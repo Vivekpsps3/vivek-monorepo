@@ -81,4 +81,101 @@ test.describe('Town', () => {
     await expect(lot).toContainText(`Lv ${checked.habit.level} · ${checked.habit.streak.current}-day streak`);
     expect(await page.content()).not.toContain(FOREIGN_HABIT);
   });
+
+  test('passive credits name Media and Travel and retract when the source is undone', async ({ page, request }) => {
+    const now = new Date();
+    expect((await request.post('/e2e/town/clock', { data: { iso: now.toISOString() } })).ok()).toBeTruthy();
+    await page.clock.setFixedTime(now);
+    await page.goto('/town');
+    const todayPanel = page.locator('app-town-today');
+    await expect(todayPanel).toContainText('Media · +0/10 XP today');
+    await expect(todayPanel).toContainText('Travel · +0/15 XP today');
+    await expect(todayPanel).not.toContainText('Auto');
+
+    const before: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+    expect(before.buildings.library.source).toBe('ok');
+    expect(before.buildings.inn.source).toBe('ok');
+    const yesterday = shiftDay(before.town.today, -1);
+
+    const movieText = await readOk(await page.request.post('/media/api/library', {
+      data: { kind: 'movie', title: 'Passive Film', status: 'completed' },
+    }));
+    const saved = JSON.parse(movieText) as { id: number };
+    expect(movieText).not.toContain('completed_on');
+    expect(saved.id).toBeGreaterThan(0);
+    const credited: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+    expect(credited.buildings.library.today_xp).toBe(10);
+    expect(credited.buildings.library.xp).toBe(before.buildings.library.xp + 10);
+    expect(credited.town.xp).toBe(before.town.xp + 10);
+    await page.reload();
+    await expect(todayPanel).toContainText('Media · +10/10 XP today');
+
+    const undoneText = await readOk(await page.request.patch(`/media/api/entries/${saved.id}`, {
+      data: { status: 'in_progress' },
+    }));
+    expect(undoneText).not.toContain('completed_on');
+    expect(JSON.parse(undoneText).status).toBe('in_progress');
+    const cleared: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+    expect(cleared.buildings.library.today_xp).toBe(0);
+    expect(cleared.buildings.library.xp).toBe(before.buildings.library.xp);
+    await page.reload();
+    await expect(todayPanel).toContainText('Media · +0/10 XP today');
+
+    const plannedText = await readOk(await page.request.post('/travel/api/trips', {
+      data: {
+        title: 'Planning only', start_date: yesterday, end_date: yesterday,
+        status: 'planning', counts_as_pto: false,
+      },
+    }));
+    const planned = JSON.parse(plannedText) as { id: number };
+    expect(planned.id).toBeGreaterThan(0);
+    const lateText = await readOk(await page.request.post('/travel/api/trips', {
+      data: {
+        title: 'Logged late', start_date: yesterday, end_date: yesterday,
+        status: 'done', counts_as_pto: false,
+      },
+    }));
+    expect(JSON.parse(lateText).status).toBe('done');
+    const still: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+    expect(still.buildings.inn.xp).toBe(before.buildings.inn.xp);
+    expect(still.buildings.inn.today_xp).toBe(0);
+
+    const reminderText = await readOk(await page.request.post(`/travel/api/trips/${planned.id}/reminders`, {
+      data: { title: 'Pack', done: true },
+    }));
+    const detail = JSON.parse(reminderText) as { reminders: { id: number; title: string }[] };
+    const packed = detail.reminders.find(item => item.title === 'Pack');
+    expect(packed).toBeTruthy();
+    expect(reminderText).not.toContain('done_at');
+    const reminded: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+    expect(reminded.buildings.inn.today_xp).toBe(5);
+    expect(reminded.buildings.inn.xp).toBe(before.buildings.inn.xp + 5);
+    expect(reminded.buildings.library.source).toBe('ok');
+    await page.reload();
+    await expect(todayPanel).toContainText('Travel · +5/15 XP today');
+    await expect(todayPanel).not.toContainText('Auto');
+
+    const reversedText = await readOk(await page.request.patch(`/travel/api/reminders/${packed!.id}`, {
+      data: { title: 'Pack', done: false },
+    }));
+    expect(JSON.parse(reversedText).reminders.find((item: { id: number }) => item.id === packed!.id).done).toBe(false);
+    const retracted: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+    expect(retracted.buildings.inn.today_xp).toBe(0);
+    expect(retracted.buildings.inn.xp).toBe(before.buildings.inn.xp);
+    await page.reload();
+    await expect(todayPanel).toContainText('Travel · +0/15 XP today');
+  });
 });
+
+function shiftDay(iso: string, days: number): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+async function readOk(response: { ok(): boolean; text(): Promise<string> }): Promise<string> {
+  const text = await response.text();
+  expect(response.ok(), text).toBeTruthy();
+  return text;
+}

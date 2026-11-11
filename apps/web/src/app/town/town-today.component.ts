@@ -145,7 +145,8 @@ export class TownTodayComponent {
 
   autoLabel(kind: 'library' | 'inn', building: Building): string {
     const source = kind === 'library' ? 'Media' : 'Travel';
-    return building.source === 'unavailable' ? `${source} unavailable` : `Auto · +${building.today_xp}/${building.today_cap} XP today`;
+    if (building.source === 'unavailable') return `${source} unavailable`;
+    return `${source} · +${building.today_xp}/${building.today_cap} XP today`;
   }
 
   toggle(habit: Habit): void {

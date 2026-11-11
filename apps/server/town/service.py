@@ -1,15 +1,24 @@
-"""Owner-scoped reads; XP is computed. TB3 replaces only passive_days' body."""
+"""Owner-scoped reads. Habit XP and passive Media/Travel credits are computed."""
 
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import bindparam, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from apps.server.errors import APIError
-from apps.server.town.constants import BUILDING_LV, CONSTANTS_VERSION, DAILY_CAP, TOWN_LV, TOWN_NAME
+from apps.server.town.constants import (
+    BUILDING_LV,
+    CONSTANTS_VERSION,
+    DAILY_CAP,
+    MEDIA_FINISHED_KINDS,
+    TOWN_LV,
+    TOWN_NAME,
+)
 from apps.server.town.engine import (
     cadence_on,
     describe_cadence,
@@ -26,7 +35,7 @@ from apps.server.town.models import Habit, HabitCadence
 
 @dataclass(frozen=True)
 class PassiveDays:
-    """Stable TB3 seam: per-day counts and source availability flags."""
+    """Per-day source counts and whether that source could be read."""
 
     episodes: dict[date, int]
     finished: dict[date, int]
@@ -36,11 +45,166 @@ class PassiveDays:
     travel_ok: bool
 
 
+_MEDIA_TABLES = frozenset({"episode_progress", "user_entries", "catalog_items"})
+_TRAVEL_TABLES = frozenset({"reminders", "trips"})
+_FINISHED_KINDS = tuple(sorted(MEDIA_FINISHED_KINDS))
+
+
+def _table_names(db: Session) -> set[str]:
+    try:
+        rows = db.execute(
+            text(
+                "SELECT name FROM sqlite_master WHERE type = 'table' "
+                "AND name IN ('episode_progress', 'user_entries', 'catalog_items', "
+                "'reminders', 'trips')"
+            )
+        ).all()
+    except SQLAlchemyError:
+        db.rollback()
+        return set()
+    return {str(row[0]) for row in rows}
+
+
+def _window(founding: date | None, today: date) -> tuple[date, date] | None:
+    if founding is None or founding > today:
+        return None
+    return founding, today
+
+
+def _day_counts(rows) -> dict[date, int]:
+    counts: dict[date, int] = {}
+    for raw, count in rows:
+        if type(raw) is date:
+            day = raw
+        else:
+            try:
+                day = date.fromisoformat(str(raw)[:10])
+            except ValueError:
+                continue
+        counts[day] = int(count)
+    return counts
+
+
+def _grouped(db: Session, sql: str, params: dict) -> dict[date, int]:
+    statement = text(sql)
+    if "kinds" in params:
+        statement = statement.bindparams(bindparam("kinds", expanding=True))
+    return _day_counts(db.execute(statement, params).all())
+
+
+def _media_counts(
+    db: Session, user_id: int, founding: date | None, today: date, present: set[str]
+) -> tuple[bool, dict[date, int], dict[date, int]]:
+    if not present >= _MEDIA_TABLES:
+        return False, {}, {}
+    window = _window(founding, today)
+    if window is None:
+        return True, {}, {}
+    start, end = window
+    bounds = {"uid": user_id, "start": start.isoformat(), "end": end.isoformat()}
+    try:
+        episodes = _grouped(
+            db,
+            """SELECT watched_on AS d, COUNT(*) AS n FROM episode_progress
+            WHERE user_id = :uid AND watched = 1 AND watched_on IS NOT NULL
+            AND watched_on >= :start AND watched_on <= :end
+            GROUP BY watched_on""",
+            bounds,
+        )
+        finished = _grouped(
+            db,
+            """SELECT e.completed_on AS d, COUNT(*) AS n
+            FROM user_entries AS e JOIN catalog_items AS c ON c.id = e.catalog_id
+            WHERE e.user_id = :uid AND e.status = 'completed' AND e.completed_on IS NOT NULL
+            AND c.kind IN :kinds AND e.completed_on >= :start AND e.completed_on <= :end
+            GROUP BY e.completed_on""",
+            {**bounds, "kinds": _FINISHED_KINDS},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        return False, {}, {}
+    return True, episodes, finished
+
+
+def _instant(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        instant = value
+    elif isinstance(value, date):
+        instant = datetime(value.year, value.month, value.day, tzinfo=UTC)
+    else:
+        raw = str(value).strip().replace("Z", "+00:00")
+        if not raw or raw == "None":
+            return None
+        if " " in raw and "T" not in raw:
+            raw = raw.replace(" ", "T", 1)
+        try:
+            instant = datetime.fromisoformat(raw)
+        except ValueError:
+            return None
+    if instant.tzinfo is None:
+        return instant.replace(tzinfo=UTC)
+    return instant
+
+
+def _bind_local_day(db: Session, tz: str) -> None:
+    zone = ZoneInfo(tz)
+
+    def local_day(value: object) -> str | None:
+        instant = _instant(value)
+        if instant is None:
+            return None
+        return instant.astimezone(zone).date().isoformat()
+
+    create = getattr(db.connection().connection, "create_function", None)
+    if create is None:
+        raise SQLAlchemyError("local day conversion is unavailable")
+    create("town_local_day", 1, local_day)
+
+
+def _travel_counts(
+    db: Session, user_id: int, tz: str, founding: date | None, today: date, present: set[str]
+) -> tuple[bool, dict[date, int], dict[date, int]]:
+    if not present >= _TRAVEL_TABLES:
+        return False, {}, {}
+    window = _window(founding, today)
+    if window is None:
+        return True, {}, {}
+    start, end = window
+    params = {"uid": user_id, "start": start.isoformat(), "end": end.isoformat()}
+    try:
+        _bind_local_day(db, tz)
+        reminders = _grouped(
+            db,
+            """SELECT town_local_day(r.done_at) AS d, COUNT(*) AS n
+            FROM reminders AS r JOIN trips AS t ON t.id = r.trip_id
+            WHERE t.user_id = :uid AND r.done = 1 AND r.done_at IS NOT NULL
+            AND town_local_day(r.done_at) >= :start AND town_local_day(r.done_at) <= :end
+            GROUP BY d""",
+            params,
+        )
+        trips_done = _grouped(
+            db,
+            """SELECT date(t.end_date, '+1 day') AS d, COUNT(*) AS n FROM trips AS t
+            WHERE t.user_id = :uid AND t.status IN ('booked', 'done')
+            AND t.created_at IS NOT NULL AND town_local_day(t.created_at) <= t.end_date
+            AND date(t.end_date, '+1 day') >= :start AND date(t.end_date, '+1 day') <= :end
+            GROUP BY d""",
+            params,
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        return False, {}, {}
+    return True, reminders, trips_done
+
+
 def passive_days(
     db: Session, user_id: int, tz: str, founding_day: date | None, today: date
 ) -> PassiveDays:
-    """TB3 replaces this body; preserve signature and PassiveDays fields."""
-    return PassiveDays({}, {}, {}, {}, True, True)
+    """One grouped query per source. A missing or failed source contributes no XP."""
+    present = _table_names(db)
+    media_ok, episodes, finished = _media_counts(db, user_id, founding_day, today, present)
+    travel_ok, reminders, trips_done = _travel_counts(db, user_id, tz, founding_day, today, present)
+    return PassiveDays(episodes, finished, reminders, trips_done, media_ok, travel_ok)
 
 
 # (habit_id, day) is unique, so COUNT(*) is one row per check-in day.
