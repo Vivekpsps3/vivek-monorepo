@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#237](https://github.com/Vivekpsps3/vivek-monorepo/issues/237); parent [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85) stays open
 - Agent/context, branch/worktree: implementer, `agent/med-03`, `/tmp/vivek-med-03`
-- Base main SHA, current tested SHA: base `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. The commands below ran on that base plus the files in this commit, immediately before the commit. Karma used port 9981 in this worktree only; that line was reverted and is not in the commit.
+- Base main SHA, current tested SHA: base `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. Product commit `d94a4e9f3d73451cf352d51b2b60a0e4aa2de854` contains the code these commands ran against. Karma used port 9981 in this worktree only; that line was reverted and is not in the commit.
 - Fresh-main/prerequisite/active-PR checks: HEAD matched `origin/main` at the base above. MED-02 #236 is closed by squash `0c6e6bf3e2e3e4a244efd478fed21766ad81a442`. MED-10 #285 is closed by squash `1268f8d8a61b4b0116fc10eedc6739dfed1f8b78`. Both are ancestors of the base. The tag editor and the detail race fixes stayed in place. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/237#issuecomment-6806636390
 
 ## Acceptance
@@ -53,10 +53,10 @@ Not run: Finance, site, and Travel Karma; Finance, Travel, and Town Playwright; 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet. The PR will use `Closes #237` only and will reference #85 without a closing keyword.
-- Roadmap #134 append-only status-note URL: not posted yet.
-- Merged/activation status: not merged. Local verification passed. CI is not recorded.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/345 (`Closes #237` only). #85 is referenced and stays open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6807193843. The issue body was not edited.
+- Merged/activation status: PR #345 is open. Not merged. Local verification passed. CI is not recorded yet.
 - Remaining external prerequisites or approved scope decisions: none. The search listener release is the safety fix that makes the already-failing web Karma gate pass; it does not change the rating scale.
-- Next actor: open the pull request, append the #134 note, watch Backend, Frontend, Unified Site Release, and Playwright, then squash-merge and record the squash SHA on #237 and #134.
+- Next actor: watch Backend, Frontend, Unified Site Release, and Playwright on #345, squash-merge, then record the squash SHA on #237 and #134.
 
 No unstated decision from the previous context is necessary to continue.
