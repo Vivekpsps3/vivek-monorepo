@@ -80,6 +80,8 @@ export interface FinanceDataChange {
   source: 'local' | 'remote';
 }
 
+type CashflowRecordCollection = 'job_incomes' | 'fixed_expenses' | 'subscriptions';
+
 export interface MarketQuoteApplyResult {
   holdingsUpdated: number;
   employerValuationsUpdated: number;
@@ -262,6 +264,51 @@ export class FinanceService {
     this.publishValueIfUnlocked(lock, subject, await read());
   }
 
+  private readonly joinedReads = new Map<string, Promise<unknown>>();
+
+  private joinRead<T>(key: string, read: () => Promise<T>): Promise<T> {
+    const pending = this.joinedReads.get(key) as Promise<T> | undefined;
+    if (pending) return pending;
+    const work = read().finally(() => { if (this.joinedReads.get(key) === work) this.joinedReads.delete(key); });
+    this.joinedReads.set(key, work);
+    return work;
+  }
+
+  private async loadEligible<T>(
+    collection: CashflowRecordCollection, read: () => Promise<T>, publish: (rows: T) => void,
+    captured: { session: number; epoch: string; lock: number },
+  ): Promise<{ sessionEnded: boolean; deliver: boolean; rows: T }> {
+    const rows = await this.joinRead(`${collection}:${captured.session}:${captured.epoch}:${captured.lock}`, read);
+    const sessionEnded = captured.session !== this.encStore.sessionToken;
+    const deliver = captured.lock === readLockEpoch() && hasDek();
+    if (!sessionEnded && deliver && captured.epoch === this.dataEpoch([collection])) publish(rows);
+    return { sessionEnded, deliver, rows };
+  }
+
+  private observeEligible<T>(collection: CashflowRecordCollection, read: () => Promise<T>, publish: (rows: T) => void): Observable<T> {
+    const captured = { session: this.encStore.sessionToken, epoch: this.dataEpoch([collection]), lock: readLockEpoch() };
+    return new Observable(subscriber => {
+      void this.loadEligible(collection, read, publish, captured).then(result => {
+        if (!result.deliver) { subscriber.complete(); return; }
+        subscriber.next(result.rows);
+        subscriber.complete();
+      }, (error: unknown) => subscriber.error(error));
+    });
+  }
+
+  private writeEligible<T, R>(
+    collection: CashflowRecordCollection, write: (options: VaultWriteOptions) => Promise<T>,
+    read: () => Promise<R>, publish: (rows: R) => void, silent = false,
+  ): Observable<T> {
+    return this.commit(async options => {
+      const lock = readLockEpoch();
+      const row = await write(options);
+      await this.loadEligible(collection, read, publish, { session: this.encStore.sessionToken, epoch: this.dataEpoch([collection]), lock });
+      this.invalidateDashboardCache();
+      return row;
+    }, silent);
+  }
+
   getConfiguredMarketSymbols(): Promise<string[]> {
     return this.market.getConfiguredSymbols();
   }
@@ -322,21 +369,9 @@ export class FinanceService {
       if (sessionToken !== this.encStore.sessionToken) return;
       if (isCurrent(['liabilities'])) this.publishLoaded(this._liabilities, rows);
     }
-    if (unique.includes('job_incomes')) {
-      const rows = await this.encStore.getJobIncomes();
-      if (sessionToken !== this.encStore.sessionToken) return;
-      if (isCurrent(['job_incomes'])) this._jobIncomes.next(rows);
-    }
-    if (unique.includes('fixed_expenses')) {
-      const rows = await this.encStore.getFixedExpenses();
-      if (sessionToken !== this.encStore.sessionToken) return;
-      if (isCurrent(['fixed_expenses'])) this.publishLoaded(this._fixedExpenses, rows);
-    }
-    if (unique.includes('subscriptions')) {
-      const rows = await this.encStore.getSubscriptions();
-      if (sessionToken !== this.encStore.sessionToken) return;
-      if (isCurrent(['subscriptions'])) this.publishLoaded(this._subscriptions, rows);
-    }
+    if (unique.includes('job_incomes') && (await this.loadEligible('job_incomes', () => this.encStore.getJobIncomes(), rows => this._jobIncomes.next(rows), { session: sessionToken, epoch: expectedEpochs.get('job_incomes') ?? '', lock: readLockEpoch() })).sessionEnded) return;
+    if (unique.includes('fixed_expenses') && (await this.loadEligible('fixed_expenses', () => this.encStore.getFixedExpenses(), rows => this.publishLoaded(this._fixedExpenses, rows), { session: sessionToken, epoch: expectedEpochs.get('fixed_expenses') ?? '', lock: readLockEpoch() })).sessionEnded) return;
+    if (unique.includes('subscriptions') && (await this.loadEligible('subscriptions', () => this.encStore.getSubscriptions(), rows => this.publishLoaded(this._subscriptions, rows), { session: sessionToken, epoch: expectedEpochs.get('subscriptions') ?? '', lock: readLockEpoch() })).sessionEnded) return;
     const cashflowCollections: EncryptedCollection[] = ['transactions', 'job_incomes', 'fixed_expenses', 'subscriptions'];
     const balanceCollections: EncryptedCollection[] = ['holdings', 'assets', 'liabilities'];
     if (unique.some(name => cashflowCollections.includes(name))) {
@@ -520,84 +555,45 @@ export class FinanceService {
   }
 
   getJobIncomes(): Observable<JobIncome[]> {
-    const epoch = this.dataEpoch(['job_incomes']);
-    return this.guardedRead(() => this.encStore.getJobIncomes(), rows => {
-      if (epoch === this.dataEpoch(['job_incomes'])) this._jobIncomes.next(rows);
-    });
+    return this.observeEligible('job_incomes', () => this.encStore.getJobIncomes(), rows => this._jobIncomes.next(rows));
   }
 
   addJobIncome(body: JobIncomeCreate, silent = false): Observable<JobIncome> {
-    return this.commit(async options => {
-      const lock = readLockEpoch();
-      const row = await this.encStore.addJobIncome(body, options);
-      await this.publishReadBackIfUnlocked(lock, this._jobIncomes, () => this.encStore.getJobIncomes());
-      this.invalidateDashboardCache();
-      return row;
-    }, silent);
+    return this.writeEligible('job_incomes', options => this.encStore.addJobIncome(body, options), () => this.encStore.getJobIncomes(), rows => this._jobIncomes.next(rows), silent);
   }
 
   updateJobIncome(id: number, body: Partial<JobIncomeCreate>, silent = false): Observable<JobIncome> {
-    return this.commit(async options => {
-      const lock = readLockEpoch();
-      const row = await this.encStore.updateJobIncome(id, body, options);
-      await this.publishReadBackIfUnlocked(lock, this._jobIncomes, () => this.encStore.getJobIncomes());
-      this.invalidateDashboardCache();
-      return row;
-    }, silent);
+    return this.writeEligible('job_incomes', options => this.encStore.updateJobIncome(id, body, options), () => this.encStore.getJobIncomes(), rows => this._jobIncomes.next(rows), silent);
   }
 
   deleteJobIncome(id: number, silent = false): Observable<{ ok: boolean }> {
-    return this.commit(async options => {
-      const lock = readLockEpoch();
+    return this.writeEligible('job_incomes', async options => {
       await this.encStore.deleteJobIncome(id, options);
-      await this.publishReadBackIfUnlocked(lock, this._jobIncomes, () => this.encStore.getJobIncomes());
-      this.invalidateDashboardCache();
       return { ok: true };
-    }, silent);
+    }, () => this.encStore.getJobIncomes(), rows => this._jobIncomes.next(rows), silent);
   }
 
   getFixedExpenses(): Observable<FixedExpense[]> {
-    const epoch = this.dataEpoch(['fixed_expenses']);
-    return this.guardedRead(() => this.encStore.getFixedExpenses(), rows => {
-      if (epoch === this.dataEpoch(['fixed_expenses'])) this.publishLoaded(this._fixedExpenses, rows);
-    });
+    return this.observeEligible('fixed_expenses', () => this.encStore.getFixedExpenses(), rows => this.publishLoaded(this._fixedExpenses, rows));
   }
 
   getSubscriptions(): Observable<Subscription[]> {
-    const epoch = this.dataEpoch(['subscriptions']);
-    return this.guardedRead(() => this.encStore.getSubscriptions(), rows => {
-      if (epoch === this.dataEpoch(['subscriptions'])) this.publishLoaded(this._subscriptions, rows);
-    });
+    return this.observeEligible('subscriptions', () => this.encStore.getSubscriptions(), rows => this.publishLoaded(this._subscriptions, rows));
   }
 
   addSubscription(body: SubscriptionCreate, silent = false): Observable<Subscription> {
-    return this.commit(async options => {
-      const lock = readLockEpoch();
-      const row = await this.encStore.addSubscription(body, options);
-      await this.publishReadBackIfUnlocked(lock, this._subscriptions, () => this.encStore.getSubscriptions());
-      this.invalidateDashboardCache();
-      return row;
-    }, silent);
+    return this.writeEligible('subscriptions', options => this.encStore.addSubscription(body, options), () => this.encStore.getSubscriptions(), rows => this.publishLoaded(this._subscriptions, rows), silent);
   }
 
   updateSubscription(id: number, body: Partial<SubscriptionCreate>, silent = false): Observable<Subscription> {
-    return this.commit(async options => {
-      const lock = readLockEpoch();
-      const row = await this.encStore.updateSubscription(id, body, options);
-      await this.publishReadBackIfUnlocked(lock, this._subscriptions, () => this.encStore.getSubscriptions());
-      this.invalidateDashboardCache();
-      return row;
-    }, silent);
+    return this.writeEligible('subscriptions', options => this.encStore.updateSubscription(id, body, options), () => this.encStore.getSubscriptions(), rows => this.publishLoaded(this._subscriptions, rows), silent);
   }
 
   deleteSubscription(id: number, silent = false): Observable<{ ok: boolean }> {
-    return this.commit(async options => {
-      const lock = readLockEpoch();
+    return this.writeEligible('subscriptions', async options => {
       await this.encStore.deleteSubscription(id, options);
-      await this.publishReadBackIfUnlocked(lock, this._subscriptions, () => this.encStore.getSubscriptions());
-      this.invalidateDashboardCache();
       return { ok: true };
-    }, silent);
+    }, () => this.encStore.getSubscriptions(), rows => this.publishLoaded(this._subscriptions, rows), silent);
   }
 
   clearSessionState(): void {
@@ -629,33 +625,18 @@ export class FinanceService {
   }
 
   addFixedExpense(body: FixedExpenseCreate, silent = false): Observable<FixedExpense> {
-    return this.commit(async options => {
-      const lock = readLockEpoch();
-      const row = await this.encStore.addFixedExpense(body, options);
-      await this.publishReadBackIfUnlocked(lock, this._fixedExpenses, () => this.encStore.getFixedExpenses());
-      this.invalidateDashboardCache();
-      return row;
-    }, silent);
+    return this.writeEligible('fixed_expenses', options => this.encStore.addFixedExpense(body, options), () => this.encStore.getFixedExpenses(), rows => this.publishLoaded(this._fixedExpenses, rows), silent);
   }
 
   updateFixedExpense(id: number, body: Partial<FixedExpenseCreate>, silent = false): Observable<FixedExpense> {
-    return this.commit(async options => {
-      const lock = readLockEpoch();
-      const row = await this.encStore.updateFixedExpense(id, body, options);
-      await this.publishReadBackIfUnlocked(lock, this._fixedExpenses, () => this.encStore.getFixedExpenses());
-      this.invalidateDashboardCache();
-      return row;
-    }, silent);
+    return this.writeEligible('fixed_expenses', options => this.encStore.updateFixedExpense(id, body, options), () => this.encStore.getFixedExpenses(), rows => this.publishLoaded(this._fixedExpenses, rows), silent);
   }
 
   deleteFixedExpense(id: number, silent = false): Observable<{ ok: boolean }> {
-    return this.commit(async options => {
-      const lock = readLockEpoch();
+    return this.writeEligible('fixed_expenses', async options => {
       await this.encStore.deleteFixedExpense(id, options);
-      await this.publishReadBackIfUnlocked(lock, this._fixedExpenses, () => this.encStore.getFixedExpenses());
-      this.invalidateDashboardCache();
       return { ok: true };
-    }, silent);
+    }, () => this.encStore.getFixedExpenses(), rows => this.publishLoaded(this._fixedExpenses, rows), silent);
   }
 
   renameCategory(fromCategory: string, toCategory: string): Observable<CategoryRenameResult> {

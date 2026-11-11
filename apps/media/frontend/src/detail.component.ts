@@ -23,6 +23,7 @@ import {
   UiFieldComponent,
   UiFieldControlDirective,
   UiPageHeaderComponent,
+  UiSegmentedComponent,
 } from "@vivek/ui";
 import {
   Detail,
@@ -35,6 +36,7 @@ import {
 import { showDay } from "./display";
 import { MediaCardComponent } from "./media-card.component";
 import { NextEpisodeUndoService } from "./next-episode-undo.service";
+import { halfNote, ratingOptions, segmentValue } from "./rating-model.mjs";
 import { addTag, normaliseTags, removeTag } from "./tag-model.mjs";
 @Component({
   standalone: true,
@@ -48,6 +50,7 @@ import { addTag, normaliseTags, removeTag } from "./tag-model.mjs";
     UiFieldComponent,
     UiFieldControlDirective,
     UiPageHeaderComponent,
+    UiSegmentedComponent,
     MediaCardComponent,
   ],
   templateUrl: "./detail.component.html",
@@ -100,6 +103,7 @@ export class DetailComponent {
   episodeOpen = false;
   review = "";
   rating: number | null = null;
+  readonly ratingChoices = ratingOptions();
   status = "";
   progress: number | null = null;
   unit = "";
@@ -270,6 +274,25 @@ export class DetailComponent {
   }
   get dirty(): boolean {
     return !!this.item() && this.saved !== this.snapshot();
+  }
+  /** Integers 0–10 select a segment. A saved half rating stays exact until an explicit choice. */
+  get ratingChoice(): number | null {
+    return segmentValue(this.rating);
+  }
+  get ratingNote(): string {
+    return halfNote(this.rating);
+  }
+  chooseRating(value: string | number | null): void {
+    if (typeof value !== "number") return;
+    const next = segmentValue(value);
+    if (next === null || next === this.rating) return;
+    this.rating = next;
+    this.rememberDraft();
+  }
+  clearRating(): void {
+    if (this.rating === null) return;
+    this.rating = null;
+    this.rememberDraft();
   }
   canLeave(): boolean | Promise<boolean> {
     this.rememberDraft();

@@ -4,9 +4,11 @@ import { HttpClientTestingModule, HttpTestingController } from '@angular/common/
 import { BehaviorSubject, firstValueFrom, Observable, of, Subject } from 'rxjs';
 import { ToastService } from '@vivek/ui';
 import { holdDek, wipeDek } from '../crypto/dek-holder';
+import { VAULT_PRESENCE } from '../crypto/dek-store';
 import { lockFinance, lockLoad } from '../crypto/lock-finance';
 import { loadFinanceHubSnapshot } from '../hub/finance-hub-facade';
 import { FinanceService } from './finance.service';
+import { searchFinanceNames } from './finance-search';
 import { VaultService } from '../crypto/vault.service';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import {
@@ -346,6 +348,142 @@ describe('FinanceService', () => {
     release(stale);
     await staleRead;
     expect(subjects._subscriptions.value).toEqual(fresh);
+  });
+
+  it('joins one in-flight collection read and still loads an unrelated collection', async () => {
+    let subscriptionReads = 0;
+    let releaseSubscriptions!: (rows: Subscription[]) => void;
+    const current = [{ id: 4, name: 'Stream' } as Subscription];
+    encStore.getSubscriptions.and.callFake(() => {
+      subscriptionReads += 1;
+      return new Promise<Subscription[]>(resolve => { releaseSubscriptions = resolve; });
+    });
+    encStore.getJobIncomes.and.resolveTo([{ id: 7 } as JobIncome]);
+    const first = firstValueFrom(service.getSubscriptions());
+    const second = firstValueFrom(service.getSubscriptions());
+    const jobs = firstValueFrom(service.getJobIncomes());
+    expect(subscriptionReads).toBe(1);
+    expect(await jobs).toEqual([{ id: 7 } as JobIncome]);
+    expect((service as unknown as { _jobIncomes: BehaviorSubject<JobIncome[]> })._jobIncomes.value).toEqual([{ id: 7 } as JobIncome]);
+    releaseSubscriptions(current);
+    expect(await first).toEqual(current);
+    expect(await second).toEqual(current);
+    expect((service as unknown as { _subscriptions: BehaviorSubject<Subscription[]> })._subscriptions.value).toEqual(current);
+    encStore.getSubscriptions.and.resolveTo([{ id: 5, name: 'Later' } as Subscription]);
+    await firstValueFrom(service.getSubscriptions());
+    expect(encStore.getSubscriptions).toHaveBeenCalledTimes(2);
+    expect((service as unknown as { _subscriptions: BehaviorSubject<Subscription[]> })._subscriptions.value).toEqual([{ id: 5, name: 'Later' } as Subscription]);
+  });
+
+  it('does not publish a cashflow read after its session, revision, or lock moves', async () => {
+    const subjects = service as unknown as {
+      _jobIncomes: BehaviorSubject<JobIncome[]>;
+      _fixedExpenses: BehaviorSubject<FixedExpense[]>;
+      _subscriptions: BehaviorSubject<Subscription[]>;
+    };
+    const jobSentinel = [{ id: 1 } as JobIncome];
+    subjects._jobIncomes.next(jobSentinel);
+    let token = 4;
+    Object.defineProperty(encStore, 'sessionToken', { configurable: true, get: () => token });
+    let releaseJobs!: (rows: JobIncome[]) => void;
+    encStore.getJobIncomes.and.returnValue(new Promise<JobIncome[]>(resolve => { releaseJobs = resolve; }));
+    const seenJobs: JobIncome[][] = [];
+    service.getJobIncomes().subscribe(rows => seenJobs.push(rows));
+    token = 5;
+    releaseJobs([{ id: 9 } as JobIncome]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(seenJobs).toEqual([[{ id: 9 } as JobIncome]]);
+    expect(subjects._jobIncomes.value).toEqual(jobSentinel);
+
+    const expenseSentinel = [{ id: 2 } as FixedExpense];
+    subjects._fixedExpenses.next(expenseSentinel);
+    let releaseExpenses!: (rows: FixedExpense[]) => void;
+    encStore.getFixedExpenses.and.returnValue(new Promise<FixedExpense[]>(resolve => { releaseExpenses = resolve; }));
+    const seenExpenses: FixedExpense[][] = [];
+    let expensesCompleted = false;
+    service.getFixedExpenses().subscribe({ next: rows => seenExpenses.push(rows), complete: () => { expensesCompleted = true; } });
+    wipeDek();
+    releaseExpenses([{ id: 8 } as FixedExpense]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(seenExpenses).toEqual([]);
+    expect(expensesCompleted).toBeTrue();
+    expect(subjects._fixedExpenses.value).toEqual(expenseSentinel);
+
+    holdDek({} as CryptoKey);
+    const subscriptionSentinel = [{ id: 3 } as Subscription];
+    subjects._subscriptions.next(subscriptionSentinel);
+    let releaseSubscriptions!: (rows: Subscription[]) => void;
+    encStore.reloadCollections.and.resolveTo();
+    encStore.getSubscriptions.and.returnValue(new Promise<Subscription[]>(resolve => { releaseSubscriptions = resolve; }));
+    encStore.getCashflowSummary.and.resolveTo({} as never);
+    const refresh = service.refreshCollectionsFromAnotherTab(['subscriptions']);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    token += 1;
+    releaseSubscriptions([{ id: 11, name: 'Stale' } as Subscription]);
+    await refresh;
+    expect(subjects._subscriptions.value).toEqual(subscriptionSentinel);
+    expect(encStore.getCashflowSummary).not.toHaveBeenCalled();
+  });
+
+  it('publishes a later collection when an earlier cashflow refresh goes stale', async () => {
+    let releaseJobs!: (rows: JobIncome[]) => void;
+    encStore.reloadCollections.and.resolveTo();
+    encStore.getJobIncomes.and.returnValue(new Promise<JobIncome[]>(resolve => { releaseJobs = resolve; }));
+    encStore.getSubscriptions.and.resolveTo([{ id: 8, name: 'Stream' } as Subscription]);
+    encStore.getCashflowSummary.and.resolveTo({} as never);
+    const mixed = service.refreshCollectionsFromAnotherTab(['job_incomes', 'subscriptions']);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    storeChanges.next({ collection: 'job_incomes', source: 'local' });
+    releaseJobs([{ id: 1 } as JobIncome]);
+    await mixed;
+    expect((service as unknown as { _jobIncomes: BehaviorSubject<JobIncome[]> })._jobIncomes.value).toEqual([]);
+    expect((service as unknown as { _subscriptions: BehaviorSubject<Subscription[]> })._subscriptions.value).toEqual([{ id: 8, name: 'Stream' } as Subscription]);
+    expect(encStore.getJobIncomes).toHaveBeenCalledTimes(1);
+    expect(encStore.getSubscriptions).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let a subscription write-back overwrite a newer revision', async () => {
+    const subjects = service as unknown as { _subscriptions: BehaviorSubject<Subscription[]> };
+    const fresh = [{ id: 4 } as Subscription, { id: 6 } as Subscription];
+    let release!: (rows: Subscription[]) => void;
+    encStore.getSubscriptions.and.returnValue(new Promise<Subscription[]>(resolve => { release = resolve; }));
+    (encStore as unknown as { addSubscription: jasmine.Spy }).addSubscription = jasmine.createSpy().and.resolveTo({ id: 4 });
+    const written = firstValueFrom(service.addSubscription({} as never));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    storeChanges.next({ collection: 'subscriptions', source: 'local' });
+    encStore.getSubscriptions.and.resolveTo(fresh);
+    await firstValueFrom(service.getSubscriptions());
+    expect(subjects._subscriptions.value).toEqual(fresh);
+    release([{ id: 4 } as Subscription]);
+    await written;
+    expect(subjects._subscriptions.value).toEqual(fresh);
+  });
+
+  it('reads ready bill names from the public search facade without loadDashboard', async () => {
+    const loadDashboard = spyOn(service, 'loadDashboard').and.callThrough();
+    encStore.getFixedExpenses.and.resolveTo([{ id: 3, name: 'Rent', annual_amount: 1200 } as FixedExpense]);
+    encStore.getSubscriptions.and.resolveTo([{ id: 4, name: 'Stream', annual_amount: 80 } as Subscription]);
+    await firstValueFrom(service.getFixedExpenses());
+    await firstValueFrom(service.getSubscriptions());
+    const vault = TestBed.inject(VaultService) as { whenReady: () => Promise<void>; isUnlocked: boolean };
+    vault.whenReady = () => Promise.resolve();
+    vault.isUnlocked = true;
+    localStorage.setItem(VAULT_PRESENCE, '1');
+    try {
+      const result = await searchFinanceNames(TestBed.inject(Injector), 'rent');
+      expect(result).toEqual({
+        status: 'ready',
+        names: [{ app: 'finance', kind: 'bill', id: 3, title: 'Rent', href: '/finance/recurring?t=spend' }],
+      });
+      expect(JSON.stringify(result)).not.toContain('1200');
+      expect(loadDashboard).not.toHaveBeenCalled();
+      expect(encStore.getTransactions).not.toHaveBeenCalled();
+      expect(encStore.getAssets).not.toHaveBeenCalled();
+      expect(encStore.getHoldings).not.toHaveBeenCalled();
+      expect(encStore.getJobIncomes).not.toHaveBeenCalled();
+    } finally {
+      localStorage.removeItem(VAULT_PRESENCE);
+    }
   });
 
   it('continues refreshing valid collections when one member of a multi-collection snapshot goes stale', async () => {

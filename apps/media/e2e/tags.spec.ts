@@ -123,13 +123,13 @@ test('Enter does not submit notes or ratings and a failed save keeps the draft',
     if (req.method() === 'PATCH') patches.push(req.postDataJSON());
   });
   await page.getByLabel('Note').fill('Keep this note');
-  await page.getByLabel('Rating').fill('7');
+  await page.getByRole('radio', { name: '7 out of 10', exact: true }).click();
   const input = tagInput(page);
   await input.fill('Vault');
   await input.press('Enter');
   await expect(page.getByRole('button', { name: 'Remove tag Vault' })).toBeVisible();
   await expect(page.getByLabel('Note')).toHaveValue('Keep this note');
-  await expect(page.getByLabel('Rating')).toHaveValue('7');
+  await expect(page.getByRole('radio', { name: '7 out of 10', exact: true })).toBeChecked();
   expect(patches).toEqual([]);
   expect(posts).toEqual([]);
 
@@ -154,7 +154,7 @@ test('Enter does not submit notes or ratings and a failed save keeps the draft',
     },
   ]);
   await expect(page.getByLabel('Note')).toHaveValue('Keep this note');
-  await expect(page.getByLabel('Rating')).toHaveValue('7');
+  await expect(page.getByRole('radio', { name: '7 out of 10', exact: true })).toBeChecked();
   await expect(page.getByRole('button', { name: 'Remove tag Vault' })).toBeVisible();
   await expect(input).toHaveValue('still typing');
   const draft = JSON.parse(await page.evaluate((id) => sessionStorage.getItem('media-item-draft:1:' + id) || 'null', item.id));
@@ -165,7 +165,7 @@ test('Enter does not submit notes or ratings and a failed save keeps the draft',
 
   await reloadDraft(page);
   await expect(page.getByLabel('Note')).toHaveValue('Keep this note');
-  await expect(page.getByLabel('Rating')).toHaveValue('7');
+  await expect(page.getByRole('radio', { name: '7 out of 10', exact: true })).toBeChecked();
   await expect(page.getByRole('button', { name: 'Remove tag Vault' })).toBeVisible();
   await expect(tagInput(page)).toHaveValue('still typing');
   const saved = await savedItem(request, item.id);
@@ -192,7 +192,7 @@ test('a draft from before tags still restores the note', async ({ page, request 
   })), { id: item.id, base: saved.updated_at });
   await openItem(page, item.id);
   await expect(page.getByLabel('Note')).toHaveValue('Older local draft');
-  await expect(page.getByLabel('Rating')).toHaveValue('4');
+  await expect(page.getByRole('radio', { name: '4 out of 10', exact: true })).toBeChecked();
   await expect(page.getByRole('button', { name: /^Remove tag / })).toHaveCount(0);
   await expect(tagInput(page)).toHaveValue('');
   expect((await savedItem(request, item.id)).review).toBe('Saved note');

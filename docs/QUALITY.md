@@ -72,7 +72,7 @@ What remains is the rule column of those files. New code still has to stay insid
 
 ## Python
 
-Ruff lints and formats `apps/` and `scripts/` at line length 100. Selected rules are `E`, `W`, `F`, `I`, `B`, `UP`, `SIM`, and `RUF`. Ignored on purpose:
+Ruff lints `apps/`, `scripts/`, and `packages/`, and formats `apps/` and `scripts/`, at line length 100. The lint and mypy directories are `PYTHON_TARGETS` in `scripts/quality_ratchet.py`. Selected rules are `E`, `W`, `F`, `I`, `B`, `UP`, `SIM`, and `RUF`. Ignored on purpose:
 
 - `E501`, because the formatter owns wrapping.
 - `B008`, because FastAPI uses `Depends` and `Query` in argument defaults.
@@ -81,7 +81,7 @@ Ruff lints and formats `apps/` and `scripts/` at line length 100. Selected rules
 
 Applied Alembic revisions are excluded from formatting and coverage to preserve historical source. Other application source remains inside the Python and suppression gates.
 
-mypy runs on Python 3.12 with `check_untyped_defs` and `ignore_missing_imports`. `disallow_untyped_defs` is off; turning it on would be a new baseline, not a cleanup.
+mypy runs on Python 3.12 with `check_untyped_defs` and `ignore_missing_imports`, on the same `PYTHON_TARGETS` directories. `disallow_untyped_defs` is off; turning it on would be a new baseline, not a cleanup.
 
 The formatting-only commits listed in `.git-blame-ignore-revs` are `0fcae8021f783f836160bcd8f6a86ad1a98eacbe`, `2c41a00fecfabaefd4acab7229f613f7951a1d2a` (the auth-hardening reformat after merging main), `0ccfa2cb0696d2c6c278fa21093cdeb3828fb9de` (the reformat after merging the schema, media, and CSP work), and `116903ebc22c48c17947200c0e19e4d5f3f56e68` (the Travel and Media Prettier reformat). Later formatting commits are appended. CI checks that every listed SHA is still an ancestor of `HEAD`, which holds when main is merged in rather than rebased. Do not drop a SHA that is still an ancestor.
 
@@ -91,9 +91,9 @@ git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 ## TypeScript
 
-All feature code and the root Angular application compile with `strict`. `make typecheck` runs `tsc --noEmit` for each app (application and spec configs) and for `packages/tsconfig.json` (`packages/browser`, `packages/auth`, `packages/ui`). `noUncheckedIndexedAccess` is not enabled.
+All feature code and the root Angular application compile with `strict`. `make typecheck` runs `tsc --noEmit` for every project in the `typecheck-web` recipe. A file is typechecked when it matches that project's `include` or `files`, not merely because another file imports it. Shipped `.mjs`, `.cjs`, and `.js` are on those includes with `allowJs`; `checkJs` stays false so strict implicit-any is not a new typing program. Handwritten `.d.mts` companions are on the same includes. `noUncheckedIndexedAccess` is not enabled.
 
-ESLint 9 with `angular-eslint` and `typescript-eslint` uses the root `eslint.config.js` and root-installed plugins for all apps and packages. Package findings are whatever `quality/eslint-packages-baseline.txt` records. `no-undef` is off for TypeScript files. Unused names that start with `_` are allowed.
+ESLint 9 with `angular-eslint` and `typescript-eslint` uses the root `eslint.config.js`. The directories `make lint-web` passes are `ESLINT_SCOPES` in `scripts/quality_ratchet.py`. `scripts/source_inventory.py` fails when a shipped file has no matching ESLint, typecheck, ruff, or mypy owner. `no-undef` is off for TypeScript files. Unused names that start with `_` are allowed for TypeScript and for shipped JavaScript. Findings stay in the committed `quality/*-baseline.txt` files. Do not copy those counts here.
 
 Prettier is not a project formatter. Travel and Media templates and CSS were formatted once in `116903ebc22c48c17947200c0e19e4d5f3f56e68`, which is listed in `.git-blame-ignore-revs`. The rest of the tree is unchanged.
 

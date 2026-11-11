@@ -299,7 +299,7 @@ test('saving status, favorite and rating keeps the controls mounted and clears l
     ? route.fulfill({ status: 502, json: { message: 'Save unavailable' } }) : route.continue());
   await page.getByRole('combobox', { name: 'State', exact: true }).selectOption('completed');
   await page.getByRole('checkbox', { name: 'Favorite', exact: true }).check();
-  await page.getByLabel('Rating').fill('0');
+  await page.getByRole('radio', { name: '0 out of 10', exact: true }).click();
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.locator('main [role=alert]')).toContainText('Save unavailable');
   failed = false;
