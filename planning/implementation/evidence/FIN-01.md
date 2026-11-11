@@ -50,8 +50,8 @@ An earlier Finance and web Karma launch failed before any spec because `SUITE_KA
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened with `Closes #220` and a non-closing reference to #65. Not merged.
-- Roadmap #134 append-only status-note URL: posted after the PR. The issue body was not edited.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/322 (`Closes #220`, non-closing reference to #65). Not merged.
+- Roadmap #134 append-only status-note URL: posted after this commit. The issue body was not edited.
 - Merged/activation status: not merged, not deployed, not activated.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Parent #65 stays open.
 - Next actor: reviewer. Integration owner folds the roadmap body after merge.
