@@ -153,24 +153,6 @@ def mb_get(http: httpx.Client, url: str, params=None, headers=None):
 SEARCH_TIMEOUT = 3.0
 SEARCH_CACHE = SearchCache()
 _SEARCH_POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="media-source")
-HEALTH_TTL = 60.0
-_HEALTH: dict[str, tuple[float, str]] = {}
-
-
-def sticky_status(name: str, state: str, now: float | None = None) -> str:
-    """Remember this provider's line, but never contradict the request in hand.
-
-    The clock is an argument so tests can move time without reading the
-    process environment. A cached error must not stay up once this call
-    returned rows, and a cached ok must not stay up once this call failed.
-    """
-    moment = time.monotonic() if now is None else now
-    previous = _HEALTH.get(name)
-    if previous is not None and moment - previous[0] < HEALTH_TTL and previous[1] == state:
-        _HEALTH[name] = (moment, state)
-        return state
-    _HEALTH[name] = (moment, state)
-    return state
 
 
 def _cache_get(db: Session, key: str):
@@ -303,7 +285,7 @@ def search(
 
     def accept(name, coverage, outcome):
         results.extend(outcome.rows)
-        status[name] = sticky_status(name, "ok" if outcome.state == "ok" else "error")
+        status[name] = "ok" if outcome.state == "ok" else "error"
         kinds = [
             media_kind
             for media_kind, names in KIND_SOURCES.items()

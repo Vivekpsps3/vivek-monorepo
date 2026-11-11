@@ -161,7 +161,6 @@ def test_search_fans_out_and_a_slow_provider_does_not_hold_the_request(client, m
         clock.sleep(6)
         return [_hit("openlibrary", "late", "book", "Too Late", 1990)]
 
-    providers._HEALTH.clear()
     monkeypatch.setattr(providers, "openlibrary_search", blocked)
     stalled = client.get("/api/search", params={"q": "stall", "kind": "book"})
     assert stalled.status_code == 200
@@ -170,20 +169,10 @@ def test_search_fans_out_and_a_slow_provider_does_not_hold_the_request(client, m
     assert stalled_body["results"] == []
 
 
-def test_provider_status_matches_this_response():
-    from apps.media.backend.services import providers
-
-    providers._HEALTH.clear()
-    assert providers.sticky_status("openlibrary", "error", now=0) == "error"
-    assert providers.sticky_status("openlibrary", "ok", now=1) == "ok"
-    assert providers.sticky_status("openlibrary", "error", now=2) == "error"
-
-
 def test_provider_line_does_not_contradict_the_rows(client, monkeypatch):
     monkeypatch.setenv("TMDB_API_KEY", "test")
     from apps.media.backend.services import providers
 
-    providers._HEALTH.clear()
     calls = {"n": 0}
 
     def flappy(*_args, **_kwargs):
@@ -213,7 +202,6 @@ def test_search_uses_real_threads_and_a_timeout(client, monkeypatch):
     monkeypatch.setenv("RAWG_API_KEY", "test")
     from apps.media.backend.services import providers
 
-    providers._HEALTH.clear()
     movie_started = threading.Event()
     game_started = threading.Event()
     release = threading.Event()

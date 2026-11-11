@@ -43,14 +43,12 @@ class _MediaClient:
 
 
 @pytest.fixture(autouse=True)
-def _clear_provider_health():
+def _clear_provider_caches():
     from apps.media.backend.services import providers
 
-    providers._HEALTH.clear()
     providers.SEARCH_CACHE.clear()
     providers._GROUP_TRACKS.clear()
     yield
-    providers._HEALTH.clear()
     providers.SEARCH_CACHE.clear()
     providers._GROUP_TRACKS.clear()
 
