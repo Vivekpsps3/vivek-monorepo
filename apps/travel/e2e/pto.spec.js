@@ -580,6 +580,105 @@ test('remove sick keeps history and a dated correction previews it', async ({ pa
   await expect(page.getByRole('heading', { name: 'Clinic', exact: true })).toBeVisible();
 });
 
+test('scheduled accrual previews, cancels, and confirms without backfill', async ({ page, request }) => {
+  test.setTimeout(90_000);
+  expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
+  await putBucket(request, 'pto', {
+    start_balance_hours: '40',
+    accrual_hours: '8',
+    accrual_cadence: 'monthly',
+    balance_as_of: '2026-01-01',
+  });
+  const entry = await request.post('/travel/api/pto/entries', {
+    data: { label: 'Clinic', start_date: '2026-04-02', end_date: '2026-04-02', days: '1', bucket: 'pto' },
+  });
+  expect(entry.ok(), await entry.text()).toBeTruthy();
+  const trip = await request.post('/travel/api/trips', {
+    data: { title: 'Kyoto', start_date: '2026-12-10', end_date: '2026-12-12', counts_as_pto: true },
+  });
+  expect(trip.ok(), await trip.text()).toBeTruthy();
+  const tripId = (await trip.json()).id;
+  const board = async () => (await request.get('/travel/api/pto')).json();
+  const allocations = async () => (await (await request.get('/travel/api/trips/' + tripId)).json()).pto_dates;
+  const before = await board();
+  const beforeAllocations = await allocations();
+  expect(before.buckets.pto.accrual_mode).toBe('daily');
+  expect(before.buckets.pto.accrual_anchor).toBeNull();
+  expect(before.buckets.pto.accrual_version).toBe(0);
+  expect(beforeAllocations.length).toBeGreaterThan(0);
+
+  const impacts = [];
+  const puts = [];
+  await page.route('**/travel/api/pto/policies/pto/impact', async route => {
+    const upstream = await route.fetch();
+    const raw = await upstream.text();
+    let body = null;
+    try { body = JSON.parse(raw); } catch { body = null; }
+    impacts.push({ status: upstream.status(), body, post: route.request().postData() || '' });
+    await route.fulfill({
+      status: upstream.status(),
+      contentType: upstream.headers()['content-type'] || 'application/json',
+      body: raw,
+    });
+  });
+  page.on('request', hit => {
+    const path = new URL(hit.url()).pathname;
+    if (hit.method() === 'PUT' && path.endsWith('/travel/api/pto/policies/pto')) puts.push(hit.postData() || '');
+  });
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/travel/pto');
+  await page.getByRole('button', { name: 'Edit PTO', exact: true }).click();
+  const schedule = page.getByRole('radio', { name: 'On a schedule', exact: true });
+  const scheduleBox = await page.locator('.segment', { has: schedule }).boundingBox();
+  expect(scheduleBox.height).toBeGreaterThanOrEqual(44);
+  await schedule.check();
+  const anchor = page.getByLabel('First posting date');
+  await anchor.fill('2026-01-31');
+  await anchor.blur();
+  await expect.poll(() => impacts.filter(row => row.status === 200 && row.post.includes('2026-01-31')).length).toBeGreaterThan(0);
+  const preview = impacts.filter(row => row.status === 200 && row.post.includes('2026-01-31')).at(-1).body;
+  expect(preview.entries_rewritten).toBe(false);
+  expect(preview.balance_today_hours).not.toBe(before.buckets.pto.balance_today_hours);
+  const hours = String(preview.balance_today_hours).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await expect(page.getByText(new RegExp('Balance today would be .*' + hours + ' h'))).toBeVisible();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Change accrual schedule' });
+  await expect(dialog).toContainText(preview.balance_today_hours);
+  await expect(dialog).toContainText('The starting balance and recorded leave stay.');
+  await dialog.getByRole('button', { name: 'Keep current accrual', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(puts).toEqual([]);
+  const cancelled = await board();
+  expect(cancelled.buckets.pto.accrual_mode).toBe('daily');
+  expect(cancelled.buckets.pto.accrual_anchor).toBeNull();
+  expect(cancelled.buckets.pto.accrual_version).toBe(0);
+  expect(cancelled.buckets.pto.start_balance_hours).toBe('40');
+  expect(cancelled.entries.map(row => row.label)).toEqual(before.entries.map(row => row.label));
+  expect(await allocations()).toEqual(beforeAllocations);
+
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save schedule', exact: true }).click();
+  await expect(page.getByText('PTO policy saved.', { exact: true })).toBeVisible();
+  expect(puts).toHaveLength(1);
+  const sent = JSON.parse(puts[0]);
+  expect(sent.accrual_mode).toBe('scheduled');
+  expect(sent.accrual_anchor).toBe('2026-01-31');
+  expect(sent.accrual_version).toBe(0);
+  expect(sent.start_balance_hours).toBe('40');
+  const saved = await board();
+  expect(saved.buckets.pto.accrual_mode).toBe('scheduled');
+  expect(saved.buckets.pto.accrual_anchor).toBe('2026-01-31');
+  expect(saved.buckets.pto.accrual_version).toBe(1);
+  expect(saved.buckets.pto.start_balance_hours).toBe('40');
+  expect(saved.buckets.pto.balance_as_of).toBe('2026-01-01');
+  expect(saved.buckets.pto.balance_today_hours).toBe(preview.balance_today_hours);
+  expect(saved.entries.map(row => ({ label: row.label, days: row.days, start_date: row.start_date }))).toEqual(
+    before.entries.map(row => ({ label: row.label, days: row.days, start_date: row.start_date })),
+  );
+  expect(await allocations()).toEqual(beforeAllocations);
+});
+
 test('painter scenes for the stacked review', async ({ page, request }) => {
   test.setTimeout(180_000);
   const widths = (process.env.SHOT_WIDTHS || '390,1280').split(',').map(Number);

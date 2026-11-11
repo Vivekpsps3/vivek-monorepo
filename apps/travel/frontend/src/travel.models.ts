@@ -62,6 +62,9 @@ export interface BucketState {
   cap_hours?: string | null;
   year_start?: string;
   carry_forward?: boolean;
+  accrual_mode?: string;
+  accrual_anchor?: string | null;
+  accrual_version?: number;
   balance_today_hours?: string;
   balance_today_days?: string;
   at_cap?: boolean;

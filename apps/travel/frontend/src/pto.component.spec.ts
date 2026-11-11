@@ -131,6 +131,9 @@ describe("PtoComponent (TPTO2A/2B)", () => {
       year_month: "01",
       year_day: "01",
       carry_forward: true,
+      accrual_mode: "daily",
+      accrual_anchor: "",
+      accrual_version: 0,
     };
     component.savePolicy("sick");
     const req = httpMock.expectOne("/travel/api/pto/policies/sick");
@@ -143,6 +146,9 @@ describe("PtoComponent (TPTO2A/2B)", () => {
       cap_hours: null,
       year_start: "01-01",
       carry_forward: true,
+      accrual_mode: "daily",
+      accrual_anchor: null,
+      accrual_version: 0,
     });
     req.flush(payload());
     httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
