@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#246](https://github.com/Vivekpsps3/vivek-monorepo/issues/246); parent [#93](https://github.com/Vivekpsps3/vivek-monorepo/issues/93) stays open. Historical #103 stays open as a parent citation, not a leaf to close.
 - Agent/context, branch/worktree: implementer, `agent/hub-04`, `/tmp/vivek-hub-04`
-- Base main SHA, current tested SHA: base `a7e16c6fa5bd5543514081e0834022fe38dcd1d1` (SAFE-05 merge). Local gates below ran on that base plus this leaf's working tree. The implementation commit SHA is the PR head once this file is committed with the code.
+- Base main SHA, current tested SHA: base `a7e16c6fa5bd5543514081e0834022fe38dcd1d1` (SAFE-05 merge). Implementation commit `15ffa26cfde0da960dbe1d01c05e41b947afb415`. Local gates ran on that tree before the commit. This file's SHA line is the only follow-up.
 - Fresh-main/prerequisite/active-PR checks: `gh issue view` on 2026-11-11. SAFE-03 #203, SAFE-04 #204, and SAFE-05 #205 are closed. #246 was open with no prior claim. No open pull requests. SAFE-05 merge SHA matches this base.
 
 ## Acceptance
