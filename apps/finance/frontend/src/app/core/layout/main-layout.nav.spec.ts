@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { BehaviorSubject, Subject, of } from 'rxjs';
-import { ConfirmService, SESSION_CONTEXT, ToastService, type SessionPort } from '@vivek/ui';
+import { ConfirmService, SESSION_CONTEXT, ToastService, UserMenuContent, type SessionPort } from '@vivek/ui';
 import { ApiHealthService } from '../../services/api-health.service';
 import { VaultService } from '../../crypto/vault.service';
 import { FinanceService } from '../../services/finance.service';
@@ -46,7 +46,9 @@ describe('MainLayoutComponent navigation (F6)', () => {
           useValue: {
             status$: of(marketState),
             currentState: marketState,
-            disclosure: of(''),
+            disclosure: 'Price checks send ticker symbols only. Shares, balances and plans stay encrypted in this browser.',
+            firstAutoCheck$: new Subject<readonly string[]>(),
+            disclosedSymbols: [] as readonly string[],
             startForSession: () => undefined,
             endSession: () => undefined,
             broadcastLock: () => undefined,
@@ -116,5 +118,48 @@ describe('MainLayoutComponent navigation (F6)', () => {
     expect(guide.firstStepsRequested()).toBe(true);
     expect(fixture.componentInstance.showTutorial).toBe(false);
     expect(navigate).toHaveBeenCalledWith('/finance');
+  });
+
+  it('toggles Check prices when I unlock in place and opens About price checks', () => {
+    localStorage.clear();
+    const menu = TestBed.inject(UserMenuContent);
+    const view = menu.template()!.createEmbeddedView({});
+    view.detectChanges();
+    const host = document.createElement('div');
+    for (const node of view.rootNodes) host.appendChild(node);
+    const toggle = host.querySelector('[role="menuitemcheckbox"]') as HTMLButtonElement;
+    expect(toggle.textContent).toContain('Check prices when I unlock');
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    expect(toggle.querySelector('ui-icon')).not.toBeNull();
+
+    toggle.click();
+    view.detectChanges();
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect(toggle.querySelector('ui-icon')).toBeNull();
+    expect(localStorage.getItem('finance-auto-price-check:7')).toBe('off');
+    expect(host.querySelector('[role="menuitemcheckbox"]')).not.toBeNull();
+
+    toggle.click();
+    view.detectChanges();
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    expect(localStorage.getItem('finance-auto-price-check:7')).toBe('on');
+
+    const about = [...host.querySelectorAll('button')].find(button => button.textContent?.trim() === 'About price checks');
+    about!.click();
+    fixture.detectChanges();
+    const title = fixture.nativeElement.querySelector('#price-details-title') as HTMLElement;
+    expect(title.textContent?.trim()).toBe('About price checks');
+    const dialogText = title.closest('ui-dialog')?.textContent ?? '';
+    expect(dialogText).toContain('Price checks send ticker symbols only. Shares, balances and plans stay encrypted in this browser.');
+    expect(dialogText).toContain("Prices come from a public market-data service, requested by Finance's server.");
+    expect(dialogText).toContain('Check prices when I unlock is on.');
+    expect(dialogText).toContain('No ticker symbols were sent.');
+    expect(dialogText).not.toMatch(/\bIP\b/);
+    fixture.componentInstance.closePriceDetails();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.showPriceDetails).toBeFalse();
+
+    view.destroy();
+    localStorage.clear();
   });
 });

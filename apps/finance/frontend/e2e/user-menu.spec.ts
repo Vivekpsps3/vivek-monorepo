@@ -20,7 +20,7 @@ test('Finance actions live in the username dropdown and preserve clear-data conf
   // F2: the Finance slot's buttons, in order.
   menu = await openUserMenu(page);
   const financeButtons = await menu.locator('.finance-user-actions').getByRole('button').allTextContents();
-  expect(financeButtons.map(text => text.trim())).toEqual(['Guide', 'Lock Finance', 'Details', 'Clear data…']);
+  expect(financeButtons.map(text => text.trim())).toEqual(['Guide', 'Lock Finance', 'About price checks', 'Clear data…']);
   await page.keyboard.press('Escape');
 
   const resets: unknown[] = [];

@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
-import { BehaviorSubject, ReplaySubject, Subject, firstValueFrom, takeUntil, timeout } from 'rxjs';
+import { BehaviorSubject, Subject, firstValueFrom, takeUntil, timeout } from 'rxjs';
 import { isoDateInZone } from '@vivek/browser';
 import { authNavigation } from '@vivek/ui';
 import { SESSION_CONTEXT } from '@vivek/ui';
@@ -78,9 +78,14 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
   private sessionCancel$ = new Subject<void>();
   readonly status$ = this.stateSubject.asObservable();
   readonly disclosure = 'Price checks send ticker symbols only. Shares, balances and plans stay encrypted in this browser.';
-  /** Emits once, when this session's automatic price check actually starts. */
-  private readonly firstAutoCheckSubject = new ReplaySubject<void>(1);
+  /**
+   * Emits the symbols for this session's automatic check once they are known,
+   * including an empty list when nothing will be sent. One emission per session.
+   */
+  private readonly firstAutoCheckSubject = new Subject<readonly string[]>();
   readonly firstAutoCheck$ = this.firstAutoCheckSubject.asObservable();
+  private sentSymbols: readonly string[] = [];
+  private announcedAutomaticCheck = false;
 
   private channel: BroadcastChannel | null = null;
   private activeUserId: number | null = null;
@@ -117,6 +122,16 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     return this.stateSubject.value;
   }
 
+  /** Symbols from the latest automatic or manual refresh in this session. */
+  get disclosedSymbols(): readonly string[] {
+    return this.sentSymbols;
+  }
+
+  /** True after this session has announced its automatic symbol list. */
+  get automaticCheckAnnounced(): boolean {
+    return this.announcedAutomaticCheck;
+  }
+
   ngOnDestroy(): void {
     this.endSession();
     this.clearPendingInvalidations();
@@ -137,13 +152,14 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
       this.automaticSessionKey = null;
       this.inFlightSymbols.clear();
       this.activeRefreshSymbols = new Set<string>();
+      this.sentSymbols = [];
+      this.announcedAutomaticCheck = false;
       this.stateSubject.next({ ...EMPTY_STATE });
     }
     this.activeUserId = userId;
     if (!this.pricePrefs.autoCheck(userId)) return;
     if (this.automaticSessionKey === key) return;
     this.automaticSessionKey = key;
-    this.firstAutoCheckSubject.next();
     void this.refreshConfiguredSymbols(true);
   }
 
@@ -155,6 +171,8 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     this.automaticSessionKey = null;
     this.inFlightSymbols.clear();
     this.activeRefreshSymbols = new Set<string>();
+    this.sentSymbols = [];
+    this.announcedAutomaticCheck = false;
     this.clearPendingInvalidations();
     if (this.stateSubject.value.phase !== 'idle') this.stateSubject.next({ ...EMPTY_STATE });
   }
@@ -198,6 +216,11 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
         .map(value => value.trim().toUpperCase())
         .filter(value => SYMBOL_PATTERN.test(value)))].sort();
       this.assertCurrentOperation(sessionKey, token, operation);
+      this.sentSymbols = symbols;
+      if (automatic) {
+        this.announcedAutomaticCheck = true;
+        this.firstAutoCheckSubject.next(symbols);
+      }
       symbols.forEach(symbol => this.activeRefreshSymbols.add(symbol));
       if (!symbols.length) {
         const idle = { ...EMPTY_STATE, phase: 'idle' as const, automatic };
