@@ -1,4 +1,5 @@
 export const RELATED_KINDS: string[];
+export const RELATED_ATTEMPT_LIMIT: number;
 export interface RelatedNode {
   title: string;
   relation: string;
