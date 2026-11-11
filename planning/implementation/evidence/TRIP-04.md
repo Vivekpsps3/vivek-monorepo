@@ -52,10 +52,10 @@ Commands ran from `/tmp/vivek-trip-04`. `PYTHON` was `/home/vivek/Deployments/vi
 
 ## Handoff
 
-- PR URL (leaf closure keyword only):
-- Roadmap #134 append-only status-note URL:
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/352 with `Closes #228` and a non-closing reference to #84.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6809455843. The issue body is not edited.
 - Merged/activation status (actual evidence, not assumption): not merged. Not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. `confirmAction` was not given a second signature. Parent #84 stays open. PTO decimal-cache from #128 is TRIP-05.
-- Next actor: this agent, to open the pull request, comment on #134, watch CI, and squash-merge #228.
+- Next actor: this agent, to watch CI and squash-merge #352.
 
 No unstated decision from the previous context is necessary to continue.
