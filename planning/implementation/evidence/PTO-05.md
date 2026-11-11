@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#234](https://github.com/Vivekpsps3/vivek-monorepo/issues/234) PTO-05. Parent [#110](https://github.com/Vivekpsps3/vivek-monorepo/issues/110) stays open.
 - Agent/context, branch/worktree: Cursor Grok implementer, `agent/pto-05`, `/tmp/vivek-pto-05`.
-- Base main SHA, current tested SHA: origin/main at gate time `b7ae697cbac05fe7db5220a8ed7f2752543a854a` (fast-forward from the assigned base `85212152bda3ce6cab5cbfcc9c787b564214fc69`, Media #349 only). The local gates ran on the working tree this leaf commit snapshots.
+- Base main SHA, current tested SHA: origin/main at gate time `b7ae697cbac05fe7db5220a8ed7f2752543a854a` (fast-forward from the assigned base `85212152bda3ce6cab5cbfcc9c787b564214fc69`, Media #349 only). Application revision `8c2c041ae2fafd0a6d0a88e104692663c9a14a2d` is what the local gates ran on. This SHA line does not change application code.
 - Fresh-main/prerequisite/active-PR checks: PTO-02 and PTO-04 are on this base. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/234#issuecomment-6808602212. No open PR shared the travel leave files at claim time.
 
 ## Acceptance
@@ -61,7 +61,7 @@ Local execution from `/tmp/vivek-pto-05` with `CHROME_BIN` and `PLAYWRIGHT_CHROM
 
 Issue / parent / local packet: PTO-05 / #234 / #110 / `planning/implementation/issues/PTO-05.md`.
 
-Branch, worktree, base main SHA, current SHA: `agent/pto-05`, `/tmp/vivek-pto-05`, base `85212152bda3ce6cab5cbfcc9c787b564214fc69`, origin/main `b7ae697cbac05fe7db5220a8ed7f2752543a854a`.
+Branch, worktree, base main SHA, current SHA: `agent/pto-05`, `/tmp/vivek-pto-05`, base `85212152bda3ce6cab5cbfcc9c787b564214fc69`, origin/main `b7ae697cbac05fe7db5220a8ed7f2752543a854a`, application `8c2c041ae2fafd0a6d0a88e104692663c9a14a2d`.
 
 Owned files and conflict groups; other active PRs checked: travel leave math, models, schemas, router, PTO component, one Alembic revision, travel leave tests, `pto.spec.js`, this evidence file. Trip UI, `packages/ui`, the combined chart, and Travel Home were not edited.
 
