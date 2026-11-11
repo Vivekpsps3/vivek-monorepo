@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): #218; parents #200 and #199
 - Agent/context, branch/worktree: Cursor Grok implementer, branch `agent/type-01`, worktree `/tmp/vivek-type-01`
-- Base main SHA, current tested SHA: base `a7e16c6fa5bd5543514081e0834022fe38dcd1d1`. Local gates ran on that base plus the implementation tree immediately before the commit that adds this file.
+- Base main SHA, current tested SHA: base `a7e16c6fa5bd5543514081e0834022fe38dcd1d1`. Implementation commit `d80394e47ada0048ac11ccabf6c1a192b01814cb`. Local gates ran on that tree. This follow-up only records the PR and roadmap URLs.
 - Fresh-main/prerequisite/active-PR checks: #218 was open with no other claim. No open PRs on `main`. Closed on `origin/main`: SAFE-05 #205, MED-08 #242, MED-02 #236, UX-05 #263, TRIP-01 #225, PTO-03 #232, SEC-02 #267, OPS-02 #273. SAFE-05 deadline behavior in `hub-load.ts` and `pixels-data.service.ts` was left in place.
 
 ## Acceptance
@@ -53,8 +53,8 @@ Karma used port 9911 only in the worktree `apps/karma.conf.js` during the runs. 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled after the PR is opened. `Closes #218` only. Parents #200 and #199 stay open.
-- Roadmap #134 append-only status-note URL: filled after the comment is posted.
-- Merged/activation status (actual evidence, not assumption): not merged yet.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/338 (`Closes #218` only). Parents #200 and #199 stay open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6804581804
+- Merged/activation status (actual evidence, not assumption): PR #338 is open. Not merged yet.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Search responses remain an unchecked `fetchHubSummary` caller on purpose.
 - Next actor: review and CI, then squash-merge of `agent/type-01` if the four required checks are green.
