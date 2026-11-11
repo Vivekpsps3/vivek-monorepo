@@ -83,6 +83,9 @@ describe('PlanningService', () => {
         expect(inputs.undated_portfolio_quotes).toBe(1);
         expect(inputs.undated_portfolio_positions).toBe(2);
         expect(inputs.undated_portfolio_values).toBe(1);
+        expect(inputs.asset_count).toBe(2);
+        expect(inputs.debt_count).toBe(1);
+        expect(inputs.holding_count).toBe(2);
         expect(inputs.snapshot_hash).toContain('portfolio-dates:');
         done();
       },
@@ -353,6 +356,134 @@ describe('PlanningService', () => {
     service.getSpendingSuggestionContext().subscribe({
       next: context => {
         expect(context).toEqual({ transactions, receipts, accounts });
+        done();
+      },
+      error: done.fail,
+    });
+  });
+
+  it('counts zero source records and does not call missing taxes net', done => {
+    encStore.getNetWorth.and.resolveTo({ total: 0, portfolio: 0, liabilities: 0 } as never);
+    encStore.getJobIncomes.and.resolveTo([]);
+    encStore.getFixedExpenses.and.resolveTo([]);
+    encStore.getSubscriptions.and.resolveTo([]);
+    encStore.getTransactions.and.resolveTo([]);
+    service.getInputs().subscribe({
+      next: inputs => {
+        expect(inputs.asset_count).toBe(0);
+        expect(inputs.debt_count).toBe(0);
+        expect(inputs.holding_count).toBe(0);
+        expect(inputs.active_job_count).toBe(0);
+        expect(inputs.active_bill_count).toBe(0);
+        expect(inputs.active_subscription_count).toBe(0);
+        expect(inputs.income_is_net).toBeFalse();
+        expect(inputs.avg_monthly_income).toBe(0);
+        expect(inputs.snapshot_hash).toContain('records:a0d0h0:gross');
+        done();
+      },
+      error: done.fail,
+    });
+  });
+
+  it('counts zero-value records and excludes inactive jobs, bills, subscriptions, and holdings', done => {
+    encStore.getNetWorth.and.resolveTo({ total: 50, portfolio: 0, liabilities: 0 } as never);
+    encStore.getTransactions.and.resolveTo([]);
+    encStore.getAssets.and.resolveTo([
+      { id: 1, current_value: 0, as_of_date: '2020-01-01' },
+      { id: 2, current_value: 10, as_of_date: null },
+    ] as never);
+    encStore.getLiabilities.and.resolveTo([
+      { id: 1, balance_owed: 0, as_of_date: '2020-01-01' },
+      { id: 2, balance_owed: 5, as_of_date: null },
+      { id: 3, balance_owed: 8, as_of_date: '2021-01-01' },
+    ] as never);
+    encStore.getHoldings.and.resolveTo([
+      { id: 1, lifecycle_status: 'active', shares: 0, quote_date: null, position_as_of: null },
+      { id: 2, lifecycle_status: 'active', shares: 1, quote_date: null, position_as_of: null },
+      { id: 3, lifecycle_status: 'inactive', shares: 9, quote_date: null, position_as_of: null },
+      { id: 4, lifecycle_status: 'staged', shares: 4, quote_date: '2020-01-01', position_as_of: '2020-01-01' },
+    ] as never);
+    encStore.getJobIncomes.and.resolveTo([
+      { monthly_net: 0, annual_taxes: 0, annual_deductions: 0, is_active: true, effective_date: '2000-01-01' },
+      { monthly_net: 1000, annual_taxes: 0, annual_deductions: 0, is_active: true, effective_date: '2000-01-01' },
+      { monthly_net: 9000, annual_taxes: 1000, annual_deductions: 0, is_active: false, effective_date: '2000-01-01' },
+      { monthly_net: 2000, annual_taxes: 0, annual_deductions: 0, is_active: true, effective_date: '2000-01-01', end_date: '2001-01-01' },
+      { monthly_net: 3000, annual_taxes: 0, annual_deductions: 0, is_active: true, effective_date: '9999-01-01' },
+    ] as never);
+    encStore.getFixedExpenses.and.resolveTo([
+      { annual_amount: 0, is_active: true },
+      { annual_amount: 120, is_active: true },
+      { annual_amount: 500, is_active: false },
+    ] as never);
+    encStore.getSubscriptions.and.resolveTo([
+      { annual_amount: 0, is_active: true },
+      { annual_amount: 15, is_active: true },
+      { annual_amount: 20, is_active: true },
+      { annual_amount: 99, is_active: false },
+    ] as never);
+    service.getInputs().subscribe({
+      next: inputs => {
+        expect(inputs.asset_count).toBe(2);
+        expect(inputs.debt_count).toBe(3);
+        expect(inputs.holding_count).toBe(2);
+        expect(inputs.active_job_count).toBe(2);
+        expect(inputs.active_bill_count).toBe(2);
+        expect(inputs.active_subscription_count).toBe(3);
+        expect(inputs.income_is_net).toBeFalse();
+        expect(inputs.avg_monthly_income).toBe(1000);
+        expect(inputs.annual_fixed_expenses).toBe(120);
+        expect(inputs.annual_subscriptions).toBe(35);
+        expect(inputs.undated_portfolio_quotes).toBe(2);
+        expect(inputs.snapshot_hash).toContain('records:a2d3h2:gross');
+        done();
+      },
+      error: done.fail,
+    });
+  });
+
+  it('counts one current taxed job as net and keeps a zero-value asset', done => {
+    encStore.getNetWorth.and.resolveTo({ total: 0, portfolio: 0, liabilities: 0 } as never);
+    encStore.getTransactions.and.resolveTo([]);
+    encStore.getAssets.and.resolveTo([{ id: 1, current_value: 0, as_of_date: '2020-01-01' }] as never);
+    encStore.getLiabilities.and.resolveTo([]);
+    encStore.getHoldings.and.resolveTo([
+      { id: 1, lifecycle_status: 'active', shares: 1, quote_date: null, position_as_of: null },
+    ] as never);
+    encStore.getJobIncomes.and.resolveTo([
+      { monthly_net: 4000, annual_taxes: 12000, annual_deductions: 0, is_active: true, effective_date: '2000-01-01' },
+    ] as never);
+    encStore.getFixedExpenses.and.resolveTo([{ annual_amount: 100, is_active: true }] as never);
+    encStore.getSubscriptions.and.resolveTo([]);
+    service.getInputs().subscribe({
+      next: inputs => {
+        expect(inputs.asset_count).toBe(1);
+        expect(inputs.debt_count).toBe(0);
+        expect(inputs.holding_count).toBe(1);
+        expect(inputs.active_job_count).toBe(1);
+        expect(inputs.active_bill_count).toBe(1);
+        expect(inputs.active_subscription_count).toBe(0);
+        expect(inputs.income_is_net).toBeTrue();
+        expect(inputs.avg_monthly_income).toBe(4000);
+        expect(inputs.undated_portfolio_quotes).toBe(1);
+        expect(inputs.snapshot_hash).toContain('records:a1d0h1:net');
+        done();
+      },
+      error: done.fail,
+    });
+  });
+
+  it('treats deductions without a separate tax amount as net pay', done => {
+    encStore.getNetWorth.and.resolveTo({ total: 1, portfolio: 0, liabilities: 0 } as never);
+    encStore.getTransactions.and.resolveTo([]);
+    encStore.getJobIncomes.and.resolveTo([
+      { monthly_net: 10, annual_taxes: 0, annual_deductions: 1, is_active: true, effective_date: '2000-01-01' },
+    ] as never);
+    encStore.getFixedExpenses.and.resolveTo([]);
+    encStore.getSubscriptions.and.resolveTo([]);
+    service.getInputs().subscribe({
+      next: inputs => {
+        expect(inputs.income_is_net).toBeTrue();
+        expect(inputs.active_job_count).toBe(1);
         done();
       },
       error: done.fail,

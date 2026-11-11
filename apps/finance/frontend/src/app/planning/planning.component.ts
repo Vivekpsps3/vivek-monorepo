@@ -67,11 +67,12 @@ import {
 } from './planning-assumptions.util';
 import { spendingModeInference } from './spending-mode';
 import {
-  asOfPhrase,
   dateWarnings as dateWarningsFor,
+  planningFactsCopy,
   planningSourceLabel,
   spendingBasisSentence as spendingBasisSentenceFor,
   type DateWarning,
+  type PlanningFactsCopy,
 } from './planning-copy';
 import { focusErrorSummary } from '../shared/form-validation';
 import { AppDatePipe } from '@vivek/ui';
@@ -109,10 +110,18 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   error: string | null = null;
 
   get hasPlanningInputs(): boolean {
-    return (this.inputs?.net_worth_total ?? 0) !== 0
-      || (this.inputs?.net_worth_portfolio ?? 0) !== 0
-      || (this.inputs?.avg_monthly_income ?? 0) !== 0
-      || (this.inputs?.recurring_annual_spending ?? 0) !== 0;
+    const inputs = this.inputs;
+    if (!inputs) return false;
+    return inputs.net_worth_total !== 0
+      || inputs.net_worth_portfolio !== 0
+      || inputs.avg_monthly_income !== 0
+      || (inputs.recurring_annual_spending ?? 0) !== 0
+      || inputs.asset_count > 0
+      || inputs.debt_count > 0
+      || inputs.holding_count > 0
+      || inputs.active_job_count > 0
+      || inputs.active_bill_count > 0
+      || inputs.active_subscription_count > 0;
   }
 
   goToEmptyAction(kind: 'balance' | 'pay'): void {
@@ -464,36 +473,9 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     return this.activeTool === 'overview' || this.activeTool === 'simulation' || this.activeTool === 'retirement-target';
   }
 
-  /** F18: plain-language facts-card copy (labels + source lines). */
-  get factsCopy(): {
-    netWorth: { label: string; small: string };
-    portfolio: { label: string; small: string };
-    takeHome: { label: string; small: string };
-    scheduled: { label: string; small: string };
-  } {
-    const inputs = this.inputs;
-    const balanceAsOf = asOfPhrase(inputs?.oldest_balance_as_of);
-    const quoteAsOf = asOfPhrase(inputs?.oldest_portfolio_quote_date);
-    return {
-      netWorth: {
-        label: 'Net worth',
-        small: balanceAsOf
-          ? `${planningSourceLabel('net_worth')} · ${balanceAsOf}`
-          : planningSourceLabel('net_worth'),
-      },
-      portfolio: {
-        label: 'Portfolio',
-        small: quoteAsOf ? `From your holdings · prices ${quoteAsOf}` : 'From your holdings',
-      },
-      takeHome: { label: 'Take-home', small: planningSourceLabel('income') },
-      scheduled: {
-        label: 'Scheduled costs',
-        // Spec gap: the ({fixed} bills, {subs} subscriptions) counts aren't
-        // carried by PlanningInputsPreview, so the parenthetical waits for a
-        // service/model addition owned outside F18.
-        small: planningSourceLabel('spending'),
-      },
-    };
+  /** Renders the preview contract. Record counts are not recomputed here. */
+  get factsCopy(): PlanningFactsCopy {
+    return planningFactsCopy(this.inputs);
   }
 
   get dateWarnings(): DateWarning[] {

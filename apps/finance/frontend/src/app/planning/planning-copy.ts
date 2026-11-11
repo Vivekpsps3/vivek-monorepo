@@ -1,5 +1,6 @@
-import { formatDate, formatMoney, fromDollars } from '@vivek/browser';
+import { formatDate, formatMoney, fromDollars, plural } from '@vivek/browser';
 import type { PlanningInputsPreview } from '../models/planning.model';
+import { formatStoredMoney } from '../shared/stored-money';
 
 export type PlanningInputs = PlanningInputsPreview;
 
@@ -50,10 +51,72 @@ export function asOfPhrase(iso: string | null | undefined, now: Date = new Date(
 export interface DateWarning {
   text: string;
   link: string;
+  linkText: string;
   queryParams: Record<string, string>;
 }
 
-/** Readable "no date" warnings with an [Add a date] link, in display order. */
+export interface PlanningFactLine {
+  label: string;
+  small: string;
+}
+
+export interface PlanningFactsCopy {
+  netWorth: PlanningFactLine;
+  portfolio: PlanningFactLine;
+  takeHome: PlanningFactLine & { amount: string };
+  scheduled: PlanningFactLine;
+}
+
+/** Parenthetical counts stay numeric so zero participation is visible. */
+function countPhrase(count: number | null | undefined, singular: string): string {
+  return plural(count ?? 0, singular, { zeroIsNo: false });
+}
+
+/**
+ * Facts-card wording from the typed preview. This does not scan records;
+ * the service already counted them.
+ */
+export function planningFactsCopy(inputs: PlanningInputs | null, now: Date = new Date()): PlanningFactsCopy {
+  const balanceAsOf = asOfPhrase(inputs?.oldest_balance_as_of, now);
+  const quoteAsOf = asOfPhrase(inputs?.oldest_portfolio_quote_date, now);
+  const netWorthCounts = `${countPhrase(inputs?.asset_count, 'asset')}, ${countPhrase(inputs?.debt_count, 'debt')}`;
+  const jobCounts = countPhrase(inputs?.active_job_count, 'active job');
+  const billCounts = `${countPhrase(inputs?.active_bill_count, 'bill')}, ${countPhrase(inputs?.active_subscription_count, 'subscription')}`;
+  const incomeSource = `${planningSourceLabel('income')} (${jobCounts})`;
+  const annual = (inputs?.avg_monthly_income || 0) * 12;
+  const incomeIsNet = inputs?.income_is_net === true;
+  return {
+    netWorth: {
+      label: 'Net worth',
+      small: balanceAsOf
+        ? `${planningSourceLabel('net_worth')} (${netWorthCounts}) · ${balanceAsOf}`
+        : `${planningSourceLabel('net_worth')} (${netWorthCounts})`,
+    },
+    portfolio: {
+      label: 'Portfolio',
+      small: quoteAsOf
+        ? `From your holdings (${countPhrase(inputs?.holding_count, 'holding')}) · prices ${quoteAsOf}`
+        : `From your holdings (${countPhrase(inputs?.holding_count, 'holding')})`,
+    },
+    takeHome: incomeIsNet
+      ? {
+          label: 'Take-home',
+          amount: `${formatStoredMoney(annual)} a year`,
+          small: incomeSource,
+        }
+      : {
+          label: 'Yearly pay',
+          amount: `${formatStoredMoney(annual)} a year before taxes`,
+          small: `${incomeSource}. Take-home: not set`,
+        },
+    scheduled: {
+      label: 'Scheduled costs',
+      small: `${planningSourceLabel('spending')} (${billCounts})`,
+    },
+  };
+}
+
+/** Missing-date warnings in display order. Price dates keep the Check prices link. */
 export function dateWarnings(inputs: PlanningInputs | null): DateWarning[] {
   if (!inputs) return [];
   const warnings: DateWarning[] = [];
@@ -62,6 +125,7 @@ export function dateWarnings(inputs: PlanningInputs | null): DateWarning[] {
     warnings.push({
       text: positions === 1 ? '1 holding has no position date.' : `${positions} holdings have no position date.`,
       link: '/finance/have',
+      linkText: 'Add a date',
       queryParams: { t: 'holdings' },
     });
   }
@@ -70,7 +134,17 @@ export function dateWarnings(inputs: PlanningInputs | null): DateWarning[] {
     warnings.push({
       text: balances === 1 ? '1 balance has no date.' : `${balances} balances have no date.`,
       link: '/finance/have',
+      linkText: 'Add a date',
       queryParams: { t: 'assets' },
+    });
+  }
+  const quotes = inputs.undated_portfolio_quotes || 0;
+  if (quotes > 0) {
+    warnings.push({
+      text: quotes === 1 ? '1 holding has no price date.' : `${quotes} holdings have no price date.`,
+      link: '/finance/have',
+      linkText: 'Check prices',
+      queryParams: { t: 'holdings' },
     });
   }
   return warnings;
