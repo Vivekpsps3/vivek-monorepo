@@ -138,6 +138,14 @@ export class PlanningService {
     const activeFixedCount = activeFixed.length;
     const activeSubCount = activeSubs.length;
     const currentHoldings = holdings.filter(row => row.lifecycle_status !== 'inactive' && row.lifecycle_status !== 'staged');
+    // Assets and debts have no inactive flag. The other counts reuse the
+    // filters above, and a zero amount still participates.
+    const assetCount = assets.length;
+    const debtCount = liabilities.length;
+    const holdingCount = currentHoldings.length;
+    const incomeIsNet = activeIncomes.some(row =>
+      (Number(row.annual_taxes) || 0) + (Number(row.annual_deductions) || 0) > 0,
+    );
     const oldestBalanceAsOf = oldestIsoDate([
       ...assets.map(row => row.as_of_date),
       ...liabilities.map(row => row.as_of_date),
@@ -161,6 +169,7 @@ export class PlanningService {
       `portfolio-dates:${oldestPortfolioQuoteDate ?? 'unknown'}:${oldestPortfolioPositionDate ?? 'unknown'}:${undatedPortfolioQuotes}:${undatedPortfolioPositions}`,
       `inc:${monthlyIncome.toFixed(2)}x${activeIncomeCount}`,
       `spend:${implied_annual_spending.toFixed(2)}f${activeFixedCount}s${activeSubCount}`,
+      `records:a${assetCount}d${debtCount}h${holdingCount}:${incomeIsNet ? 'net' : 'gross'}`,
       `txcount:${txs.length}`,
     ].join('|');
     return {
@@ -182,6 +191,13 @@ export class PlanningService {
       net_worth_source: 'balance-sheet',
       annual_income_source: 'active-job-income',
       transaction_role: 'count-only-not-used-for-spend',
+      asset_count: assetCount,
+      debt_count: debtCount,
+      holding_count: holdingCount,
+      active_job_count: activeIncomeCount,
+      active_bill_count: activeFixedCount,
+      active_subscription_count: activeSubCount,
+      income_is_net: incomeIsNet,
       oldest_balance_as_of: oldestBalanceAsOf,
       undated_asset_balances: undatedAssetBalances,
       undated_liability_balances: undatedLiabilityBalances,

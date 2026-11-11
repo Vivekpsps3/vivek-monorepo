@@ -33,7 +33,7 @@
       </div>
       <div>
         <span>{{ factsCopy.takeHome.label }}</span>
-        <strong>{{ formatMoney((inputs?.avg_monthly_income || 0) * 12) }} a year</strong>
+        <strong>{{ factsCopy.takeHome.amount }}</strong>
         <a routerLink="/finance/recurring">Open jobs and pay</a>
         <small>{{ factsCopy.takeHome.small }}</small>
       </div>
@@ -45,10 +45,7 @@
       </div>
     </div>
     @for (warning of dateWarnings; track warning.text) {
-      <p class="mc-help">{{ warning.text }} <a [routerLink]="warning.link" [queryParams]="warning.queryParams">Add a date</a></p>
-    }
-    @if ((inputs?.undated_portfolio_quotes || 0) > 0) {
-      <p class="mc-help">{{ inputs?.undated_portfolio_quotes }} {{ inputs?.undated_portfolio_quotes === 1 ? 'holding has' : 'holdings have' }} no price date. <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }">Check prices</a></p>
+      <p class="mc-help">{{ warning.text }} <a [routerLink]="warning.link" [queryParams]="warning.queryParams">{{ warning.linkText }}</a></p>
     }
     @if (sourceRefreshError) {
       <p class="mc-error" role="status">{{ sourceRefreshError }} <ui-button variant="ghost" size="sm" (clicked)="refreshSourceFacts()">Retry loading current facts</ui-button></p>
