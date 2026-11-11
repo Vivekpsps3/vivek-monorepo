@@ -133,6 +133,23 @@ export interface PlanningInputsPreview {
   annual_income_source?: string;
   /** Count only — transactions do not drive spending assumptions. */
   transaction_role?: string;
+  /** Asset records that supplied the balance sheet, including zero values. */
+  asset_count: number;
+  /** Debt records that supplied the balance sheet, including zero balances. */
+  debt_count: number;
+  /** Holdings in the net-worth total: not inactive and not staged. */
+  holding_count: number;
+  /** Jobs included by the current-job rule, including zero pay. */
+  active_job_count: number;
+  /** Active bills, including a zero amount. */
+  active_bill_count: number;
+  /** Active subscriptions, including a zero amount. */
+  active_subscription_count: number;
+  /**
+   * True when those active jobs record taxes or deductions, so the income
+   * total is take-home. False means the same total is still gross pay.
+   */
+  income_is_net: boolean;
   /** Earliest valid past date among current asset and liability balance entries. */
   oldest_balance_as_of?: string | null;
   undated_asset_balances?: number;

@@ -1,5 +1,5 @@
 import type { PortfolioAccount, PositionHighlight } from '../../../../finance/frontend/src/public-api';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, Injector, OnInit, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, Injector, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { UiStateComponent } from '@vivek/ui';
@@ -17,7 +17,16 @@ import {
   type HubCardState,
 } from './hub-load';
 import { townIsEmpty, townStreakText, type TownSummary } from './town-hub-card';
-import { hubStripRows, hubStripSummary, hubStripWindow, type HubStripCell } from './pixels-hub-card';
+import {
+  adjacentHubStripDate,
+  hubStripLabel,
+  hubStripRows,
+  hubStripSummary,
+  hubStripTabDate,
+  hubStripWindow,
+  isHubStripKey,
+  type HubStripCell,
+} from './pixels-hub-card';
 import { PixelsDataService } from '../pixels/pixels-data.service';
 import { withoutFinance, yearStats } from '../pixels/pixels-model';
 import {
@@ -86,6 +95,7 @@ interface FinanceView {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HubComponent implements OnInit {
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -122,6 +132,8 @@ export class HubComponent implements OnInit {
   pixelsPending = false;
   pixelsUpdatedAt: number | null = null;
 
+  /** The one strip cell in the tab order. Arrows move it; Enter and click open that date. */
+  private stripRoving: string | null = null;
   private generation = 0;
   private pixelsLoad = 0;
   private pixelsClearGeneration = 0;
@@ -287,12 +299,46 @@ export class HubComponent implements OnInit {
     return hubStripSummary(yearStats(this.pixels.days, this.pixels.financeStatus));
   }
 
-  /** Past and today cells open that day. Future cells are not a control. */
+  stripLabel(cell: HubStripCell): string {
+    return hubStripLabel(cell);
+  }
+
+  stripTabDate(): string {
+    return hubStripTabDate(this.stripRoving, this.stripDates(), todayIsoDate());
+  }
+
+  onStripKey(event: KeyboardEvent): void {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const date = target.getAttribute('data-date');
+    if (!date) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      const cell = this.pixelRows().flat().find(item => item.date === date);
+      if (!cell) return;
+      event.preventDefault();
+      this.openPixelDay(cell);
+      return;
+    }
+    if (!isHubStripKey(event.key)) return;
+    event.preventDefault();
+    const next = adjacentHubStripDate(date, event.key, this.stripDates());
+    if (!next || next === date) return;
+    this.stripRoving = next;
+    this.cdr.markForCheck();
+    const node = this.host.nativeElement.querySelector(`[data-date="${next}"]`);
+    if (node instanceof HTMLElement) node.focus();
+  }
+
+  /** Past, today, and future cells open that date. Pointer and keyboard share this path. */
   openPixelDay(cell: HubStripCell): void {
-    if (cell.future) return;
+    this.stripRoving = cell.date;
     void this.router.navigate(['/pixels'], {
       queryParams: { year: cell.date.slice(0, 4), day: cell.date },
     });
+  }
+
+  private stripDates(): readonly string[] {
+    return this.pixelRows().flatMap(row => row.map(cell => cell.date)).sort();
   }
 
   townStreak(summary: TownSummary): string | null {

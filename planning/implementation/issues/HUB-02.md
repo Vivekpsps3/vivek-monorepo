@@ -86,3 +86,7 @@ The workspace shows actionable upcoming activity with independent recovery, with
 ## Dependency rationale
 
 Use merged lifecycle/bounded-load contracts and the compact Pixels card. Passive Town XP calculation changes no required Hub summary shape; preserve the current Town card without waiting for TOWN-02.
+
+## Living World scope boundary — 2026-11-11
+
+Retain compact Up next and shared source responses. PLACE-13 adds dated arrivals/recaps using this owner, not another Hub store, map or reward inbox. See [scope reconciliation](../../living-world/scope.md) and [parent #304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). This is planned extension scope; it neither closes nor enlarges this packet's retained implementation acceptance.

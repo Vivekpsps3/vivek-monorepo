@@ -343,6 +343,9 @@ describe('empty states (F10)', () => {
     avg_monthly_income: 0, avg_monthly_expense: 0,
     implied_annual_spending: 0, implied_annual_savings: 0,
     transaction_count: 0, recurring_annual_spending: 0,
+    asset_count: 0, debt_count: 0, holding_count: 0,
+    active_job_count: 0, active_bill_count: 0, active_subscription_count: 0,
+    income_is_net: false,
     ...overrides,
   });
 
@@ -355,6 +358,8 @@ describe('empty states (F10)', () => {
     component.inputs = inputsPreview({ net_worth_portfolio: 250 });
     expect(component.hasPlanningInputs).toBeTrue();
     component.inputs = inputsPreview({ recurring_annual_spending: -5 });
+    expect(component.hasPlanningInputs).toBeTrue();
+    component.inputs = inputsPreview({ asset_count: 1 });
     expect(component.hasPlanningInputs).toBeTrue();
   });
 

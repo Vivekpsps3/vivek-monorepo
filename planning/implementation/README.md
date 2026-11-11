@@ -22,6 +22,17 @@ reason and continue down the same list. Do not invent a new backlog or dependenc
 An explicit user-selected domain can narrow the list with `--parent NUMBER`.
 Without `--live`, listing is an offline inventory including completed leaves.
 
+For the owner-selected Living World workstream, read the
+[product specification](../living-world/README.md), then filter this same queue:
+
+```sh
+python3 planning/implementation/plan.py list --live --parent 304
+```
+
+This does not establish readiness: verify the named existing Town/UX/safety/route
+outcomes, then follow the exact PLACE packet. Unrelated tasks retain their relative
+order; the design documents do not introduce a second ready list.
+
 ## 2. Open its exact packet
 
 For example, the current first deletion candidate is MED-11:

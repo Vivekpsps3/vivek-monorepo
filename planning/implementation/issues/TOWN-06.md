@@ -82,3 +82,7 @@ An owner can record, revisit and delete a private weekly reflection without expo
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Living World scope boundary — 2026-11-11
+
+Retain the sole encrypted editor/collection, limits, revision, lock and backup/restore requirements. PLACE-13 may link this editor only when available and must never copy review text into recaps or Hub. See [scope reconciliation](../../living-world/scope.md) and [parent #304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). This is planned extension scope; it neither closes nor enlarges this packet's retained implementation acceptance.

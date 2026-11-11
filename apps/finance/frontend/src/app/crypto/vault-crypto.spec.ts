@@ -173,6 +173,33 @@ describe('vault-crypto', () => {
     }
   });
 
+  it('puts the previous key back when a legacy migration lands and then goes stale', async () => {
+    const fresh = (await importVaultKeys(new Uint8Array(32).fill(6))).dek;
+    const secret = await encryptJson(fresh, { marker: 'user-2' });
+    expect(await persistVaultKeys({ dek: fresh, blind_index_version: 2, reindexed: [] }, 2)).toBeTrue();
+    localStorage.setItem('finance-dek', encodeBase64(new Uint8Array(32).fill(4)));
+    let current = true;
+    const put = IDBObjectStore.prototype.put;
+    let flipped = false;
+    const spy = spyOn(IDBObjectStore.prototype, 'put').and.callFake(function (this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
+      const request = key === undefined ? put.call(this, value) : put.call(this, value, key);
+      if (!flipped) {
+        flipped = true;
+        current = false;
+      }
+      return request;
+    });
+    try {
+      await expectAsync(restoreVaultKeys(1, () => current)).toBeResolvedTo(null);
+      const stored = await restoreVaultKeys(2);
+      expect(await decryptJson(stored!.dek, secret)).toEqual({ marker: 'user-2' });
+      expect(localStorage.getItem('finance-dek')).toBeNull();
+      expect(financeVaultPresent()).toBeTrue();
+    } finally {
+      spy.and.callThrough();
+    }
+  });
+
   it('encrypts and decrypts JSON with a DEK', async () => {
     const dek = await generateDataKey();
     const payload = { amount: 12.34, name: 'Cash', nested: { ok: true } };

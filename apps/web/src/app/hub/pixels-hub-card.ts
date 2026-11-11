@@ -1,3 +1,4 @@
+import { formatDate } from '@vivek/browser';
 import { sundayOnOrBefore } from '@vivek/ui';
 import { hubWindow } from '../pixels/pixels-dates';
 
@@ -53,6 +54,49 @@ export function hubStripSummary(stats: { active: number; longestRun: number }): 
     activeLine: `${stats.active} active days in the last 13 weeks`,
     runLine: `Longest run: ${stats.longestRun} days`,
   };
+}
+
+const HUB_STRIP_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']);
+
+/** Same date phrasing as the year grid: spoken day, year, then today/future/level. */
+export function hubStripLabel(cell: HubStripCell): string {
+  const spoken = formatDate(cell.date, 'heading');
+  const parts = [spoken === 'No date' ? cell.date : `${spoken}, ${cell.date.slice(0, 4)}`];
+  if (cell.today) parts.push('today');
+  if (cell.planned) parts.push('planned trip');
+  else if (cell.future) parts.push('future');
+  if (!cell.future && cell.level > 0) parts.push(`level ${cell.level}`);
+  return parts.join(', ');
+}
+
+export function isHubStripKey(key: string): boolean {
+  return HUB_STRIP_KEYS.has(key);
+}
+
+/**
+ * One roving stop in a Sunday-start strip. `dates` is chronological.
+ * Right/left move a week; down/up move a weekday; Home/End stay on that weekday.
+ */
+export function adjacentHubStripDate(date: string, key: string, dates: readonly string[]): string | null {
+  const index = dates.indexOf(date);
+  const weeks = dates.length / 7;
+  if (index < 0 || !Number.isInteger(weeks) || weeks < 1) return null;
+  const weekday = index % 7;
+  const week = Math.floor(index / 7);
+  if (key === 'Home') return dates[weekday] ?? null;
+  if (key === 'End') return dates[(weeks - 1) * 7 + weekday] ?? null;
+  if (key === 'ArrowRight') return week + 1 < weeks ? dates[index + 7] ?? null : null;
+  if (key === 'ArrowLeft') return week > 0 ? dates[index - 7] ?? null : null;
+  if (key === 'ArrowDown') return weekday < 6 ? dates[index + 1] ?? null : null;
+  if (key === 'ArrowUp') return weekday > 0 ? dates[index - 1] ?? null : null;
+  return null;
+}
+
+/** The single tab stop: the last arrow target, otherwise today, otherwise the first day. */
+export function hubStripTabDate(roving: string | null, dates: readonly string[], today: string): string {
+  if (roving && dates.includes(roving)) return roving;
+  if (dates.includes(today)) return today;
+  return dates[0] ?? '';
 }
 
 function eachInclusive(start: string, end: string): string[] {

@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../../../tests/e2e/fixtures';
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import {
@@ -266,7 +267,7 @@ for (const width of [390, 1280]) {
     test('hours in a workday save and change the days figure only', async ({ page, request }) => {
       await putBucket(request, 'pto', { start_balance_hours: '100', accrual_hours: '0' });
       await page.goto('/travel/pto');
-      await expect(page.getByText('12.5 days · 100 h', { exact: true })).toHaveCount(2);
+      await expect(page.locator('.tile-balance, .pto-lower').getByText('12.5 days · 100 h', { exact: true })).toHaveCount(2);
       await page.goto('/travel/settings');
       const hours = page.getByLabel('Hours in a workday');
       await expect(hours).toHaveValue('8');
@@ -284,9 +285,73 @@ for (const width of [390, 1280]) {
       await expect(page.getByText('Hours in a workday saved.', { exact: true })).toBeVisible();
       const link = page.getByRole('link', { name: 'PTO policy', exact: true });
       expect((await link.boundingBox()).height).toBeGreaterThanOrEqual(44);
+      let seriesAfterReturn = 0;
+      page.on('request', request => {
+        if (request.method() === 'GET' && new URL(request.url()).pathname.endsWith('/pto/series')) seriesAfterReturn += 1;
+      });
       await link.click();
-      await expect(page.getByText('13.33 days · 100 h', { exact: true })).toHaveCount(2);
+      await expect(page.locator('.tile-balance, .pto-lower').getByText('13.33 days · 100 h', { exact: true })).toHaveCount(2);
+      await expect(page.locator('travel-pto-chart')).toHaveCount(1);
+      expect(seriesAfterReturn).toBe(1);
       expect((await (await request.get('/travel/api/pto')).json()).buckets.pto.start_balance_hours).toBe('100');
+    });
+
+    test('one combined chart at the required height', async ({ page, request }) => {
+      await putBucket(request, 'pto', { start_balance_hours: '80', accrual_hours: '8' });
+      await putBucket(request, 'sick', { start_balance_hours: '24', accrual_hours: '4' });
+      const seriesHits = [];
+      page.on('request', requestHit => {
+        if (requestHit.method() === 'GET' && new URL(requestHit.url()).pathname.endsWith('/pto/series')) seriesHits.push(requestHit.url());
+      });
+      await page.goto('/travel/pto');
+      await expect(page.locator('travel-pto-chart')).toHaveCount(1);
+      await expect(page.locator('svg.pto-forecast')).toBeVisible();
+      const box = await page.locator('svg.pto-forecast').boundingBox();
+      expect(Math.round(box.height)).toBe(width === 390 ? 220 : 300);
+      if (width === 1280) {
+        const tiles = await page.locator('.pto-tiles').boundingBox();
+        expect(Math.abs(tiles.width - 320)).toBeLessThan(2);
+        expect(box.x).toBeGreaterThan(tiles.x + tiles.width - 1);
+      }
+      expect(seriesHits).toHaveLength(1);
+      await expect(page.locator('table caption')).toHaveText('Balance by month');
+      await expect(page.locator('svg.pto-forecast')).toHaveAttribute('aria-hidden', 'true');
+      await expect(page.locator('circle.pto-marker-pto').first()).toBeAttached();
+      await expect(page.locator('rect.pto-marker-sick').first()).toBeAttached();
+      await expect(page.locator('path.pto-future').first()).toBeAttached();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      for (const theme of ['light', 'dark']) {
+        await chooseColorTheme(page, theme);
+        await expect(page.locator('svg.pto-forecast')).toBeVisible();
+        const themed = await page.locator('svg.pto-forecast').boundingBox();
+        expect(Math.round(themed.height)).toBe(width === 390 ? 220 : 300);
+        const axe = await new AxeBuilder({ page }).analyze();
+        expect(axe.violations.filter(item => ['serious', 'critical'].includes(item.impact)), theme).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      }
+    });
+
+    test('a failed chart request leaves the forms usable and retries once', async ({ page, request }) => {
+      await putBucket(request);
+      let series = 0;
+      await page.route('**/travel/api/pto/series', route => {
+        series += 1;
+        if (series === 1) return route.fulfill({ status: 500, json: { message: 'down' } });
+        return route.continue();
+      });
+      await page.goto('/travel/pto');
+      await expect(page.getByText("Couldn't load the balance chart.", { exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Edit PTO', exact: true })).toBeEnabled();
+      await expect(page.getByLabel('Name', { exact: true })).toBeEnabled();
+      await page.getByRole('button', { name: 'Retry', exact: true }).click();
+      await expect(page.locator('travel-pto-chart')).toHaveCount(1);
+      expect(series).toBe(2);
+      await page.getByRole('button', { name: 'Edit PTO', exact: true }).click();
+      await page.getByLabel('Starting balance').fill('48');
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(page.getByText('PTO policy saved.', { exact: true })).toBeVisible();
+      await expect(page.locator('travel-pto-chart')).toHaveCount(1);
+      expect(series).toBe(3);
     });
 
     test('preview stays tied to the dates and the selected bucket', async ({ page }) => {

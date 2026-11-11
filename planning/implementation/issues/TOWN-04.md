@@ -86,3 +86,7 @@ Town check-in/history/edit/Undo interactions are understandable and safe across 
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Living World scope boundary — 2026-11-11
+
+Retain the entire finding/survivor inventory. PLACE-04/05 replace scene/feedback only after these outcomes exist; new visual review does not waive any retained regression. See [scope reconciliation](../../living-world/scope.md) and [parent #304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). This is planned extension scope; it neither closes nor enlarges this packet's retained implementation acceptance.

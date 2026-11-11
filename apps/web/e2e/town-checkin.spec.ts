@@ -53,8 +53,9 @@ test.describe('Town check-in', () => {
 
   test('13: visibility after the local date changes refetches unchecked rows', async ({ page, request }) => {
     expect((await request.post('/e2e/town/clock', { data: { iso: '2026-10-30T07:10:00Z' } })).ok()).toBeTruthy();
-    await page.clock.setFixedTime(new Date('2026-10-30T07:10:00Z'));
     let body: TownResponse | undefined;
+    // Arm the waiter before the clock moves. setFixedTime runs timers that
+    // elapsed during the jump, so the refresh can finish before a later wait.
     const refresh = page.waitForResponse(async response => {
       if (new URL(response.url()).pathname !== '/api/town' || response.request().method() !== 'GET') return false;
       try {
@@ -68,6 +69,7 @@ test.describe('Town check-in', () => {
       }
       return false;
     });
+    await page.clock.setFixedTime(new Date('2026-10-30T07:10:00Z'));
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await refresh;
     expect(body?.town.tz).toBe('America/Los_Angeles');
