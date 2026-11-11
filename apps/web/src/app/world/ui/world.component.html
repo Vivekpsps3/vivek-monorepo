@@ -1,8 +1,8 @@
 <main class="world-page">
   <h1>World</h1>
   <div class="world-toolbar" role="toolbar" aria-label="World">
-    <ui-button variant="secondary" ariaLabel="Previous week" (clicked)="stepWeek(-1)">{{ copy.weekBack }}</ui-button>
-    <ui-button variant="secondary" ariaLabel="Next week" (clicked)="stepWeek(1)">{{ copy.weekForward }}</ui-button>
+    <ui-button variant="secondary" (clicked)="stepWeek(-1)">{{ copy.weekBack }}</ui-button>
+    <ui-button variant="secondary" (clicked)="stepWeek(1)">{{ copy.weekForward }}</ui-button>
     <ui-button variant="secondary" (clicked)="goToday()">{{ copy.today }}</ui-button>
     <a class="world-inline" href="/town">{{ copy.town }}</a>
     <label class="world-jump">

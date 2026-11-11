@@ -166,8 +166,8 @@ export interface TownNpc {
 
 export const WORLD_COPY = Object.freeze({
   explore: 'Explore the world',
-  weekBack: 'Week',
-  weekForward: 'Week',
+  weekBack: 'Previous week',
+  weekForward: 'Next week',
   today: 'Today',
   town: 'Town',
   jump: 'Jump to date',
