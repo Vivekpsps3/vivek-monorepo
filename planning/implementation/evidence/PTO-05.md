@@ -47,7 +47,7 @@ Local execution from `/tmp/vivek-pto-05` with `CHROME_BIN` and `PLAYWRIGHT_CHROM
 | `make typecheck-web` | PASS |
 | `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS. 712 SUCCESS. Statements 83.25% (5537/6651), branches 70.21% (2124/3025), functions 82.81% (1108/1338), lines 86.92% (4794/5515). Port 9991 for that run only. |
 | `make build-frontends` | PASS. Output `dist/web`. |
-| `npx playwright test --config apps/travel/e2e/playwright.config.js` | PASS. 169 passed, including `scheduled accrual previews, cancels, and confirms without backfill`. |
+| `npx playwright test --config apps/travel/e2e/playwright.config.js` | PASS. 169 passed, including `scheduled accrual previews, cancels, and confirms without backfill`. CI run 43117540234 then failed `remove sick keeps history and a dated correction previews it` because a still-visible "Sick policy saved." toast made the second exact-text assertion match two toasts. The assertion now waits for a new toast. The same run's Media scroll failure is `library-recovery.spec.ts`, which this leaf does not edit. |
 | `make db-check` | PASS. `schema_drift_check` ok, revision `site_leave_accrual_v1`. |
 | `make db-validate-seeded` | First run FAIL: the existing `personal-site:development` image migrated only to `site_leave_carry_v1`. Repaired by `make docker-build` from this worktree, then rerun PASS. Adopt action `stamp_and_upgrade`. Upgrade action `upgrade` to `site_leave_accrual_v1`, schema diff empty, smoke routes 200. |
 

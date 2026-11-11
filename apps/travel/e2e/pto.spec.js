@@ -570,8 +570,10 @@ test('remove sick keeps history and a dated correction previews it', async ({ pa
   expect(movedBody.balance_today_hours).not.toBe(firstBody.balance_today_hours);
   const hours = String(movedBody.balance_today_hours).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   await expect(page.getByText(new RegExp('Balance today would be .*' + hours + ' h'))).toBeVisible();
+  const savedToast = page.getByText('Sick policy saved.', { exact: true });
+  const alreadySaved = await savedToast.count();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('Sick policy saved.', { exact: true })).toBeVisible();
+  await expect.poll(() => savedToast.count()).toBeGreaterThan(alreadySaved);
   const corrected = await ledger();
   expect(corrected.entries).toEqual(before.entries);
   expect(corrected.allocations).toEqual(before.allocations);
