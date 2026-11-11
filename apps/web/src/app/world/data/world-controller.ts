@@ -1,3 +1,4 @@
+import { mayPublish, openBoundedWork } from '@vivek/browser';
 import type { TownResponse } from '../../town/town.types';
 import { addDays, generateChunk, inputKey, normalizeWeek, worldSeed } from '../engine';
 import {
@@ -406,23 +407,21 @@ export class WorldController {
     const ctrl = new AbortController();
     this.budgetAbort = ctrl;
     const epoch = this.budgetEpoch;
-    const onAbort = () => ctrl.abort();
-    if (signal.aborted) ctrl.abort();
-    else signal.addEventListener('abort', onAbort, { once: true });
+    const work = openBoundedWork({ controller: ctrl, parents: [signal] });
     const today = this.meta.today;
     this.budgetView = { status: 'loading' };
     this.publishChests(true);
     let result: BudgetLoadResult;
     try {
-      result = await this.deps.loadBudget(ctrl.signal, { today, weeks, includeCurrentWeek: false });
+      result = await this.deps.loadBudget(work.signal, { today, weeks, includeCurrentWeek: false });
     } catch {
-      result = ctrl.signal.aborted ? { status: 'cancelled' } : { status: 'unavailable' };
+      result = work.signal.aborted ? { status: 'cancelled' } : { status: 'unavailable' };
     } finally {
-      signal.removeEventListener('abort', onAbort);
+      work.dispose();
     }
-    if (epoch !== this.budgetEpoch || ctrl.signal.aborted) return;
+    if (!mayPublish(work, epoch === this.budgetEpoch) || !this.meta) return;
     const view = toBudgetView(result);
-    if (!view || !this.meta) return;
+    if (!view) return;
     this.budgetView = view;
     this.publishChests(false);
   }
@@ -498,22 +497,8 @@ export class WorldController {
   }
 
   private link(signal: AbortSignal): { signal: AbortSignal; done: () => void } {
-    const ctrl = new AbortController();
-    const parent = this.worldAbort.signal;
-    const abort = () => ctrl.abort();
-    if (signal.aborted || parent.aborted) {
-      ctrl.abort();
-      return { signal: ctrl.signal, done: () => undefined };
-    }
-    signal.addEventListener('abort', abort, { once: true });
-    parent.addEventListener('abort', abort, { once: true });
-    return {
-      signal: ctrl.signal,
-      done: () => {
-        signal.removeEventListener('abort', abort);
-        parent.removeEventListener('abort', abort);
-      },
-    };
+    const work = openBoundedWork({ parents: [signal, this.worldAbort.signal] });
+    return { signal: work.signal, done: () => work.dispose() };
   }
 
   private emitLock(): void {

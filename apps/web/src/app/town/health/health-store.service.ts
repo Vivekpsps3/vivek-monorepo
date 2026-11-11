@@ -1,4 +1,5 @@
 import { DestroyRef, Injectable, Injector, inject } from '@angular/core';
+import { mayPublish, openBoundedWork } from '@vivek/browser';
 import { Observable } from 'rxjs';
 import {
   bindLockSnapshots,
@@ -204,19 +205,6 @@ export class HealthStoreService {
     throw new Error('Health publication is no longer current.');
   }
 
-  private link(external?: AbortSignal): AbortSignal {
-    const linked = new AbortController();
-    const abort = () => linked.abort();
-    const watch = (signal?: AbortSignal) => {
-      if (!signal) return;
-      if (signal.aborted) abort();
-      else signal.addEventListener('abort', abort, { once: true });
-    };
-    watch(external);
-    watch(this.stop.signal);
-    return linked.signal;
-  }
-
   private observe<T>(source: Observable<T>, signal: AbortSignal): Promise<T> {
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -254,21 +242,12 @@ export class HealthStoreService {
       return { state: 'locked' };
     }
     const ticket = this.publication(true);
-    const signal = this.link(opts?.signal);
     const deadlineMs = opts?.deadlineMs ?? HEALTH_LOAD_DEADLINE_MS;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const deadline = new Promise<'deadline'>(resolve => {
-      timer = setTimeout(() => resolve('deadline'), deadlineMs);
-    });
+    const work = openBoundedWork({ parents: [opts?.signal, this.stop.signal], deadlineMs });
     try {
-      const outcome = await Promise.race([
-        this.loadAll(signal, ticket).then(
-          () => 'done' as const,
-          () => 'failed' as const,
-        ),
-        deadline,
-      ]);
-      if (outcome !== 'done' || !this.eligible(ticket)) return this.lost(ticket);
+      if (work.callerAborted() || work.signal.aborted) return this.lost(ticket);
+      const outcome = await work.run(() => this.loadAll(work.signal, ticket));
+      if (outcome.status !== 'ok' || !mayPublish(work, this.eligible(ticket))) return this.lost(ticket);
       return {
         state: 'ready',
         stats: [...this.stats],
@@ -276,7 +255,7 @@ export class HealthStoreService {
         unreadable: this.unreadable,
       };
     } finally {
-      if (timer !== undefined) clearTimeout(timer);
+      work.dispose();
     }
   }
 
@@ -348,48 +327,53 @@ export class HealthStoreService {
     entry: { clientId: string; revision: number | null; keyVersion: number },
     value: T,
   ): Promise<HealthEntry<T>> {
-    const signal = this.link();
-    this.guard(ticket, signal);
-    const vault = await this.vault();
-    const ciphertext = await vault.encryptPayload(
-      value,
-      collection,
-      entry.clientId,
-      HEALTH_SCHEMA_VERSION,
-      entry.keyVersion,
-    );
-    this.guard(ticket, signal);
+    const work = openBoundedWork({ parents: [this.stop.signal] });
+    const signal = work.signal;
     try {
-      const saved = await this.observe(
-        vault.upsertRecords(
-          [
-            {
-              collection,
-              client_id: entry.clientId,
-              ciphertext_b64: ciphertext,
-              schema_version: HEALTH_SCHEMA_VERSION,
-              key_version: entry.keyVersion,
-              expected_revision: entry.revision,
-            },
-          ],
-          { silent: true },
-        ),
-        signal,
+      this.guard(ticket, signal);
+      const vault = await this.vault();
+      const ciphertext = await vault.encryptPayload(
+        value,
+        collection,
+        entry.clientId,
+        HEALTH_SCHEMA_VERSION,
+        entry.keyVersion,
       );
       this.guard(ticket, signal);
-      const row = saved[0];
-      return {
-        clientId: entry.clientId,
-        revision: row?.revision ?? (entry.revision ?? 0) + 1,
-        keyVersion: entry.keyVersion,
-        value,
-      };
-    } catch (error) {
-      if (isConflict(error) && this.eligible(ticket)) {
-        await this.refetch(collection, ticket, signal);
-        throw new HealthConflictError();
+      try {
+        const saved = await this.observe(
+          vault.upsertRecords(
+            [
+              {
+                collection,
+                client_id: entry.clientId,
+                ciphertext_b64: ciphertext,
+                schema_version: HEALTH_SCHEMA_VERSION,
+                key_version: entry.keyVersion,
+                expected_revision: entry.revision,
+              },
+            ],
+            { silent: true },
+          ),
+          signal,
+        );
+        this.guard(ticket, signal);
+        const row = saved[0];
+        return {
+          clientId: entry.clientId,
+          revision: row?.revision ?? (entry.revision ?? 0) + 1,
+          keyVersion: entry.keyVersion,
+          value,
+        };
+      } catch (error) {
+        if (isConflict(error) && this.eligible(ticket)) {
+          await this.refetch(collection, ticket, signal);
+          throw new HealthConflictError();
+        }
+        throw error;
       }
-      throw error;
+    } finally {
+      work.dispose();
     }
   }
 
@@ -419,35 +403,40 @@ export class HealthStoreService {
     collection: Collection,
     entry: HealthEntry<T>,
   ): Promise<void> {
-    const signal = this.link();
-    this.guard(ticket, signal);
-    const vault = await this.vault();
+    const work = openBoundedWork({ parents: [this.stop.signal] });
+    const signal = work.signal;
     try {
-      await this.observe(
-        vault.deleteRecords(
-          [
-            {
-              collection,
-              client_id: entry.clientId,
-              expected_revision: entry.revision,
-            },
-          ],
-          { silent: true },
-        ),
-        signal,
-      );
-    } catch (error) {
-      if (isConflict(error) && this.eligible(ticket)) {
-        await this.refetch(collection, ticket, signal);
-        throw new HealthConflictError();
+      this.guard(ticket, signal);
+      const vault = await this.vault();
+      try {
+        await this.observe(
+          vault.deleteRecords(
+            [
+              {
+                collection,
+                client_id: entry.clientId,
+                expected_revision: entry.revision,
+              },
+            ],
+            { silent: true },
+          ),
+          signal,
+        );
+      } catch (error) {
+        if (isConflict(error) && this.eligible(ticket)) {
+          await this.refetch(collection, ticket, signal);
+          throw new HealthConflictError();
+        }
+        throw error;
       }
-      throw error;
-    }
-    this.guard(ticket, signal);
-    if (collection === HEALTH_STATS_COLLECTION) {
-      this.stats = this.stats.filter(item => item.clientId !== entry.clientId);
-    } else {
-      this.prs = this.prs.filter(item => item.clientId !== entry.clientId);
+      this.guard(ticket, signal);
+      if (collection === HEALTH_STATS_COLLECTION) {
+        this.stats = this.stats.filter(item => item.clientId !== entry.clientId);
+      } else {
+        this.prs = this.prs.filter(item => item.clientId !== entry.clientId);
+      }
+    } finally {
+      work.dispose();
     }
   }
 

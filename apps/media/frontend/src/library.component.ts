@@ -346,17 +346,22 @@ export class LibraryComponent {
   readonly childrenError = signal("");
   readonly childrenLoading = signal(false);
   constructor() {
+    // Router Back is deferred with setTimeout(0). A paused test clock does not
+    // run that timer, so the URL changes while the Type control keeps the
+    // pending value. Sync from the browser URL in the popstate event itself.
+    const onPopState = () => this.dropPendingFilters(true);
+    window.addEventListener("popstate", onPopState);
     this.destroy.onDestroy(() => {
       this.active = false;
       clearTimeout(this.filterTimer);
+      window.removeEventListener("popstate", onPopState);
     });
     this.router.events.pipe(takeUntilDestroyed()).subscribe((event) => {
       if (
         event instanceof NavigationStart &&
         event.navigationTrigger === "popstate"
       ) {
-        clearTimeout(this.filterTimer);
-        this.filterTimer = undefined;
+        this.dropPendingFilters(false);
       }
       if (
         event instanceof NavigationStart &&
@@ -439,6 +444,37 @@ export class LibraryComponent {
   applySoon(): void {
     clearTimeout(this.filterTimer);
     this.filterTimer = setTimeout(() => this.applyNow(), 250);
+  }
+  private dropPendingFilters(syncRouter: boolean): void {
+    clearTimeout(this.filterTimer);
+    this.filterTimer = undefined;
+    const filters = readFilters(new URLSearchParams(window.location.search));
+    this.q = filters.q;
+    this.kind = filters.kind;
+    this.status = filters.status;
+    this.sort = filters.sort;
+    this.favorite = filters.favorite;
+    this.tags = filters.tags;
+    const search = document.getElementById("library-q");
+    if (search instanceof HTMLInputElement) search.value = filters.q;
+    const root = document.getElementById("library-filters");
+    const selects = root?.querySelectorAll("select");
+    if (selects) {
+      const [type, state, sort] = selects;
+      if (type instanceof HTMLSelectElement) type.value = filters.kind;
+      if (state instanceof HTMLSelectElement) state.value = filters.status;
+      if (sort instanceof HTMLSelectElement) sort.value = filters.sort;
+    }
+    const favorite = root?.querySelector('input[type="checkbox"]');
+    if (favorite instanceof HTMLInputElement)
+      favorite.checked = filters.favorite;
+    if (!syncRouter) return;
+    // The router applies Back on a paused timer. Follow the URL now so the
+    // restored library read is not delayed until that timer runs.
+    void this.router.navigateByUrl(
+      `${window.location.pathname}${window.location.search}`,
+      { skipLocationChange: true },
+    );
   }
   searchSoon(): void {
     this.applySoon();

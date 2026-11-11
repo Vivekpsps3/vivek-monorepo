@@ -364,6 +364,20 @@ describe('HealthStoreService', () => {
     fake.hangLists = true;
     const result = await store.load({ deadlineMs: 25 });
     expect(result).toEqual({ state: 'unavailable' });
+    expect(fake.listCancelled).toBeGreaterThan(0);
+    expect(store.statsSnapshot).toEqual([]);
+  });
+
+  it('does not touch the vault when the caller aborted before load', async () => {
+    fake.rows = [row('health_stats', 'hlt_a', { ...STAT, note: MARKER })];
+    const callsBefore = vaultCalls;
+    const controller = new AbortController();
+    controller.abort();
+    const result = await store.load({ signal: controller.signal });
+    expect(result).toEqual({ state: 'unavailable' });
+    expect(vaultCalls).toBe(callsBefore);
+    expect(store.statsSnapshot).toEqual([]);
+    expect(textOf(result)).not.toContain(MARKER);
   });
 
   it('creates with an hlt_ client id, v2 envelope and ciphertext only (AC-H2 store half)', async () => {
@@ -631,6 +645,29 @@ describe('HealthStoreService', () => {
     expect(textOf(result)).not.toContain(MARKER);
     expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
   }));
+
+  it('bounds the stage read on the store deadline and drops a late decrypt', fakeAsync(() => {
+    fake.holdDecrypt = true;
+    fake.rows = [row('health_stats', 'hlt_a', { ...STAT, note: MARKER })];
+    const injector = Injector.create({
+      providers: [{ provide: HealthStoreService, useValue: store }],
+    });
+    let stage: Awaited<ReturnType<typeof loadTownHealthStages>> | undefined;
+    const pending = loadTownHealthStages(injector, new AbortController().signal, { deadlineMs: 1_000 });
+    pending.then(value => { stage = value; });
+    for (let attempt = 0; attempt < 20 && fake.decryptRelease.length === 0; attempt += 1) flushMicrotasks();
+    expect(fake.decryptRelease.length).toBe(1);
+    tick(999);
+    expect(stage).toBeUndefined();
+    tick(1);
+    flushMicrotasks();
+    expect(stage).toEqual({ state: 'unavailable' });
+    fake.decryptRelease.shift()?.();
+    flushMicrotasks();
+    expect(stage).toEqual({ state: 'unavailable' });
+    expect(textOf(stage)).not.toContain(MARKER);
+    expect(store.statsSnapshot).toEqual([]);
+  }));
 });
 
 describe('loadTownHealthStages (barrel)', () => {
@@ -681,21 +718,21 @@ describe('loadTownHealthStages (barrel)', () => {
     expect(Object.keys(result).sort()).toEqual(['clinic', 'gym', 'state']);
   });
 
-  it('honours the deadline and the abort signal as unavailable', async () => {
-    const hanging = {
-      load: () => new Promise<never>(() => undefined),
+  it('returns unavailable when the caller already aborted, without asking the store', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    let calls = 0;
+    const stub = {
+      load: () => {
+        calls += 1;
+        return Promise.resolve({ state: 'unavailable' as const, stats: [], prs: [], unreadable: 0 });
+      },
     };
     const injector = Injector.create({
-      providers: [{ provide: HealthStoreService, useValue: hanging }],
+      providers: [{ provide: HealthStoreService, useValue: stub }],
     });
-    const timed = await loadTownHealthStages(injector, new AbortController().signal, {
-      deadlineMs: 25,
-    });
-    expect(timed).toEqual({ state: 'unavailable' });
-
-    const controller = new AbortController();
-    const pending = loadTownHealthStages(injector, controller.signal, { deadlineMs: 5_000 });
-    controller.abort();
-    expect(await pending).toEqual({ state: 'unavailable' });
+    const result = await loadTownHealthStages(injector, controller.signal, { deadlineMs: 25 });
+    expect(result).toEqual({ state: 'unavailable' });
+    expect(calls).toBe(0);
   });
 });
