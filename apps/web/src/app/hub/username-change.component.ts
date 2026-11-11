@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@
 import { FormsModule } from '@angular/forms';
 import { ToastService, UiButtonComponent, UiInputComponent } from '@vivek/ui';
 import { SessionService as AuthService } from '../platform/session.service';
-import { UsernameChangeError } from '../platform/auth/username-change';
+import { UsernameChangeError, usernameChangeMessage } from '../platform/auth/username-change';
 
 @Component({
   selector: 'app-username-change',
@@ -43,7 +43,7 @@ export class UsernameChangeComponent {
       this.toast.success('Username updated.');
     } catch (err) {
       this.errorStatus = err instanceof UsernameChangeError ? err.status : 0;
-      this.error = err instanceof Error ? err.message : 'The username could not be changed.';
+      this.error = err instanceof UsernameChangeError ? err.message : usernameChangeMessage(this.errorStatus);
     } finally {
       this.passphrase = '';
       this.saving = false;
