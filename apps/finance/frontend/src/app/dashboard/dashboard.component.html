@@ -2,8 +2,11 @@
   <ui-page-header [title]="'Home'" [concealTitle]="true" />
   @if (!isLoading && !error && priceNoticeVisible) {
     <div class="price-notice" role="status">
-      <p>Prices checked automatically. Only ticker symbols are sent.</p>
-      <ui-button variant="ghost" size="sm" (clicked)="dismissPriceNotice()">Got it</ui-button>
+      <p>{{ priceNoticeCopy }}</p>
+      <div class="price-notice__actions">
+        <ui-button variant="ghost" size="sm" (clicked)="turnOffAutomaticChecks()">Turn off automatic checks</ui-button>
+        <ui-button variant="ghost" size="sm" (clicked)="dismissPriceNotice()">OK</ui-button>
+      </div>
     </div>
   }
   @if (!isLoading && !error && netWorth && isStarterState && !incomeOccurrences.length) {
