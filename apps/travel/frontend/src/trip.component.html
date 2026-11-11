@@ -33,29 +33,29 @@
       </p>
     }
     <div class="button-row">
-      <ui-button variant="primary" (click)="open('transport')">
-        Add transport</ui-button
-      ><ui-button
-        variant="ghost"
-        (click)="selectedDay = trip.start_date; open('activity')"
-      >
-        Add activity
-      </ui-button>
-      <details class="add-menu">
-        <summary>Add more</summary>
-        <div class="button-row">
-          <ui-button variant="ghost" (click)="open('destination')">
-            Add destination</ui-button
-          ><ui-button variant="ghost" (click)="open('parking')"
-            >Add parking</ui-button
-          ><ui-button variant="ghost" (click)="open('note')">Add note</ui-button
-          ><ui-button variant="ghost" (click)="open('reminder')"
-            >Add reminder</ui-button
-          ><ui-button variant="ghost" (click)="open('budget')"
-            >Add cost</ui-button
-          >
-        </div>
-      </details>
+      <ui-menu label="Add" icon="plus" align="start">
+        <button type="button" uiMenuItem (select)="open('transport')">
+          Transport
+        </button>
+        <button
+          type="button"
+          uiMenuItem
+          (select)="selectedDay = trip.start_date; open('activity')"
+        >
+          Activity
+        </button>
+        <button type="button" uiMenuItem (select)="open('destination')">
+          Destination
+        </button>
+        <button type="button" uiMenuItem (select)="open('parking')">
+          Parking
+        </button>
+        <button type="button" uiMenuItem (select)="open('reminder')">
+          Reminder
+        </button>
+        <button type="button" uiMenuItem (select)="open('note')">Note</button>
+        <button type="button" uiMenuItem (select)="open('budget')">Cost</button>
+      </ui-menu>
     </div>
     <ui-card>
       <h2>Destinations</h2>
@@ -71,7 +71,7 @@
               <p class="muted">Location has not been chosen.</p>
             }
           </div>
-          <div class="button-row">
+          <div class="button-row row-actions row-actions--inline">
             <ui-button variant="ghost" size="sm" (click)="chooseLocation(stay)">
               Choose location</ui-button
             ><ui-button
@@ -88,6 +88,26 @@
               Remove
             </ui-button>
           </div>
+          <ui-menu
+            class="row-actions row-actions--menu"
+            [label]="'Actions for ' + stay.city"
+            [iconOnly]="true"
+          >
+            <button type="button" uiMenuItem (select)="chooseLocation(stay)">
+              Choose location
+            </button>
+            <button type="button" uiMenuItem (select)="open('destination', stay)">
+              Edit destination
+            </button>
+            <button
+              type="button"
+              uiMenuItem
+              [danger]="true"
+              (select)="remove('/stays/' + stay.id, 'destination')"
+            >
+              Remove
+            </button>
+          </ui-menu>
         </article>
       } @empty {
         <p class="muted">
@@ -126,21 +146,6 @@
                   }
                 </p>
               }
-            </div>
-            <div class="button-row">
-              <ui-button
-                variant="ghost"
-                size="sm"
-                (click)="open('transport', transport)"
-              >
-                Edit transport</ui-button
-              ><ui-button
-                variant="ghost"
-                size="sm"
-                (click)="remove('/transports/' + transport.id, 'transport')"
-              >
-                Remove
-              </ui-button>
             </div>
           </article>
         }
@@ -358,19 +363,6 @@
               <p>{{ parkingLine(parking) }}</p>
               <p>{{ parking.notes }}</p>
             </div>
-            <ui-button
-              variant="ghost"
-              size="sm"
-              (click)="open('parking', parking)"
-            >
-              Edit parking</ui-button
-            ><ui-button
-              variant="ghost"
-              size="sm"
-              (click)="remove('/parking/' + parking.id, 'parking')"
-            >
-              Remove parking
-            </ui-button>
           </article>
         }
       </ui-card>
@@ -389,13 +381,29 @@
                 <p class="muted">{{ formatDay(note.on_date) }}</p>
               }
             </div>
-            <ui-button
-              variant="ghost"
-              size="sm"
-              (click)="remove('/notes/' + note.id, 'note')"
+            <div class="button-row row-actions row-actions--inline">
+              <ui-button
+                variant="ghost"
+                size="sm"
+                (click)="remove('/notes/' + note.id, 'note')"
+              >
+                Remove note
+              </ui-button>
+            </div>
+            <ui-menu
+              class="row-actions row-actions--menu"
+              [label]="'Actions for ' + note.body"
+              [iconOnly]="true"
             >
-              Remove note
-            </ui-button>
+              <button
+                type="button"
+                uiMenuItem
+                [danger]="true"
+                (select)="remove('/notes/' + note.id, 'note')"
+              >
+                Remove note
+              </button>
+            </ui-menu>
           </article>
         }
       </ui-card>

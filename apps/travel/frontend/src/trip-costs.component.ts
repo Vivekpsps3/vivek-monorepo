@@ -13,6 +13,8 @@ import {
   UiBadgeComponent,
   UiButtonComponent,
   UiIconComponent,
+  UiMenuComponent,
+  UiMenuItemDirective,
 } from "@vivek/ui";
 import {
   BUCKET_SHORT,
@@ -33,7 +35,14 @@ type ManualLine = Trip["budget"]["manual"][number];
 @Component({
   selector: "travel-trip-costs",
   standalone: true,
-  imports: [RouterLink, UiBadgeComponent, UiButtonComponent, UiIconComponent],
+  imports: [
+    RouterLink,
+    UiBadgeComponent,
+    UiButtonComponent,
+    UiIconComponent,
+    UiMenuComponent,
+    UiMenuItemDirective,
+  ],
   template: `
     <section class="surface trip-costs" aria-labelledby="trip-costs-heading">
       <h2 id="trip-costs-heading">Trip costs</h2>
@@ -164,7 +173,7 @@ type ManualLine = Trip["budget"]["manual"][number];
                     <ui-badge variant="success">Paid</ui-badge>
                   }
                 </div>
-                <div class="row-actions-inline">
+                <div class="row-actions-inline row-actions--inline">
                   <ui-button
                     variant="secondary"
                     size="sm"
@@ -179,6 +188,24 @@ type ManualLine = Trip["budget"]["manual"][number];
                     >Remove cost</ui-button
                   >
                 </div>
+                <ui-menu
+                  class="row-actions--menu"
+                  [label]="'Actions for ' + line.label"
+                  [iconOnly]="true"
+                >
+                  <button type="button" uiMenuItem (select)="editCost.emit(line)">
+                    Edit cost
+                  </button>
+                  <button
+                    type="button"
+                    uiMenuItem
+                    [danger]="true"
+                    [disabled]="busy()"
+                    (select)="removeCost.emit(line)"
+                  >
+                    Remove cost
+                  </button>
+                </ui-menu>
               </article>
             </li>
           }

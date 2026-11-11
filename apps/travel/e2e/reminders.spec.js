@@ -1,4 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
+import { removeRow } from './dates.mjs';
 
 // T3 e2e. Seeded through the API like undo.spec.js. Due dates are built
 // relative to the test's Date.now() in local time, matching the component's
@@ -105,14 +106,14 @@ for (const combo of COMBOS) {
       const violations = watchConsole(page);
       const trip = await seedTrip(request, [{ title: 'Tap done', due_at: daysFromNow(20) }]);
       const section = await openReminders(page, trip);
-      await section.getByLabel('Tap done').check();
+      await section.getByRole('checkbox', { name: 'Tap done', exact: true }).check();
       const done = groupList(section, 'Done');
       await expect(done.locator('label')).toHaveText(['Tap done']);
-      await expect(done.getByLabel('Tap done')).toBeChecked();
+      await expect(done.getByRole('checkbox', { name: 'Tap done', exact: true })).toBeChecked();
       await page.reload();
       const reloaded = page.locator('travel-trip-reminders');
       await expect(groupList(reloaded, 'Done').locator('label')).toHaveText(['Tap done']);
-      await expect(groupList(reloaded, 'Done').getByLabel('Tap done')).toBeChecked();
+      await expect(groupList(reloaded, 'Done').getByRole('checkbox', { name: 'Tap done', exact: true })).toBeChecked();
       const saved = await (await request.get('/travel/api/trips/' + trip.id)).json();
       expect(saved.reminders.find((row) => row.title === 'Tap done').done).toBe(true);
       await expectClean(page, violations);
@@ -130,9 +131,12 @@ for (const combo of COMBOS) {
         });
       });
       const section = await openReminders(page, trip);
-      await section.getByLabel('Fragile').check();
-      await expect(page.locator('main').getByRole('alert')).toContainText('Toggle unavailable');
-      await expect(section.getByLabel('Fragile')).not.toBeChecked();
+      await section.getByRole('checkbox', { name: 'Fragile', exact: true }).check();
+      const tripAlert = page.locator('main').getByRole('alert').filter({ hasText: 'Toggle unavailable' });
+      await expect(tripAlert).toHaveCount(1);
+      await expect(tripAlert).toContainText('Toggle unavailable');
+      await expect(page.locator('.toast-region[role="alert"]')).not.toContainText('Toggle unavailable');
+      await expect(section.getByRole('checkbox', { name: 'Fragile', exact: true })).not.toBeChecked();
       await expect(section.getByRole('heading', { name: 'Done', exact: true })).toHaveCount(0);
       await expectClean(page, violations);
     });
@@ -194,6 +198,44 @@ for (const combo of COMBOS) {
       await section.getByRole('button', { name: 'Add to list', exact: true }).click();
       await expect(section.locator('ul.reminder-list label')).toHaveText(['First one']);
       await expect(section.getByText("No reminders yet. Add the things you don't want to forget.", { exact: true })).toHaveCount(0);
+      await expectClean(page, violations);
+    });
+
+    test(`[${combo.width} ${combo.theme}] failed restore keeps the reminder gone until retry`, async ({ page, request }) => {
+      const violations = watchConsole(page);
+      const trip = await seedTrip(request, [{ title: 'Restore reminder', done: false }]);
+      const section = await openReminders(page, trip);
+      const row = section.locator('article').filter({ hasText: 'Restore reminder' });
+      await expect(row).toHaveCount(1);
+      if (combo.width <= 640) {
+        await expect(row.locator('.row-actions--menu')).toBeVisible();
+        await expect(row.locator('.row-actions--inline')).toBeHidden();
+      } else {
+        await expect(row.locator('.row-actions--inline')).toBeVisible();
+        await expect(row.locator('.row-actions--menu')).toBeHidden();
+      }
+      let posted = null;
+      let failed = false;
+      await page.route('**/travel/api/trips/' + trip.id + '/reminders', async route => {
+        if (route.request().method() !== 'POST') return route.continue();
+        posted = route.request().postDataJSON();
+        if (!failed) {
+          failed = true;
+          return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'Restore unavailable' }) });
+        }
+        return route.continue();
+      });
+      await removeRow(row);
+      await expect(row).toHaveCount(0);
+      await page.getByRole('button', { name: 'Undo', exact: true }).click();
+      const restoreAlert = page.getByRole('alert').filter({ hasText: 'Restore unavailable' });
+      await expect(restoreAlert).toHaveCount(1);
+      await expect(restoreAlert).toContainText('Restore unavailable');
+      await expect(page.locator('main').getByRole('alert').filter({ hasText: 'Restore unavailable' })).toHaveCount(0);
+      await expect(row).toHaveCount(0);
+      await restoreAlert.getByRole('button', { name: 'Retry', exact: true }).click();
+      await expect(section.getByRole('checkbox', { name: 'Restore reminder', exact: true })).toBeVisible();
+      expect(posted).toMatchObject({ title: 'Restore reminder', done: false });
       await expectClean(page, violations);
     });
   });

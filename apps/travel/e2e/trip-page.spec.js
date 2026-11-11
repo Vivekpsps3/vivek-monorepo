@@ -1,9 +1,8 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
 import { formatDateRange, tripHeader } from './dates.mjs';
 
-// Only the T5 acceptance that is built on this branch: the Add menu, the
-// phone row menus and the typed delete are blocked on K1 (ui-menu) and
-// K2 (confirmAction), which are not on main yet.
+// Header, money, and at-rest delete styling. Add, row menus, and typed
+// delete live in trip-actions.spec.js.
 
 async function createTrip(request, title, start, end) {
   const created = await request.post('/travel/api/trips', {

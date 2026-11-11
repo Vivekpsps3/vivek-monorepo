@@ -112,14 +112,23 @@
   overflow-wrap: anywhere;
 }
 
-/*
- * Inline actions stay visible at every width. ui-menu is already on main
- * (PR #145). A narrower menu swap belongs to TRIP-03 (#227), not to a
- * missing-component follow-up.
- */
 .row-actions-inline {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
+}
+
+.row-actions--menu {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .row-actions--inline {
+    display: none;
+  }
+
+  .row-actions--menu {
+    display: inline-block;
+  }
 }

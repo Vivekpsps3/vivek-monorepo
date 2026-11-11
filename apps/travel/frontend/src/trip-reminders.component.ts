@@ -13,7 +13,12 @@ import {
   viewChild,
 } from "@angular/core";
 import { formatDay, formatRelativeDay } from "@vivek/browser";
-import { UiBadgeComponent, UiButtonComponent } from "@vivek/ui";
+import {
+  UiBadgeComponent,
+  UiButtonComponent,
+  UiMenuComponent,
+  UiMenuItemDirective,
+} from "@vivek/ui";
 import {
   dueParts,
   groupReminders,
@@ -52,7 +57,13 @@ function localNowMinute(): string {
 @Component({
   selector: "travel-trip-reminders",
   standalone: true,
-  imports: [NgTemplateOutlet, UiBadgeComponent, UiButtonComponent],
+  imports: [
+    NgTemplateOutlet,
+    UiBadgeComponent,
+    UiButtonComponent,
+    UiMenuComponent,
+    UiMenuItemDirective,
+  ],
   template: `
     <section class="surface trip-reminders" aria-labelledby="reminders-heading">
       <h2 id="reminders-heading">Reminders</h2>
@@ -81,13 +92,30 @@ function localNowMinute(): string {
                 </p>
               </div>
             </div>
-            <ui-button
-              variant="ghost"
-              size="sm"
-              [disabled]="busy()"
-              (clicked)="removeReminder.emit(r)"
-              >Remove</ui-button
+            <div class="row-actions row-actions--inline">
+              <ui-button
+                variant="ghost"
+                size="sm"
+                [disabled]="busy()"
+                (clicked)="removeReminder.emit(r)"
+                >Remove</ui-button
+              >
+            </div>
+            <ui-menu
+              class="row-actions row-actions--menu"
+              [label]="'Actions for ' + r.title"
+              [iconOnly]="true"
             >
+              <button
+                type="button"
+                uiMenuItem
+                [danger]="true"
+                [disabled]="busy()"
+                (select)="removeReminder.emit(r)"
+              >
+                Remove
+              </button>
+            </ui-menu>
           </article>
         </li>
       </ng-template>

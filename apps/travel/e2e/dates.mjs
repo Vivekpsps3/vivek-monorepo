@@ -20,6 +20,33 @@ export async function expectSectionHeading(page, name) {
   return heading;
 }
 
+/** Trip-detail Add menu. Item names are the seven menuitems. */
+export async function openTripAdd(page, name) {
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('menuitem', { name, exact: true }).click();
+}
+
+/** Inline buttons at wide widths, one row menu at narrow widths. */
+export async function removeRow(row) {
+  const menu = row.getByRole('button', { name: /^Actions for / });
+  if (await menu.isVisible()) {
+    await menu.click();
+    await row.getByRole('menuitem', { name: /^Remove/ }).click();
+    return;
+  }
+  await row.getByRole('button', { name: /^Remove/ }).click();
+}
+
+export async function runRowAction(row, action) {
+  const menu = row.getByRole('button', { name: /^Actions for / });
+  if (await menu.isVisible()) {
+    await menu.click();
+    await row.getByRole('menuitem', { name: action, exact: true }).click();
+    return;
+  }
+  await row.getByRole('button', { name: action, exact: true }).click();
+}
+
 /** The date line is projected into the page header, not a sibling of the h1. */
 export function tripHeader(page, title) {
   return page.locator('ui-page-header').filter({
