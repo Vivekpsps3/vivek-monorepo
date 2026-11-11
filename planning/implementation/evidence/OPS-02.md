@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [OPS-02](../issues/OPS-02.md) / [#273](https://github.com/Vivekpsps3/vivek-monorepo/issues/273). Parent [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stays open.
 - Agent/context, branch/worktree: OPS-02 in `/tmp/vivek-ops-02`, branch `agent/ops-02`.
-- Base main SHA, current tested SHA: work started at `3954d1f27aa8ad0766eac9a7e9667f68d3c76571`. `origin/main` then fast-forwarded to `1b4f35a80784a3181da809784fa80b33c13c6e60` (#322, Finance price preference only) before this commit. OPS-01 `8b9f0998` is an ancestor. Product revision is the commit that adds this file.
+- Base main SHA, current tested SHA: work started at `3954d1f27aa8ad0766eac9a7e9667f68d3c76571`. `origin/main` then fast-forwarded to `1b4f35a80784a3181da809784fa80b33c13c6e60` (#322, Finance price preference only) before the product commit. OPS-01 `8b9f0998` is an ancestor. Product revision under test: `316b500b050ac30d9993240bc625324be710cabd`.
 - Fresh-main/prerequisite/active-PR checks: OPS-01 is merged on this base. No other open PR owned `scripts/backup-site.py`, `compose.yml`, or the backup sections of the operations docs at implementation time. FIN-01 does not touch those files.
 
 ## Acceptance
@@ -34,16 +34,16 @@
 
 | Command | Tested revision | Result |
 | --- | --- | --- |
-| `python3 -m unittest scripts.test_backup_retention` | Worktree before commit, parent `1b4f35a` | PASS. 15 tests. |
-| `make test-fast` | Same tree | PASS. Doc paths OK. Planning validation 94 packets. Unittest 78 OK, including the 15 retention tests. Node script tests 15 pass, 0 fail. |
-| `make lint-python` | Same tree | PASS. Ruff 101 findings match the baseline. Suppressions 6 match the baseline. |
-| `make typecheck-python` | Same tree | PASS. Mypy 87 findings match the baseline. |
-| `node scripts/test-release-manifest.mjs` | Same tree | PASS. |
-| `make docker-build` | Image label `org.opencontainers.image.revision=3954d1f27aa8ad0766eac9a7e9667f68d3c76571` because this commit did not exist yet. Backup and Compose sources in the build context are this change. | PASS. |
+| `python3 -m unittest scripts.test_backup_retention` | `316b500b050ac30d9993240bc625324be710cabd` | PASS. 15 tests. |
+| `make test-fast` | `316b500b050ac30d9993240bc625324be710cabd` | PASS. Doc paths OK. Planning validation 94 packets. Unittest 78 OK, including the 15 retention tests. Node script tests 15 pass, 0 fail. |
+| `make lint-python` | `316b500b050ac30d9993240bc625324be710cabd` | PASS. Ruff 101 findings match the baseline. Suppressions 6 match the baseline. |
+| `make typecheck-python` | `316b500b050ac30d9993240bc625324be710cabd` | PASS. Mypy 87 findings match the baseline. |
+| `node scripts/test-release-manifest.mjs` | `316b500b050ac30d9993240bc625324be710cabd` | PASS. |
+| `make docker-build` | Image label `org.opencontainers.image.revision=3954d1f27aa8ad0766eac9a7e9667f68d3c76571` because `316b500` did not exist yet. Backup and Compose sources in the build context are this change. | PASS. |
 | `make test-suite-routes` | That image | PASS. Unified checks passed. |
 | `make db-validate-seeded` | Same image. Adopt from `8dc554e`. Upgrade from `1b4f35a`. | PASS. Modes `adopt` and `upgrade`. Upgrade action `current`. Upgrade schema diff empty. Smoke routes returned 200. The backup service published one verified snapshot. |
-| `./scripts/coverage-gate.sh server` | Same tree | PASS. 874 passed, 2 xfailed. Total coverage 80.12%. Required floor 61.53% reached. The suggested floor increase was not applied. |
-| Server backup tests `pytest apps/server/tests/test_migration.py apps/server/tests/test_schema_migrations.py -k "backup or premigrate or retention or latest_backup"` | Same tree | PASS. 7 passed, 28 deselected. |
+| `./scripts/coverage-gate.sh server` | `316b500b050ac30d9993240bc625324be710cabd` | PASS. 874 passed, 2 xfailed. Total coverage 80.12%. Required floor 61.53% reached. The suggested floor increase was not applied. |
+| Server backup tests `pytest apps/server/tests/test_migration.py apps/server/tests/test_schema_migrations.py -k "backup or premigrate or retention or latest_backup"` | `316b500b050ac30d9993240bc625324be710cabd` | PASS. 7 passed, 28 deselected. |
 
 `python3 planning/implementation/plan.py launch OPS-02` printed the commands above. Each distinct command is listed once.
 
