@@ -52,8 +52,8 @@ Commands ran from `/tmp/vivek-trip-03`. `PYTHON` was `/home/vivek/Deployments/vi
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after these gates, with `Closes #227` and a non-closing reference to #84. URL recorded in the next handoff update.
-- Roadmap #134 append-only status-note URL: posted after the PR exists. The issue body is not edited.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/346 with `Closes #227` and a non-closing reference to #84.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6807308405. The issue body is not edited.
 - Merged/activation status (actual evidence, not assumption): not merged. Not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. `confirmAction`'s call shape stayed unchanged, so PTO-04 does not need a packages/ui edit from this work.
-- Next actor: this agent, to push `agent/trip-03`, watch CI, and squash-merge.
+- Next actor: this agent, to watch CI and squash-merge #346.
