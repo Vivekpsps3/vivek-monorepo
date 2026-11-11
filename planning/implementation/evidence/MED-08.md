@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#242](https://github.com/Vivekpsps3/vivek-monorepo/issues/242); parents [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200) and [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85) stay open
 - Agent/context, branch/worktree: Cursor Grok, `agent/med-08`, `/tmp/vivek-med-08`
-- Base main SHA, current tested SHA: base `3954d1f27aa8ad0766eac9a7e9667f68d3c76571`; tested implementation is the commit that introduces `records.py` and `test_record_commands.py` (recorded in Handoff after that commit)
+- Base main SHA, current tested SHA: base `3954d1f27aa8ad0766eac9a7e9667f68d3c76571`; tested implementation `27ffa71f000a6c51accfec2210823a3cf2ae4583`
 - Fresh-main/prerequisite/active-PR checks: MED-01 `29e1318` is an ancestor (saved reads stay database-only). PR #193 ancestor `495d698` (MusicBrainz release-group identity) is an ancestor. Open PR #322 (`agent/fin-01`) touches Finance only. No open pull request uses `media-records`, `media-membership`, or `media-library-api`. Claim is on #242. Worktree base matches `origin/main` at `3954d1f`.
 
 ## Acceptance
@@ -69,7 +69,7 @@ Commands ran in `/tmp/vivek-med-08` on the implementation tree before this evide
 
 Issue / parent / local packet: MED-08, GitHub #242, parents #200 and #85, packet `planning/implementation/issues/MED-08.md`.
 
-Branch, worktree, base main SHA, current SHA: `agent/med-08`, `/tmp/vivek-med-08`, base `3954d1f27aa8ad0766eac9a7e9667f68d3c76571`. Tested SHA is filled in the Handoff section after the implementation commit.
+Branch, worktree, base main SHA, current SHA: `agent/med-08`, `/tmp/vivek-med-08`, base `3954d1f27aa8ad0766eac9a7e9667f68d3c76571`, tested implementation `27ffa71f000a6c51accfec2210823a3cf2ae4583`.
 
 Owned files and conflict groups: `media-records`, `media-membership`, `media-library-api`. Edited files are `records.py`, the new Media backend test, and this evidence file. Other active PRs checked: #322 Finance only.
 
