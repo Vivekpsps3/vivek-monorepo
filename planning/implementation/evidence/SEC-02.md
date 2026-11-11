@@ -53,7 +53,7 @@ The default 4-worker Town Playwright command timed out once on the unchanged `to
 ## Handoff
 
 - PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/334 (`Closes #267`, reference #121)
-- Roadmap #134 append-only status-note URL: posted with this PR
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6789491998
 - Merged/activation status: not merged. Not deployed
 - Remaining external prerequisites or approved scope decisions: parent #121 stays open. HUB-01 still owns account-form focus and copy wiring
 - Next actor: CI, then squash-merge after Backend, Frontend, Unified Site Release, and Playwright are green
