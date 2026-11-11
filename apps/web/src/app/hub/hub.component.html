@@ -201,22 +201,33 @@
             <p class="figure-note">{{ summary.activeLine }}</p>
             <p class="figure-note">{{ summary.runLine }}</p>
           }
-          <div class="pixel-strip">
-            @for (row of pixelRows(); track $index) {
-              @for (cell of row; track cell.date) {
-                <div
-                  class="pixel"
-                  [class.l1]="cell.level === 1"
-                  [class.l2]="cell.level === 2"
-                  [class.l3]="cell.level === 3"
-                  [class.l4]="cell.level === 4"
-                  [class.future]="cell.future"
-                  [class.plan]="cell.planned"
-                  [class.today]="cell.today"
-                  [attr.data-date]="cell.date"
-                  aria-hidden="true"
-                  (click)="openPixelDay(cell)"></div>
-              }
+          <div
+            class="pixel-strip"
+            role="grid"
+            aria-label="Last 13 weeks"
+            aria-rowcount="7"
+            aria-colcount="13"
+            (keydown)="onStripKey($event)">
+            @for (row of pixelRows(); track $index; let rowIndex = $index) {
+              <div class="pixel-strip__row" role="row" [attr.aria-rowindex]="rowIndex + 1">
+                @for (cell of row; track cell.date) {
+                  <div
+                    role="gridcell"
+                    class="pixel"
+                    [class.l1]="cell.level === 1"
+                    [class.l2]="cell.level === 2"
+                    [class.l3]="cell.level === 3"
+                    [class.l4]="cell.level === 4"
+                    [class.future]="cell.future"
+                    [class.plan]="cell.planned"
+                    [class.today]="cell.today"
+                    [attr.data-date]="cell.date"
+                    [attr.aria-label]="stripLabel(cell)"
+                    [attr.aria-current]="cell.today ? 'date' : null"
+                    [attr.tabindex]="cell.date === stripTabDate() ? 0 : -1"
+                    (click)="openPixelDay(cell)"></div>
+                }
+              </div>
             }
           </div>
         </ui-state>

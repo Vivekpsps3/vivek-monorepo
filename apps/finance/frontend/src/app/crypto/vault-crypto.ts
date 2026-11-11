@@ -166,23 +166,32 @@ function progressId(userId: number): string {
   return `progress:${userId}`;
 }
 
-/** Remove this write only. A newer hold's record has a different token and stays. */
-async function dropStaleVaultWrite(token: string, ownerId: number): Promise<void> {
+/**
+ * Undo this write only. If it replaced another hold, put that record back.
+ * Deleting is safe only when this write created the row. A different token stays.
+ */
+async function rollbackStaleVaultWrite(token: string, previous: DekRecord | undefined, ownerId: number): Promise<void> {
   let removed = false;
+  let restoredOwner: number | null = null;
   await withVaultStore('readwrite', store => {
     const request = store.get(VAULT_KEY_ID);
     request.onsuccess = () => {
-      const row = request.result as { write_token?: string } | undefined;
-      if (row?.write_token === token) {
+      const row = request.result as DekRecord | undefined;
+      if (row?.write_token !== token) return;
+      const prior = previous?.write_token !== token ? previous : undefined;
+      if (prior) {
+        store.put(prior);
+        restoredOwner = typeof prior.owner_id === 'number' ? prior.owner_id : null;
+      } else {
         store.delete(VAULT_KEY_ID);
         removed = true;
       }
     };
     return request;
   });
-  if (!removed) return;
   try {
-    if (localStorage.getItem(VAULT_PRESENCE) === String(ownerId)) localStorage.removeItem(VAULT_PRESENCE);
+    if (restoredOwner != null) markVaultPresent(restoredOwner);
+    else if (removed && localStorage.getItem(VAULT_PRESENCE) === String(ownerId)) localStorage.removeItem(VAULT_PRESENCE);
   } catch { /* private mode */ }
 }
 
@@ -192,26 +201,32 @@ export async function persistVaultKeys(keys: StoredVaultKeys, ownerId: number | 
   const extra = requireAttached(keys.dek);
   if (!stillCurrent()) return false;
   const writeToken = bufToB64(randomBytes(8));
+  const record = {
+    id: VAULT_KEY_ID, ...keys, owner_id: ownerId, blindKey: extra.blindKey, legacyBlindKey: extra.legacyBlindKey, write_token: writeToken,
+  } satisfies DekRecord;
   let wrote = false;
+  // Read before the put so a stale write can restore the hold it replaced.
+  let previous: DekRecord | undefined;
   await withVaultStore('readwrite', store => {
-    if (!stillCurrent()) return store.get(VAULT_KEY_ID);
+    const currentRow = store.get(VAULT_KEY_ID);
+    currentRow.onsuccess = () => { previous = currentRow.result as DekRecord | undefined; };
+    if (!stillCurrent()) return currentRow;
     wrote = true;
-    return store.put({
-      id: VAULT_KEY_ID, ...keys, owner_id: ownerId, blindKey: extra.blindKey, legacyBlindKey: extra.legacyBlindKey, write_token: writeToken,
-    } satisfies DekRecord);
+    store.put(record);
+    return currentRow;
   });
   if (!wrote || !stillCurrent()) {
-    if (wrote) await dropStaleVaultWrite(writeToken, ownerId);
+    if (wrote) await rollbackStaleVaultWrite(writeToken, previous, ownerId);
     return false;
   }
   markVaultPresent(ownerId);
   if (!stillCurrent()) {
-    await dropStaleVaultWrite(writeToken, ownerId);
+    await rollbackStaleVaultWrite(writeToken, previous, ownerId);
     return false;
   }
   migrateLegacyDek();
   if (!stillCurrent()) {
-    await dropStaleVaultWrite(writeToken, ownerId);
+    await rollbackStaleVaultWrite(writeToken, previous, ownerId);
     return false;
   }
   return true;
