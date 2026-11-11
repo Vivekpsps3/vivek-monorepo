@@ -44,9 +44,9 @@ Local gates on this worktree, `PYTHON=/home/vivek/Deployments/vivek-monorepo/.ve
 | `node --test apps/travel/backend/static/tests/*.test.mjs` | PASS. 63 tests. |
 | `node --test apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs` | PASS. 53 tests. |
 | `make lint-web` / `make typecheck-web` | PASS |
-| `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS. 711 SUCCESS. Statements 83.27, branches 70.24, functions 82.93, lines 86.93. |
+| `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS. 711 SUCCESS. Statements 83.27, branches 70.24, functions 82.93, lines 86.93. Rerun after the day-refresh guard: 711 SUCCESS, statements 83.30. |
 | `make build-frontends` | PASS |
-| `npx playwright test --config apps/web/e2e/playwright.config.ts` | PASS on the rerun: 79 passed. The first full run timed out once in `town-checkin.spec.ts` “visibility after the local date changes” (`waitForResponse` 60s). That test passed alone and in the full rerun. The new passive test passed in both full runs. |
+| `npx playwright test --config apps/web/e2e/playwright.config.ts` | PASS on the rerun: 79 passed. The first full run timed out once in `town-checkin.spec.ts` “visibility after the local date changes” (`waitForResponse` 60s). That test passed alone and in the full rerun. The new passive test passed in both full runs. CI run 43103047547 failed that same visibility test under the full browser matrix. A jumped clock was firing the five-minute poll once per elapsed interval while Town was still on the old day, so each tick started another `GET /api/town`. `refreshDay` now keeps one in-flight load per new local day. `town.component.spec.ts` asserts a second interval does not fetch again, and `town-checkin.spec.ts` then passed 5 tests. |
 | `npx playwright test --project=suite` | PASS. 26 passed. |
 | `bash scripts/perf-gate.sh` (serial, no coverage, before the coverage gate) | PASS. p50 239.32 ms. |
 

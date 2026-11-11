@@ -32,6 +32,8 @@ export class TownComponent {
   private readonly toast = inject(ToastService);
   private readonly loads = new Subject<void>();
   private pendingLive: CheckinResult | null = null;
+  /** Day already requested by a visibility or interval refresh. One in-flight load, not one per tick. */
+  private pendingDay: string | null = null;
   readonly data = signal<TownResponse | null>(null);
   readonly financeVaultPresent = financeVaultPresent;
   readonly state = signal<'loading' | 'ready' | 'unavailable'>('loading');
@@ -47,6 +49,7 @@ export class TownComponent {
   constructor() {
     this.loads.pipe(
       switchMap(() => this.api.getTown().pipe(catchError((error: { status?: number }) => {
+        this.pendingDay = null;
         this.data.set(null);
         // A 401 follows the global auth redirect. Town does not paint a session banner.
         this.state.set(error.status === 401 ? 'loading' : 'unavailable');
@@ -88,6 +91,7 @@ export class TownComponent {
     return this.swapping()[key] ?? null;
   }
   private show(data: TownResponse): void {
+    this.pendingDay = null;
     const lots = Array.isArray(data.lots) ? [...data.lots].sort((a, b) => a.slot - b.slot) : [];
     const sorted = { ...data, lots };
     const toasted = this.observe(sorted);
@@ -124,7 +128,9 @@ export class TownComponent {
     if (this.document.visibilityState !== 'visible' || this.state() !== 'ready') return;
     const now = new Date();
     const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    if (this.data()?.town.today !== day) this.reload();
+    if (this.data()?.town.today === day || this.pendingDay === day) return;
+    this.pendingDay = day;
+    this.reload();
   }
   habit(id: number | null) { return this.data()?.habits.find(habit => habit.id === id); }
   weeksKept(data: TownResponse): number | null {
