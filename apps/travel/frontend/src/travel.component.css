@@ -1,3 +1,11 @@
+.time-off p {
+  margin: 0 0 0.35rem;
+}
+
+.time-off a {
+  margin-right: 0.75rem;
+}
+
 .trip-card {
   display: flex;
   flex-direction: column;

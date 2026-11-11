@@ -1,6 +1,8 @@
 """Read models for the home page, a trip, and the calendar."""
 
 from datetime import date, datetime
+from decimal import Decimal
+from fractions import Fraction
 
 from sqlalchemy.orm import selectinload
 
@@ -21,7 +23,8 @@ from apps.travel.backend.services.budget import (
     rollup,
 )
 from apps.travel.backend.services.dates import iter_dates, nights_away, phase_for, span_days
-from apps.travel.backend.services.leave_buckets import policy_for_read
+from apps.travel.backend.services.leave_buckets import hours_per_day, policy_for_read
+from apps.travel.backend.services.leave_math import fmt_hours
 from apps.travel.backend.services.money import fmt_days, fmt_money, store_days
 from apps.travel.backend.services.pto import (
     counted_pto_dates,
@@ -505,6 +508,14 @@ def _days_until(start: date, today: date) -> int:
     return max((start - today).days, 0)
 
 
+def _hour_text(days: str, hpd: Decimal) -> str:
+    """Spell a day amount from the existing trip projection in hours.
+
+    ``fmt_hours`` owns the spelling. This does not walk the policy again.
+    """
+    return fmt_hours(Fraction(Decimal(days)) * Fraction(hpd))
+
+
 def _choose_next(in_progress: list[dict], upcoming: list[dict]) -> dict | None:
     return (in_progress or upcoming or [None])[0]
 
@@ -595,16 +606,23 @@ def build_home(db, today: date | None = None, *, user_id: int) -> dict:
             "days_until": _days_until(chosen["start_date"], today),
         }
     pto = snapshot_pto(policy, usages, today)
+    hpd = hours_per_day(db, owner)
     next_pto = None
     for item in in_progress + upcoming:
         if item["counts_as_pto"] and item["pto"]["balance_when_you_leave"] is not None:
+            leaving = item["pto"]["balance_when_you_leave"]
+            leftover = item["pto"]["leftover_after"]
+            taken = item["pto"]["days"]
             next_pto = {
                 "trip_id": item["id"],
                 "title": item["title"],
                 "start_date": item["start_date"],
-                "days": item["pto"]["days"],
-                "balance_when_you_leave": item["pto"]["balance_when_you_leave"],
-                "leftover_after": item["pto"]["leftover_after"],
+                "days": taken,
+                "hours": _hour_text(taken, hpd),
+                "balance_when_you_leave": leaving,
+                "balance_when_you_leave_hours": _hour_text(leaving, hpd),
+                "leftover_after": leftover,
+                "leftover_after_hours": _hour_text(leftover, hpd),
             }
             break
     return {

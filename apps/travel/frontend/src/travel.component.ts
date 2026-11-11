@@ -3,12 +3,11 @@ import { HttpClient } from "@angular/common/http";
 import { RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { formatDateRange, formatMoney, formatRelativeDay } from "@vivek/browser";
-import { Home, Trip, travelError } from "./travel.models";
+import { Home, PtoBoard, Trip, travelError } from "./travel.models";
 import {
   PAST_PREVIEW,
   cardPtoText,
   countdownText,
-  daysText,
   isEmpty,
   localToday,
   pastSlice,
@@ -54,13 +53,54 @@ type HomeTrip = Trip & {
       <ui-button variant="ghost" (click)="load()">Retry trips</ui-button>
     }
     @if (data(); as home) {
-      @if (home.pto.configured) {
+      <section class="time-off" aria-label="Time off">
         <ui-card>
-          PTO balance today:
-          <strong>{{ daysText(home.pto.balance_today) }}</strong> ·
-          <a routerLink="/travel/pto">View forecast</a>
+          @if (leaveError()) {
+            <p class="local-error" role="alert">{{ leaveError() }}</p>
+            <ui-button variant="ghost" (click)="loadLeave()">Retry time off</ui-button>
+          } @else if (leaveLoading() && !leave()) {
+            <p role="status">Loading time off…</p>
+          } @else if (leave(); as board) {
+            @if (!board.buckets.pto && !board.buckets.sick) {
+              <p>PTO and Sick are not set up.</p>
+              <a routerLink="/travel/pto">Set up PTO</a>
+            } @else {
+              @if (board.buckets.pto; as pto) {
+                <p>
+                  PTO balance today:
+                  <strong
+                    >{{ pto.balance_today_days }} days · {{ pto.balance_today_hours }} h</strong
+                  >
+                </p>
+              }
+              @if (board.buckets.sick; as sick) {
+                <p>
+                  Sick balance today:
+                  <strong
+                    >{{ sick.balance_today_days }} days · {{ sick.balance_today_hours }} h</strong
+                  >
+                </p>
+              }
+              @if (board.buckets.pto && home.next_pto) {
+                <p>
+                  Next trip {{ home.next_pto.title }} uses
+                  {{ home.next_pto.days }} days · {{ home.next_pto.hours }} h.
+                  {{ home.next_pto.balance_when_you_leave }} days ·
+                  {{ home.next_pto.balance_when_you_leave_hours }} h before the trip,
+                  {{ home.next_pto.leftover_after }} days ·
+                  {{ home.next_pto.leftover_after_hours }} h after.
+                </p>
+              }
+              @if (!board.buckets.pto) {
+                <a routerLink="/travel/pto">Set up PTO</a>
+              } @else if (!board.buckets.sick) {
+                <a routerLink="/travel/pto">Set up Sick</a>
+              }
+              <a routerLink="/travel/pto">View forecast</a>
+            }
+          }
         </ui-card>
-      }
+      </section>
       @if (home.attention.length) {
         <section>
           <h2>Needs a look</h2>
@@ -167,7 +207,6 @@ type HomeTrip = Trip & {
 })
 export class TravelComponent {
   readonly formatDateRange = formatDateRange;
-  readonly daysText = daysText;
   readonly isEmpty = isEmpty;
   readonly totals = totals;
   readonly pastSlice = pastSlice;
@@ -177,6 +216,9 @@ export class TravelComponent {
   private readonly destroy = inject(DestroyRef);
   readonly data = signal<Home | null>(null);
   readonly error = signal("");
+  readonly leave = signal<PtoBoard | null>(null);
+  readonly leaveError = signal("");
+  readonly leaveLoading = signal(true);
   readonly pastExpanded = signal(false);
   /** Browser-local calendar day (LA-day ruling, #113): never the UTC/server date. */
   readonly today = localToday();
@@ -191,6 +233,25 @@ export class TravelComponent {
       .subscribe({
         next: (d) => this.data.set(d),
         error: (e) => this.error.set(travelError(e)),
+      });
+    this.loadLeave();
+  }
+  loadLeave(): void {
+    this.leaveError.set("");
+    this.leaveLoading.set(true);
+    this.http
+      .get<PtoBoard>("/travel/api/pto")
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (d) => {
+          this.leave.set(d);
+          this.leaveLoading.set(false);
+        },
+        error: () => {
+          this.leave.set(null);
+          this.leaveLoading.set(false);
+          this.leaveError.set("Couldn't load time off.");
+        },
       });
   }
   groups(home: Home): {
