@@ -56,6 +56,38 @@ SUPPRESSION_SKIP = {
     "scripts/test_quality_ratchet.py",
 }
 
+# Ruff and mypy both receive these directories. source_inventory.py reads the
+# same tuple; do not keep a second copy in docs or pyproject comments.
+PYTHON_TARGETS = ("apps", "scripts", "packages")
+
+# Directories make lint-web actually passes to ESLint. A shipped file that
+# matches eslint.config.js but not one of these still has no CI lint owner.
+ESLINT_EXTENSIONS = ("ts", "html", "mjs", "cjs", "js")
+ESLINT_SCOPES = {
+    "eslint-finance": (
+        "apps/finance/frontend/src",
+        "apps/finance/frontend/e2e",
+        "apps/web/src",
+        "apps/travel/frontend/src",
+        "apps/media/frontend/src",
+    ),
+    "eslint-site": ("apps/site/src",),
+    "eslint-packages": (
+        "packages/browser/src",
+        "packages/auth/src",
+        "packages/ui/src",
+        "packages/ui/pixels",
+        "packages/browser/runtime",
+        "scripts",
+    ),
+    "eslint-world-engine": ("apps/web/src/app/world/engine",),
+}
+ESLINT_FILES = (
+    "eslint.config.js",
+    "apps/karma.conf.js",
+    "apps/web/proxy.conf.cjs",
+)
+
 _NOQA = re.compile(
     r"#\s*(?:(?P<tool>ruff|flake8)\s*:\s*)?noqa\b(?::\s*(?P<codes>[A-Za-z0-9_,\s]+))?",
     re.IGNORECASE,
@@ -142,7 +174,8 @@ def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 def ruff_findings() -> list[tuple[str, str]]:
     completed = run(
-        [sys.executable, "-m", "ruff", "check", "--output-format", "json", "apps", "scripts"], ROOT
+        [sys.executable, "-m", "ruff", "check", "--output-format", "json", *PYTHON_TARGETS],
+        ROOT,
     )
     if completed.returncode not in (0, 1):
         sys.stderr.write(completed.stderr)
@@ -173,8 +206,7 @@ def mypy_findings() -> list[tuple[str, str]]:
             "mypy",
             "--no-error-summary",
             "--no-color-output",
-            "apps",
-            "scripts",
+            *PYTHON_TARGETS,
         ],
         ROOT,
     )
@@ -206,13 +238,18 @@ def parse_eslint_report(payload: list[dict[str, object]]) -> list[tuple[str, str
     return findings
 
 
-def eslint_findings(prefix: str, cwd: Path, targets: list[str]) -> list[tuple[str, str]]:
-    scoped = [str((cwd / target).relative_to(ROOT)) for target in targets]
-    if prefix == "apps/finance/frontend" and cwd == ROOT / "apps/finance/frontend":
-        scoped += ["apps/web/src", "apps/travel/frontend/src", "apps/media/frontend/src"]
+def eslint_patterns(tool: str) -> list[str]:
     patterns = [
-        pattern for target in scoped for pattern in (f"{target}/**/*.ts", f"{target}/**/*.html")
+        f"{directory}/**/*.{extension}"
+        for directory in ESLINT_SCOPES[tool]
+        for extension in ESLINT_EXTENSIONS
     ]
+    if tool == "eslint-packages":
+        patterns.extend(ESLINT_FILES)
+    return patterns
+
+
+def eslint_findings(patterns: list[str]) -> list[tuple[str, str]]:
     completed = run(
         [
             str(ROOT / "node_modules/.bin/eslint"),
@@ -315,31 +352,19 @@ TOOLS = {
     "mypy": (BASELINES / "mypy-baseline.txt", mypy_findings),
     "eslint-finance": (
         BASELINES / "eslint-finance-baseline.txt",
-        lambda: eslint_findings(
-            "apps/finance/frontend",
-            ROOT / "apps/finance/frontend",
-            ["src", "e2e"],
-        ),
+        lambda: eslint_findings(eslint_patterns("eslint-finance")),
     ),
     "eslint-site": (
         BASELINES / "eslint-site-baseline.txt",
-        lambda: eslint_findings("apps/site", ROOT / "apps/site", ["src"]),
+        lambda: eslint_findings(eslint_patterns("eslint-site")),
     ),
     "eslint-packages": (
         BASELINES / "eslint-packages-baseline.txt",
-        lambda: eslint_findings(
-            "apps/finance/frontend",
-            ROOT / "packages",
-            ["browser/src", "auth/src", "ui/src", "ui/pixels"],
-        ),
+        lambda: eslint_findings(eslint_patterns("eslint-packages")),
     ),
     "eslint-world-engine": (
         BASELINES / "eslint-world-engine-baseline.txt",
-        lambda: eslint_findings(
-            "apps/web",
-            ROOT,
-            ["apps/web/src/app/world/engine"],
-        ),
+        lambda: eslint_findings(eslint_patterns("eslint-world-engine")),
     ),
     "suppressions": (BASELINES / "suppressions-baseline.txt", suppression_findings),
 }

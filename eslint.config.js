@@ -1,10 +1,20 @@
 const eslint = require('@eslint/js');
 const tseslint = require('typescript-eslint');
 const angular = require('angular-eslint');
+const globals = require('globals');
 const rules = {
   'no-undef': 'off',
   '@typescript-eslint/no-unused-vars': ['error', {argsIgnorePattern:'^_',varsIgnorePattern:'^_',caughtErrorsIgnorePattern:'^_'}],
 };
+// Same unused-name exception as TypeScript. Shipped JS keeps recommended
+// no-undef so an unknown name still fails.
+const jsRules = {
+  ...eslint.configs.recommended.rules,
+  'no-unused-vars': ['error', {argsIgnorePattern:'^_',varsIgnorePattern:'^_',caughtErrorsIgnorePattern:'^_'}],
+};
+function jsLanguage(sourceType, globalsForFile) {
+  return {ecmaVersion: 2022, sourceType, globals: globalsForFile};
+}
 // worldgen-design.md §6.1: the engine is pure. ESLint replaces a rule's array,
 // so canonical.ts restates no-restricted-syntax without the Object.keys ban.
 const ENGINE_PURITY = 'worldgen-design.md §6.1: engine must be pure';
@@ -84,5 +94,33 @@ module.exports = tseslint.config(
         {selector: "MemberExpression[object.object.name='globalThis'][object.property.name='Math'][property.name='random']", message: ENGINE_PURITY},
       ],
     },
+  },
+  {
+    files: ['apps/**/src/**/*.mjs', 'packages/**/*.mjs'],
+    ignores: ['**/*.test.mjs', '**/vendor/**'],
+    languageOptions: jsLanguage('module', globals.browser),
+    rules: jsRules,
+  },
+  {
+    files: ['scripts/**/*.mjs', 'apps/web/proxy.conf.cjs', 'apps/karma.conf.js', 'eslint.config.js'],
+    ignores: ['scripts/**/*.test.mjs'],
+    languageOptions: jsLanguage('module', globals.node),
+    rules: jsRules,
+  },
+  {
+    files: ['apps/web/proxy.conf.cjs', 'apps/karma.conf.js', 'eslint.config.js'],
+    languageOptions: jsLanguage('commonjs', globals.node),
+    rules: jsRules,
+  },
+  {
+    files: ['**/*.test.mjs'],
+    languageOptions: jsLanguage('module', globals.node),
+    rules: jsRules,
+  },
+  {
+    // Node harness with page.evaluate callbacks. Browser names are real there.
+    files: ['scripts/test-site-browser.mjs'],
+    languageOptions: jsLanguage('module', {...globals.node, ...globals.browser, dispatchEvent: 'readonly'}),
+    rules: jsRules,
   },
 );
