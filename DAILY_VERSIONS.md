@@ -10,7 +10,7 @@ Dates use the **committer timestamp converted to UTC on the first-parent main hi
 
 The report contains 197 mainline integrations across 27 active UTC dates and accounts for all 622 reachable commits. Each active day has feature, bug-fix, and maintenance explanations plus an auditable ledger. Generic commit titles support only limited conclusions; they are preserved without inventing a specific incident. Feature work and security fixes can share a commit. An entry describes historical work and does not imply the capability remains available today.
 
-The 2026-11-11 section records seven owner-accepted leaves. It does not re-audit every commit after `80b9ca0`, and it does not change the integration or commit totals above. Six of those leaves are first-parent commits on main. The other one is a pull-request landing and is not on that main snapshot.
+The 2026-11-11 section records twelve owner-accepted leaves: the original seven, including FIN-01's squash, and five later leaves. It does not re-audit every commit after `80b9ca0`, and it does not change the integration or commit totals above. Other mainline commits that UTC day stay in their own records.
 
 The first commit is an imported baseline; Git cannot date the original creation of everything it contains. Squashed PRs preserve one mainline commit even if their body describes many intermediate steps. Expanded implementation commits below are included once, at first integration; merge-only bookkeeping is labeled separately. Test fixes are distinguished from confirmed product fixes. Old commit bodies that say a test passed are historical claims, not new verification of those releases.
 
@@ -45,7 +45,7 @@ The first commit is an imported baseline; Git cannot date the original creation 
 | [day-2026.11.08](#2026-11-08) | 5 | [`ab67b90`](https://github.com/Vivekpsps3/vivek-monorepo/commit/ab67b90fdcbcea7802d6ee724585127181959f9c) |
 | [day-2026.11.09](#2026-11-09) | 12 | [`08be484`](https://github.com/Vivekpsps3/vivek-monorepo/commit/08be484ba3b3535dbcb500749245f2e75ee1f2e4) |
 | [day-2026.11.10](#2026-11-10) | 6 | [`80b9ca0`](https://github.com/Vivekpsps3/vivek-monorepo/commit/80b9ca0e0776297f3addcdfdac78542f6a7ced40) |
-| [day-2026.11.11](#2026-11-11) | 6 on main; 1 pull request | [`939984d`](https://github.com/Vivekpsps3/vivek-monorepo/commit/939984de389b9e33510aecb12a80eb50ff3ef06b) |
+| [day-2026.11.11](#2026-11-11) | accepted landings, not a full recount | [`1268f8d`](https://github.com/Vivekpsps3/vivek-monorepo/commit/1268f8d8a61b4b0116fc10eedc6739dfed1f8b78) |
 
 ## Days without a mainline version
 
@@ -1124,7 +1124,7 @@ Version: **day-2026.11.10** · 6 mainline integration(s) · end state [`80b9ca0`
 
 ### 2026-11-11
 
-Version: **day-2026.11.11** · 6 of these seven leaves are mainline integrations · main when this note was written [`939984d`](https://github.com/Vivekpsps3/vivek-monorepo/commit/939984de389b9e33510aecb12a80eb50ff3ef06b).
+Version: **day-2026.11.11** · accepted landings, not a full recount · latest cited main [`1268f8d`](https://github.com/Vivekpsps3/vivek-monorepo/commit/1268f8d8a61b4b0116fc10eedc6739dfed1f8b78). The first seven-leaf note below was written against [`939984d`](https://github.com/Vivekpsps3/vivek-monorepo/commit/939984de389b9e33510aecb12a80eb50ff3ef06b).
 
 This is an accepted-landing note for seven leaves, dated by UTC committer time. It is not a full recount of November 11. Other mainline commits that UTC day, including [#303](https://github.com/Vivekpsps3/vivek-monorepo/pull/303) and [#319](https://github.com/Vivekpsps3/vivek-monorepo/pull/319), stay in their own records. A merge is not deployment or external activation.
 
@@ -1132,7 +1132,7 @@ This is an accepted-landing note for seven leaves, dated by UTC committer time. 
 
 **Bugs fixed and recovery.** A failed PTO series request shows “Couldn't load the balance chart.” with Retry and leaves the tiles and forms usable. Library Back clears a pending filter so a debounced change does not request the library again after that navigation. Login and username-change challenges share one configured-origin check. A proof is accepted only for `CORS_ORIGINS`, or for the documented development origins when that variable is unset. Forwarded headers do not choose the origin. A missing, malformed, foreign, or swapped origin keeps the existing 401 and does not create a session or rename the account. A challenge can still be spent only once. A manual production deploy now reads the latest same-repository push run for the SHA and refuses it unless that run succeeded, the SHA is still current main, and the last Seeded schema rehearsals step succeeded.
 
-**Maintenance and limits.** Unmodified fork pull requests stay on GitHub-hosted runners; no routing defect in that expression was changed. Missing branch protection, rulesets, CODEOWNERS, and production reviewers stay unresolved. OPS-01 does not prove a real off-host destination or alert recipient. Deploy rebuilds the SHA rather than promoting the byte-identical CI image. Parents #65, #110, #85, #196, #121, and #125 stay open. Backend, Frontend, Unified Site Release, and Playwright passed on the six merged pull requests at the time of this note. [#322](https://github.com/Vivekpsps3/vivek-monorepo/pull/322) had not all passed.
+**Maintenance and limits.** Unmodified fork pull requests stay on GitHub-hosted runners; no routing defect in that expression was changed. Missing branch protection, rulesets, CODEOWNERS, and production reviewers stay unresolved. OPS-01 does not prove a real off-host destination or alert recipient. Deploy rebuilds the SHA rather than promoting the byte-identical CI image. Parents #65, #110, #85, #196, #121, and #125 stay open. Backend, Frontend, Unified Site Release, and Playwright passed on all seven pull requests, including [#322](https://github.com/Vivekpsps3/vivek-monorepo/pull/322).
 
 **Mainline evidence, in integration order:**
 
@@ -1142,16 +1142,29 @@ This is an accepted-landing note for seven leaves, dated by UTC committer time. 
 - [`8201296`](https://github.com/Vivekpsps3/vivek-monorepo/commit/82012961e85eb5d43c05caab0d151d2804b2f3fa) — Cancel a pending library filter when the user goes Back ([#321](https://github.com/Vivekpsps3/vivek-monorepo/pull/321)), squash `82012961e85eb5d43c05caab0d151d2804b2f3fa`
 - [`71c11f6`](https://github.com/Vivekpsps3/vivek-monorepo/commit/71c11f6ee731dc55111dee1cccc8b14cd11e5c1c) — Give the Hub miniature one date action for pointer and keyboard ([#325](https://github.com/Vivekpsps3/vivek-monorepo/pull/325)), squash `71c11f6ee731dc55111dee1cccc8b14cd11e5c1c`
 - [`939984d`](https://github.com/Vivekpsps3/vivek-monorepo/commit/939984de389b9e33510aecb12a80eb50ff3ef06b) — Bind login and rename challenges to one configured origin ([#324](https://github.com/Vivekpsps3/vivek-monorepo/pull/324)), squash `939984de389b9e33510aecb12a80eb50ff3ef06b`
+- [`1b4f35a`](https://github.com/Vivekpsps3/vivek-monorepo/commit/1b4f35a80784a3181da809784fa80b33c13c6e60) — Give Finance one unlock-time price preference ([#322](https://github.com/Vivekpsps3/vivek-monorepo/pull/322)), squash `1b4f35a80784a3181da809784fa80b33c13c6e60`
 
-**Accepted pull-request landing not on this main snapshot:**
+Squashed implementation steps for these seven leaves remain in the linked integration diffs.
 
-- [PR #322](https://github.com/Vivekpsps3/vivek-monorepo/pull/322) — FIN-01, “Give Finance one unlock-time price preference”. Landing is that pull request. No squash SHA is cited because GitHub has not merged it.
+**Five later leaves the same UTC day.** These are on main after the note above. A merge is not deployment or external activation. Backend, Frontend, Unified Site Release, and Playwright passed on each pull request. Parents #65, #84, #85, #93, #110, #121, #125, #196, #198, #199, and #200 stay open. Sidequests, Cards, and the coastal art direction stay unbuilt. OPS-03 does not prove a configured off-host destination or an alert recipient.
 
-No separate reachable branch commits are listed for the unmerged leaf. Squashed implementation steps for the six merged leaves remain in the linked integration diffs.
+**Features added or changed.** Unlocked search returns at most five already-loaded Finance account, holding, and bill names. The query does not load the dashboard, call a provider, or read a server Finance index. Lock, logout, and an identity change drop those rows. Persisted recents stay `{app, kind, id}`. A time-off policy keeps stored hours exact until that field is edited. A comma is a decimal point, and quarter-hour rounding runs on blur of an edited field. The existing backup command can seal a verified snapshot for an owner-supplied directory. The default mode is off, and dry-run sends nothing.
+
+**Bugs fixed and recovery.** A malformed Hub or Pixels payload becomes unavailable for that source and does not invent a zero, a trip, or a date. Other Hub cards still render. A response that decodes after abort or an owner change is dropped. A late Media failure stays off the item on screen. A timed-out save keeps the draft. A failed save is an inline alert, and the next success clears it without a toast. An identical note does not write again. A failed policy save keeps the draft for retry.
+
+**Maintenance and limits.** The off-host adapter reuses the existing backup producer and scheduler. It does not configure a destination, an alert recipient, or a production transfer.
+
+**Mainline evidence, in integration order:**
+
+- [`19c6b51`](https://github.com/Vivekpsps3/vivek-monorepo/commit/19c6b51ebdead875fad7f62f0a18a6b7a6288c94) — Keep untouched PTO hours exact while edited ones round ([#337](https://github.com/Vivekpsps3/vivek-monorepo/pull/337)), squash `19c6b51ebdead875fad7f62f0a18a6b7a6288c94`
+- [`9620ebb`](https://github.com/Vivekpsps3/vivek-monorepo/commit/9620ebb7a0b31027acb892f90e75d46a02bd6447) — Add an opt-in off-host backup adapter with dry-run ([#339](https://github.com/Vivekpsps3/vivek-monorepo/pull/339)), squash `9620ebb7a0b31027acb892f90e75d46a02bd6447`
+- [`e3ff785`](https://github.com/Vivekpsps3/vivek-monorepo/commit/e3ff785e1e65315425fd24fc733b88bdf0337857) — Decode Hub and Pixels payloads before the cards trust them ([#338](https://github.com/Vivekpsps3/vivek-monorepo/pull/338)), squash `e3ff785e1e65315425fd24fc733b88bdf0337857`
+- [`779f167`](https://github.com/Vivekpsps3/vivek-monorepo/commit/779f1679827de7e45f1ce3d3f09fe5d8715c3ceb) — Search unlocked Finance names from memory ([#340](https://github.com/Vivekpsps3/vivek-monorepo/pull/340)), squash `779f1679827de7e45f1ce3d3f09fe5d8715c3ceb`
+- [`1268f8d`](https://github.com/Vivekpsps3/vivek-monorepo/commit/1268f8d8a61b4b0116fc10eedc6739dfed1f8b78) — Keep late Media failures and duplicate notes off the current item ([#336](https://github.com/Vivekpsps3/vivek-monorepo/pull/336)), squash `1268f8d8a61b4b0116fc10eedc6739dfed1f8b78`
 
 ## Reproducing and extending this report
 
-Use `80b9ca0` as the immutable cutoff for the complete audit above. The 2026-11-11 note is an accepted-landing record after that cutoff, not a replacement recount. Then inspect:
+Use `80b9ca0` as the immutable cutoff for the complete audit above. The 2026-11-11 notes are accepted-landing records after that cutoff, not a replacement recount. Then inspect:
 
 ```sh
 git log --first-parent --reverse --format='%H %ct %s' 80b9ca0e0776297f3addcdfdac78542f6a7ced40

@@ -35,6 +35,10 @@ current `main`, and the Seeded schema rehearsals step must have succeeded.
 Fork pull requests and unsuccessful CI do not deploy. That guard is on main in
 [#323](https://github.com/Vivekpsps3/vivek-monorepo/pull/323). It is not a
 deployment by itself, and it does not prove an off-host backup destination or
-an alert recipient. A temporary deployment checkout supplies the versioned
-Compose definition and is removed after the job. Application code runs from
+an alert recipient. An opt-in encrypted backup adapter is on main in
+[#339](https://github.com/Vivekpsps3/vivek-monorepo/pull/339). Its default mode
+is off, and dry-run sends nothing. That adapter does not configure a
+destination, an alert recipient, or a production transfer. A temporary
+deployment checkout supplies the versioned Compose definition and is removed
+after the job. Application code runs from
 the image; no permanent source checkout is needed on the host.
