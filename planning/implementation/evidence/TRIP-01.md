@@ -52,8 +52,8 @@ CI, merge, and deployment are not claimed here.
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opening after this note (`Closes #225`; parent #84 referenced only)
-- Roadmap #134 append-only status-note URL: not posted yet
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/333 (`Closes #225`; parent #84 referenced only)
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6789426299
 - Merged/activation status: not merged, not deployed
 - Remaining external prerequisites or approved scope decisions: none for this leaf. FIN-01 may still land; do not take its files
 - Next actor: open the pull request, watch CI, squash-merge, then record the SHA
