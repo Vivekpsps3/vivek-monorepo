@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#230](https://github.com/Vivekpsps3/vivek-monorepo/issues/230) PTO-01. Parent [#110](https://github.com/Vivekpsps3/vivek-monorepo/issues/110) stays open.
 - Agent/context, branch/worktree: Cursor Grok, `agent/pto-01`, `/tmp/vivek-pto-01`.
-- Base main SHA, current tested SHA: base `0ed83e95a3727acc4f512dd2ac77211d8a622407`. Tests below ran on that base plus this leaf’s uncommitted tree. The committed tested revision is recorded in the handoff after the commit. `origin/main` later gained planning commit `c252b4d` (#319); it does not touch Travel and was not merged.
+- Base main SHA, current tested SHA: base `0ed83e95a3727acc4f512dd2ac77211d8a622407`. Tested application revision `5f4c7f58461a55321401f1abec37ced28237900d` (the checks ran on that tree before this evidence SHA line was added). `origin/main` later gained planning commit `c252b4d` (#319); it does not touch Travel and was not merged.
 - Fresh-main/prerequisite/active-PR checks: PTO-01 has no dependencies. Open PR #319 is planning-only and does not edit the chart. No other open PR claimed `travel-pto-main` or `travel-pto-chart`.
 
 ## Acceptance
@@ -58,7 +58,7 @@ Not run: `make lint-python`, `make typecheck-python`, and `./scripts/coverage-ga
 
 Issue / parent / local packet: PTO-01 / #230 / #110 / `planning/implementation/issues/PTO-01.md`.
 
-Branch, worktree, base main SHA, current SHA: `agent/pto-01`, `/tmp/vivek-pto-01`, base `0ed83e95a3727acc4f512dd2ac77211d8a622407`.
+Branch, worktree, base main SHA, current SHA: `agent/pto-01`, `/tmp/vivek-pto-01`, base `0ed83e95a3727acc4f512dd2ac77211d8a622407`, tested application revision `5f4c7f58461a55321401f1abec37ced28237900d`.
 
 Owned files and conflict groups: `travel-pto-main`, `travel-pto-chart`. Other agents’ worktrees were not edited.
 
