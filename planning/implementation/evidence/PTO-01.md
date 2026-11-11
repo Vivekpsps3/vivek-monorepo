@@ -50,8 +50,8 @@ Not run: `make lint-python`, `make typecheck-python`, and `./scripts/coverage-ga
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled after `gh pr create`. `Closes #230`. Parent #110 is referenced and not closed.
-- Roadmap #134 append-only status-note URL: filled after the comment. The roadmap body was not edited.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/326 (`Closes #230`). Parent #110 is referenced and not closed.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6786901013. The roadmap body was not edited.
 - Merged/activation status (actual evidence, not assumption): not merged. Not deployed. Local verification only.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. #110 stays open for PTO-02 through PTO-05.
 - Next actor: review the pull request. Do not merge from this leaf.
@@ -70,7 +70,7 @@ Deletion ledger and current consumer migration: the PTO page is the only chart c
 
 Commands run, results, tested SHA; required checks still pending: see Verification. CI has not run.
 
-PR and roadmap note URLs; actual merge/deployment/activation state: not merged, not deployed.
+PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/326 is open, not merged, not deployed. Roadmap note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6786901013. The roadmap body was not edited.
 
 External prerequisites and next actor: reviewer. #110 remains the open parent ledger.
 
