@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import secrets
+import sqlite3
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Optional
@@ -128,23 +129,32 @@ def clear_session_cookie(response: Response) -> None:
 
 
 def committed_csrf_hash(db: Session, session_id: int) -> str | None:
-    """Read the committed hash without hiding a winner behind this request's snapshot.
+    """Read the committed hash without taking another connection from the request pool.
 
-    A file database uses a second connection. The test memory pool is one
-    shared connection, so a second session would roll back the request.
+    A file database opens its own SQLite connection, so this request cannot
+    deadlock the pool while it waits to see another transaction's winner.
+    The shared memory pool is one connection; a second session would roll
+    the request back, so that path reads the current session.
     """
     bind = db.get_bind()
     engine = bind.engine if isinstance(bind, Connection) else bind
-    shared = isinstance(getattr(engine, "pool", None), StaticPool)
-    reader: Session = db if shared else Session(bind=engine)
+    if isinstance(getattr(engine, "pool", None), StaticPool):
+        stored = db.query(UserSession.csrf_token_hash).filter(UserSession.id == session_id).scalar()
+        return stored if isinstance(stored, str) else None
+    database = getattr(engine.url, "database", None)
+    if not isinstance(database, str) or not database:
+        return None
+    raw = sqlite3.connect(database, timeout=5)
     try:
-        stored = (
-            reader.query(UserSession.csrf_token_hash).filter(UserSession.id == session_id).scalar()
-        )
+        row = raw.execute(
+            "SELECT csrf_token_hash FROM user_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
     finally:
-        if reader is not db:
-            reader.close()
-    return stored if isinstance(stored, str) else None
+        raw.close()
+    if row is None or not isinstance(row[0], str):
+        return None
+    return row[0]
 
 
 def emit_committed_csrf(db: Session, response: Response, session_id: int, csrf: str) -> None:
