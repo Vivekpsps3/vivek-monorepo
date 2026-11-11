@@ -19,10 +19,12 @@ from apps.server.database import get_db
 from apps.server.identity.admin import admin_metrics, delete_user_account, reset_user_contents
 from apps.server.identity.auth_decoy import decoy_passwordless_material
 from apps.server.identity.challenge_auth import (
+    CHALLENGE_FAILURE_DETAIL,
     CHALLENGE_TTL,
-    PROTOCOL,
     PURPOSE_LOGIN,
+    bound_challenge_origin,
     issue_challenge,
+    render_challenge_message,
     verify_challenge,
 )
 from apps.server.identity.models import AuthEnrollment, User, UserRole, UserSession
@@ -83,10 +85,6 @@ from apps.server.rate_limit import (
 
 router = APIRouter(tags=["auth"])
 logger = logging.getLogger("finance.auth")
-
-
-def _origin(request: Request) -> str:
-    return request.headers.get("origin") or str(request.base_url).rstrip("/")
 
 
 def _find_passwordless_user(db: Session, identifier: str) -> User | None:
@@ -172,15 +170,13 @@ def _user_and_vault(db: Session, identifier: str) -> tuple[User | None, object |
     return user, vault
 
 
-def _decoy_challenge(request: Request, purpose: str) -> dict:
+def _decoy_challenge(origin: str, purpose: str) -> dict:
     expires_at = utc_now_naive() + CHALLENGE_TTL
     challenge_id = secrets.token_urlsafe(24)
     return {
         "challenge_id": challenge_id,
         "challenge": secrets.token_urlsafe(32),
-        "message": "\n".join(
-            [PROTOCOL, _origin(request), challenge_id, purpose, expires_at.isoformat()]
-        ),
+        "message": render_challenge_message(origin, challenge_id, purpose, expires_at),
         "expires_at": expires_at,
     }
 
@@ -354,10 +350,11 @@ def passwordless_challenge(
     db: Session = Depends(get_db, scope="function"),
 ):
     enforce_login_pair_limit(body.username, request)
+    origin = bound_challenge_origin(request, body.purpose)
     user = _find_passwordless_user(db, body.username)
     if not user or not user.is_active or not user.auth_public_key_b64:
-        return _decoy_challenge(request, body.purpose)
-    challenge, raw, message = issue_challenge(db, user, _origin(request), body.purpose)
+        return _decoy_challenge(origin, body.purpose)
+    challenge, raw, message = issue_challenge(db, user, origin, body.purpose)
     db.commit()
     return {
         "challenge_id": challenge.challenge_id,
@@ -407,6 +404,7 @@ def passwordless_verify(
     db: Session = Depends(get_db, scope="function"),
 ):
     enforce_login_pair_limit(body.username, request)
+    origin = bound_challenge_origin(request, PURPOSE_LOGIN)
     user = _find_passwordless_user(db, body.username)
     # The challenge row is checked before ECDSA, so a forged id is a lookup, not a signature.
     # A correct signature is never turned into a 429. The failed-verify cap applies only after a failure.
@@ -420,7 +418,7 @@ def passwordless_verify(
             body.challenge,
             body.message,
             body.signature_b64,
-            _origin(request),
+            origin,
             PURPOSE_LOGIN,
         )
     ):
@@ -430,7 +428,7 @@ def passwordless_verify(
     if failed_verify_blocked(body.username):
         raise HTTPException(status_code=429, detail="Rate limit exceeded; retry later")
     note_failed_verify(body.username)
-    raise HTTPException(status_code=401, detail="Invalid or expired vault authentication challenge")
+    raise HTTPException(status_code=401, detail=CHALLENGE_FAILURE_DETAIL)
 
 
 def _invitation_for_token(db: Session, token: str) -> tuple[AuthEnrollment, User]:

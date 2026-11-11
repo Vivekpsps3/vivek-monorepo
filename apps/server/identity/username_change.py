@@ -15,7 +15,12 @@ from fastapi import HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from apps.server.identity.challenge_auth import PURPOSE_USERNAME_CHANGE, verify_challenge
+from apps.server.identity.challenge_auth import (
+    CHALLENGE_FAILURE_DETAIL,
+    PURPOSE_USERNAME_CHANGE,
+    bound_challenge_origin,
+    verify_challenge,
+)
 from apps.server.identity.models import User
 from apps.server.identity.schemas import UsernameChangeRequest
 from apps.server.identity.session import audit_event, utc_now_naive
@@ -27,7 +32,7 @@ from apps.server.rate_limit import (
 )
 
 _RATE_DETAIL = "Rate limit exceeded; retry later"
-_PROOF_DETAIL = "Invalid or expired vault authentication challenge"
+_PROOF_DETAIL = CHALLENGE_FAILURE_DETAIL
 _CONFLICT_DETAIL = "Username already exists"
 
 
@@ -96,10 +101,6 @@ def _replacement_email(user: User, new_name: str) -> str | None:
     return _synthetic_email(new_name)
 
 
-def _request_origin(request: Request) -> str:
-    return request.headers.get("origin") or str(request.base_url).rstrip("/")
-
-
 def _taken(
     db: Session, user_id: int, *, username: str | None = None, email: str | None = None
 ) -> bool:
@@ -142,6 +143,12 @@ def change_username(db: Session, user: User, body: UsernameChangeRequest, reques
             _fail(db, user_id, old_name, attempted, "rate_limit")
         raise
 
+    try:
+        origin = bound_challenge_origin(request, PURPOSE_USERNAME_CHANGE)
+    except HTTPException:
+        _fail(db, user_id, old_name, attempted, "passphrase")
+        raise
+
     if not verify_challenge(
         db,
         user,
@@ -149,7 +156,7 @@ def change_username(db: Session, user: User, body: UsernameChangeRequest, reques
         body.challenge,
         body.message,
         body.signature_b64,
-        _request_origin(request),
+        origin,
         PURPOSE_USERNAME_CHANGE,
     ):
         if failed_verify_blocked(account):

@@ -17,6 +17,12 @@ os.environ.pop("AUTH_ACCOUNT_RATE_LIMIT_PER_MIN", None)
 os.environ.pop("AUTH_PAIR_RATE_LIMIT_PER_MIN", None)
 os.environ.pop("AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN", None)
 os.environ.pop("RATE_LIMIT_PER_MIN", None)
+# The test client speaks http://testserver. Dev origins stay listed so those clients
+# can be asserted explicitly. A developer shell must not replace this set.
+os.environ["CORS_ORIGINS"] = (
+    "http://testserver,http://localhost:4200,http://127.0.0.1:4200,"
+    "http://localhost:8000,http://127.0.0.1:8000"
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 

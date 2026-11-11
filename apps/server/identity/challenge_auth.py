@@ -1,12 +1,15 @@
 import base64
 import hashlib
+import os
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
+from urllib.parse import urlsplit
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+from fastapi import HTTPException, Request
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
@@ -18,10 +21,78 @@ PROTOCOL = "vault-auth-v1"
 PURPOSE_LOGIN = "login"
 PURPOSE_USERNAME_CHANGE = "username_change"
 PURPOSES = frozenset({PURPOSE_LOGIN, PURPOSE_USERNAME_CHANGE})
+CHALLENGE_FAILURE_DETAIL = "Invalid or expired vault authentication challenge"
+# Documented dev clients and the same-site local server. Production sets CORS_ORIGINS.
+_DEV_ORIGINS = (
+    "http://localhost:4200,http://127.0.0.1:4200,http://localhost:8000,http://127.0.0.1:8000"
+)
 
 
 def _hash(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _normalize_origin(value: str) -> str | None:
+    """scheme://host[:port] or None. No path, userinfo, or whitespace."""
+    text = value.strip()
+    if not text or text.lower() == "null" or any(character.isspace() for character in text):
+        return None
+    if text.endswith("/"):
+        text = text[:-1]
+    try:
+        parts = urlsplit(text)
+        port = parts.port
+    except ValueError:
+        return None
+    scheme = parts.scheme.lower()
+    if (
+        scheme not in {"http", "https"}
+        or parts.username
+        or parts.password
+        or parts.path
+        or parts.query
+        or parts.fragment
+        or not parts.hostname
+    ):
+        return None
+    host = parts.hostname.lower()
+    netloc = host if port is None else f"{host}:{port}"
+    return f"{scheme}://{netloc}"
+
+
+def configured_challenge_origins() -> frozenset[str]:
+    """Public origin from CORS_ORIGINS, or the documented development origins."""
+    raw = os.getenv("CORS_ORIGINS", "").strip() or _DEV_ORIGINS
+    return frozenset(
+        origin for item in raw.split(",") if (origin := _normalize_origin(item)) is not None
+    )
+
+
+def _url_origin(request: Request) -> str | None:
+    """Scheme and host from the request URL. Does not read forwarded headers."""
+    return _normalize_origin(f"{request.url.scheme}://{request.url.netloc}")
+
+
+def bound_challenge_origin(request: Request, purpose: str) -> str:
+    """Origin and purpose for issue and verify.
+
+    A present Origin header must be one configured origin. When it is absent,
+    the request URL is accepted only if that origin is configured too. Forwarded,
+    X-Forwarded-Host, and X-Forwarded-Proto are not consulted.
+    """
+    if purpose not in PURPOSES:
+        raise HTTPException(status_code=401, detail=CHALLENGE_FAILURE_DETAIL)
+    supplied = request.headers.get("origin")
+    candidate = _url_origin(request) if supplied is None else _normalize_origin(supplied)
+    if candidate is None or candidate not in configured_challenge_origins():
+        raise HTTPException(status_code=401, detail=CHALLENGE_FAILURE_DETAIL)
+    return candidate
+
+
+def render_challenge_message(
+    origin: str, challenge_id: str, purpose: str, expires_at: datetime
+) -> str:
+    return "\n".join([PROTOCOL, origin, str(challenge_id), str(purpose), expires_at.isoformat()])
 
 
 def challenge_message(challenge: AuthChallenge, origin: str) -> str:
@@ -30,14 +101,8 @@ def challenge_message(challenge: AuthChallenge, origin: str) -> str:
     The challenge id and purpose are inside the string, so a signature captured
     for one challenge or one action cannot be replayed against another.
     """
-    return "\n".join(
-        [
-            PROTOCOL,
-            origin,
-            str(challenge.challenge_id),
-            str(challenge.purpose),
-            challenge.expires_at.isoformat(),
-        ]
+    return render_challenge_message(
+        origin, str(challenge.challenge_id), str(challenge.purpose), challenge.expires_at
     )
 
 
