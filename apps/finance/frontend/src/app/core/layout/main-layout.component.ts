@@ -9,6 +9,7 @@ import { ConfirmService } from '@vivek/ui';
 import { VaultService } from '../../crypto/vault.service';
 import { FinanceLockService } from '../finance-lock.service';
 import { FinanceGuideService } from '../finance-guide.service';
+import { FinancePricePrefsService, automaticPriceNotice } from '../finance-price-prefs.service';
 import { FinanceService } from '../../services/finance.service';
 import { UserMenuContent } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
@@ -48,6 +49,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private userMenu = inject(UserMenuContent);
   @ViewChild('userMenuActions', { static: true }) private userMenuActions!: TemplateRef<unknown>;
   private marketRefresh = inject(MarketRefreshCoordinatorService);
+  private pricePrefs = inject(FinancePricePrefsService);
   private lock = inject(FinanceLockService);
   private guide = inject(FinanceGuideService);
   private readonly injector = inject(Injector);
@@ -63,6 +65,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   showTutorial = false;
   marketState: MarketRefreshState = this.marketRefresh.currentState;
   readonly marketRefreshDisclosure = this.marketRefresh.disclosure;
+  priceSymbols: readonly string[] = [];
 
   /** One label set at every width (D3): Home, Net worth, Spending, Recurring, Planning. */
   readonly navGroups: NavGroup[] = [
@@ -104,8 +107,14 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.userMenu.template.set(this.userMenuActions);
     this.auth.user$.pipe(takeUntil(this.destroy$)).subscribe(user => {
+      if (this.user?.id !== user?.id) this.priceSymbols = [];
       this.user = user;
       this.syncMarketSession();
+      this.cdr.markForCheck();
+    });
+    this.pricePrefs.changes$.pipe(takeUntil(this.destroy$)).subscribe(() => this.cdr.markForCheck());
+    this.marketRefresh.firstAutoCheck$?.pipe(takeUntil(this.destroy$)).subscribe(symbols => {
+      this.priceSymbols = [...symbols];
       this.cdr.markForCheck();
     });
     this.vault.unlocked$.pipe(takeUntil(this.destroy$)).subscribe(() => this.syncMarketSession());
@@ -232,7 +241,28 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
 
   showPriceDetails = false;
 
+  /** Shared per-user preference. Default on, including when storage throws. */
+  get autoPricesOn(): boolean {
+    const id = this.user?.id;
+    return id == null ? true : this.pricePrefs.autoCheck(id);
+  }
+
+  get priceDisclosureCopy(): string {
+    return automaticPriceNotice(this.priceSymbols);
+  }
+
+  toggleAutoPrices(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const id = this.user?.id;
+    if (id == null) return;
+    this.pricePrefs.setAutoCheck(id, !this.pricePrefs.autoCheck(id));
+    this.cdr.markForCheck();
+  }
+
   openPriceDetails(): void {
+    const symbols = this.marketRefresh.disclosedSymbols;
+    if (symbols) this.priceSymbols = [...symbols];
     this.showPriceDetails = true;
     this.cdr.markForCheck();
   }

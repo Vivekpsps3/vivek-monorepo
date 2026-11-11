@@ -61,7 +61,8 @@ test('home charts at 1280 have a real size and painted pixels', async ({ page })
     }
     return false;
   })).toBe(true);
-  await expect(page.getByText('VOO')).toBeVisible();
-  await expect(page.getByText('BND')).toBeVisible();
+  const allocation = page.locator('app-charts');
+  await expect(allocation.getByText('VOO', { exact: true })).toBeVisible();
+  await expect(allocation.getByText('BND', { exact: true })).toBeVisible();
   await expect(page.locator('.toast')).toHaveCount(0);
 });

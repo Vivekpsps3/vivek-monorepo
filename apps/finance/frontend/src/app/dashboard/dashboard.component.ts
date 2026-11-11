@@ -5,7 +5,7 @@ import { formatDate, formatDay, formatRelativeDay, todayIsoDate } from '@vivek/b
 import { Subject, combineLatest, finalize, forkJoin, takeUntil } from 'rxjs';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { ChartsComponent } from '../charts/charts.component';
-import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
+import { FinancePricePrefsService, automaticPriceNotice } from '../core/finance-price-prefs.service';
 import {
   Asset,
   CashflowSummary,
@@ -77,8 +77,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   firstStepsHidden = false;
   /** One-time ticker-privacy notice, shown after the first automatic check. */
   priceNoticeVisible = false;
-  /** True when the user turned automatic price checks off. */
-  autoPricesOff = false;
+  noticeSymbols: readonly string[] = [];
 
   protected readonly guide = inject(FinanceGuideService);
 
@@ -118,23 +117,46 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.subscriptions = subscriptions;
         this.cdr.markForCheck();
       });
-    const userId = this.session?.currentUser?.id;
-    if (userId != null && this.pricePrefs) this.autoPricesOff = !this.pricePrefs.autoCheck(userId);
-    this.marketRefresh?.firstAutoCheck$.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      const id = this.session?.currentUser?.id;
-      if (id != null && this.pricePrefs && !this.pricePrefs.noticeSeen(id)) {
-        this.priceNoticeVisible = true;
-        this.cdr.markForCheck();
-      }
+    this.pricePrefs?.changes$.pipe(takeUntil(this.destroy$)).subscribe(() => this.cdr.markForCheck());
+    this.marketRefresh?.firstAutoCheck$?.pipe(takeUntil(this.destroy$)).subscribe(symbols => {
+      this.revealPriceNotice(symbols);
     });
+    if (this.marketRefresh?.automaticCheckAnnounced) this.revealPriceNotice(this.marketRefresh.disclosedSymbols);
     this.load();
     this.readFirstStepsHidden();
+  }
+
+  /** True when this user turned automatic price checks off. Reads the shared preference. */
+  get autoPricesOff(): boolean {
+    const userId = this.session?.currentUser?.id;
+    return userId != null && !!this.pricePrefs && !this.pricePrefs.autoCheck(userId);
+  }
+
+  get priceNoticeCopy(): string {
+    return automaticPriceNotice(this.noticeSymbols);
   }
 
   dismissPriceNotice(): void {
     const userId = this.session?.currentUser?.id;
     if (userId != null) this.pricePrefs?.markNoticeSeen(userId);
     this.priceNoticeVisible = false;
+    this.cdr.markForCheck();
+  }
+
+  turnOffAutomaticChecks(): void {
+    const userId = this.session?.currentUser?.id;
+    if (userId != null) {
+      this.pricePrefs?.setAutoCheck(userId, false);
+      this.pricePrefs?.markNoticeSeen(userId);
+    }
+    this.priceNoticeVisible = false;
+    this.cdr.markForCheck();
+  }
+
+  private revealPriceNotice(symbols: readonly string[]): void {
+    this.noticeSymbols = [...symbols];
+    const id = this.session?.currentUser?.id;
+    if (id != null && this.pricePrefs && !this.pricePrefs.noticeSeen(id)) this.priceNoticeVisible = true;
     this.cdr.markForCheck();
   }
 
