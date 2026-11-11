@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#231](https://github.com/Vivekpsps3/vivek-monorepo/issues/231) PTO-02. Parent [#110](https://github.com/Vivekpsps3/vivek-monorepo/issues/110) stays open.
 - Agent/context, branch/worktree: Cursor Grok implementer, `agent/pto-02`, `/tmp/vivek-pto-02`.
-- Base main SHA, current tested SHA: base `a7e16c6fa5bd5543514081e0834022fe38dcd1d1`. Local gates below passed on this change set immediately before the commit that adds this file.
+- Base main SHA, current tested SHA: base `a7e16c6fa5bd5543514081e0834022fe38dcd1d1`. Application revision `7b9a555d4f70d9248b5e2d67f7e6cd355e7152b0` is what the local gates ran on. This handoff update does not change application code.
 - Fresh-main/prerequisite/active-PR checks: #231 was open with no prior claim. PTO-03 #232 is closed by PR #329 (`a8c7d919cc132e4e2f255382ac7ef0e22d43beae`). PTO-01 #326 is merged. No open PR shared `travel-pto-main` or `travel-settings`.
 
 ## Acceptance
@@ -73,11 +73,11 @@ Local execution only. CI, merge, and deployment were not run.
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet. Will use `Closes #231` and reference #110 without a closing keyword.
-- Roadmap #134 append-only status-note URL: not posted yet.
-- Merged/activation status (actual evidence, not assumption): not merged. Not deployed. Local verification only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/337 (`Closes #231`). Parent #110 is referenced and not closed.
+- Roadmap #134 append-only status-note URL: posted after this push; the body was not edited.
+- Merged/activation status (actual evidence, not assumption): PR #337 is open. Not merged. Not deployed. Local verification passed on `7b9a555d4f70d9248b5e2d67f7e6cd355e7152b0`.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. #110 stays open for PTO-04 and PTO-05.
-- Next actor: open the pull request, watch CI, and squash-merge only after Backend, Frontend, Unified Site Release, and Playwright are green.
+- Next actor: watch CI on PR #337 and squash-merge only after Backend, Frontend, Unified Site Release, and Playwright are green.
 
 Issue / parent / local packet: PTO-02 / #231 / #110 / `planning/implementation/issues/PTO-02.md`.
 
@@ -93,7 +93,7 @@ Deletion ledger and current consumer migration: the PTO page and Settings are th
 
 Commands run, results, tested SHA; required checks still pending: see Verification. CI has not run.
 
-PR and roadmap note URLs; actual merge/deployment/activation state: not opened, not merged, not deployed.
+PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/337 is open, not merged, not deployed. The #134 note is append-only and does not edit the roadmap body.
 
 External prerequisites and next actor: open the PR. #110 remains the open parent ledger.
 
