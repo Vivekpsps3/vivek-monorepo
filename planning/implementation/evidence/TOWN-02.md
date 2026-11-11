@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): TOWN-02 / #250. Parent #81 is referenced and stays open. Living World PLACE work stays unbuilt.
 - Agent/context, branch/worktree: sole implementer, `/tmp/vivek-town-02`, branch `agent/town-02`.
-- Base main SHA, current tested SHA: base `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. Tested tree is this branch after the local gates below; the commit SHA is recorded in the handoff after the commit.
+- Base main SHA, current tested SHA: base `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. Implementation commit `80c7235ac46b076a63216babdf20ee40b31b61fa`.
 - Fresh-main/prerequisite/active-PR checks: TOWN-01 `6157e6a7cd11c87b45598879fa9c5a12c970cf64` and MED-01 `29e131821d138bba224e02d5d61b77e23247e08a` are ancestors of the base. Open PRs at commit time do not edit the owned Town/Media/Travel credit files. #346 also adjusts the shared vault-listener assertion in `world.component.spec.ts`; this leaf's copy is the one the local Karma run executed.
 
 ## Acceptance
