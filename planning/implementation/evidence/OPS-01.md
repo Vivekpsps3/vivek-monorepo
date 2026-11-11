@@ -71,10 +71,10 @@ Collected with read-only `gh api` after the fast-forward, for repository `Vivekp
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened in this commit
-- Roadmap #134 append-only status-note URL: not posted in this commit
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/323 (`Closes #272`). Parent #125 is referenced and stays open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6786265102
 - Merged/activation status: not merged. Not deployed. The deploy workflow for `c252b4db` was skipped. No off-host destination or notification path was configured.
 - Remaining external prerequisites or approved scope decisions: branch protection, rulesets, CODEOWNERS, production-environment reviewers, a deployment branch policy, fork-approval confirmation, and runner-group policy remain unset or unreadable. Automated advisory delivery and an external notification destination stay unresolved. Parent #125 stays open.
-- Next actor: open the leaf PR, then the integration owner after merge. Merge is not done.
+- Next actor: integration owner after merge. Merge is not done.
 
 No unstated decision from this context is necessary to continue.
