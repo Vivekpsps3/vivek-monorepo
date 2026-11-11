@@ -121,6 +121,109 @@ test('old fav=1 link still works', async ({ page, request }) => {
   await expect(page.locator('media-card')).toHaveCount(1);
   await expect(page.getByText('Favorite tale')).toBeVisible();
   await expect(page.getByText('Plain tale')).toHaveCount(0);
+  await expect(page.locator('button[aria-controls="library-filters"]')).toHaveText('Filters (1)');
+  await openFilters(page);
+  await expect(page.getByRole('dialog').getByRole('checkbox', { name: 'Favorites only' })).toBeChecked();
+  await expectCleanPage(page, violations);
+});
+
+test('rapid typing sends one debounced library read', async ({ page, request }) => {
+  const violations: string[] = [];
+  await addItem(request, { title: 'Browser story' });
+  await page.clock.install({ time: new Date('2026-10-15T12:00:00Z') });
+  let requests = 0;
+  page.on('request', (req) => {
+    if (req.method() === 'GET' && req.url().includes('/media/api/library')) requests++;
+  });
+  await openLibrary(page, theme, violations);
+  await expect(page.locator('media-card')).toHaveCount(4);
+  await page.clock.pauseAt(new Date('2026-10-15T12:01:00Z'));
+  const before = requests;
+  const search = page.locator('#library-q');
+  for (const value of ['s', 'st', 'sto', 'stor', 'story']) await search.fill(value);
+  expect(requests).toBe(before);
+  await page.clock.runFor(250);
+  await expect(page.locator('media-card')).toHaveCount(1);
+  await expect(page).toHaveURL(/q=story/);
+  await page.clock.runFor(1000);
+  expect(requests).toBe(before + 1);
+  await expectCleanPage(page, violations);
+});
+
+test('back and forward restore filter URL, controls, and results', async ({ page, request }) => {
+  const violations: string[] = [];
+  await addItem(request, { kind: 'movie', title: 'Filter movie' });
+  await addItem(request, { kind: 'book', title: 'Filter book' });
+  await openLibrary(page, theme, violations);
+  await openFilters(page);
+  const type = page.getByRole('dialog').getByLabel('Type');
+  await type.selectOption('movie');
+  await expect(page).toHaveURL(/kind=movie/);
+  await expect(page.getByText('Filter movie')).toBeVisible();
+  await expect(page.getByText('Filter book')).toHaveCount(0);
+  await type.selectOption('book');
+  await expect(page).toHaveURL(/kind=book/);
+  await expect(page.getByText('Filter book')).toBeVisible();
+  await expect(page.getByText('Filter movie')).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/kind=movie/);
+  await expect(page).not.toHaveURL(/kind=book/);
+  await expect(type).toHaveValue('movie');
+  await expect(page.getByText('Filter movie')).toBeVisible();
+  await expect(page.getByText('Filter book')).toHaveCount(0);
+  await page.goForward();
+  await expect(page).toHaveURL(/kind=book/);
+  await expect(type).toHaveValue('book');
+  await expect(page.getByText('Filter book')).toBeVisible();
+  await expect(page.getByText('Filter movie')).toHaveCount(0);
+  await expectCleanPage(page, violations);
+});
+
+test('Back drops a pending filter instead of applying it later', async ({ page, request }) => {
+  const violations: string[] = [];
+  await addItem(request, { kind: 'movie', title: 'Pending movie' });
+  await page.clock.install({ time: new Date('2026-10-15T12:00:00Z') });
+  let requests = 0;
+  page.on('request', (req) => {
+    if (req.method() === 'GET' && req.url().includes('/media/api/library')) requests++;
+  });
+  await openLibrary(page, theme, violations);
+  await openFilters(page);
+  const type = page.getByRole('dialog').getByLabel('Type');
+  await type.selectOption('movie');
+  await expect(page).toHaveURL(/kind=movie/);
+  await page.clock.pauseAt(new Date('2026-10-15T12:02:00Z'));
+  const before = requests;
+  await type.selectOption('book');
+  expect(requests).toBe(before);
+  await page.goBack();
+  await expect(page).not.toHaveURL(/kind=/);
+  await expect(type).toHaveValue('');
+  const afterBack = requests;
+  expect(afterBack).toBe(before + 1);
+  await page.clock.runFor(1000);
+  expect(requests).toBe(afterBack);
+  await expect(page).not.toHaveURL(/kind=book/);
+  await expect(type).toHaveValue('');
+  await expect(page.getByText('Pending movie')).toBeVisible();
+  await expectCleanPage(page, violations);
+});
+
+test('Escape flushes a pending filter and returns focus', async ({ page, request }) => {
+  const violations: string[] = [];
+  await addItem(request, { kind: 'movie', title: 'Escape movie' });
+  await page.clock.install({ time: new Date('2026-10-15T12:00:00Z') });
+  await openLibrary(page, theme, violations);
+  await openFilters(page);
+  await page.clock.pauseAt(new Date('2026-10-15T12:02:00Z'));
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Type').selectOption('movie');
+  await dialog.getByRole('heading', { name: 'Filters' }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('button[aria-controls="library-filters"]')).toBeFocused();
+  await expect(page).toHaveURL(/kind=movie/);
+  await expect(page.getByText('Escape movie')).toBeVisible();
   await expectCleanPage(page, violations);
 });
 

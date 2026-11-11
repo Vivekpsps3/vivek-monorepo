@@ -353,6 +353,13 @@ export class LibraryComponent {
     this.router.events.pipe(takeUntilDestroyed()).subscribe((event) => {
       if (
         event instanceof NavigationStart &&
+        event.navigationTrigger === "popstate"
+      ) {
+        clearTimeout(this.filterTimer);
+        this.filterTimer = undefined;
+      }
+      if (
+        event instanceof NavigationStart &&
         event.navigationTrigger === "imperative"
       )
         history.replaceState(
