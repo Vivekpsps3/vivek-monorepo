@@ -25,8 +25,9 @@ import {
 } from "@vivek/ui";
 import { localTodayIso } from "@vivek/browser";
 import { Subscription } from "rxjs";
-import { showDay, showRange } from "./display";
-import { PtoChartComponent, type PtoSeriesPoint } from "./pto-chart.component";
+import { showRange } from "./display";
+import { PtoChartComponent } from "./pto-chart.component";
+import { CHART_ERROR } from "./pto-chart.mjs";
 import {
   CADENCES,
   CAP_BLURB,
@@ -78,7 +79,13 @@ interface SeriesBucket {
     days: string;
     projected: boolean;
   } | null;
-  points: PtoSeriesPoint[];
+  points: {
+    on: string;
+    hours: string;
+    days: string;
+    projected: boolean;
+    kinds: string[];
+  }[];
 }
 interface Series {
   today: string;
@@ -133,6 +140,7 @@ type Busy = "" | "policy" | "entry" | "remove";
             <ui-skeleton variant="block" height="7.5rem" />
             <ui-skeleton variant="block" height="7.5rem" />
           </div>
+          <div class="pto-chart-skel" aria-hidden="true"></div>
         </div>
       } @else if (data(); as board) {
         @if (showFirstRun(board)) {
@@ -170,58 +178,16 @@ type Busy = "" | "policy" | "entry" | "remove";
               </article>
             }
           </div>
-          <section class="pto-chart-slot">
-            @if (series(); as s) {
-              <ui-card>
-                <h2>Forecast</h2>
-                <p class="muted">
-                  Policy year ends {{ showDay(s.policy_year_end) }} ·
-                  {{ s.days_left_in_policy_year }} days left · Chart runs through
-                  {{ showDay(s.horizon_end) }}
-                </p>
-                @if (s.pto; as bucket) {
-                  <h3>PTO</h3>
-                  <travel-pto-chart [points]="bucket.points" label="PTO balance" />
-                  <p>
-                    Today {{ bucket.balance_today_days }} days · By
-                    {{ showDay(bucket.horizon_end || s.horizon_end) }}
-                    {{ bucket.balance_horizon_days }}
-                    days
-                    @if (bucket.at_cap_today) {
-                      · At cap
-                    }
-                  </p>
-                  @if (bucket.first_negative; as dip) {
-                    <p class="local-error">
-                      Balance first goes negative on {{ showDay(dip.on) }} ({{
-                        dip.days
-                      }}
-                      days).
-                    </p>
-                  }
-                }
-                @if (s.sick; as bucket) {
-                  <h3>Sick</h3>
-                  <travel-pto-chart [points]="bucket.points" label="Sick balance" />
-                  <p>
-                    Today {{ bucket.balance_today_days }} days · By
-                    {{ showDay(bucket.horizon_end || s.horizon_end) }}
-                    {{ bucket.balance_horizon_days }}
-                    days
-                    @if (bucket.at_cap_today) {
-                      · At cap
-                    }
-                  </p>
-                  @if (bucket.first_negative; as dip) {
-                    <p class="local-error">
-                      Balance first goes negative on {{ showDay(dip.on) }} ({{
-                        dip.days
-                      }}
-                      days).
-                    </p>
-                  }
-                }
-              </ui-card>
+          <section class="pto-chart-slot" [attr.aria-busy]="chartPhase() === 'loading' ? 'true' : null">
+            @if (chartPhase() === "loading") {
+              <div class="pto-chart-skel" aria-hidden="true"></div>
+            } @else if (chartPhase() === "error") {
+              <p class="local-error" role="alert">{{ chartError }}</p>
+              <ui-button variant="secondary" (clicked)="loadSeries()">Retry</ui-button>
+            } @else if (series(); as forecast) {
+              @if (forecast.pto || forecast.sick) {
+                <travel-pto-chart [series]="forecast" />
+              }
             }
           </section>
         </div>
@@ -504,7 +470,8 @@ type Busy = "" | "policy" | "entry" | "remove";
   </main>`,
   styles: [
     `
-      .pto-page { max-width: 1080px; }
+      .pto-page { max-width: 1080px; --series-2: #7c3aed; }
+      :host-context([data-theme="dark"]) .pto-page { --series-2: #a78bfa; }
       .visually-hidden {
         position: absolute;
         width: 1px;
@@ -567,18 +534,20 @@ type Busy = "" | "policy" | "entry" | "remove";
       .field-error { color: var(--danger); }
       .pto-chart-slot { min-width: 0; }
       .pto-chart-slot:empty { min-height: 0; }
+      .pto-chart-skel { height: 220px; border-radius: var(--radius-md); background: var(--surface-sunken, var(--surface)); }
       @media (min-width: 1280px) {
         .pto-top { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 1rem; align-items: start; }
         .pto-tiles { grid-template-columns: 1fr; }
         .pto-lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
         .segment { flex: 1 1 0; }
+        .pto-chart-skel { height: 300px; }
       }
     `,
   ],
 })
 export class PtoComponent {
-  readonly showDay = showDay;
   readonly showRange = showRange;
+  readonly chartError = CHART_ERROR;
   readonly pageTitle = PAGE_TITLE;
   readonly loadError = LOAD_ERROR;
   readonly emptyTitle = EMPTY_TITLE;
@@ -605,6 +574,7 @@ export class PtoComponent {
   readonly phase = signal<"loading" | "error" | "ready">("loading");
   readonly data = signal<PtoBoard | null>(null);
   readonly series = signal<Series | null>(null);
+  readonly chartPhase = signal<"loading" | "error" | "ready">("loading");
   readonly message = signal("");
   readonly busy = signal<Busy>("");
   readonly editing = signal<BucketName | null>(null);
@@ -623,6 +593,8 @@ export class PtoComponent {
   private returnFocus: HTMLElement | null = null;
   private openedByPointer = false;
   private loading?: Subscription;
+  private seriesSub?: Subscription;
+  private seriesEpoch = 0;
   private policyAttempt: { bucket: BucketName; body: object; draft: string } | null = null;
   private entryAttempt: object | null = null;
   @ViewChild("startBalance") private startBalance?: ElementRef<HTMLInputElement>;
@@ -663,6 +635,7 @@ export class PtoComponent {
     const today = localTodayIso();
     this.drafts = { pto: blankDraft(today), sick: blankDraft(today) };
     this.savedDrafts = { pto: blankDraft(today), sick: blankDraft(today) };
+    this.destroy.onDestroy(() => this.seriesSub?.unsubscribe());
     this.load();
   }
 
@@ -727,14 +700,22 @@ export class PtoComponent {
   }
 
   loadSeries(): void {
-    this.http
-      .get<Series>("/travel/api/pto/series")
-      .pipe(takeUntilDestroyed(this.destroy))
+    if (!this.ownsSession) return;
+    this.seriesSub?.unsubscribe();
+    const epoch = ++this.seriesEpoch;
+    this.chartPhase.set("loading");
+    this.seriesSub = this.http
+      .get<Series>("/travel/api/pto/series", { context: silentErrorToast() })
       .subscribe({
         next: (body) => {
-          if (this.ownsSession) this.series.set(body);
+          if (!this.ownsSession || epoch !== this.seriesEpoch) return;
+          this.series.set(body);
+          this.chartPhase.set("ready");
         },
-        error: () => this.series.set(null),
+        error: (error: HttpErrorResponse) => {
+          if (epoch !== this.seriesEpoch || error.status === 401) return;
+          this.chartPhase.set("error");
+        },
       });
   }
 

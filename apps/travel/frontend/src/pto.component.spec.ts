@@ -110,7 +110,10 @@ describe("PtoComponent (TPTO2A/2B)", () => {
     expect(root.querySelector("h1.visually-hidden")?.textContent).toContain("PTO");
     expect(root.querySelector("p.lede")).toBeNull();
     expect(root.textContent).not.toContain("Your time off today and what's left after each trip.");
-    expect(root.textContent).toContain("Chart runs through");
+    expect(root.querySelectorAll("travel-pto-chart").length).toBe(1);
+    expect(root.textContent).toContain("Projected to Dec 31, 2026");
+    expect(root.textContent).toContain("end of your policy year");
+    expect(root.textContent).not.toContain("Chart runs through");
     expect(root.textContent).not.toContain("last 60");
     expect(root.textContent).toContain("Balance today");
     expect(root.textContent).toContain("Track sick time too");
@@ -161,6 +164,43 @@ describe("PtoComponent (TPTO2A/2B)", () => {
     expect(req.request.body.bucket).toBe("sick");
     req.flush(payload());
     httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
+  });
+
+  it("keeps the forms when the chart fails and refreshes from one retry", () => {
+    TestBed.configureTestingModule({
+      imports: [PtoComponent],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: SESSION_CONTEXT, useValue: { currentUser: { id: 1 } } },
+      ],
+    });
+    httpMock = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(PtoComponent);
+    fixture.detectChanges();
+    httpMock.expectOne("/travel/api/pto").flush(payload());
+    httpMock.expectOne("/travel/api/pto/series").flush("down", { status: 500, statusText: "down" });
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const component = fixture.componentInstance;
+    expect(root.textContent).toContain("Couldn't load the balance chart.");
+    expect(root.querySelector("travel-pto-chart")).toBeNull();
+    expect(root.textContent).toContain("Balance today");
+    expect(root.querySelector("input[name='entry-label']")).not.toBeNull();
+    const retry = [...root.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Retry");
+    expect(retry).toBeTruthy();
+    retry!.click();
+    fixture.detectChanges();
+    httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
+    fixture.detectChanges();
+    expect(root.querySelectorAll("travel-pto-chart").length).toBe(1);
+    component.drafts.pto.start_balance_hours = "40";
+    component.savePolicy("pto");
+    httpMock.expectOne("/travel/api/pto/policies/pto").flush(payload());
+    httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
+    fixture.detectChanges();
+    expect(root.querySelectorAll("travel-pto-chart").length).toBe(1);
   });
 
   it("dismisses the sick prompt through PTO settings", () => {
