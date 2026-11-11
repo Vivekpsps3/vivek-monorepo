@@ -52,8 +52,8 @@ Karma and Playwright were not run locally. This change does not alter a screen, 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet
-- Roadmap #134 append-only status-note URL: not posted yet
-- Merged/activation status (actual evidence, not assumption): not merged, not deployed
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/344 (`Closes #209` only)
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6807028243
+- Merged/activation status (actual evidence, not assumption): PR #344 is open. Not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: `checkJs` stays false so strict implicit-any on existing MJS helpers is not a new typing program. Handwritten `.d.mts` files are in the typecheck includes. pyproject `files` still lists `apps` and `scripts`; CI mypy/ruff ownership is `PYTHON_TARGETS`, which also includes `packages`.
 - Next actor: open the PR with `Closes #209`, comment on #134, watch CI, and squash-merge. Record the squash SHA on #209 and #134 after merge.
