@@ -9,7 +9,9 @@ import sys
 import threading
 import time
 import urllib.request
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -20,6 +22,81 @@ TARGETS = {
     "travel": "https://vivekpanchagnula.com/travel/api/health",
     "media": "https://vivekpanchagnula.com/media/api/health",
 }
+
+
+def offhost_configured(env: Mapping[str, str]) -> int:
+    """1 only when this process was given a file destination and a key path.
+
+    Dry-run and off are not a configured destination. The gauge does not mean
+    a restore was performed.
+    """
+    mode = env.get("SITE_BACKUP_OFFHOST", "off").strip().lower()
+    directory = env.get("SITE_BACKUP_OFFHOST_DIR", "").strip()
+    key_file = env.get("SITE_BACKUP_OFFHOST_KEY_FILE", "").strip()
+    if mode == "file" and directory and key_file:
+        return 1
+    return 0
+
+
+def _offhost_epoch(value: object) -> float | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.timestamp()
+
+
+def offhost_timestamps(backup_dir: Path) -> tuple[float, float]:
+    """Last verified transfer and last failed transfer. Missing stays 0.
+
+    Local snapshot mtimes are not off-host success. Dry-run does not count.
+    """
+    success = 0.0
+    failure = 0.0
+    if not backup_dir.is_dir():
+        return success, failure
+    for path in backup_dir.glob("site-*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        offhost = payload.get("offhost")
+        if not isinstance(offhost, dict):
+            continue
+        if offhost.get("status") == "verified" and offhost.get("transferred") is True:
+            stamp = _offhost_epoch(offhost.get("verified_at"))
+            if stamp is not None:
+                success = max(success, stamp)
+        elif offhost.get("status") == "failed":
+            stamp = _offhost_epoch(offhost.get("failed_at"))
+            if stamp is not None:
+                failure = max(failure, stamp)
+    return success, failure
+
+
+def _format_offhost_time(value: float) -> str:
+    if value <= 0:
+        return "0"
+    return f"{value:.3f}"
+
+
+def backup_metric_lines(backup_dir: Path, env: Mapping[str, str] | None = None) -> str:
+    source = os.environ if env is None else env
+    manifests = list(backup_dir.glob("site-*.json")) if backup_dir.is_dir() else []
+    newest = max((path.stat().st_mtime for path in manifests), default=0)
+    success, failure = offhost_timestamps(backup_dir)
+    return (
+        f"site_backup_last_success_timestamp_seconds {newest}\n"
+        f"site_backup_offhost_configured {offhost_configured(source)}\n"
+        f"site_backup_offhost_last_success_timestamp_seconds {_format_offhost_time(success)}\n"
+        f"site_backup_offhost_last_failure_timestamp_seconds {_format_offhost_time(failure)}\n"
+    )
 
 
 def probe(item):
@@ -49,9 +126,7 @@ class Handler(BaseHTTPRequestHandler):
             body += f"site_tls_expiry_timestamp_seconds {expiry}\n"
         except Exception:
             body += "site_tls_expiry_timestamp_seconds 0\n"
-        manifests = list(Path("/backups").glob("site-*.json"))
-        newest = max((p.stat().st_mtime for p in manifests), default=0)
-        body += f"site_backup_last_success_timestamp_seconds {newest}\n"
+        body += backup_metric_lines(Path("/backups"))
         body += f"site_probe_timestamp_seconds {time.time()}\n"
         encoded = body.encode()
         self.send_response(200)

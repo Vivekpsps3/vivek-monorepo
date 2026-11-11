@@ -188,8 +188,39 @@ The newest recovery point is about one hour plus scheduling delay. Older hourly
 copies stay under the 30-day/seven rule once those backups exist. All copies
 remain on this machine. The checked-in Compose file is what the next deploy
 starts; a host that has not applied it still uses the environment it was
-started with. Off-host encrypted backup and a measured replacement-host
-recovery time are not established by this policy.
+started with.
+
+Off-host transfer is an opt-in step on this same backup command, not a second
+scheduler, ledger, or daemon. `SITE_BACKUP_OFFHOST` defaults to `off`. `off`
+and `dry-run` send nothing. Dry-run does not read the key file. `file` encrypts
+the verified snapshot with AES-GCM in a separate envelope from vault signing
+and vault AES-GCM records, then writes that ciphertext to an owner-supplied
+directory. The adapter retries at most three times (immediately, then after
+0.5s, then after 1s). A failed attempt leaves the last verified local snapshot
+and the last verified remote object in place. The adapter does not prune the
+destination; local retention remains the only prune. Maintenance still has one
+in-memory loop and calls the same script. Its off-host metrics count only a
+manifest that records a verified transfer. Dry-run, a missing receipt, and a
+failed attempt do not advance that success time. `site_backup_offhost_configured`
+is 1 only when the process environment names `file` mode, a directory, and a
+key file. That gauge is not a restore.
+
+Recovery-key custody: the key is 32 bytes in a mode-0600 file outside the
+repository and outside the destination. The process reads it only in `file`
+mode and does not write it into the snapshot, manifest, image, or logs. It is
+not the vault passphrase and it is not generated or escrowed here. Losing the
+key makes the envelopes unreadable, so the owner copy stays with the owner,
+separate from the destination host.
+
+Activation prerequisites, all still unmet in this tree:
+
+- An existing destination directory supplied by the owner. This repository does not choose a vendor or embed a URL.
+- A 32-byte recovery key file, mode `0600`, stored outside the repository and outside the destination.
+- `SITE_BACKUP_OFFHOST=file`, `SITE_BACKUP_OFFHOST_DIR`, and `SITE_BACKUP_OFFHOST_KEY_FILE` in the private environment of the existing backup and maintenance services.
+- A mount of that directory into those services. The checked-in Compose file does not add one.
+- A real transfer and a disposable restore recorded by [OPS-06](https://github.com/Vivekpsps3/vivek-monorepo/issues/277). Until that evidence exists, leave the mode `off`.
+
+This is not a configured destination and not production activation. No alert recipient is configured. A measured replacement-host recovery time is not established by this policy.
 
 For restore: stop site and maintenance, preserve the current database together
 with WAL/SHM, verify the chosen backup, restore into a new empty data volume with

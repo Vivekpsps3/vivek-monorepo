@@ -14,7 +14,9 @@ verification. Preserve backup retention/recovery and transaction invariants. Hou
 backups keep a 30-day window and at least seven verified copies. Pre-migration backups
 keep the newest file of each of the last three revisions. A passing
 fixture or configured adapter is not proof a live destination, recipient or restore
-has been activated. Use [OPERATIONS](../docs/OPERATIONS.md) and
+has been activated. `SITE_BACKUP_OFFHOST` on that same backup command is the
+off-host adapter: `off` and `dry-run` send nothing, and `file` needs an
+owner-supplied directory plus a separate 32-byte key file. Use [OPERATIONS](../docs/OPERATIONS.md) and
 [MIGRATIONS](../docs/MIGRATIONS.md) for those changes.
 
 For instruction maintenance, the existing [doc check](check-doc-paths.sh) validates

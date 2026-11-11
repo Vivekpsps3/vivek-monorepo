@@ -57,7 +57,13 @@ services:
   backup:
     <<: *runtime
     profiles: [ops]
-    environment: {SITE_BACKUP_KEEP: "7", SITE_BACKUP_KEEP_DAYS: "30"}
+    environment:
+      SITE_BACKUP_KEEP: "7"
+      SITE_BACKUP_KEEP_DAYS: "30"
+      # Opt-in only. off sends nothing. This file does not set a destination or a key.
+      SITE_BACKUP_OFFHOST: ${SITE_BACKUP_OFFHOST:-off}
+      SITE_BACKUP_OFFHOST_DIR: ${SITE_BACKUP_OFFHOST_DIR:-}
+      SITE_BACKUP_OFFHOST_KEY_FILE: ${SITE_BACKUP_OFFHOST_KEY_FILE:-}
     command: [python, /app/backup-site.py, --source, /data/site.db, --directory, /backups]
     volumes: [data:/data, backups:/backups]
     network_mode: none
@@ -83,6 +89,10 @@ services:
       SITE_BACKUP_INTERVAL_SECONDS: "3600"
       SITE_BACKUP_KEEP: "7"
       SITE_BACKUP_KEEP_DAYS: "30"
+      # Same opt-in as the backup service. The maintenance loop is still the only scheduler.
+      SITE_BACKUP_OFFHOST: ${SITE_BACKUP_OFFHOST:-off}
+      SITE_BACKUP_OFFHOST_DIR: ${SITE_BACKUP_OFFHOST_DIR:-}
+      SITE_BACKUP_OFFHOST_KEY_FILE: ${SITE_BACKUP_OFFHOST_KEY_FILE:-}
     volumes: [data:/data, backups:/backups]
     networks:
       monitoring: {aliases: [personal-site-probe]}

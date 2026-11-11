@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${1:-}" == "--dry-run" ]]; then
+  # Forces the existing backup service to send nothing. Does not set a destination or key.
+  export SITE_BACKUP_OFFHOST=dry-run
+  shift
+fi
+if [[ $# -ne 0 ]]; then
+  printf 'usage: %s [--dry-run]\n' "$0" >&2
+  exit 2
+fi
 root="$(cd "$(dirname "$0")/.." && pwd)"
 read -r -a docker_cmd <<< "${DOCKER_COMMAND:-docker}"
 # Use the running immutable image, not a mutable development tag.
