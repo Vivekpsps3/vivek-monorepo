@@ -32,9 +32,7 @@ The shared nginx-edge and its Let's Encrypt certificates remain existing host in
 
 If the host still uses the older vhost, it may add a report-only policy and `X-Frame-Options: SAMEORIGIN` beside the app headers. Verify the actual response before and after installing the reviewed configuration; merging application code does not update nginx-edge.
 
-The existing self-hosted runner and its Docker privilege are retained by explicit
-user preference. It remains capable of modifying host resources and reading site
-state through Docker. Stateless containers do not remove that trust boundary.
+Test and release runners are the pool in [Local runner](./LOCAL-RUNNER.md). The production runner is a separate runtime registration. Deploy selects it with the `monorepo-prod` label, and this repository does not install or start it. That runner's host Docker access can change host resources and read site state. The access stays by explicit user preference. A container without the host socket does not remove it.
 
 ## Application and data flow
 
@@ -85,9 +83,7 @@ restore tests, runtime dependency audits, and image checks for authenticated rea
 writes, CSRF, isolation, deletion, routing, and caching. Desktop/mobile Chromium
 checks run against the built image. Official Actions and image bases are pinned.
 
-The Deploy workflow accepts only commits from successful trusted main push CI
-runs. It rejects stale SHAs; manual runs also require successful CI and the
-seeded schema rehearsal for the selected main commit. The production runner
+The Deploy workflow accepts a successful same-repository push of `main`, or a manual run of `main`. The candidate SHA must equal current `main`. A manual run uses the latest push CI run for that SHA, so a newer failure overrides an older success. The `Seeded schema rehearsals` step on the selected run must have concluded `success`. Fork pull requests and unsuccessful CI do not deploy. The production runner
 checks out that exact SHA into a unique private directory under `RUNNER_TEMP`,
 then runs scripts/deploy-site.sh to rebuild the image from that source. No
 GitHub Actions artifacts are uploaded or downloaded. Base images are pinned
@@ -124,6 +120,8 @@ live tables needs an expand/contract plan before it is merged, because deploy
 migrates while the previous process may still be serving and a failed probe
 after a successful migration leaves the new schema in place. Keep preceding
 images available; do not prune rollback images indiscriminately.
+
+The workflow selects the GitHub `production` environment. Reviewers, a wait timer, a deployment branch policy, and branch protection are not defined in this tree. A missing setting is not protection. An earlier successful deploy is not evidence that those settings exist now.
 
 Commands from any directory on the host (as vivek):
 
@@ -191,6 +189,12 @@ and writes across every domain before discarding any old state. Never replace a
 live SQLite file or pair an old database with unrelated WAL files. Restore all
 domains together so identity and ownership remain consistent.
 
+## Dependency and image review
+
+No update controller is installed. The repository owner reviews pins at least monthly, and again in any change that edits a lockfile, a base-image digest, an Actions SHA, or the runner tarball pin. Review the Actions SHAs under `.github/workflows/` and `.github/actions/`, the image digests in the root `Dockerfile`, `ops/actions-runner/Dockerfile`, and `ops/actions-runner/compose.yml`, `RUNNER_VERSION` and `RUNNER_SHA256` in the runner Dockerfile, `apps/server/requirements.lock`, and the root `package-lock.json`.
+
+CI runs `pip-audit` against the runtime lock and `npm audit --omit=dev --audit-level=high`. A pin that passes is reproducible. It is not a current advisory clearance. This tree has no Dependabot configuration and no host timer for the review. Automated advisory delivery stays unresolved.
+
 ## Monitoring and limits
 
 The app exposes request, latency and process metrics. Maintenance checks public
@@ -199,9 +203,8 @@ ops/monitoring/site-alerts.yml cover availability, backup freshness, TLS, errors
 and latency. /metrics and internal health endpoints are blocked at the public edge.
 Edge logs use nginx-edge's existing bounded Docker logging driver.
 
-Local probes cannot independently detect a dead host or Internet connection.
-An external monitor and proven notification delivery remain TODOs. Existing alert
-rules alone are not proof that anyone receives a notification. Shared-origin XSS,
+Local probes cannot independently detect a dead host or a lost network path.
+Release and runner diagnostics stay in the Actions job log and the bounded Docker json-file logs from Compose. A failed deploy prints a short local container log tail. Do not copy those logs into an issue. No second logger is added. An external monitor and a notification destination are not configured, so existing alert rules are not proof that anyone is notified. Shared-origin XSS,
 resource contention with the homelab, one disk/host/router/ISP, and the existing
 runner's Docker access remain deliberate constraints, tracked in SRE-FOLLOWUPS.md.
 

@@ -39,13 +39,23 @@ jobs:
             run_id="$CI_RUN"
           else
             sha="$MANUAL_SHA"
-            run_id="$(gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=30" --jq ".workflow_runs[] | select(.head_sha == \"$sha\") | .id" | head -1)"
-            test -n "$run_id"
           fi
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          # Latest push run for this SHA. A success filter would keep an older
+          # success after a newer failure.
+          if [ "$EVENT" != workflow_run ]; then
+            line="$(gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&head_sha=${sha}&per_page=1" --jq '[.workflow_runs[0].id // "", .workflow_runs[0].conclusion // ""] | @tsv')"
+            run_id="${line%%$'\t'*}"
+            conclusion="${line#*$'\t'}"
+            if [ "$conclusion" != success ]; then
+              echo "latest push CI for $sha concluded '${conclusion:-missing}'; refusing to deploy" >&2
+              exit 1
+            fi
+          fi
+          [[ "$run_id" =~ ^[0-9]+$ ]]
           current="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
           test "$sha" = "$current"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          printf 'sha=%s\nrun_id=%s\n' "$sha" "$run_id" >> "$GITHUB_OUTPUT"
       - name: Require the seeded schema rehearsal
         env:
           GH_TOKEN: ${{ github.token }}
@@ -53,7 +63,8 @@ jobs:
           RUN_ID: ${{ steps.release.outputs.run_id }}
         run: |
           set -euo pipefail
-          conclusion="$(gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" --jq '[.jobs[] | select(.name == "Unified Site Release") | .steps[] | select(.name == "Seeded schema rehearsals") | .conclusion] | first // ""')"
+          # Last matching step: a later failed attempt must not lose to an earlier success.
+          conclusion="$(gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" --jq '[.jobs[] | select(.name == "Unified Site Release") | (.steps // [])[] | select(.name == "Seeded schema rehearsals") | .conclusion] | last // ""')"
           if [ "$conclusion" != "success" ]; then
             echo "Seeded schema rehearsals concluded '${conclusion:-missing}'; refusing to deploy" >&2
             exit 1
