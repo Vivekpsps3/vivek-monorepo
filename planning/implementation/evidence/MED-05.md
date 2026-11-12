@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#239](https://github.com/Vivekpsps3/vivek-monorepo/issues/239); parent [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85) stays open
 - Agent/context, branch/worktree: implementer, `agent/med-05`, `/tmp/vivek-med-05`
-- Base main SHA, current tested SHA: base `04a5dac19356b3a6e6871a920b34fce0b843d08d`. The commands below ran on this worktree before the commit that adds this file. Karma used port 9997 in this worktree only; that line was reverted and is not in the commit.
+- Base main SHA, current tested SHA: base `04a5dac19356b3a6e6871a920b34fce0b843d08d`. Product commit `e249e40248d8c76caeb30c9d8a945f871f5cda7e` contains the code these commands ran against. Karma used port 9997 in this worktree only; that line was reverted and is not in the commit.
 - Fresh-main/prerequisite/active-PR checks: this branch matched `origin/main` at the base above. MED-01 is on that base as squash `29e1318` (#282). MED-04 is on that base as squash `b7ae697` (#349). Open pull requests were none. #239 had no earlier claim. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/239#issuecomment-6811776204
 
 ## Acceptance
