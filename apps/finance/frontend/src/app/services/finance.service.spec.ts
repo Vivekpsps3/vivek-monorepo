@@ -33,6 +33,7 @@ describe('FinanceService', () => {
       'getFixedExpenses',
       'getSubscriptions',
       'getCashflowSummary',
+      'getBankAccounts',
       'reloadCollections',
       'updateHoldingPrice',
       'bulkRenameTransactionCategories',
@@ -135,6 +136,56 @@ describe('FinanceService', () => {
     await service.refreshCollectionsFromAnotherTab(['transactions']);
 
     expect(encStore.reloadCollections).toHaveBeenCalledOnceWith(['transactions'], { silent: true });
+  });
+
+  it('does not deliver bank or brokerage accounts after a lock', async () => {
+    const account = { id: 1, bank_slug: 'chase', account_mask: '1234', account_key: 'chk', display_name: 'Checking', confirmed: true };
+    const brokerage = { id: 2, broker_slug: 'fidelity', broker_name: 'Fidelity', account_mask: '9999' };
+    let releaseBank: (rows: unknown[]) => void = () => undefined;
+    let releaseBrokerage: (rows: unknown[]) => void = () => undefined;
+    encStore.getBankAccounts.and.returnValue(new Promise(resolve => { releaseBank = resolve as (rows: unknown[]) => void; }));
+    encStore.getBrokerageAccounts.and.returnValue(new Promise(resolve => { releaseBrokerage = resolve as (rows: unknown[]) => void; }));
+    let token = 4;
+    Object.defineProperty(encStore, 'sessionToken', { configurable: true, get: () => token });
+    (encStore as unknown as { clear(): void }).clear = () => { token += 1; };
+    (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => { wipeDek(); };
+    const banks: unknown[] = [];
+    const brokers: unknown[] = [];
+    let bankCompleted = false;
+    let brokerCompleted = false;
+    service.getBankAccounts().subscribe({ next: rows => banks.push(rows), complete: () => { bankCompleted = true; } });
+    service.getBrokerageAccounts().subscribe({ next: rows => brokers.push(rows), complete: () => { brokerCompleted = true; } });
+    service.clearSessionState();
+    releaseBank([account]);
+    releaseBrokerage([brokerage]);
+    await Promise.resolve();
+    expect(banks).toEqual([]);
+    expect(brokers).toEqual([]);
+    expect(bankCompleted).toBeTrue();
+    expect(brokerCompleted).toBeTrue();
+  });
+
+  it('does not publish a holding or transaction delete into the next session', async () => {
+    let releaseHolding: () => void = () => undefined;
+    let releaseTransaction: () => void = () => undefined;
+    encStore.deleteHolding = jasmine.createSpy('deleteHolding').and.returnValue(new Promise<void>(resolve => { releaseHolding = resolve; }));
+    encStore.deleteTransaction = jasmine.createSpy('deleteTransaction').and.returnValue(new Promise<void>(resolve => { releaseTransaction = resolve; }));
+    encStore.getHoldings.and.resolveTo([{ id: 9, symbol: 'SECRET' } as Holding]);
+    encStore.getTransactions.and.resolveTo([{ id: 8, description: 'SECRET' } as Transaction]);
+    let token = 2;
+    Object.defineProperty(encStore, 'sessionToken', { configurable: true, get: () => token });
+    (encStore as unknown as { clear(): void }).clear = () => { token += 1; };
+    (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => undefined;
+    const holdingDelete = firstValueFrom(service.deleteHolding(9));
+    const transactionDelete = firstValueFrom(service.deleteTransaction(8));
+    service.clearSessionState();
+    releaseHolding();
+    releaseTransaction();
+    await Promise.all([holdingDelete, transactionDelete]);
+    expect(encStore.getHoldings).not.toHaveBeenCalled();
+    expect(encStore.getTransactions).not.toHaveBeenCalled();
+    expect((service as unknown as { _holdings: { value: unknown[] } })._holdings.value).toEqual([]);
+    expect((service as unknown as { _transactions: { value: unknown[] } })._transactions.value).toEqual([]);
   });
 
   it('does not deliver decrypted assets after a lock', async () => {

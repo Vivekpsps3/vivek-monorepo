@@ -547,8 +547,11 @@ export class FinanceService {
   deleteTransaction(id: number, silent = false): Observable<{ ok: boolean }> {
     return this.commit(async options => {
       const lock = readLockEpoch();
+      const session = this.encStore.sessionToken;
       await this.encStore.deleteTransaction(id, options);
+      if (session !== this.encStore.sessionToken) return { ok: true };
       await this.publishReadBackIfUnlocked(lock, this._transactions, () => this.encStore.getTransactions());
+      if (session !== this.encStore.sessionToken) return { ok: true };
       this.invalidateDashboardCache();
       return { ok: true };
     }, silent);
@@ -776,8 +779,11 @@ export class FinanceService {
   deleteHolding(id: number, silent = false): Observable<{ ok: boolean }> {
     return this.commit(async options => {
       const lock = readLockEpoch();
+      const session = this.encStore.sessionToken;
       await this.encStore.deleteHolding(id, options);
+      if (session !== this.encStore.sessionToken) return { ok: true };
       await this.publishReadBackIfUnlocked(lock, this._holdings, () => this.encStore.getHoldings());
+      if (session !== this.encStore.sessionToken) return { ok: true };
       this.refreshDerivedMetrics();
       return { ok: true };
     }, silent);
@@ -886,7 +892,7 @@ export class FinanceService {
   }
 
   getBankAccounts(): Observable<BankAccountRecord[]> {
-    return from(this.financeImports.getBankAccounts());
+    return this.guardedRead(() => this.financeImports.getBankAccounts(), () => undefined);
   }
 
   getImportReceipts(): Observable<ImportReceipt[]> {
@@ -955,7 +961,7 @@ export class FinanceService {
   }
 
   getBrokerageAccounts(): Observable<BrokerageAccountRecord[]> {
-    return from(this.financeImports.getBrokerageAccounts());
+    return this.guardedRead(() => this.financeImports.getBrokerageAccounts(), () => undefined);
   }
 
   getHoldingImportStages(): Observable<FidelityStageRecord[]> {

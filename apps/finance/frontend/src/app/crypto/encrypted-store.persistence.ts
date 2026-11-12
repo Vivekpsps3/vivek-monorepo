@@ -111,6 +111,10 @@ export class EncryptedRecordPersistence {
     return this.getSessionToken();
   }
 
+  requireUnlocked(): void {
+    if (!this.vault.isUnlocked) throw new Error('Vault locked');
+  }
+
   assertSession(expectedGeneration: number): void {
     if (expectedGeneration !== this.getSessionToken()) throw new Error('Vault session changed');
   }
@@ -386,6 +390,8 @@ export class EncryptedRecordPersistence {
         },
       ], options)
     ).catch(async error => {
+      // A 422 or 409 that arrives after the owner changed must not toast or reload into the next session.
+      if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
       const status = Number((error as { status?: number })?.status);
       if (status === 422 && !options?.silent) this.vault.reportFallbackFailure();
       if (status === 409) {
@@ -488,6 +494,40 @@ export class EncryptedRecordPersistence {
       this.changesSubject.next({ collection, source: 'local' });
     }
     return output;
+  }
+
+  /**
+   * Holding replacement for one stage. The snapshot is read inside the holdings
+   * queue, after earlier edits of those ids, and is dropped if the session or
+   * the id set changed. Nothing is written in that case.
+   */
+  async commitHoldingReplacements<T extends { id: number }>(
+    generation: number,
+    extraIds: number[],
+    build: (current: T[]) => T[],
+    options?: VaultWriteOptions,
+  ): Promise<T[]> {
+    await this.ensureLoaded({ ...options, reportRewriteFailure: true });
+    this.requireUnlocked();
+    this.assertSession(generation);
+    const lockedIds = [...new Set([
+      ...this.list<{ id: number }>('holdings').map(row => row.id),
+      ...extraIds,
+    ])].sort((a, b) => a - b);
+    const locked = new Set(lockedIds);
+    return this.withRecordUpdates('holdings', lockedIds, generation, async () => {
+      this.assertSession(generation);
+      const current = this.list<T>('holdings');
+      if (current.some(row => !locked.has(row.id))) {
+        throw new Error('Holdings changed while the stage was waiting; active holdings were not changed');
+      }
+      const records = build(current);
+      this.assertSession(generation);
+      if (records.some(row => !locked.has(row.id))) {
+        throw new Error('Holdings changed while the stage was waiting; active holdings were not changed');
+      }
+      return this.savePreparedRecordsUnlocked('holdings', records, generation, options);
+    });
   }
 
   private async rewriteLegacyRecords(generation: number): Promise<void> {

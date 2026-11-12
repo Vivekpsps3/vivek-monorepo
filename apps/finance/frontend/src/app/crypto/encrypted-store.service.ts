@@ -76,11 +76,11 @@ export class EncryptedStoreService {
       ensureLoaded: () => this.ensureLoaded(),
       readPersistedRows: <T>(collection: CollectionName, generation?: number) => this.readPersistedRows<T>(collection, generation),
       getImportRows: <T>() => this.list<T>('import_batches'),
-      getStoredHoldings: () => this.list<Holding>('holdings'),
       allocateId: () => this.allocateId(),
       upsertImportRecord: <T extends { id?: number }>(payload: T, clientId?: string, generation?: number) =>
         this.upsert('import_batches', payload, clientId, generation),
-      savePreparedHoldings: rows => this.savePreparedRecords('holdings', rows),
+      commitHoldingReplacements: (generation, extraIds, build) =>
+        this.persistence.commitHoldingReplacements(generation, extraIds, build),
       savePreparedImportRows: rows => this.savePreparedRecords('import_batches', rows),
       getBrokerageAccounts: () => this.getBrokerageAccounts(),
       upsertBrokerageAccount: body => this.upsertBrokerageAccount(body),
@@ -196,6 +196,7 @@ export class EncryptedStoreService {
 
   async getBankAccounts(): Promise<BankAccountRecord[]> {
     await this.ensureLoaded();
+    this.persistence.requireUnlocked();
     return this.list<BankAccountRecord>('bank_accounts');
   }
 
@@ -517,6 +518,7 @@ export class EncryptedStoreService {
     }>
   > {
     await this.ensureLoaded();
+    this.persistence.requireUnlocked();
     return this.list('brokerage_accounts');
   }
 

@@ -1,7 +1,8 @@
 import { ChangeDetectorRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ConfirmService, ToastService } from '@vivek/ui';
-import { of, throwError } from 'rxjs';
+import { Observable, of, Subject, throwError } from 'rxjs';
+import { fakeAsync, tick } from '@angular/core/testing';
 import {
   BankAccountRecord,
   BankImportFilePreview,
@@ -126,6 +127,52 @@ describe('TransactionsImportWorkflow F9', () => {
     );
     expect(finance.deleteImportReceipt).toHaveBeenCalledWith(9);
   });
+
+  it('clears cached bank accounts when a refresh hits a locked vault and keeps them on other errors', fakeAsync(() => {
+    const dataChanges$ = new Subject<{ collections: string[]; source: string }>();
+    let mode: 'rows' | 'locked' | 'offline' = 'rows';
+    const { workflow } = makeWorkflow({
+      dataChanges$,
+      getBankAccounts: () => {
+        if (mode === 'locked') return throwError(() => new Error('Vault locked'));
+        if (mode === 'offline') return throwError(() => new Error('offline'));
+        return of([bankAccount('chase')]);
+      },
+      getImportReceipts: () => of([receipt]),
+    });
+    workflow.bankAccounts = [bankAccount('amex')];
+    workflow.connectImportContextRefresh();
+    tick(60);
+    expect(workflow.bankAccounts.map(account => account.bank_slug)).toEqual(['chase']);
+    expect(workflow.importReceipts).toEqual([receipt]);
+
+    mode = 'locked';
+    dataChanges$.next({ collections: ['bank_accounts'], source: 'remote' });
+    tick(120);
+    expect(workflow.bankAccounts).toEqual([]);
+    expect(workflow.importReceipts).toEqual([receipt]);
+
+    mode = 'rows';
+    dataChanges$.next({ collections: ['bank_accounts'], source: 'remote' });
+    tick(120);
+    expect(workflow.bankAccounts.map(account => account.bank_slug)).toEqual(['chase']);
+
+    mode = 'offline';
+    dataChanges$.next({ collections: ['bank_accounts'], source: 'remote' });
+    tick(120);
+    expect(workflow.bankAccounts.map(account => account.bank_slug)).toEqual(['chase']);
+  }));
+
+  it('clears cached bank accounts when a lookup completes without rows', fakeAsync(() => {
+    const { workflow } = makeWorkflow({
+      getBankAccounts: () => new Observable(subscriber => subscriber.complete()),
+      getImportReceipts: () => of([]),
+    });
+    workflow.bankAccounts = [bankAccount('chase')];
+    workflow.connectImportContextRefresh();
+    tick(60);
+    expect(workflow.bankAccounts).toEqual([]);
+  }));
 
   it('renders the shared receipt line and status labels', () => {
     const { workflow } = makeWorkflow();

@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Injectable, OnDestroy } from '@angular/core';
-import { EMPTY, Subject, Subscription, catchError, debounceTime, filter, forkJoin, of, startWith, switchMap, takeUntil } from 'rxjs';
+import { EMPTY, Observable, Subject, Subscription, catchError, debounceTime, defaultIfEmpty, filter, forkJoin, of, startWith, switchMap, takeUntil } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FinanceService } from '../services/finance.service';
 import {
@@ -57,7 +57,7 @@ export class TransactionsImportWorkflow implements OnDestroy {
       startWith(undefined),
       debounceTime(60),
       switchMap(() => forkJoin({
-        bankAccounts: this.financeService.getBankAccounts().pipe(catchError(() => of(null))),
+        bankAccounts: this.lookupOrClear(this.financeService.getBankAccounts()),
         importReceipts: this.financeService.getImportReceipts().pipe(catchError(() => of(null))),
       })),
       takeUntil(this.destroy$),
@@ -447,6 +447,18 @@ export class TransactionsImportWorkflow implements OnDestroy {
 
   private refreshImportReceipts(): void {
     this.importContextRefresh$.next();
+  }
+
+  /** A lock or owner switch clears the cached accounts. Other failures keep them. */
+  private lookupOrClear<T>(source: Observable<T[]>): Observable<T[] | null> {
+    return source.pipe(
+      defaultIfEmpty([] as T[]),
+      catchError(err => {
+        const message = err instanceof Error ? err.message : '';
+        if (message === 'Vault locked' || message === 'Vault session changed') return of([]);
+        return of(null);
+      }),
+    );
   }
 
   resumeImport(receipt: ImportReceipt): void {
