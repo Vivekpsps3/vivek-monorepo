@@ -5,6 +5,8 @@ import { FinanceService } from '../services/finance.service';
 import {
   BankImportOption,
   BankAccountRecord,
+  CsvMappingProfile,
+  CustomCsvMapping,
   ImportCommitResult,
   BankImportFile,
   BankImportFilePreview,
@@ -14,6 +16,7 @@ import {
 } from '../models/transaction.model';
 import { ToastService, ConfirmService } from '@vivek/ui';
 import { plural } from '@vivek/browser';
+import { bindLockSnapshots } from '../crypto/lock-finance';
 import {
   bankExportHelp,
   importButtonLabel,
@@ -22,6 +25,15 @@ import {
   receiptLine,
   undoConfirmBody,
 } from '../utils/bank-import-copy';
+import { customCommitRefusal } from '../utils/bank-import.util';
+import {
+  customCsvHeaders,
+  customMappingProblems,
+  detectCsvDelimiter,
+  errorMessage,
+  inspectCustomCsv,
+  suggestCustomCsvMapping,
+} from '../utils/bank-import.parsers';
 
 @Injectable()
 export class TransactionsImportWorkflow implements OnDestroy {
@@ -38,7 +50,9 @@ export class TransactionsImportWorkflow implements OnDestroy {
   activeImportReceiptId: number | null = null;
   reattachReceiptFilename: string | null = null;
   importError = '';
+  csvProfiles: CsvMappingProfile[] = [];
   private nextImportFileId = 1;
+  private releaseImportLock: () => void;
   private importPreviewRequest?: Subscription;
   private destroy$ = new Subject<void>();
   private importContextRefresh$ = new Subject<void>();
@@ -50,7 +64,9 @@ export class TransactionsImportWorkflow implements OnDestroy {
     private cdr: ChangeDetectorRef,
     private route: ActivatedRoute,
     private router: Router,
-  ) {}
+  ) {
+    this.releaseImportLock = bindLockSnapshots(() => this.discardImportPlaintext());
+  }
 
   connectImportContextRefresh(): void {
     this.importContextRefresh$.pipe(
@@ -133,9 +149,16 @@ export class TransactionsImportWorkflow implements OnDestroy {
   }
 
   get canPreviewImport(): boolean {
-    return this.importFiles.length > 0 && this.importFiles.every(entry =>
-      !!this.importBank(entry.bank_slug) && (!!entry.bank_account_id || !!entry.new_account_label?.trim())
-    );
+    return this.importFiles.length > 0 && this.importFiles.every(entry => this.entryReady(entry));
+  }
+
+  private entryReady(entry: BankImportFile): boolean {
+    if (!this.importBank(entry.bank_slug)) return false;
+    if (entry.bank_slug === 'custom_csv') {
+      return !customMappingProblems(entry.csv_mapping, entry.csv_headers || [])
+        && (!!entry.csv_mapping?.account_column || !!entry.bank_account_id || !!entry.new_account_label?.trim());
+    }
+    return !!entry.bank_account_id || !!entry.new_account_label?.trim();
   }
 
   get canSaveImport(): boolean {
@@ -171,6 +194,15 @@ export class TransactionsImportWorkflow implements OnDestroy {
         this.cdr.markForCheck();
       },
     });
+    if (typeof this.financeService.listCsvMappingProfiles === 'function') {
+      this.financeService.listCsvMappingProfiles().pipe(takeUntil(this.destroy$)).subscribe({
+        next: profiles => {
+          this.csvProfiles = profiles || [];
+          this.cdr.markForCheck();
+        },
+        error: () => undefined,
+      });
+    }
     this.importContextRefresh$.next();
   }
 
@@ -190,7 +222,11 @@ export class TransactionsImportWorkflow implements OnDestroy {
     entry.account_key = undefined;
     entry.account_mask_override = undefined;
     entry.map_legacy_account = false;
+    entry.csv_mapping = undefined;
+    entry.csv_headers = undefined;
+    entry.csv_delimiter = undefined;
     this.onImportBankChange();
+    if (value === 'custom_csv') void this.loadCustomCsvShape(entry);
   }
 
   accountOptionsFor(entry: BankImportFile): BankAccountRecord[] {
@@ -231,17 +267,8 @@ export class TransactionsImportWorkflow implements OnDestroy {
 
   closeImportModal(): boolean {
     if (this.importCommitting) return false;
-    this.importPreviewRequest?.unsubscribe();
-    this.importParsing = false;
-    this.showImportModal = false;
-    this.importStep = 'upload';
-    this.importFiles = [];
-    this.importPreviews = [];
-    this.importSelected.clear();
-    this.importError = '';
-    this.activeImportReceiptId = null;
-    this.cdr.markForCheck();
-    if (this.route.snapshot.queryParamMap.get('add') === '1') {
+    this.discardImportPlaintext();
+    if (this.route.snapshot?.queryParamMap.get('add') === '1') {
       void this.router.navigate([], {
         relativeTo: this.route,
         queryParams: { add: null, reattach: null, reattach_file: null },
@@ -256,7 +283,9 @@ export class TransactionsImportWorkflow implements OnDestroy {
     if (this.importParsing || this.importCommitting) return;
     const input = event.target as HTMLInputElement;
     for (const file of Array.from(input.files || [])) {
-      this.importFiles.push({ id: this.nextImportFileId++, bank_slug: this.defaultBankSlug, file, account_key: undefined });
+      const entry: BankImportFile = { id: this.nextImportFileId++, bank_slug: this.defaultBankSlug, file, account_key: undefined };
+      this.importFiles.push(entry);
+      if (entry.bank_slug === 'custom_csv') void this.loadCustomCsvShape(entry);
     }
     input.value = '';
     this.onImportBankChange();
@@ -277,9 +306,13 @@ export class TransactionsImportWorkflow implements OnDestroy {
     if (this.importParsing || this.importCommitting) return;
     if (!this.canPreviewImport) {
       const missingBank = this.importFiles.find(entry => !this.importBank(entry.bank_slug));
+      const custom = this.importFiles.find(entry => entry.bank_slug === 'custom_csv' && !this.entryReady(entry));
       this.importError = missingBank
         ? `Choose the bank for ${missingBank.file.name} first.`
-        : 'Choose CSV files and select a bank for every file.';
+        : custom
+          ? (customMappingProblems(custom.csv_mapping, custom.csv_headers || [])
+            || 'Choose an account for this file, or map an account column.')
+          : 'Choose CSV files and select a bank for every file.';
       this.cdr.markForCheck();
       return;
     }
@@ -386,10 +419,22 @@ export class TransactionsImportWorkflow implements OnDestroy {
       (row.status !== 'duplicate' && (row.kind === 'ambiguous_credit' || this.importSelected.has(row.dedupe_key)))
       || (row.status === 'duplicate' && !!row.legacy_dedupe_key)
     );
+    const refusal = customCommitRefusal(this.importFiles, this.importPreviews, rows.length);
+    if (refusal) {
+      this.importError = this.importFailureMessage({ message: importFileError(refusal) }, 'Fix the column mapping, then preview again. Nothing was saved.');
+      this.cdr.markForCheck();
+      return;
+    }
     if (!rows.length && !this.canSaveImport) {
       this.importError = 'Select a transaction or confirm statement coverage.';
       this.cdr.markForCheck();
       return;
+    }
+    const remembered: Array<{ name: string; mapping: CustomCsvMapping }> = [];
+    for (const file of this.importFiles) {
+      if (file.bank_slug === 'custom_csv' && file.csv_mapping) {
+        remembered.push({ name: file.csv_profile_name?.trim() || 'Custom CSV', mapping: file.csv_mapping });
+      }
     }
     this.importCommitting = true;
     this.importError = '';
@@ -431,6 +476,7 @@ export class TransactionsImportWorkflow implements OnDestroy {
         next: (res: ImportCommitResult) => {
           this.importCommitting = false;
           this.activeImportReceiptId = null;
+          this.rememberCustomMappings(remembered);
           this.closeImportModal();
           this.refreshImportReceipts();
           this.toastService.success(`Imported ${plural(res.inserted, 'transaction')}${res.skipped ? `; skipped ${plural(res.skipped, 'duplicate')}` : ''}`);
@@ -532,7 +578,89 @@ export class TransactionsImportWorkflow implements OnDestroy {
     return `bank-account:${crypto.randomUUID()}`;
   }
 
+  /** Lock and cancel drop the file and the preview. The mapping profile stays encrypted. */
+  discardImportPlaintext(): void {
+    this.importPreviewRequest?.unsubscribe();
+    this.importParsing = false;
+    this.showImportModal = false;
+    this.importStep = 'upload';
+    this.importFiles = [];
+    this.importPreviews = [];
+    this.importSelected.clear();
+    this.importError = '';
+    this.activeImportReceiptId = null;
+    this.reattachReceiptFilename = null;
+    this.cdr.markForCheck();
+  }
+
+  delimiterLabel(entry: BankImportFile): string {
+    const labels: Record<string, string> = { ',': 'comma', ';': 'semicolon', '\t': 'tab', '|': 'pipe' };
+    return labels[entry.csv_delimiter || ','] || 'comma';
+  }
+
+  async loadCustomCsvShape(entry: BankImportFile): Promise<void> {
+    if (entry.bank_slug !== 'custom_csv') return;
+    try {
+      const text = await entry.file.text();
+      const shape = inspectCustomCsv(text);
+      const headerRow = entry.csv_mapping?.header_row ?? shape.header_row;
+      entry.csv_delimiter = detectCsvDelimiter(text.replace(/^\ufeff/, ''));
+      entry.csv_headers = customCsvHeaders(text, headerRow);
+      if (!entry.csv_mapping) entry.csv_mapping = suggestCustomCsvMapping({ ...shape, headers: entry.csv_headers, header_row: headerRow });
+      else entry.csv_mapping = { ...entry.csv_mapping, header_row: headerRow };
+    } catch (error) {
+      entry.csv_headers = [];
+      this.importError = importFileError(errorMessage(error));
+    }
+    this.cdr.markForCheck();
+  }
+
+  setCsvField(entry: BankImportFile, field: keyof CustomCsvMapping, value: string): void {
+    const current = entry.csv_mapping || {
+      version: 1 as const,
+      date_column: '',
+      description_column: '',
+      date_format: 'mdy' as const,
+      amount_mode: 'signed' as const,
+      outflow_sign: 'negative' as const,
+      refund_mode: 'description' as const,
+      header_row: true,
+    };
+    const stored = value === '' ? undefined : value;
+    entry.csv_mapping = { ...current, [field]: stored } as CustomCsvMapping;
+    this.onImportBankChange();
+  }
+
+  setCsvHeaderRow(entry: BankImportFile, checked: boolean): void {
+    if (entry.csv_mapping) entry.csv_mapping = { ...entry.csv_mapping, header_row: checked };
+    void this.loadCustomCsvShape(entry);
+    this.onImportBankChange();
+  }
+
+  applyCsvProfile(entry: BankImportFile, profileId: string): void {
+    const profile = this.csvProfiles.find(row => String(row.id) === profileId);
+    if (!profile) return;
+    entry.csv_mapping = { ...profile.mapping, version: 1 };
+    entry.csv_profile_name = profile.name;
+    void this.loadCustomCsvShape(entry);
+    this.onImportBankChange();
+  }
+
+  private rememberCustomMappings(profiles: Array<{ name: string; mapping: CustomCsvMapping }>): void {
+    if (typeof this.financeService.saveCsvMappingProfile !== 'function') return;
+    for (const profile of profiles) {
+      this.financeService.saveCsvMappingProfile(profile).pipe(takeUntil(this.destroy$)).subscribe({
+        next: saved => {
+          this.csvProfiles = [...this.csvProfiles.filter(row => row.name !== saved.name), saved]
+            .sort((a, b) => a.name.localeCompare(b.name));
+        },
+        error: () => undefined,
+      });
+    }
+  }
+
   ngOnDestroy(): void {
+    this.releaseImportLock();
     this.importPreviewRequest?.unsubscribe();
     this.destroy$.next();
     this.destroy$.complete();

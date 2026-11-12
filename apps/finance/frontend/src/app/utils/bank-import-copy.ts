@@ -13,6 +13,7 @@ export const BANK_EXPORT_HELP: Record<string, string> = {
   citi: 'Citi: choose Statements, Download, and select the CSV format.',
   bank_of_america: 'Bank of America: open the account, choose Download transactions, and pick the comma-separated (CSV) format.',
   x_money: 'X Money: export your transactions as a CSV from the app, then choose that file here.',
+  custom_csv: 'Custom CSV: map the date, description, and amount or debit and credit columns. A currency column must be USD.',
 };
 
 export const DEFAULT_BANK_EXPORT_HELP = 'Download a CSV of your transactions from your bank, then choose that file here.';
@@ -32,6 +33,9 @@ export function importFileError(raw: string | null | undefined): string {
   const text = (raw ?? '').trim();
   if (!text) return '';
   const lower = text.toLowerCase();
+  if (lower.includes('unsupported currency') || lower.includes('missing currency') || lower.startsWith('choose ') || lower.startsWith('fix the column mapping')) {
+    return /[.!?]$/.test(text) ? text : `${text}.`;
+  }
   if (HEADER_HINTS.some(hint => lower.includes(hint))) {
     return "This file doesn't look like a bank export. Download the CSV from your bank and try again.";
   }

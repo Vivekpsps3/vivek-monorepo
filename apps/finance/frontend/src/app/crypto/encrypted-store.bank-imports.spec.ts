@@ -84,4 +84,46 @@ describe('EncryptedBankImportStore F9', () => {
     expect(after?.status).toBe('withdrawn');
     expect(after?.undone_at).toBeTruthy();
   });
+
+  it('keeps a custom mapping profile out of the receipt list and ignores a newer format', async () => {
+    const { store, importRows } = makeStore();
+    const mapping = {
+      version: 1 as const, date_column: 'Date', description_column: 'Description', amount_column: 'Amount',
+      date_format: 'iso' as const, amount_mode: 'signed' as const, outflow_sign: 'negative' as const,
+      refund_mode: 'description' as const, header_row: true,
+    };
+    await store.saveCsvMappingProfile({ name: 'Checking export', mapping });
+    await store.saveCsvMappingProfile({ name: 'Checking export', mapping: { ...mapping, outflow_sign: 'positive' } });
+    const profiles = await store.listCsvMappingProfiles();
+    expect(profiles.map(row => row.name)).toEqual(['Checking export']);
+    expect(profiles[0].format_version).toBe(1);
+    expect(profiles[0].mapping.outflow_sign).toBe('positive');
+    expect(JSON.stringify(profiles)).not.toContain('SECRET-NOTE-77');
+    expect(await store.getImportReceipts()).toEqual([]);
+    importRows.push({ id: 9, record_type: 'csv_mapping_profile', format_version: 2, name: 'later', mapping });
+    expect((await store.listCsvMappingProfiles()).map(row => row.name)).toEqual(['Checking export']);
+  });
+
+  it('undo of a custom receipt keeps the edited row and withdraws coverage', async () => {
+    const { store, transactions } = makeStore();
+    const receipt = await store.addImportReceipt({
+      bank_slugs: ['custom_csv'], filenames: ['custom.csv'], status: 'complete',
+      started_at: '2026-10-01T00:00:00Z', selected_row_count: 2, inserted_count: 2,
+      unresolved: [], account_displays: ['Checking'],
+      coverage: [{ account_display: 'Checking', account_key: 'checking', start_date: '2026-04-01', end_date: '2026-04-30', confirmed: true }],
+      coverage_start: '2026-04-01', coverage_end: '2026-04-30',
+    } as Omit<ImportReceipt, 'id'>);
+    const customSnapshot = { ...snapshot, source_bank: 'custom_csv', account_display: 'Checking' };
+    transactions.push(
+      { id: 1, import_receipt_id: receipt.id, import_snapshot: customSnapshot, ...customSnapshot } as unknown as Transaction,
+      { id: 2, import_receipt_id: receipt.id, import_snapshot: customSnapshot, ...customSnapshot, import_edited: true, merchant: 'Edited shop' } as unknown as Transaction,
+    );
+    const result = await store.undoImportReceipt(receipt.id);
+    expect(result.edited).toBe(1);
+    expect(result.removed).toBe(1);
+    expect(transactions.map(row => row.merchant)).toEqual(['Edited shop']);
+    const after = await store.getImportReceipt(receipt.id);
+    expect(after?.status).toBe('withdrawn');
+    expect(after?.coverage).toEqual([]);
+  });
 });

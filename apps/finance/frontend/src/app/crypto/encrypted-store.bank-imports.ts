@@ -1,4 +1,6 @@
 import {
+  CsvMappingProfile,
+  CustomCsvMapping,
   ImportPreviewRow,
   ImportReceipt,
   ImportReceiptRows,
@@ -28,6 +30,7 @@ export class EncryptedBankImportStore {
     return this.port.getImportRows<ImportReceipt>()
       .filter(row => {
         const type = (row as any).record_type;
+        if (type === 'csv_mapping_profile') return false;
         if (type === 'bank_receipt') return true;
         // Compatibility for pre-discriminator bank receipts, excluding all stage/chunk rows.
         return !type && Array.isArray((row as any).bank_slugs) && Array.isArray((row as any).filenames)
@@ -152,6 +155,30 @@ export class EncryptedBankImportStore {
       editedKept: linked.length - removable,
       alreadyGone: Math.max(0, (receipt.inserted_count || 0) - linked.length),
     };
+  }
+
+  async listCsvMappingProfiles(): Promise<CsvMappingProfile[]> {
+    await this.port.ensureLoaded();
+    return this.port.getImportRows<CsvMappingProfile>()
+      .filter(row => row.record_type === 'csv_mapping_profile' && row.format_version === 1 && row.mapping?.version === 1)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** Replace a profile with the same name. The payload is the column map, never the CSV. */
+  async saveCsvMappingProfile(body: { id?: number; name: string; mapping: CustomCsvMapping }): Promise<CsvMappingProfile> {
+    await this.port.ensureLoaded();
+    const name = body.name.trim() || 'Custom CSV';
+    const existing = (await this.listCsvMappingProfiles()).find(row =>
+      (body.id != null && row.id === body.id) || row.name === name);
+    const saved = await this.port.upsertImportRecord({
+      ...existing,
+      id: body.id ?? existing?.id,
+      record_type: 'csv_mapping_profile' as const,
+      format_version: 1 as const,
+      name,
+      mapping: body.mapping,
+    });
+    return saved as CsvMappingProfile;
   }
 
   /** Delete only the receipt record (and its staged row chunks). Transactions stay. */

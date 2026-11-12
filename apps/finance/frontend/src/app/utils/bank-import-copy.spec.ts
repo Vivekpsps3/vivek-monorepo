@@ -15,6 +15,7 @@ describe('bank-import-copy', () => {
     expect(bankExportHelp('citi')).toContain('Citi');
     expect(bankExportHelp('bank_of_america')).toContain('Bank of America');
     expect(bankExportHelp('x_money')).toContain('X Money');
+    expect(bankExportHelp('custom_csv')).toContain('USD');
     expect(bankExportHelp('')).toBe('Download a CSV of your transactions from your bank, then choose that file here.');
     expect(bankExportHelp('unknown_bank')).toBe(bankExportHelp(''));
   });
@@ -23,6 +24,15 @@ describe('bank-import-copy', () => {
     expect(importFileError('Missing required header: Transaction Date'))
       .toBe("This file doesn't look like a bank export. Download the CSV from your bank and try again.");
     expect(importFileError('Unknown column layout')).toBe(importFileError('Missing required header: X'));
+  });
+
+  it('keeps custom mapping and currency errors specific', () => {
+    expect(importFileError('Choose a date column that exists in this file.'))
+      .toBe('Choose a date column that exists in this file.');
+    expect(importFileError('unsupported currency EUR. Finance records USD only.'))
+      .toBe('unsupported currency EUR. Finance records USD only.');
+    expect(importFileError('Fix the column mapping, then preview again. Nothing was saved.'))
+      .toBe('Fix the column mapping, then preview again. Nothing was saved.');
   });
 
   it('maps empty files and ambiguous accounts', () => {

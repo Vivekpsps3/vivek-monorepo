@@ -494,6 +494,118 @@
               [disabled]="importWorkflow.importParsing"
               (valueChange)="importWorkflow.onImportBankSelectionChange(entry, $event)" />
             <p class="import-hint">{{ importWorkflow.importBankHelp(entry.bank_slug) }}</p>
+            @if (entry.bank_slug === 'custom_csv') {
+              <div class="import-csv-mapping">
+                <p class="import-hint">Detected {{ importWorkflow.delimiterLabel(entry) }} columns: {{ (entry.csv_headers || []).join(', ') || 'none yet' }}.</p>
+                @if (importWorkflow.csvProfiles.length) {
+                  <label class="form-group import-account-picker">
+                    <span>Saved mapping for {{ entry.file.name }}</span>
+                    <select [name]="'csv-profile-' + entry.id" (change)="importWorkflow.applyCsvProfile(entry, $any($event.target).value)">
+                      <option value="">Choose a saved mapping…</option>
+                      @for (profile of importWorkflow.csvProfiles; track profile.id) {
+                        <option [value]="profile.id">{{ profile.name }}</option>
+                      }
+                    </select>
+                  </label>
+                }
+                <label class="check-label">
+                  <input type="checkbox" [checked]="entry.csv_mapping?.header_row !== false" [name]="'csv-header-' + entry.id" [disabled]="importWorkflow.importParsing" (change)="importWorkflow.setCsvHeaderRow(entry, $any($event.target).checked)" />
+                  First row is a header for {{ entry.file.name }}
+                </label>
+                <label class="form-group import-account-picker">
+                  <span>Date column for {{ entry.file.name }}</span>
+                  <select [name]="'csv-date-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.date_column || ''" (change)="importWorkflow.setCsvField(entry, 'date_column', $any($event.target).value)">
+                    <option value="">Choose…</option>
+                    @for (header of entry.csv_headers || []; track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="form-group import-account-picker">
+                  <span>Description column for {{ entry.file.name }}</span>
+                  <select [name]="'csv-description-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.description_column || ''" (change)="importWorkflow.setCsvField(entry, 'description_column', $any($event.target).value)">
+                    <option value="">Choose…</option>
+                    @for (header of entry.csv_headers || []; track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="form-group import-account-picker">
+                  <span>Amount columns for {{ entry.file.name }}</span>
+                  <select [name]="'csv-amount-mode-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.amount_mode || 'signed'" (change)="importWorkflow.setCsvField(entry, 'amount_mode', $any($event.target).value)">
+                    <option value="signed">One signed amount</option>
+                    <option value="debit_credit">Debit and credit</option>
+                  </select>
+                </label>
+                @if ((entry.csv_mapping?.amount_mode || 'signed') === 'signed') {
+                  <label class="form-group import-account-picker">
+                    <span>Amount column for {{ entry.file.name }}</span>
+                    <select [name]="'csv-amount-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.amount_column || ''" (change)="importWorkflow.setCsvField(entry, 'amount_column', $any($event.target).value)">
+                      <option value="">Choose…</option>
+                      @for (header of entry.csv_headers || []; track header) { <option [value]="header">{{ header }}</option> }
+                    </select>
+                  </label>
+                  <label class="form-group import-account-picker">
+                    <span>Purchases are for {{ entry.file.name }}</span>
+                    <select [name]="'csv-sign-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.outflow_sign || 'negative'" (change)="importWorkflow.setCsvField(entry, 'outflow_sign', $any($event.target).value)">
+                      <option value="negative">Negative amounts</option>
+                      <option value="positive">Positive amounts</option>
+                    </select>
+                  </label>
+                } @else {
+                  <label class="form-group import-account-picker">
+                    <span>Debit column for {{ entry.file.name }}</span>
+                    <select [name]="'csv-debit-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.debit_column || ''" (change)="importWorkflow.setCsvField(entry, 'debit_column', $any($event.target).value)">
+                      <option value="">Choose…</option>
+                      @for (header of entry.csv_headers || []; track header) { <option [value]="header">{{ header }}</option> }
+                    </select>
+                  </label>
+                  <label class="form-group import-account-picker">
+                    <span>Credit column for {{ entry.file.name }}</span>
+                    <select [name]="'csv-credit-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.credit_column || ''" (change)="importWorkflow.setCsvField(entry, 'credit_column', $any($event.target).value)">
+                      <option value="">Choose…</option>
+                      @for (header of entry.csv_headers || []; track header) { <option [value]="header">{{ header }}</option> }
+                    </select>
+                  </label>
+                }
+                <label class="form-group import-account-picker">
+                  <span>Date format for {{ entry.file.name }}</span>
+                  <select [name]="'csv-date-format-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.date_format || 'mdy'" (change)="importWorkflow.setCsvField(entry, 'date_format', $any($event.target).value)">
+                    <option value="iso">Year-month-day</option>
+                    <option value="mdy">Month/day/year</option>
+                    <option value="dmy">Day/month/year</option>
+                  </select>
+                </label>
+                <label class="form-group import-account-picker">
+                  <span>Refunds are for {{ entry.file.name }}</span>
+                  <select [name]="'csv-refund-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.refund_mode || 'description'" (change)="importWorkflow.setCsvField(entry, 'refund_mode', $any($event.target).value)">
+                    <option value="description">Described as refunds</option>
+                    <option value="inflow">Incoming amounts</option>
+                  </select>
+                </label>
+                <label class="form-group import-account-picker">
+                  <span>Account column for {{ entry.file.name }}</span>
+                  <select [name]="'csv-account-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.account_column || ''" (change)="importWorkflow.setCsvField(entry, 'account_column', $any($event.target).value)">
+                    <option value="">None</option>
+                    @for (header of entry.csv_headers || []; track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="form-group import-account-picker">
+                  <span>Category column for {{ entry.file.name }}</span>
+                  <select [name]="'csv-category-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.category_column || ''" (change)="importWorkflow.setCsvField(entry, 'category_column', $any($event.target).value)">
+                    <option value="">None</option>
+                    @for (header of entry.csv_headers || []; track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="form-group import-account-picker">
+                  <span>Currency column for {{ entry.file.name }}</span>
+                  <select [name]="'csv-currency-' + entry.id" [disabled]="importWorkflow.importParsing" [value]="entry.csv_mapping?.currency_column || ''" (change)="importWorkflow.setCsvField(entry, 'currency_column', $any($event.target).value)">
+                    <option value="">None</option>
+                    @for (header of entry.csv_headers || []; track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="form-group import-account-picker">
+                  <span>Mapping name for {{ entry.file.name }}</span>
+                  <input type="text" [name]="'csv-profile-name-' + entry.id" [ngModel]="entry.csv_profile_name || ''" (ngModelChange)="entry.csv_profile_name = $event" placeholder="Custom CSV" [disabled]="importWorkflow.importParsing" />
+                </label>
+              </div>
+            }
             @if (importWorkflow.importBank(entry.bank_slug); as bank) {
 
               <label class="form-group import-account-picker">
