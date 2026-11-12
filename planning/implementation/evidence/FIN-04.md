@@ -54,8 +54,8 @@ Fixtures are synthetic. Dates in the browser spec use the frozen 2026-10-15 cloc
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet.
-- Roadmap #134 append-only status-note URL: not posted yet.
-- Merged/activation status: not merged. Not a deployment.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/357 (`Closes #223` only). Parent #65 is named in the body and stays open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6813655890
+- Merged/activation status: pull request #357 is open. Not merged. Not a deployment.
 - Remaining external prerequisites or approved scope decisions: #65 stays open.
-- Next actor: open the pull request, append the #134 note, wait for Backend, Frontend, Unified Site Release, and Playwright, then squash-merge.
+- Next actor: wait for Backend, Frontend, Unified Site Release, and Playwright, then squash-merge.
