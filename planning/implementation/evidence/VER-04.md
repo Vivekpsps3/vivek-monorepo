@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#212](https://github.com/Vivekpsps3/vivek-monorepo/issues/212). Parents [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199) and [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stay open.
 - Agent/context, branch/worktree: VER-04 implementer, branch `agent/ver-04`, worktree `/tmp/vivek-ver-04`.
-- Base main SHA, current tested SHA: base `04a5dac19356b3a6e6871a920b34fce0b843d08d`. Gates below ran on that SHA plus the uncommitted product diff (Makefile, package.json, docs/VERIFICATION.md, planning/implementation/verification.json, scripts/test-release-manifest.mjs, scripts/verification-ownership.test.mjs). This evidence file is the only later addition in the implementation commit.
+- Base main SHA, current tested SHA: base `04a5dac19356b3a6e6871a920b34fce0b843d08d`. Product commit `48d9c035a7aa8ca3af0b052da90126a805297fab`. Gates below ran on that diff before the commit; this handoff URL line is the only later edit.
 - Fresh-main/prerequisite/active-PR checks: `HEAD` matched `origin/main` at `04a5dac19356b3a6e6871a920b34fce0b843d08d`. Ancestors already on main: VER-01 #209 squash `9aa01242fbb6dc6cd5040a4e39babff2c0c187b1`, VER-02 #210 squash `ab365b629ec9bd0d4969b76908bd542f36467a81`, VER-03 #211 squash `71d293aa6b9323b4bf9007c4db28b90540b6acd5`. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/212#issuecomment-6811862581
 
 ## Acceptance
@@ -64,8 +64,8 @@ Same-machine LOCAL2 table (this host, base `04a5dac`, warm Karma cache):
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled in the follow-up commit on this branch after the pull request exists. Body uses `Closes #212` only and names #199 without that keyword.
-- Roadmap #134 append-only status-note URL: filled in that same follow-up after the comment is posted. The issue body is not edited.
-- Merged/activation status (actual evidence, not assumption): not merged and not deployed at the time of the implementation commit. Local gates above passed.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/355 (`Closes #212` only)
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6812207655
+- Merged/activation status (actual evidence, not assumption): PR #355 is open on `agent/ver-04`. Not squash-merged and not deployed. Local gates above passed.
 - Remaining external prerequisites or approved scope decisions: finance and site `npm test` wrappers stay because documented prefix commands still call them. Playwright rebuild fallback and perf separation stay. Parents #199 and #125 stay open.
 - Next actor: push `HEAD:agent/ver-04`, open the PR, append the #134 note, watch Backend, Frontend, Unified Site Release, and Playwright, then squash-merge. Record the squash SHA on #212 and #134. Do not close #199.
