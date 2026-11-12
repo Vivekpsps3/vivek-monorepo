@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import HTTPException
@@ -11,8 +12,30 @@ from sqlalchemy.orm import Session
 from apps.finance.backend.kdf_policy import MAX_PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS
 from apps.finance.backend.models import EncryptedRecord, EncryptedRecordIndex, UserVault, utc_now
 
-# Any future DEK rotation must re-encrypt every collection here, including health_stats and health_prs (Town Health).
-ALLOWED_COLLECTIONS = frozenset(
+
+class CollectionContractError(ValueError):
+    """A server-accepted collection is missing from the owner/recovery policy."""
+
+
+@dataclass(frozen=True)
+class CollectionPolicy:
+    """Finance bags and Health collections are different owner subsets.
+
+    Recovery membership is their union. It is not a third hand-maintained list.
+    """
+
+    finance: frozenset[str]
+    health: frozenset[str]
+
+    @property
+    def recovery(self) -> frozenset[str]:
+        return self.finance | self.health
+
+
+# One server policy. Client copies are language-boundary subsets pinned by
+# scripts/check_collection_policy.py. A future DEK rotation must re-encrypt
+# every recovery collection, including Town Health.
+FINANCE_OWNER_COLLECTIONS = frozenset(
     {
         "transactions",
         "bank_accounts",
@@ -26,10 +49,48 @@ ALLOWED_COLLECTIONS = frozenset(
         "subscriptions",
         "planning_profiles",
         "stock_lab_scenarios",
-        "health_stats",
-        "health_prs",
     }
 )
+HEALTH_OWNER_COLLECTIONS = frozenset({"health_stats", "health_prs"})
+COLLECTION_POLICY = CollectionPolicy(
+    finance=FINANCE_OWNER_COLLECTIONS,
+    health=HEALTH_OWNER_COLLECTIONS,
+)
+ALLOWED_COLLECTIONS = COLLECTION_POLICY.recovery
+
+
+def assert_collection_contract(
+    accepted: frozenset[str] | set[str],
+    policy: CollectionPolicy,
+) -> None:
+    """Fail when an accepted name is outside the owner/recovery policy.
+
+    The subsets must both be non-empty, different, and disjoint. Recovery is
+    exactly the names the server accepts.
+    """
+    accepted_names = set(accepted)
+    finance = set(policy.finance)
+    health = set(policy.health)
+    recovery = finance | health
+    missing = accepted_names - recovery
+    if missing:
+        names = ", ".join(sorted(missing))
+        raise CollectionContractError(
+            f"server-accepted names absent from owner/recovery policy: {names}"
+        )
+    if finance & health:
+        raise CollectionContractError("Finance and Health subsets overlap")
+    if finance == health or not finance or not health:
+        raise CollectionContractError("Finance and Health subsets must differ")
+    extra = recovery - accepted_names
+    if extra:
+        names = ", ".join(sorted(extra))
+        raise CollectionContractError(
+            f"owner/recovery policy names a collection the server does not accept: {names}"
+        )
+
+
+assert_collection_contract(ALLOWED_COLLECTIONS, COLLECTION_POLICY)
 
 CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{8,128}$")
 MAX_CIPHERTEXT_BYTES = 512_000
@@ -170,9 +231,13 @@ def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> li
             raise HTTPException(status_code=400, detail="Invalid ciphertext")
         schema_version = int(item.get("schema_version", 1))
         key_version = int(item.get("key_version", 1))
-        # Security (2026-10-30): health collections are v2-only; the Health
-        # client refuses v1 rows, so never let one be written.
-        if collection.startswith("health_") and schema_version != CURRENT_RECORD_SCHEMA_VERSION:
+        # Security (2026-10-30): Health-owned collections are v2-only; the Health
+        # client refuses v1 rows, so never let one be written. Membership is the
+        # Health subset, not a name prefix.
+        if (
+            collection in COLLECTION_POLICY.health
+            and schema_version != CURRENT_RECORD_SCHEMA_VERSION
+        ):
             raise HTTPException(status_code=422, detail="Health records require schema_version 2")
         if schema_version not in {1, CURRENT_RECORD_SCHEMA_VERSION} or key_version < 1:
             raise HTTPException(status_code=400, detail="Invalid version fields")

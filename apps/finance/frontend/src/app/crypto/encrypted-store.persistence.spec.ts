@@ -102,4 +102,88 @@ describe('foreign health collections', () => {
   it('names exactly health_stats and health_prs', () => {
     expect(Array.from(FINANCE_FOREIGN_COLLECTIONS).sort()).toEqual(['health_prs', 'health_stats']);
   });
+
+  it('LOCAL3: an older finance load or save does not decrypt, delete, or rewrite an unknown row', async () => {
+    const rows: EncryptedRecordDto[] = [
+      {
+        collection: 'transactions',
+        client_id: 'txn-000001',
+        ciphertext_b64: 'opaque-tx',
+        schema_version: 2,
+        key_version: 1,
+        revision: 1,
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        collection: 'transactions',
+        client_id: 'txn-legacy01',
+        ciphertext_b64: 'opaque-legacy',
+        schema_version: 1,
+        key_version: 1,
+        revision: 3,
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        collection: 'health_stats',
+        client_id: 'hlt_stats0001',
+        ciphertext_b64: 'opaque-stats',
+        schema_version: 2,
+        key_version: 1,
+        revision: 1,
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        collection: 'future_private',
+        client_id: 'future_private_1',
+        ciphertext_b64: 'opaque-future',
+        schema_version: 1,
+        key_version: 1,
+        revision: 4,
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ];
+    const decrypted: string[] = [];
+    const upserts: string[] = [];
+    const deletes: string[] = [];
+    const vault = {
+      isUnlocked: true,
+      listRecords: () => of(rows),
+      decryptPayload: async (ciphertextB64: string, collection: string) => {
+        decrypted.push(`${collection}:${ciphertextB64}`);
+        if (ciphertextB64 === 'opaque-future' || ciphertextB64 === 'opaque-stats') {
+          throw new Error(`decoded a sealed ${collection} row`);
+        }
+        return ciphertextB64 === 'opaque-legacy' ? { id: 22 } : { id: 11 };
+      },
+      encryptPayload: async () => 'opaque-rewritten',
+      upsertRecords: (records: Array<{ collection: string; client_id: string; ciphertext_b64: string }>) => {
+        for (const record of records) upserts.push(`${record.collection}:${record.client_id}`);
+        return of(records.map(record => ({
+          collection: record.collection,
+          client_id: record.client_id,
+          ciphertext_b64: record.ciphertext_b64,
+          schema_version: 2,
+          key_version: 1,
+          revision: 2,
+          updated_at: '2026-01-01T00:00:00Z',
+        })));
+      },
+      deleteRecords: (records: Array<{ collection: string }>) => {
+        for (const record of records) deletes.push(record.collection);
+        return of({ deleted: records.length });
+      },
+      reportFallbackFailure(): void {},
+    } as unknown as VaultService;
+    const persistence = new EncryptedRecordPersistence(vault, () => 1);
+
+    await persistence.ensureLoaded({ silent: true });
+    await persistence.upsert('transactions', { id: 11 }, 'txn-000001');
+
+    expect(decrypted).toEqual(['transactions:opaque-tx', 'transactions:opaque-legacy']);
+    expect(upserts).toEqual(['transactions:txn-legacy01', 'transactions:txn-000001']);
+    expect(deletes).toEqual([]);
+    expect(rows.find(row => row.collection === 'future_private')?.ciphertext_b64).toBe('opaque-future');
+    expect(rows.find(row => row.collection === 'future_private')?.revision).toBe(4);
+    expect(rows.find(row => row.collection === 'health_stats')?.ciphertext_b64).toBe('opaque-stats');
+  });
 });
