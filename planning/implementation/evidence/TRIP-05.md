@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#229](https://github.com/Vivekpsps3/vivek-monorepo/issues/229); parent [#84](https://github.com/Vivekpsps3/vivek-monorepo/issues/84) stays open
 - Agent/context, branch/worktree: Cursor Grok, `agent/trip-05`, `/tmp/vivek-trip-05`
-- Base main SHA, current tested SHA: base `04a5dac19356b3a6e6871a920b34fce0b843d08d`. Local gates ran on this working tree before the commit that records it.
+- Base main SHA, current tested SHA: base `04a5dac19356b3a6e6871a920b34fce0b843d08d`. Product and test commit `eb989e688ababcd7c5d81caff3072bfd7333267b` is the tree those gates ran against. This SHA line is the only later documentation change.
 - Fresh-main/prerequisite/active-PR checks: the branch was created from that base, which was `origin/main` at claim time. TRIP-04 is on this base as squash `942db75` (`Explain trip form errors on submit instead of disabling Save (#352)`). `gh pr list --state open` returned no open pull requests. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/229#issuecomment-6811728220
 
 ## Acceptance
