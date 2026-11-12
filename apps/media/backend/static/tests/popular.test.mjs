@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   cleanPopular,
   popularError,
+  popularFocus,
   safeArt,
 } from "../../../frontend/src/popular.mjs";
 
@@ -32,8 +33,22 @@ test("cleanPopular drops bad rows, dedupes and caps at 20", () => {
     "Dune",
   ];
   assert.deepEqual(cleanPopular(rows), [
-    { title: "Dune", source: "tmdb", source_id: "1", kind: "movie" },
-    { title: "Series row", source: "tmdb", source_id: "2", kind: "movie" },
+    {
+      title: "Dune",
+      source: "tmdb",
+      source_id: "1",
+      kind: "movie",
+      artwork_url: null,
+      already_saved: false,
+    },
+    {
+      title: "Series row",
+      source: "tmdb",
+      source_id: "2",
+      kind: "movie",
+      artwork_url: null,
+      already_saved: false,
+    },
   ]);
   const many = Array.from({ length: 25 }, (_, i) => ({
     title: "Movie " + i,
@@ -44,6 +59,53 @@ test("cleanPopular drops bad rows, dedupes and caps at 20", () => {
   assert.equal(capped.length, 20);
   assert.equal(capped[0].kind, "movie");
   assert.deepEqual(cleanPopular(undefined), []);
+});
+
+test("cleanPopular keeps one saved identity and only TMDB artwork", () => {
+  const rows = cleanPopular([
+    {
+      title: "Saved",
+      source: "tmdb",
+      source_id: "9",
+      already_saved: true,
+      saved_id: 42,
+      artwork_url: "https://image.tmdb.org/t/p/w500/saved.jpg",
+    },
+    {
+      title: "Unsafe",
+      source: "tmdb",
+      source_id: "10",
+      already_saved: true,
+      saved_id: "42",
+      artwork_url: "javascript:alert(1)",
+    },
+    {
+      title: "Evil host",
+      source: "tmdb",
+      source_id: "11",
+      artwork_url: "https://image.tmdb.org.evil.example/poster.jpg",
+    },
+  ]);
+  assert.equal(rows[0].already_saved, true);
+  assert.equal(rows[0].saved_id, 42);
+  assert.equal(
+    rows[0].artwork_url,
+    "https://image.tmdb.org/t/p/w500/saved.jpg",
+  );
+  assert.equal(rows[1].already_saved, false);
+  assert.equal(rows[1].saved_id, undefined);
+  assert.equal(rows[1].artwork_url, null);
+  assert.equal(rows[2].artwork_url, null);
+});
+
+test("popularFocus names loading, retry, and results", () => {
+  assert.equal(popularFocus("idle", "idle", 0), "");
+  assert.equal(popularFocus("ready", "ready", 20), "");
+  assert.equal(popularFocus("idle", "loading", 0), "popular-status");
+  assert.equal(popularFocus("error", "loading", 0), "popular-status");
+  assert.equal(popularFocus("loading", "error", 0), "popular-retry");
+  assert.equal(popularFocus("loading", "ready", 0), "popular-retry");
+  assert.equal(popularFocus("loading", "ready", 20), "popular-heading");
 });
 
 test("popularError maps 0 and 5xx to service copy", () => {

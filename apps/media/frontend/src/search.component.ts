@@ -1,4 +1,4 @@
-import { Component, inject, signal, DestroyRef } from "@angular/core";
+import { Component, DestroyRef, effect, inject, signal } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
@@ -19,6 +19,8 @@ import {
   SearchHit,
   Detail,
 } from "./media.models";
+import { PopularMoviesService } from "./popular-movies.service";
+import { popularFocus, safeArt } from "./popular.mjs";
 @Component({
   standalone: true,
   imports: [
@@ -70,6 +72,106 @@ import {
         Search
       </ui-button>
     </form>
+    <section class="popular" aria-labelledby="popular-heading">
+      <h2 id="popular-heading" tabindex="-1">Popular movies</h2>
+      @if (popular.state() === "idle") {
+        <ui-button variant="secondary" (click)="openPopular()">
+          Popular
+        </ui-button>
+      }
+      @if (popular.state() === "loading") {
+        <div
+          id="popular-status"
+          class="popular-status"
+          role="status"
+          tabindex="-1"
+        >
+          Loading popular movies…
+        </div>
+        <div class="popular-skeletons" aria-hidden="true">
+          @for (slot of popularSkeleton; track slot) {
+            <div class="popular-skeleton"></div>
+          }
+        </div>
+      }
+      @if (popular.state() === "error") {
+        <div class="local-error popular-error" role="alert">
+          @if (popular.error()) {
+            <p>{{ popular.error() }}</p>
+          }
+          <ui-button id="popular-retry" variant="ghost" (click)="retryPopular()">
+            Retry popular
+          </ui-button>
+        </div>
+      }
+      @if (popular.state() === "ready" && popular.rows().length === 0) {
+        <ui-empty-state
+          title="No popular movies"
+          message="The movie service returned nothing. Retry, or search for a title."
+        >
+          <ui-button
+            id="popular-retry"
+            variant="primary"
+            (click)="retryPopular()"
+          >
+            Retry popular
+          </ui-button>
+        </ui-empty-state>
+      }
+      @if (popular.state() === "ready" && popular.rows().length) {
+        <div class="popular-list">
+          @for (
+            item of popular.rows();
+            track item.source + "|" + item.source_id
+          ) {
+            <article class="media-card popular-card">
+              <div class="media-art">
+                @if (art(item.artwork_url); as src) {
+                  <img
+                    [src]="src"
+                    alt=""
+                    loading="lazy"
+                    (error)="clearArt(item)"
+                  />
+                } @else {
+                  <span>{{ item.title.slice(0, 2).toUpperCase() }}</span>
+                }
+              </div>
+              <div class="media-card-copy">
+                <h3>{{ item.title }}</h3>
+                @if (item.year) {
+                  <p class="muted">{{ item.year }}</p>
+                }
+                @if (item.already_saved && item.saved_id) {
+                  <ui-button
+                    variant="ghost"
+                    [href]="'/media/item/' + item.saved_id"
+                    label="Open saved item"
+                  />
+                } @else {
+                  <ui-button
+                    variant="ghost"
+                    [disabled]="popularBusy() === popularKey(item)"
+                    (click)="addPopular(item)"
+                  >
+                    {{
+                      popularBusy() === popularKey(item)
+                        ? "Saving…"
+                        : "Add to library"
+                    }}
+                  </ui-button>
+                }
+                @if (popularErrors()[popularKey(item)]) {
+                  <p role="alert">
+                    {{ popularErrors()[popularKey(item)] }}
+                  </p>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
     @if (loading()) {
       <p role="status">Searching sources…</p>
     }
@@ -211,7 +313,7 @@ import {
         }
       </div>
     }
-    @if (!q.trim()) {
+    @if (!q.trim() && popular.state() === "idle") {
       <ui-empty-state
         title="What are you curious about?"
         message="Search movies, series, books, games, artists, albums, and songs."
@@ -234,7 +336,24 @@ export class SearchComponent {
   readonly error = signal("");
   readonly saving = signal("");
   readonly saveErrors = signal<Record<string, string>>({});
+  readonly popular = inject(PopularMoviesService);
+  readonly popularBusy = signal("");
+  readonly popularErrors = signal<Record<string, string>>({});
+  readonly popularSkeleton = [1, 2, 3, 4];
+  readonly art = safeArt;
+  private readonly popularInflight = new Set<string>();
+  private readonly popularAttempt = new Map<string, number>();
+  private focusTimer = 0;
   constructor() {
+    let previous = this.popular.state();
+    effect(() => {
+      const state = this.popular.state();
+      const count = this.popular.rows().length;
+      const target = popularFocus(previous, state, count);
+      previous = state;
+      if (target) this.focusSoon(target);
+    });
+    this.destroy.onDestroy(() => window.clearTimeout(this.focusTimer));
     this.typed
       .pipe(debounceTime(350), takeUntilDestroyed())
       .subscribe(() => this.search());
@@ -294,6 +413,60 @@ export class SearchComponent {
       relativeTo: this.route,
       queryParamsHandling: "merge",
       queryParams: { offset: Math.max(0, this.offset + delta), retry: null },
+    });
+  }
+  openPopular(): void {
+    this.popular.load();
+  }
+  retryPopular(): void {
+    this.popular.retry();
+  }
+  popularKey(item: SearchHit): string {
+    return item.source + "|" + item.source_id;
+  }
+  clearArt(item: SearchHit): void {
+    item.artwork_url = null;
+  }
+  addPopular(item: SearchHit): void {
+    const key = this.popularKey(item);
+    if (item.already_saved || this.popularInflight.has(key)) return;
+    const attempt = (this.popularAttempt.get(key) ?? 0) + 1;
+    this.popularAttempt.set(key, attempt);
+    this.popularInflight.add(key);
+    this.popularBusy.set(key);
+    this.popularErrors.update((errors) => ({ ...errors, [key]: "" }));
+    this.http
+      .post<Detail>("/media/api/library/from-provider", {
+        source: item.source,
+        source_id: item.source_id,
+        kind: item.kind,
+        title: item.title,
+      })
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (detail) => {
+          if (this.popularAttempt.get(key) !== attempt) return;
+          this.popular.markSaved(key, detail.id);
+          this.finishPopular(key, "");
+        },
+        error: (error) => {
+          if (this.popularAttempt.get(key) !== attempt) return;
+          this.finishPopular(key, errorCopy(error));
+        },
+      });
+  }
+  private finishPopular(key: string, message: string): void {
+    this.popularInflight.delete(key);
+    if (this.popularBusy() === key) this.popularBusy.set("");
+    this.popularErrors.update((errors) => ({ ...errors, [key]: message }));
+  }
+  private focusSoon(id: string): void {
+    window.clearTimeout(this.focusTimer);
+    this.focusTimer = window.setTimeout(() => {
+      const host = document.getElementById(id);
+      if (!host) return;
+      const button = host.querySelector("button");
+      (button instanceof HTMLElement ? button : host).focus();
     });
   }
   save(item: SearchHit): void {

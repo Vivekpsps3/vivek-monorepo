@@ -19,10 +19,31 @@ export function cleanPopular(rows) {
     const key = row.source + "|" + row.source_id;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ ...row, kind: "movie" });
+    const saved =
+      row.already_saved === true &&
+      Number.isInteger(row.saved_id) &&
+      row.saved_id > 0;
+    const next = {
+      ...row,
+      kind: "movie",
+      artwork_url: safeArt(row.artwork_url),
+      already_saved: saved,
+    };
+    if (saved) next.saved_id = row.saved_id;
+    else delete next.saved_id;
+    out.push(next);
     if (out.length >= 20) break;
   }
   return out;
+}
+
+export function popularFocus(previous, state, count) {
+  if (previous === state) return "";
+  if (state === "loading") return "popular-status";
+  if (state === "error" || (state === "ready" && count === 0))
+    return "popular-retry";
+  if (previous === "loading" && state === "ready") return "popular-heading";
+  return "";
 }
 
 export function popularError(status) {
