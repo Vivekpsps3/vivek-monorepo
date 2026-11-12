@@ -54,10 +54,10 @@ Not run: Finance, site, and Travel Karma; Finance, Travel, and Town Playwright; 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened from `agent/med-05` with `Closes #239` only. #85 is referenced and stays open. The URL is recorded in the next handoff update on this file.
-- Roadmap #134 append-only status-note URL: not posted yet. The issue body will not be edited.
-- Merged/activation status: not merged. Not deployed. Local verification passed. CI is not recorded yet.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/353 (`Closes #239` only). #85 is referenced and stays open.
+- Roadmap #134 append-only status-note URL: posted after this note. The issue body was not edited.
+- Merged/activation status: PR #353 is open. Not merged. Not deployed. Local verification passed. CI is not recorded yet.
 - Remaining external prerequisites or approved scope decisions: none. Parent #85 stays open.
-- Next actor: push `HEAD:agent/med-05`, open the pull request, append a scoped note to #134, watch Backend, Frontend, Unified Site Release, and Playwright, then squash-merge.
+- Next actor: watch Backend, Frontend, Unified Site Release, and Playwright on #353, squash-merge, then record the squash SHA on #239 and #134.
 
 No unstated decision from the previous context is necessary to continue.
