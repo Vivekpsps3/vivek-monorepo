@@ -6,10 +6,13 @@ export interface EncryptedBrokerageStagePort {
   ensureLoaded(): Promise<void>;
   readPersistedRows<T>(collection: CollectionName, generation?: number): Promise<T[]>;
   getImportRows<T>(): T[];
-  getStoredHoldings(): Holding[];
   allocateId(): number;
   upsertImportRecord<T extends { id?: number }>(payload: T, clientId?: string, generation?: number): Promise<T>;
-  savePreparedHoldings(rows: Holding[]): Promise<Holding[]>;
+  commitHoldingReplacements(
+    generation: number,
+    extraIds: number[],
+    build: (current: Holding[]) => Holding[],
+  ): Promise<Holding[]>;
   savePreparedImportRows(rows: Array<{ id: number }>): Promise<Array<{ id: number }>>;
   getBrokerageAccounts(): Promise<BrokerageAccountRecord[]>;
   upsertBrokerageAccount(body: Omit<BrokerageAccountRecord, 'id'> & { id?: number }): Promise<BrokerageAccountRecord>;
@@ -171,17 +174,19 @@ export class EncryptedBrokerageStageStore {
     };
     let activeStage = stage;
     if (stage.status !== 'activated') {
-      const previousStageRows = this.port.getStoredHoldings().filter(row => row.portfolio_stage_id === stageId);
-      const replacements = rows.map((row, index) => ({
-        ...row,
-        id: previousStageRows.find(existing => existing.portfolio_row_index === index
-          && existing.symbol === row.symbol && existing.brokerage_account_id === row.brokerage_account_id)?.id ?? this.port.allocateId(),
-        lifecycle_status: 'staged' as const,
-        portfolio_stage_id: stageId,
-        portfolio_row_index: index,
-        cost_basis_status: row.cost_basis_status || (row.purchase_price == null ? 'unknown' : 'known'),
-      }));
-      await this.port.savePreparedHoldings(replacements);
+      const allocated = rows.map(() => this.port.allocateId());
+      await this.port.commitHoldingReplacements(generation, allocated, current => {
+        const previousStageRows = current.filter(row => row.portfolio_stage_id === stageId);
+        return rows.map((row, index) => ({
+          ...row,
+          id: previousStageRows.find(existing => existing.portfolio_row_index === index
+            && existing.symbol === row.symbol && existing.brokerage_account_id === row.brokerage_account_id)?.id ?? allocated[index],
+          lifecycle_status: 'staged' as const,
+          portfolio_stage_id: stageId,
+          portfolio_row_index: index,
+          cost_basis_status: row.cost_basis_status || (row.purchase_price == null ? 'unknown' : 'known'),
+        }));
+      });
       if (generation !== this.port.sessionToken()) throw new Error('Vault session changed');
       const persistedHoldings = await this.port.readPersistedRows<Holding>('holdings', generation);
       const verifiedReplacements = persistedHoldings.filter(row => row.portfolio_stage_id === stageId);

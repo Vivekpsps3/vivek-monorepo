@@ -100,6 +100,8 @@ async function pageClockNow(request: { frame: () => { page: () => Page } }): Pro
   return frozenNow();
 }
 
+export const SYNTHETIC_VAULT_PASSPHRASE = 'Synthetic finance test passphrase';
+
 /** Each test uses a fresh key and an in-memory ciphertext server; no real API or vault. */
 export async function syntheticVault(
   page: Page,
@@ -123,7 +125,7 @@ export async function syntheticVault(
     path: '/',
   }]);
   const key = randomBytes(32);
-  const passphrase = 'Synthetic finance test passphrase';
+  const passphrase = SYNTHETIC_VAULT_PASSPHRASE
   const salt = randomBytes(16);
   const wrapIv = randomBytes(12);
   const wrapCipher = createCipheriv('aes-256-gcm', pbkdf2Sync(passphrase, salt, DEFAULT_PBKDF2_ITERATIONS, 32, 'sha256'), wrapIv);
@@ -147,14 +149,14 @@ export async function syntheticVault(
   function encrypt(data: Payload, row: RecordRow): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', key, iv);
-    cipher.setAAD(aad(row));
+    if (row.schema_version !== 1) cipher.setAAD(aad(row));
     const ciphertext = Buffer.concat([cipher.update(JSON.stringify(data)), cipher.final(), cipher.getAuthTag()]);
     return Buffer.concat([iv, ciphertext]).toString('base64');
   }
   function plaintext(row: RecordRow): Payload {
     const packed = Buffer.from(row.ciphertext_b64, 'base64');
     const cipher = createDecipheriv('aes-256-gcm', key, packed.subarray(0, 12));
-    cipher.setAAD(aad(row));
+    if (row.schema_version !== 1) cipher.setAAD(aad(row));
     cipher.setAuthTag(packed.subarray(-16));
     return JSON.parse(Buffer.concat([cipher.update(packed.subarray(12, -16)), cipher.final()]).toString());
   }
@@ -162,10 +164,13 @@ export async function syntheticVault(
     let nextId = Math.max(0, ...rows.map(row => Number.isSafeInteger(row.id) ? row.id : 0)) + 1;
     for (const input of rows) {
       // Omitted ids must not collapse every row onto the same ciphertext key.
+      // schema_version 1 is the wire envelope only; it is not part of the record.
       const data = { ...input, id: input.id ?? nextId++ };
+      const schemaVersion = data.schema_version === 1 ? 1 : 2;
+      delete data.schema_version;
       const row: RecordRow = {
         collection, client_id: `synthetic_${collection}_${data.id}`, ciphertext_b64: '',
-        schema_version: 2, key_version: 1, revision: 1, updated_at: new Date().toISOString(),
+        schema_version: schemaVersion, key_version: 1, revision: 1, updated_at: new Date().toISOString(),
       };
       row.ciphertext_b64 = encrypt(data, row);
       records.set(identity(collection, row.client_id), row);

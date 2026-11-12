@@ -206,7 +206,6 @@ describe('brokerage stage status writes', () => {
       ensureLoaded: async () => undefined,
       readPersistedRows: async (collection: string) => collection === 'import_batches' ? [stage] : [],
       getImportRows: () => [stage],
-      getStoredHoldings: () => [],
       allocateId: () => 7,
       upsertImportRecord: async (payload: { status?: string; cleanup_complete?: boolean }) => {
         const gated = options?.gateStatus === payload.status
@@ -219,7 +218,7 @@ describe('brokerage stage status writes', () => {
         }
         return { ...stage, ...payload, id: 7 };
       },
-      savePreparedHoldings: async () => [],
+      commitHoldingReplacements: async (_generation: number, _extraIds: number[], build: (current: never[]) => never[]) => build([]),
       savePreparedImportRows: async () => {
         if (options?.failCheckpoint) throw new Error('checkpoint');
         return [];
@@ -270,6 +269,143 @@ describe('brokerage stage status writes', () => {
   it('serializes two cleanup writes of the same stage', async () => {
     const harness = stageStore('activated', { gateStatus: 'activated', cleanup: true });
     await overlap(stages => stages.activateHoldingImportStage(7), harness);
+  });
+
+  it('builds the replacement from holdings observed after the queued edit', async () => {
+    const session = 1;
+    const persistence = new EncryptedRecordPersistence({} as VaultService, () => session);
+    let holdings: Array<Record<string, unknown>> = [];
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const written: Array<Array<Record<string, unknown>>> = [];
+    const statuses: string[] = [];
+    const stage = {
+      id: 7, record_type: 'holding_stage', status: 'verified', account_masks: ['1234'],
+      expected_row_count: 1, created_at: '2026-01-01T00:00:00Z', source: 'fidelity', filename: 'positions.csv',
+      account_replacements: [],
+    };
+    const rowChunk = {
+      id: 8, record_type: 'holding_stage_rows', stage_id: 7, chunk_index: 0,
+      rows: [{
+        symbol: 'MSFT', shares: 4, brokerage_account_id: 3, account_display: 'Fidelity ···1234',
+        purchase_price: 10, purchase_date: '2024-01-02', current_price: 10, value: 40,
+        price_source: 'manual', price_as_of: null, quote_date: null, position_as_of: null,
+        cost_basis_status: 'known', lifecycle_status: 'staged', portfolio_row_index: 0,
+      }],
+    };
+    const edit = persistence.runRecordUpdate('holdings', 5, 1, async () => {
+      await gate;
+      holdings = [{
+        id: 5, symbol: 'MSFT', shares: 2, brokerage_account_id: 3,
+        portfolio_stage_id: 7, portfolio_row_index: 0,
+      }];
+    });
+    const stages = new EncryptedBrokerageStageStore({
+      ensureLoaded: async () => undefined,
+      readPersistedRows: async (collection: string) => collection === 'import_batches' ? [stage, rowChunk] : holdings,
+      getImportRows: () => [stage, rowChunk],
+      allocateId: () => 99,
+      upsertImportRecord: async (payload: { status?: string }) => {
+        statuses.push(String(payload.status));
+        return { ...stage, ...payload, id: 7 };
+      },
+      commitHoldingReplacements: async (
+        generation: number,
+        extraIds: number[],
+        build: (current: Array<Record<string, unknown>>) => Array<Record<string, unknown>>,
+      ) => persistence.withRecordUpdates('holdings', [...new Set([5, ...extraIds])], generation, async () => {
+        const records = build(holdings);
+        written.push(records);
+        holdings = records;
+        return records;
+      }),
+      savePreparedImportRows: async () => [],
+      getBrokerageAccounts: async () => [],
+      upsertBrokerageAccount: async () => stage,
+      getHoldings: async () => holdings,
+      updateHolding: async () => holdings[0],
+      removeHolding: async () => undefined,
+      sessionToken: () => session,
+      assertSession: (generation: number) => {
+        if (generation !== session) throw new Error('Vault session changed');
+      },
+      runRecordUpdate: <T>(collection: 'import_batches', id: number, generation: number, update: () => Promise<T>) =>
+        persistence.runRecordUpdate(collection, id, generation, update),
+    } as never);
+
+    const activation = stages.activateHoldingImportStage(7);
+    for (let step = 0; step < 30 && written.length === 0; step += 1) await Promise.resolve();
+    expect(written).withContext('the replacement waits for the holding edit').toEqual([]);
+    release();
+    const result = await activation;
+    await edit;
+    expect(written.length).toBe(1);
+    expect(written[0][0]).toEqual(jasmine.objectContaining({ id: 5, shares: 4, symbol: 'MSFT' }));
+    expect(written[0].some(row => row['id'] === 99)).toBeFalse();
+    expect(result).toEqual(jasmine.objectContaining({ status: 'activated', stage_id: 7 }));
+    expect(statuses).toContain('activated');
+  });
+
+  it('does not activate or write holdings after the session changes while the snapshot waits', async () => {
+    let session = 1;
+    const persistence = new EncryptedRecordPersistence({} as VaultService, () => session);
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const written: unknown[] = [];
+    const statuses: string[] = [];
+    const stage = {
+      id: 7, record_type: 'holding_stage', status: 'verified', account_masks: ['1234'],
+      expected_row_count: 1, created_at: '2026-01-01T00:00:00Z', source: 'fidelity', filename: 'positions.csv',
+      account_replacements: [],
+    };
+    const rowChunk = {
+      id: 8, record_type: 'holding_stage_rows', stage_id: 7, chunk_index: 0,
+      rows: [{
+        symbol: 'MSFT', shares: 4, brokerage_account_id: 3, account_display: 'Fidelity ···1234',
+        purchase_price: 10, purchase_date: '2024-01-02', current_price: 10, value: 40,
+        price_source: 'manual', price_as_of: null, quote_date: null, position_as_of: null,
+        cost_basis_status: 'known', lifecycle_status: 'staged', portfolio_row_index: 0,
+      }],
+    };
+    const edit = persistence.runRecordUpdate('holdings', 5, 1, async () => { await gate; });
+    const stages = new EncryptedBrokerageStageStore({
+      ensureLoaded: async () => undefined,
+      readPersistedRows: async (collection: string) => collection === 'import_batches' ? [stage, rowChunk] : [],
+      getImportRows: () => [stage, rowChunk],
+      allocateId: () => 99,
+      upsertImportRecord: async (payload: { status?: string }) => {
+        statuses.push(String(payload.status));
+        return { ...stage, ...payload, id: 7 };
+      },
+      commitHoldingReplacements: async (
+        generation: number,
+        extraIds: number[],
+        build: (current: Array<Record<string, unknown>>) => Array<Record<string, unknown>>,
+      ) => persistence.withRecordUpdates('holdings', [...new Set([5, ...extraIds])], generation, async () => {
+        const records = build([]);
+        written.push(records);
+        return records;
+      }),
+      savePreparedImportRows: async () => [],
+      getBrokerageAccounts: async () => [],
+      upsertBrokerageAccount: async () => stage,
+      getHoldings: async () => [],
+      updateHolding: async () => undefined,
+      removeHolding: async () => undefined,
+      sessionToken: () => session,
+      assertSession: () => undefined,
+      runRecordUpdate: <T>(collection: 'import_batches', id: number, generation: number, update: () => Promise<T>) =>
+        persistence.runRecordUpdate(collection, id, generation, update),
+    } as never);
+
+    const activation = stages.activateHoldingImportStage(7);
+    for (let step = 0; step < 30; step += 1) await Promise.resolve();
+    session = 2;
+    release();
+    await expectAsync(activation).toBeRejectedWithError('Vault session changed');
+    await edit.catch(() => undefined);
+    expect(written).toEqual([]);
+    expect(statuses).not.toContain('activated');
   });
 });
 

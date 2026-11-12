@@ -475,4 +475,52 @@ describe('vault load silence', () => {
     expect(http.match(req => req.method === 'POST').length).withContext('the old rewrite does not write').toBe(0);
     expect(toast.error).not.toHaveBeenCalled();
   });
+
+  it('rejects a queued save when the legacy rewrite fails and does not post that save', async () => {
+    await failLegacyRewrite();
+    const encrypt = TestBed.inject(VaultService).encryptPayload as jasmine.Spy;
+    encrypt.calls.reset();
+    const save = store.updateAsset(1, { name: 'Queued' }).then(() => 'saved', () => 'rejected');
+    const readRetry = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(readRetry.request.context.get(SILENT_ERROR_TOAST)).withContext('read retry stays silent').toBeTrue();
+    expect(readRetry.request.body?.records?.[0]).toEqual(jasmine.objectContaining({
+      client_id: 'asset-1',
+      expected_revision: 3,
+    }));
+    await settle();
+    expect(http.match(req => req.method === 'POST').length).withContext('the waiting save does not open its own post').toBe(0);
+    readRetry.flush({ detail: 'Synthetic rewrite failed' }, { status: 503, statusText: 'Unavailable' });
+
+    const writeRetry = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(writeRetry.request.context.get(SILENT_ERROR_TOAST)).withContext('write retry is still the legacy row').toBeTrue();
+    expect(writeRetry.request.body?.records?.[0]).toEqual(jasmine.objectContaining({
+      client_id: 'asset-1',
+      expected_revision: 3,
+    }));
+    writeRetry.flush({ detail: 'Synthetic rewrite failed' }, { status: 503, statusText: 'Unavailable' });
+
+    expect(await save).toBe('rejected');
+    expect(http.match(req => req.method === 'POST').length).withContext('the rejected save does not post afterward').toBe(0);
+    const encryptedNames = encrypt.calls.allArgs().map(args => (args[0] as { name?: string }).name);
+    expect(encryptedNames).not.toContain('Queued');
+    expect(toast.error).toHaveBeenCalledOnceWith(HTTP_ERROR_FALLBACK);
+  });
+
+  it('does not toast a 422 that arrives after the session changes', async () => {
+    const vault = TestBed.inject(VaultService);
+    const preload = store.getAssets();
+    const list = await whenRequest(fullLoad);
+    list.flush([assetRow(3)]);
+    await preload;
+
+    const save = store.updateAsset(1, { name: 'Bad' }).then(() => 'saved', (error: Error) => error.message);
+    const noisy = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(noisy.request.context.get(SILENT_ERROR_TOAST)).toBeFalse();
+    store.clear();
+    await vault.lock();
+    noisy.flush({ detail: 'Invalid amount' }, { status: 422, statusText: 'Unprocessable Entity' });
+    expect(await save).toBe('Vault session changed');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(http.match(req => req.method === 'GET').length).withContext('the 422 does not reload the next session').toBe(0);
+  });
 });
