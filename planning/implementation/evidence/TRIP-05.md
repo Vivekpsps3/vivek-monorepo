@@ -45,10 +45,10 @@ Commands ran from `/tmp/vivek-trip-05`. `PYTHON` was `/home/vivek/Deployments/vi
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending the pull request. The body uses `Closes #229` and names parent #84 without closing it.
-- Roadmap #134 append-only status-note URL: pending the comment after the pull request exists. The issue body is not edited.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/354 with `Closes #229` and a non-closing reference to #84.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6811963189. The issue body is not edited.
 - Merged/activation status (actual evidence, not assumption): not merged. Not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Parent #84 stays open. Policy quarter-rounding stays on the PTO policy form.
-- Next actor: this agent, to open the pull request, watch CI, and squash-merge.
+- Next actor: this agent, to watch CI and squash-merge #354.
 
 No unstated decision from the previous context is necessary to continue.
