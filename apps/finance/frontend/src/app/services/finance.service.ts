@@ -38,6 +38,8 @@ import {
   AssetCreate,
   BankImportOption,
   BankImportFile,
+  CsvMappingProfile,
+  CustomCsvMapping,
   BankImportFilePreview,
   CashflowSummary,
   CategoryBulkRenameResult,
@@ -881,6 +883,14 @@ export class FinanceService {
 
   getImportBanks(): Observable<BankImportOption[]> {
     return of(this.financeImports.listBanks());
+  }
+
+  listCsvMappingProfiles(): Observable<CsvMappingProfile[]> {
+    return from(this.financeImports.listCsvMappingProfiles());
+  }
+
+  saveCsvMappingProfile(body: { id?: number; name: string; mapping: CustomCsvMapping }): Observable<CsvMappingProfile> {
+    return from(this.financeImports.saveCsvMappingProfile(body));
   }
 
   previewBankImport(bankSlug: string, file: File): Observable<ImportPreviewResult> {

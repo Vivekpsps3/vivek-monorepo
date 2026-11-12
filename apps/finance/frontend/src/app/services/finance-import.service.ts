@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import {
   BankAccountRecord,
+  CsvMappingProfile,
+  CustomCsvMapping,
   BankImportFile,
   BankImportFilePreview,
   BankImportOption,
@@ -94,6 +96,14 @@ export class FinanceImportService {
 
   deleteBankReceipt(receiptId: number): Promise<void> {
     return this.store.deleteImportReceipt(receiptId);
+  }
+
+  listCsvMappingProfiles(): Promise<CsvMappingProfile[]> {
+    return this.store.listCsvMappingProfiles();
+  }
+
+  saveCsvMappingProfile(body: { id?: number; name: string; mapping: CustomCsvMapping }): Promise<CsvMappingProfile> {
+    return this.store.saveCsvMappingProfile(body);
   }
 
   commitBank(rows: ImportPreviewRow[]): Promise<ImportCommitResult> {

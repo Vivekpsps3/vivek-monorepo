@@ -38,5 +38,6 @@ previews while retaining files and bank assignments.
 | `citi` | Cleared purchases are imported. Credits are classified as refunds, or held as ambiguous; payments and transfers are excluded. |
 | `bank_of_america` | Negative amounts are purchases. Positive amounts are classified as refunds, or held as ambiguous; payments and transfers are excluded. |
 | `x_money` | Completed card purchases and recognized refunds are imported. Other rows are skipped. |
+| `custom_csv` | Column map for date, description, and a signed amount or debit/credit, plus optional account, category, and currency. Delimiter and header are detected. A mapped currency must be USD; other currencies stay row errors and are not committed. The same preview, receipt, and Undo path is used. Mapping profiles are encrypted `csv_mapping_profile` records at format version 1. |
 
 Fidelity positions CSV is a **holdings** import (replace positions per account), not expense transactions. Parser: `apps/finance/frontend/src/app/utils/fidelity-import.util.ts`.

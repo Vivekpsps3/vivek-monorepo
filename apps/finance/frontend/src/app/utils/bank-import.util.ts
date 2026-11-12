@@ -2,6 +2,7 @@ import {
   BankAccountRecord,
   BankImportFile,
   BankImportFilePreview,
+  CustomCsvMapping,
   ImportCommitResult,
   ImportPreviewResult,
   ImportPreviewRow,
@@ -10,8 +11,13 @@ import {
   Transaction,
 } from '../models/transaction.model';
 
-import { accountDisplay, buildDedupeKey, errorMessage, getBankImporter, listClientBankImports, suggestMerchant } from './bank-import.parsers';
+import { accountDisplay, buildDedupeKey, errorMessage, getBankImporter, listClientBankImports, parseCustomCsv, suggestMerchant } from './bank-import.parsers';
 export { listClientBankImports, suggestMerchant };
+
+function requiredCustomMapping(mapping: CustomCsvMapping | undefined): CustomCsvMapping {
+  if (!mapping) throw new Error('Choose the date, description, and amount columns before preview.');
+  return mapping;
+}
 
 interface EncryptedImportStore {
   getTransactions(): Promise<Transaction[]>;
@@ -37,16 +43,20 @@ export async function buildBankImportPreview(
   accountKey?: string,
   explicitlyMappedLegacyAccount = false,
   legacyDedupeKeys = existingDedupeKeys,
-  accountMaskOverride?: string
+  accountMaskOverride?: string,
+  csvMapping?: CustomCsvMapping,
 ): Promise<ImportPreviewResult> {
   const importer = getBankImporter(bankSlug);
-  const parsed = await importer.parse(content, accountKey ? (accountMaskOverride ?? '') : accountMaskOverride);
+  const parsed = bankSlug === 'custom_csv'
+    ? await parseCustomCsv(content, requiredCustomMapping(csvMapping))
+    : await importer.parse(content, accountKey ? (accountMaskOverride ?? '') : accountMaskOverride);
   const seenInFile = new Set<string>();
   let newCount = 0;
   let duplicateCount = 0;
-  const rows: ImportPreviewRow[] = await Promise.all(parsed.rows.map(async (row): Promise<ImportPreviewRow> => {
+  const rows: ImportPreviewRow[] = await Promise.all(parsed.rows.map(async (parsedRow): Promise<ImportPreviewRow> => {
+    const { row_account, ...row } = parsedRow;
     const legacyDedupeKey = row.legacy_dedupe_key;
-    const dedupe_key = accountKey
+    const dedupe_key = accountKey && !row_account
       ? await buildDedupeKey(bankSlug, `account:${accountKey}`, row.date, row.amount, row.description)
       : row.dedupe_key;
     const stableDuplicate = existingDedupeKeys.has(dedupe_key) || seenInFile.has(dedupe_key);
@@ -62,11 +72,13 @@ export async function buildBankImportPreview(
     return {
       ...row,
       dedupe_key,
-      account_key: accountKey,
+      account_key: row_account ? `custom-account:${row.account_mask}` : accountKey,
       bank_slug: bankSlug,
       source_account_mask: row.account_mask,
       legacy_dedupe_key: legacyMatch ? legacyDedupeKey : undefined,
-      account_display: accountDisplayOverride?.trim() || accountDisplay(importer.name, row.account_mask),
+      account_display: row_account
+        ? row.account_mask
+        : (accountDisplayOverride?.trim() || accountDisplay(importer.name, row.account_mask)),
       status: duplicate ? 'duplicate' : requiresReview ? 'review' : 'new',
       kind: row.kind,
       review_reason: requiresReview ? 'Credit type is unclear. Choose how to record it before importing.' : undefined,
@@ -115,7 +127,8 @@ export async function buildBankImportPreviews(
         entry.account_key,
         entry.map_legacy_account === true,
         legacyDedupeKeys,
-        entry.account_mask_override
+        entry.account_mask_override,
+        entry.csv_mapping,
       );
       for (const row of result.preview.rows) row.source_filename = entry.file.name;
       for (const row of result.preview.rows) seen.add(row.dedupe_key);
@@ -132,6 +145,11 @@ export async function commitBankImportRows(
   rows: ImportPreviewRow[],
   receiptContext?: { bank_slugs?: string[]; filenames?: string[]; unresolved?: ImportRowNote[]; account_displays?: string[]; coverage?: ImportReceipt['coverage']; resume_receipt_id?: number; replace_filename?: string; confirmed_bank_accounts?: Array<Omit<BankAccountRecord, 'id'> & { id?: number }> }
 ): Promise<ImportCommitResult> {
+  const foreign = rows.find(row => {
+    const code = String(row.currency_code || '').trim().toUpperCase();
+    return !!code && code !== 'USD';
+  });
+  if (foreign) throw new Error(`Unsupported currency ${foreign.currency_code}. Finance records USD only.`);
   const transactions = await store.getTransactions();
   const existing = new Map(
     transactions.map(tx => [String(tx.dedupe_key || ''), tx] as const).filter(([key]) => !!key)
@@ -332,4 +350,22 @@ export async function resumeBankImportReceipt(store: EncryptedImportStore & {
     : receipt.selected_rows || [];
   if (rows.length !== receipt.selected_row_count) throw new Error('This receipt is missing staged rows and cannot be resumed. Re-import the original CSV.');
   return commitBankImportRows(store, [], { resume_receipt_id: receipt.id });
+}
+
+/** A custom file with nothing safe to write must not open a receipt. */
+export function customCommitRefusal(
+  files: Array<Pick<BankImportFile, 'id' | 'bank_slug'>>,
+  previews: BankImportFilePreview[],
+  selectedCount: number,
+): string | null {
+  if (selectedCount > 0 || !files.some(file => file.bank_slug === 'custom_csv')) return null;
+  const custom = previews.filter(preview => files.some(file => file.id === preview.id && file.bank_slug === 'custom_csv'));
+  const currency = custom.flatMap(preview => preview.preview?.errors || []).find(note => /currency/i.test(note.reason));
+  if (currency) return currency.reason.endsWith('.') ? currency.reason : `${currency.reason}.`;
+  const fileError = custom.find(preview => preview.error)?.error;
+  if (fileError) return fileError;
+  if (custom.some(preview => (preview.preview?.errors.length || 0) > 0)) {
+    return 'Fix the column mapping, then preview again. Nothing was saved.';
+  }
+  return 'That file has no transactions in it.';
 }

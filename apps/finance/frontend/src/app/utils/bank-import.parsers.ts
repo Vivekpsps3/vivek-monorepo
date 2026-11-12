@@ -1,4 +1,4 @@
-import { BankImportOption, ImportPreviewRow, ImportRowNote } from '../models/transaction.model';
+import { BankImportOption, CustomCsvMapping, ImportPreviewRow, ImportRowNote } from '../models/transaction.model';
 
 export interface ParsedBankRow {
   date: string;
@@ -9,6 +9,8 @@ export interface ParsedBankRow {
   dedupe_key: string;
   legacy_dedupe_key?: string;
   kind: NonNullable<ImportPreviewRow['kind']>;
+  /** The account cell identifies this row, so the file-level account must not replace it. */
+  row_account?: boolean;
 }
 
 export interface ParsedBankResult {
@@ -68,6 +70,15 @@ const IMPORTERS: BankImporter[] = [
     hint: 'X Money CSV. Uses Date, Description, Type, Category, Amount, and Status. Account is optional when you select an account. Completed purchases and recognized refunds are imported; other rows are skipped.',
     file_extensions: ['.csv'],
     parse: parseXMoney,
+  },
+  {
+    slug: 'custom_csv',
+    name: 'Custom CSV',
+    hint: 'Map date, description, and amount or debit and credit columns. A currency column must be USD. Refunds follow the description or the sign you choose.',
+    file_extensions: ['.csv'],
+    parse: async () => {
+      throw new Error('Choose the date, description, and amount columns before preview.');
+    },
   },
 ];
 
@@ -392,7 +403,8 @@ async function parsedRow(
   category: string,
   amount: number,
   kind: NonNullable<ImportPreviewRow['kind']> = 'purchase',
-  legacyAccountMask?: string
+  legacyAccountMask?: string,
+  rowAccount = false
 ): Promise<ParsedBankRow> {
   const dedupeMask = legacyAccountMask ?? accountMask;
   const dedupe_key = await buildDedupeKey(bankSlug, dedupeMask, date, amount, description);
@@ -405,6 +417,7 @@ async function parsedRow(
     dedupe_key,
     legacy_dedupe_key: legacyAccountMask ? dedupe_key : undefined,
     kind,
+    row_account: rowAccount || undefined,
   };
 }
 
@@ -427,7 +440,8 @@ async function addCreditRow(
   amount: number,
   line: number,
   rowType = '',
-  legacyAccountMask?: string
+  legacyAccountMask?: string,
+  rowAccount = false
 ): Promise<void> {
   const kind = classifyCredit(description, rowType);
   if (kind === 'payment' || kind === 'transfer') {
@@ -438,7 +452,7 @@ async function addCreditRow(
     });
     return;
   }
-  result.rows.push(await parsedRow(bankSlug, accountMask, date, description, category, amount, kind, legacyAccountMask));
+  result.rows.push(await parsedRow(bankSlug, accountMask, date, description, category, amount, kind, legacyAccountMask, rowAccount));
 }
 
 function classifyCredit(description: string, rowType = ''): 'refund' | 'ambiguous_credit' | 'payment' | 'transfer' {
@@ -447,6 +461,300 @@ function classifyCredit(description: string, rowType = ''): 'refund' | 'ambiguou
   if (/transfer|balance transfer/.test(text)) return 'transfer';
   if (/refund|return|reversal|merchant credit/.test(text) || /return|refund/.test(rowType.toLowerCase())) return 'refund';
   return 'ambiguous_credit';
+}
+
+const CSV_DELIMITERS = [',', ';', '\t', '|'] as const;
+export type CsvDelimiter = (typeof CSV_DELIMITERS)[number];
+
+export interface CustomCsvShape {
+  delimiter: CsvDelimiter;
+  headers: string[];
+  header_row: boolean;
+  sample_date: string;
+}
+
+export function detectCsvDelimiter(content: string): CsvDelimiter {
+  const counts: Record<CsvDelimiter, number> = { ',': 0, ';': 0, '\t': 0, '|': 0 };
+  let inQuotes = false;
+  for (let i = 0; i < content.length; i += 1) {
+    const ch = content[i];
+    if (ch === '"') {
+      if (inQuotes && content[i + 1] === '"') {
+        i += 1;
+        continue;
+      }
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (!inQuotes && (ch === '\n' || ch === '\r')) break;
+    if (!inQuotes && (ch === ',' || ch === ';' || ch === '\t' || ch === '|')) counts[ch] += 1;
+  }
+  let best: CsvDelimiter = ',';
+  let bestCount = 0;
+  for (const delimiter of CSV_DELIMITERS) {
+    if (counts[delimiter] > bestCount) {
+      best = delimiter;
+      bestCount = counts[delimiter];
+    }
+  }
+  return best;
+}
+
+function csvRecords(content: string): { delimiter: CsvDelimiter; records: string[][] } {
+  const text = content.replace(/^\ufeff/, '');
+  const delimiter = detectCsvDelimiter(text);
+  return { delimiter, records: parseCsv(text, delimiter) };
+}
+
+function looksLikeHeader(cells: string[]): boolean {
+  const filled = cells.map(cell => cell.trim()).filter(Boolean);
+  if (!filled.length) return false;
+  const dataLike = (cell: string) => /^\d{4}-\d{2}-\d{2}$/.test(cell)
+    || /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(cell)
+    || /^-?\(?\$?\d[\d,]*(\.\d+)?\)?$/.test(cell);
+  if (filled.every(dataLike)) return false;
+  return filled.some(cell => /[A-Za-z]/.test(cell));
+}
+
+function headerNames(cells: string[], useRow: boolean, width: number): string[] {
+  const count = Math.max(width, cells.length, 1);
+  if (!useRow) return Array.from({ length: count }, (_, index) => `Column ${index + 1}`);
+  const seen = new Map<string, number>();
+  return Array.from({ length: count }, (_, index) => {
+    const base = (cells[index] || '').trim() || `Column ${index + 1}`;
+    const next = (seen.get(base) || 0) + 1;
+    seen.set(base, next);
+    return next === 1 ? base : `${base} (${next})`;
+  });
+}
+
+export function inspectCustomCsv(content: string): CustomCsvShape {
+  if (!content.replace(/^\ufeff/, '').trim()) throw new Error('CSV file is empty');
+  const { delimiter, records } = csvRecords(content);
+  const filled = records.filter(row => row.some(cell => cell.trim()));
+  if (!filled.length) throw new Error('CSV file is empty');
+  const width = Math.max(...filled.map(row => row.length));
+  const header_row = looksLikeHeader(filled[0]);
+  const headers = headerNames(filled[0], header_row, width);
+  const sample = (header_row ? filled[1] : filled[0]) || [];
+  const dateIndex = headers.findIndex(header => /date/i.test(header));
+  return {
+    delimiter,
+    headers,
+    header_row,
+    sample_date: (sample[dateIndex >= 0 ? dateIndex : 0] || '').trim(),
+  };
+}
+
+export function customCsvHeaders(content: string, headerRow: boolean): string[] {
+  const { records } = csvRecords(content);
+  const width = Math.max(1, ...records.map(row => row.length));
+  return headerNames(records[0] || [], headerRow, width);
+}
+
+function sniffDateFormat(value: string): CustomCsvMapping['date_format'] {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return 'iso';
+  return 'mdy';
+}
+
+function headerByName(headers: string[], ...names: string[]): string {
+  return headers.find(header => names.includes(header.trim().toLowerCase())) || '';
+}
+
+export function suggestCustomCsvMapping(shape: CustomCsvShape): CustomCsvMapping {
+  const date = headerByName(shape.headers, 'date', 'transaction date', 'posted date', 'post date');
+  const description = headerByName(shape.headers, 'description', 'details', 'payee', 'memo', 'name');
+  const amount = headerByName(shape.headers, 'amount');
+  const debit = headerByName(shape.headers, 'debit');
+  const credit = headerByName(shape.headers, 'credit');
+  const split = !amount && !!debit && !!credit;
+  return {
+    version: 1,
+    date_column: date,
+    description_column: description,
+    amount_column: split ? undefined : amount,
+    debit_column: split ? debit : undefined,
+    credit_column: split ? credit : undefined,
+    account_column: headerByName(shape.headers, 'account', 'account name', 'account #') || undefined,
+    category_column: headerByName(shape.headers, 'category') || undefined,
+    currency_column: headerByName(shape.headers, 'currency') || undefined,
+    date_format: sniffDateFormat(shape.sample_date),
+    amount_mode: split ? 'debit_credit' : 'signed',
+    outflow_sign: 'negative',
+    refund_mode: 'description',
+    header_row: shape.header_row,
+  };
+}
+
+function columnIndex(headers: string[], name: string | undefined): number {
+  if (!name) return -1;
+  const exact = headers.indexOf(name);
+  if (exact >= 0) return exact;
+  const lower = name.trim().toLowerCase();
+  return headers.findIndex(header => header.trim().toLowerCase() === lower);
+}
+
+export function customMappingProblems(mapping: CustomCsvMapping | undefined, headers: string[] = []): string | null {
+  if (!mapping || mapping.version !== 1) return 'Choose a supported mapping profile.';
+  if (!mapping.date_column) return 'Choose a date column before preview.';
+  if (!mapping.description_column) return 'Choose a description column before preview.';
+  if (mapping.amount_mode === 'debit_credit') {
+    if (!mapping.debit_column || !mapping.credit_column) return 'Choose the debit and credit columns before preview.';
+  } else if (!mapping.amount_column) {
+    return 'Choose an amount column before preview.';
+  }
+  const required: Array<[string | undefined, string]> = [
+    [mapping.date_column, 'date'],
+    [mapping.description_column, 'description'],
+    [mapping.amount_column, 'amount'],
+    [mapping.debit_column, 'debit'],
+    [mapping.credit_column, 'credit'],
+    [mapping.account_column, 'account'],
+    [mapping.category_column, 'category'],
+    [mapping.currency_column, 'currency'],
+  ];
+  if (headers.length) {
+    for (const [name, label] of required) {
+      if (name && columnIndex(headers, name) < 0) return `Choose a ${label} column that exists in this file.`;
+    }
+  }
+  return null;
+}
+
+function parseMappedDate(raw: string, format: CustomCsvMapping['date_format']): string {
+  const value = (raw || '').trim();
+  if (format === 'dmy') {
+    const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
+    if (!match) throw new Error(`Unrecognized date: ${JSON.stringify(value)}`);
+    return parseDate(`${match[2]}/${match[1]}/${match[3]}`);
+  }
+  if (format === 'iso' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`Unrecognized date: ${JSON.stringify(value)}`);
+  }
+  if (format === 'mdy' && !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)) {
+    throw new Error(`Unrecognized date: ${JSON.stringify(value)}`);
+  }
+  return parseDate(value);
+}
+
+function currencyVerdict(raw: string): 'USD' | 'missing' | 'unsupported' {
+  const value = raw.trim().toUpperCase().replace(/\s+/g, ' ');
+  if (!value) return 'missing';
+  if (value === 'USD' || value === 'US$' || value === '$' || value === 'US DOLLAR' || value === 'US DOLLARS') return 'USD';
+  return 'unsupported';
+}
+
+export async function parseCustomCsv(content: string, mapping: CustomCsvMapping): Promise<ParsedBankResult> {
+  const problem = customMappingProblems(mapping);
+  if (problem) throw new Error(problem);
+  if (!content.replace(/^\ufeff/, '').trim()) throw new Error('CSV file is empty');
+  const { records } = csvRecords(content);
+  if (!records.some(row => row.some(cell => cell.trim()))) throw new Error('CSV file is empty');
+  const width = Math.max(1, ...records.map(row => row.length));
+  const headers = headerNames(records[0] || [], mapping.header_row !== false, width);
+  const mapped = customMappingProblems(mapping, headers);
+  if (mapped) throw new Error(mapped);
+  const rows = records
+    .map((row, index) => ({ row: padRow(row, headers.length), lineNo: index + 1 }))
+    .slice(mapping.header_row === false ? 0 : 1)
+    .filter(({ row }) => row.some(cell => cell.trim()));
+  if (!rows.length) throw new Error('CSV file is empty');
+  const result: ParsedBankResult = { rows: [], skipped: [], errors: [] };
+  const cell = (row: string[], name: string | undefined) => {
+    const index = columnIndex(headers, name);
+    return index < 0 ? '' : (row[index] || '');
+  };
+  for (const { row, lineNo } of rows) {
+    const currencyName = mapping.currency_column;
+    if (currencyName) {
+      const verdict = currencyVerdict(cell(row, currencyName));
+      if (verdict !== 'USD') {
+        const code = cell(row, currencyName).trim();
+        result.errors.push({
+          line: lineNo,
+          reason: verdict === 'missing'
+            ? 'missing currency. Finance records USD only.'
+            : `unsupported currency ${code || 'blank'}. Finance records USD only.`,
+        });
+        continue;
+      }
+    }
+    const description = normalizeDescription(cell(row, mapping.description_column));
+    if (!description) {
+      result.errors.push({ line: lineNo, reason: 'missing description' });
+      continue;
+    }
+    const accountName = mapping.account_column;
+    const accountCell = accountName ? cell(row, accountName).trim() : '';
+    if (accountName && !accountCell) {
+      result.errors.push({ line: lineNo, reason: 'missing account' });
+      continue;
+    }
+    try {
+      const date = parseMappedDate(cell(row, mapping.date_column), mapping.date_format);
+      const category = resolveCategory(description, mapping.category_column ? cell(row, mapping.category_column) : '');
+      const accountMask = accountCell || 'custom';
+      if (mapping.amount_mode === 'debit_credit') {
+        const debit = parseAmount(cell(row, mapping.debit_column));
+        const credit = parseAmount(cell(row, mapping.credit_column));
+        if (debit > 0 && credit > 0) {
+          result.errors.push({ line: lineNo, reason: 'a row cannot have both a debit and a credit.' });
+          continue;
+        }
+        if (debit <= 0 && credit <= 0) {
+          result.skipped.push({ line: lineNo, reason: 'zero amount is not imported' });
+          continue;
+        }
+        if (debit > 0) {
+          result.rows.push(await parsedRow('custom_csv', accountMask, date, description, category, debit, 'purchase', undefined, !!accountName));
+        } else {
+          await pushCustomCredit(result, accountMask, date, description, category, credit, lineNo, mapping, !!accountName);
+        }
+        continue;
+      }
+      const signed = parseAmount(cell(row, mapping.amount_column));
+      if (!signed) {
+        result.skipped.push({ line: lineNo, reason: 'zero amount is not imported' });
+        continue;
+      }
+      const outflow = mapping.outflow_sign === 'positive' ? signed > 0 : signed < 0;
+      if (outflow) {
+        result.rows.push(await parsedRow('custom_csv', accountMask, date, description, category, Math.abs(signed), 'purchase', undefined, !!accountName));
+      } else {
+        await pushCustomCredit(result, accountMask, date, description, category, Math.abs(signed), lineNo, mapping, !!accountName);
+      }
+    } catch (error) {
+      result.errors.push({ line: lineNo, reason: errorMessage(error) });
+    }
+  }
+  return result;
+}
+
+async function pushCustomCredit(
+  result: ParsedBankResult,
+  accountMask: string,
+  date: string,
+  description: string,
+  category: string,
+  amount: number,
+  line: number,
+  mapping: CustomCsvMapping,
+  rowAccount: boolean
+): Promise<void> {
+  if (mapping.refund_mode === 'inflow') {
+    const kind = classifyCredit(description);
+    if (kind === 'payment' || kind === 'transfer') {
+      result.skipped.push({
+        line,
+        reason: kind === 'payment' ? 'card payment is excluded from spending' : 'transfer is excluded from spending',
+        kind,
+      });
+      return;
+    }
+    result.rows.push(await parsedRow('custom_csv', accountMask, date, description, category, amount, 'refund', undefined, rowAccount));
+    return;
+  }
+  await addCreditRow(result, 'custom_csv', accountMask, date, description, category, amount, line, '', undefined, rowAccount);
 }
 
 export function getBankImporter(slug: string): BankImporter {
@@ -472,7 +780,7 @@ function readCsvWithHeader(content: string, required: string[]) {
   return { header, rows };
 }
 
-function parseCsv(content: string): string[][] {
+function parseCsv(content: string, delimiter = ','): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = '';
@@ -486,7 +794,7 @@ function parseCsv(content: string): string[][] {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (ch === ',' && !inQuotes) {
+    } else if (ch === delimiter && !inQuotes) {
       row.push(cell);
       cell = '';
     } else if ((ch === '\n' || ch === '\r') && !inQuotes) {

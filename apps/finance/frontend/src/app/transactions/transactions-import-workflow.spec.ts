@@ -1,8 +1,13 @@
 import { ChangeDetectorRef } from '@angular/core';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { Injector } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ConfirmService, ToastService } from '@vivek/ui';
 import { Observable, of, Subject, throwError } from 'rxjs';
 import { fakeAsync, tick } from '@angular/core/testing';
+import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
+import { lockFinance } from '../crypto/lock-finance';
 import {
   BankAccountRecord,
   BankImportFilePreview,
@@ -180,5 +185,61 @@ describe('TransactionsImportWorkflow F9', () => {
     expect(workflow.importStatusLabel(previewRow({ status: 'duplicate' }))).toBe('Already imported');
     expect(workflow.importStatusLabel(previewRow({ kind: 'refund' }))).toBe('Refund');
     expect(workflow.importStatusLabel(previewRow({ kind: 'purchase' }))).toBe('Purchase');
+  });
+
+  it('CSV2 does not write a custom import that has no valid rows, then commits the correction', () => {
+    const commit = jasmine.createSpy('commitBankImports').and.returnValue(of({ inserted: 1, skipped: 0, batch_id: 4 }));
+    const { workflow } = makeWorkflow({ commitBankImports: commit, saveCsvMappingProfile: () => of({ id: 1, name: 'Custom CSV', format_version: 1, record_type: 'csv_mapping_profile', mapping: { version: 1 } }) });
+    const file = { id: 1, bank_slug: 'custom_csv', file: new File(['Date,Amount'], 'mixed.csv'), csv_mapping: { version: 1 as const, date_column: 'Date', description_column: 'Description', amount_column: 'Amount', date_format: 'iso' as const, amount_mode: 'signed' as const, outflow_sign: 'negative' as const, refund_mode: 'description' as const, header_row: true } };
+    workflow.importFiles = [file];
+    workflow.importPreviews = [{
+      id: 1, bank_slug: 'custom_csv', filename: 'mixed.csv', error: null,
+      preview: {
+        bank: 'Custom CSV', filename: 'mixed.csv', rows: [], skipped: [],
+        errors: [{ line: 2, reason: 'unsupported currency EUR. Finance records USD only.' }],
+        summary: { total_parsed: 0, new: 0, duplicate: 0, skipped: 0, errors: 1 },
+      },
+    }];
+    workflow.commitImport();
+    expect(commit).not.toHaveBeenCalled();
+    expect(workflow.importError).toContain('unsupported currency EUR');
+
+    const row = previewRow({ dedupe_key: 'bus', description: 'Bus', amount: 3, kind: 'purchase' });
+    workflow.importPreviews = [{
+      id: 1, bank_slug: 'custom_csv', filename: 'mixed.csv', error: null,
+      preview: {
+        bank: 'Custom CSV', filename: 'mixed.csv', rows: [row], skipped: [], errors: [],
+        summary: { total_parsed: 1, new: 1, duplicate: 0, skipped: 0, errors: 0 },
+      },
+    }];
+    workflow.importSelected = new Set(['bus']);
+    workflow.commitImport();
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commit.calls.mostRecent().args[0]).toEqual([row]);
+  });
+
+  it('CSV3 drops custom CSV text when the vault locks', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [
+        { provide: FinanceService, useValue: { clearSessionState: () => undefined } },
+        { provide: MarketRefreshCoordinatorService, useValue: { endSession: () => undefined } },
+      ],
+    });
+    const { workflow } = makeWorkflow();
+    workflow.showImportModal = true;
+    workflow.importFiles = [{ id: 1, bank_slug: 'custom_csv', file: new File(['SECRET-NOTE-77,1'], 'secret.csv') }];
+    workflow.importPreviews = [{ id: 1, bank_slug: 'custom_csv', filename: 'secret.csv', preview: null, error: 'SECRET-NOTE-77' }];
+    try {
+      await lockFinance(TestBed.inject(Injector));
+    } catch {
+      // The snapshot drop runs before lock finishes talking to the vault.
+    }
+    expect(workflow.showImportModal).toBeFalse();
+    expect(workflow.importFiles).toEqual([]);
+    expect(workflow.importPreviews).toEqual([]);
+    workflow.ngOnDestroy();
+    TestBed.resetTestingModule();
   });
 });

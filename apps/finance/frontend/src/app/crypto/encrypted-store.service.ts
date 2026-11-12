@@ -6,6 +6,8 @@ import {
   Holding,
   JobIncome,
   Liability,
+  CsvMappingProfile,
+  CustomCsvMapping,
   ImportReceipt,
   ImportReceiptRows,
   Subscription,
@@ -257,6 +259,12 @@ export class EncryptedStoreService {
   }
   deleteImportReceipt(id: number): Promise<void> {
     return this.bankImports.deleteImportReceipt(id);
+  }
+  listCsvMappingProfiles(): Promise<CsvMappingProfile[]> {
+    return this.bankImports.listCsvMappingProfiles();
+  }
+  saveCsvMappingProfile(body: { id?: number; name: string; mapping: CustomCsvMapping }): Promise<CsvMappingProfile> {
+    return this.bankImports.saveCsvMappingProfile(body);
   }
 
   async bulkRenameTransactionCategories(renames: { fromCategory: string; toCategory: string }[]): Promise<{ updated: number; conflicts: number }> {

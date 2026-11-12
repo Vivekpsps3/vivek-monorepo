@@ -47,6 +47,35 @@ export interface ImportPreviewRow {
   review_reason?: string | null;
   merchant_suggestion?: string | null;
   merchant?: string | null;
+  /** Set only to reject a row before any write. Accepted rows omit it. */
+  currency_code?: string;
+}
+
+/** Version 1 column map for a custom CSV. Column names are headers, not file text. */
+export interface CustomCsvMapping {
+  version: 1;
+  date_column: string;
+  description_column: string;
+  amount_column?: string;
+  debit_column?: string;
+  credit_column?: string;
+  account_column?: string;
+  category_column?: string;
+  currency_column?: string;
+  date_format: 'iso' | 'mdy' | 'dmy';
+  amount_mode: 'signed' | 'debit_credit';
+  outflow_sign: 'negative' | 'positive';
+  refund_mode: 'description' | 'inflow';
+  header_row: boolean;
+}
+
+/** Encrypted vault metadata. Additive: unknown format_version values are ignored. */
+export interface CsvMappingProfile {
+  id: number;
+  record_type: 'csv_mapping_profile';
+  format_version: 1;
+  name: string;
+  mapping: CustomCsvMapping;
 }
 
 export interface ImportRowNote {
@@ -84,6 +113,11 @@ export interface BankImportFile {
   new_account_label?: string;
   /** Explicitly bind matching transactions from the legacy, unassigned importer identity. */
   map_legacy_account?: boolean;
+  /** In-memory column map for a custom CSV. Never written to localStorage or a URL. */
+  csv_mapping?: CustomCsvMapping;
+  csv_headers?: string[];
+  csv_delimiter?: ',' | ';' | '\t' | '|';
+  csv_profile_name?: string;
   coverage_start?: string;
   coverage_end?: string;
   confirm_coverage?: boolean;

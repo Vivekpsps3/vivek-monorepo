@@ -1,8 +1,13 @@
+import { CustomCsvMapping, ImportPreviewRow, ImportReceipt, Transaction } from '../models/transaction.model';
+import { EncryptedBankImportStore, type EncryptedBankImportPort } from '../crypto/encrypted-store.bank-imports';
+import { buildDedupeKey } from './bank-import.parsers';
 import {
   buildBankImportPreview,
   buildBankImportPreviews,
   commitBankImportRows,
+  customCommitRefusal,
   listClientBankImports,
+  resumeBankImportReceipt,
 } from './bank-import.util';
 
 describe('bank-import util', () => {
@@ -14,6 +19,7 @@ describe('bank-import util', () => {
       'citi',
       'bank_of_america',
       'x_money',
+      'custom_csv',
     ]);
   });
 
@@ -425,3 +431,236 @@ describe('multi-file bank import', () => {
     expect(savedTransactions.length).toBe(2);
   });
 });
+
+const signedMapping: CustomCsvMapping = {
+  version: 1,
+  date_column: 'Date',
+  description_column: 'Description',
+  amount_column: 'Amount',
+  account_column: 'Account',
+  category_column: 'Category',
+  date_format: 'iso',
+  amount_mode: 'signed',
+  outflow_sign: 'negative',
+  refund_mode: 'description',
+  header_row: true,
+};
+
+const splitMapping: CustomCsvMapping = {
+  version: 1,
+  date_column: 'Posted',
+  description_column: 'Details',
+  debit_column: 'Debit',
+  credit_column: 'Credit',
+  account_column: 'Account',
+  category_column: 'Category',
+  date_format: 'dmy',
+  amount_mode: 'debit_credit',
+  outflow_sign: 'negative',
+  refund_mode: 'description',
+  header_row: true,
+};
+
+describe('custom CSV adapter', () => {
+  const signed = [
+    'Date,Description,Amount,Account,Category,Note',
+    '2026-04-02,Market refund,12.50,Checking,Food,SECRET-NOTE-77',
+    '2026-04-03,Costco gas,-42.12,Checking,Gas,SECRET-NOTE-77',
+    '2026-04-03,Costco gas,-42.12,Checking,Gas,SECRET-NOTE-77',
+    '2026-04-04,Bus fare,-3.00,Joint,Transit,SECRET-NOTE-77',
+  ].join('\n');
+  const split = [
+    'Posted;Details;Debit;Credit;Account;Category',
+    '03/04/2026;Costco gas;42.12;;Checking;Gas',
+    '03/04/2026;Store return;;9.00;Savings;Shopping',
+  ].join('\n');
+
+  it('CSV1 maps signed and debit-credit rows, refunds, and accounts onto one dedupe policy', async () => {
+    const signedPreview = await buildBankImportPreview('custom_csv', 'signed.csv', signed, new Set(), undefined, undefined, false, new Set(), undefined, signedMapping);
+    const splitPreview = await buildBankImportPreview('custom_csv', 'split.csv', split, new Set([signedPreview.rows[1].dedupe_key]), undefined, undefined, false, new Set(), undefined, splitMapping);
+
+    expect(signedPreview.summary).toEqual({ total_parsed: 4, new: 3, duplicate: 1, skipped: 0, errors: 0 });
+    expect(signedPreview.rows.map(row => ({ description: row.description, amount: row.amount, kind: row.kind, account: row.account_display, status: row.status, category: row.category }))).toEqual([
+      { description: 'Market refund', amount: 12.5, kind: 'refund', account: 'Checking', status: 'new', category: 'Food' },
+      { description: 'Costco gas', amount: 42.12, kind: 'purchase', account: 'Checking', status: 'new', category: 'Costco' },
+      { description: 'Costco gas', amount: 42.12, kind: 'purchase', account: 'Checking', status: 'duplicate', category: 'Costco' },
+      { description: 'Bus fare', amount: 3, kind: 'purchase', account: 'Joint', status: 'new', category: 'Transit' },
+    ]);
+    expect(signedPreview.rows[1].dedupe_key).toBe(await buildDedupeKey('custom_csv', 'Checking', '2026-04-03', 42.12, 'Costco gas'));
+    expect(splitPreview.rows[0].status).toBe('duplicate');
+    expect(splitPreview.rows[0].dedupe_key).toBe(signedPreview.rows[1].dedupe_key);
+    expect(splitPreview.rows[1]).toEqual(jasmine.objectContaining({
+      date: '2026-04-03', amount: 9, kind: 'refund', account_display: 'Savings', description: 'Store return',
+    }));
+    expect(JSON.stringify(signedPreview)).not.toContain('SECRET-NOTE-77');
+  });
+
+  it('CSV2 rejects foreign currency, empty files, and wrong columns without mixing totals', async () => {
+    const mixed = [
+      'Date,Description,Amount,Currency',
+      '2026-04-05,Taxi,-10.00,EUR',
+      '2026-04-06,Bus,-3.00,USD',
+      '2026-04-07,Tip,-1.00,',
+    ].join('\n');
+    const mapping: CustomCsvMapping = {
+      ...signedMapping, account_column: undefined, category_column: undefined, currency_column: 'Currency',
+    };
+    const preview = await buildBankImportPreview('custom_csv', 'mixed.csv', mixed, new Set(), 'Cash', 'cash-1', false, new Set(), undefined, mapping);
+    expect(preview.rows.map(row => row.description)).toEqual(['Bus']);
+    expect(preview.rows.reduce((sum, row) => sum + row.amount, 0)).toBe(3);
+    expect(preview.errors.map(note => note.reason)).toEqual([
+      'unsupported currency EUR. Finance records USD only.',
+      'missing currency. Finance records USD only.',
+    ]);
+    expect(JSON.stringify(preview.rows)).not.toContain('Taxi');
+    expect(preview.rows.some(row => row.amount === 10)).toBeFalse();
+
+    const bareMapping: CustomCsvMapping = { ...signedMapping, account_column: undefined, category_column: undefined };
+    await expectAsync(buildBankImportPreview('custom_csv', 'empty.csv', 'Date,Description,Amount\n', new Set(), 'Cash', 'cash-1', false, new Set(), undefined, bareMapping))
+      .toBeRejectedWithError('CSV file is empty');
+    await expectAsync(buildBankImportPreview('custom_csv', 'wrong.csv', signed, new Set(), 'Cash', 'cash-1', false, new Set(), undefined, { ...signedMapping, date_column: 'When' }))
+      .toBeRejectedWithError('Choose a date column that exists in this file.');
+
+    const malformed = await buildBankImportPreview('custom_csv', 'bad.csv', 'Date,Description,Amount,Account\nnot-a-date,Nope,-5,Checking', new Set(), undefined, undefined, false, new Set(), undefined, { ...signedMapping, category_column: undefined });
+    expect(malformed.rows).toEqual([]);
+    expect(malformed.errors[0].reason).toContain('Unrecognized date');
+
+    const corrected = await buildBankImportPreview('custom_csv', 'mixed.csv', mixed, new Set(), 'Cash', 'cash-1', false, new Set(), undefined, { ...mapping, currency_column: undefined });
+    expect(corrected.rows.map(row => row.amount).sort((a, b) => a - b)).toEqual([1, 3, 10]);
+    const calls = { transactions: 0, writes: 0 };
+    const store = {
+      getTransactions: async (): Promise<Transaction[]> => { calls.transactions += 1; return []; },
+      addTransaction: async (row: ImportPreviewRow): Promise<Transaction> => {
+        calls.writes += 1;
+        return { ...row, id: calls.writes, type: 'expense' } as unknown as Transaction;
+      },
+      addImportReceiptWithRows: jasmine.createSpy('addImportReceiptWithRows'),
+    };
+    await expectAsync(commitBankImportRows(store, [{ ...corrected.rows[0], currency_code: 'EUR' }])).toBeRejectedWithError('Unsupported currency EUR. Finance records USD only.');
+    expect(calls).toEqual({ transactions: 0, writes: 0 });
+    expect(store.addImportReceiptWithRows).not.toHaveBeenCalled();
+    expect(customCommitRefusal(
+      [{ id: 1, bank_slug: 'custom_csv' }],
+      [{ id: 1, bank_slug: 'custom_csv', filename: 'mixed.csv', error: null, preview }],
+      0,
+    )).toContain('unsupported currency EUR');
+
+    const committed = await commitBankImportRows(store, corrected.rows.filter(row => row.description === 'Bus'), {
+      bank_slugs: ['custom_csv'], filenames: ['mixed.csv'],
+    });
+    expect(committed.inserted).toBe(1);
+    expect(calls.writes).toBe(1);
+  });
+
+  it('CSV3 keeps a failed custom checkpoint uncommitted, resumes, and undo keeps the edited row', async () => {
+    const harness = customHarness(0);
+    const preview = await buildBankImportPreview('custom_csv', 'signed.csv', signed, new Set(), undefined, undefined, false, new Set(), undefined, signedMapping);
+    const selected = preview.rows.filter(row => row.status === 'new');
+    await expectAsync(commitBankImportRows(harness.store, selected, {
+      bank_slugs: ['custom_csv'], filenames: ['signed.csv'],
+      coverage: [{ account_display: 'Checking', account_key: 'checking', start_date: '2026-04-01', end_date: '2026-04-30', confirmed: true }],
+    })).toBeRejectedWithError('checkpoint failed');
+    expect(harness.transactions).toEqual([]);
+    expect(harness.importRows.some(row => row.status === 'staging')).toBeTrue();
+    expect(JSON.stringify(harness.importRows)).not.toContain('SECRET-NOTE-77');
+    const staged = harness.importRows.find(row => row.record_type === 'bank_receipt');
+    expect(staged).toBeDefined();
+    await expectAsync(resumeBankImportReceipt(harness.store, staged ? staged.id : 0)).toBeRejectedWithError(/missing staged rows/);
+
+    const live = customHarness(null);
+    let completeWrites = 0;
+    const conflicting = {
+      ...live.store,
+      updateImportReceipt: async (id: number, patch: Partial<ImportReceipt>) => {
+        if (patch.status === 'complete' && completeWrites++ === 0) throw new Error('session changed');
+        return live.store.updateImportReceipt(id, patch);
+      },
+    };
+    await expectAsync(commitBankImportRows(conflicting, selected, {
+      bank_slugs: ['custom_csv'], filenames: ['signed.csv'],
+      coverage: [{ account_display: 'Checking', account_key: 'checking', start_date: '2026-04-01', end_date: '2026-04-30', confirmed: true }],
+    })).toBeRejectedWithError('session changed');
+    expect(live.transactions.length).toBe(selected.length);
+    const partial = live.importRows.find(row => row.record_type === 'bank_receipt');
+    expect(partial?.status).toBe('partial');
+    completeWrites = 99;
+    const resumed = await resumeBankImportReceipt(live.store, partial ? partial.id : 0);
+    expect(resumed.inserted).toBe(0);
+    expect(live.transactions.length).toBe(selected.length);
+
+    const finished = customHarness(null);
+    const result = await commitBankImportRows(finished.store, selected, {
+      bank_slugs: ['custom_csv'], filenames: ['signed.csv'],
+      coverage: [{ account_display: 'Checking', account_key: 'checking', start_date: '2026-04-01', end_date: '2026-04-30', confirmed: true }],
+    });
+    finished.transactions[0].import_edited = true;
+    finished.transactions[0].merchant = 'Edited shop';
+    const receiptId = result.receipt_id;
+    expect(receiptId).toBeTruthy();
+    const undone = await finished.bank.undoImportReceipt(receiptId || 0);
+    expect(undone.edited).toBe(1);
+    expect(undone.removed).toBe(selected.length - 1);
+    expect(finished.transactions.map(row => row.description)).toEqual([selected[0].description]);
+    const receipt = await finished.bank.getImportReceipt(receiptId || 0);
+    expect(receipt?.status).toBe('withdrawn');
+    expect(receipt?.coverage).toEqual([]);
+    expect(JSON.stringify(finished.importRows)).not.toContain('SECRET-NOTE-77');
+  });
+});
+
+type StoredImport = { id: number; record_type?: string; status?: string; receipt_id?: number };
+
+function customHarness(failCheckpoint: number | null) {
+  const importRows: StoredImport[] = [];
+  const transactions: Transaction[] = [];
+  let nextId = 100;
+  const remember = (row: StoredImport) => {
+    const index = importRows.findIndex(item => item.id === row.id);
+    if (index >= 0) importRows[index] = row;
+    else importRows.push(row);
+  };
+  const port: EncryptedBankImportPort = {
+    ensureLoaded: async () => undefined,
+    getImportRows: <T>() => importRows as T[],
+    allocateId: () => ++nextId,
+    upsertImportRecord: async <T extends { id?: number }>(payload: T) => {
+      const row = { ...payload, id: payload.id ?? ++nextId } as T & StoredImport;
+      remember(row);
+      return row;
+    },
+    removeImportRecord: async (id: number) => {
+      const index = importRows.findIndex(item => item.id === id);
+      if (index >= 0) importRows.splice(index, 1);
+    },
+    savePreparedRecords: async <T extends { id: number }>(records: T[]) => {
+      if (failCheckpoint === 0) throw new Error('checkpoint failed');
+      for (const record of records) remember(record as T & StoredImport);
+      return records;
+    },
+    getTransactions: async () => transactions,
+    deleteTransactions: async (ids: number[]) => {
+      for (const id of ids) {
+        const index = transactions.findIndex(row => row.id === id);
+        if (index >= 0) transactions.splice(index, 1);
+      }
+    },
+    sessionToken: () => 1,
+    assertSession: () => undefined,
+    runRecordUpdate: async (_collection, _id, _generation, update) => update(),
+  };
+  const bank = new EncryptedBankImportStore(port);
+  const store = {
+    getTransactions: async () => transactions,
+    addTransaction: async (row: ImportPreviewRow) => {
+      const saved = { ...row, id: transactions.length + 1, type: row.kind === 'income' ? 'income' : 'expense' } as unknown as Transaction;
+      transactions.push(saved);
+      return saved;
+    },
+    addImportReceiptWithRows: (body: Omit<ImportReceipt, 'id'>, rows: ImportPreviewRow[]) => bank.addImportReceiptWithRows(body, rows),
+    saveImportReceiptRows: (id: number, rows: ImportPreviewRow[]) => bank.saveImportReceiptRows(id, rows),
+    getImportReceiptRows: (id: number) => bank.getImportReceiptRows(id),
+    getImportReceipt: (id: number) => bank.getImportReceipt(id),
+    updateImportReceipt: (id: number, patch: Partial<ImportReceipt>) => bank.updateImportReceipt(id, patch),
+  };
+  return { bank, store, importRows, transactions };
+}
