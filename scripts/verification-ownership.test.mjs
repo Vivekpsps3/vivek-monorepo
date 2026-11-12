@@ -226,7 +226,7 @@ test('LOCAL3: concurrent workers keep isolated databases and sessions, and a fai
     const cleanEnv = { ...process.env };
     delete cleanEnv.NODE_TEST_CONTEXT;
     for (const attempt of [1, 2]) {
-      const result = spawnSync(process.execPath, ['--test', failing], { encoding: 'utf8', env: cleanEnv });
+      const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', failing], { encoding: 'utf8', env: cleanEnv });
       assert.notEqual(result.status, 0, `attempt ${attempt} should fail`);
       assert.match(result.stdout, /# fail 1/);
       assert.equal(result.stdout.split('not ok').length - 1, 1);

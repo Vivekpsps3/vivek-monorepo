@@ -39,7 +39,7 @@
 | Command | Result |
 | --- | --- |
 | `python3 planning/implementation/plan.py launch VER-04` | prints `make test-fast` once, then `make lint-python`, `make typecheck-python`, `make docker-build`, `make test-suite-routes`, `make db-validate-seeded`. No standalone manifest command. |
-| `make test-fast` | PASS. 21.52s. Unittest 98 OK. Node `--test` 21 pass, 0 fail, duration_ms 4545.91. Includes release-manifest and verification-ownership. |
+| `make test-fast` | PASS. First product diff 21.52s, unittest 98 OK, node 21 pass, duration_ms 4545.91. CI Backend on `9b285c0` failed: the runner printed spec `ℹ fail 1` instead of TAP `# fail 1`. The nested check now uses `--test-reporter=tap` and still requires one failure and no retry. Re-run after the pin: PASS, 23.74s, unittest 98 OK, node 21 pass, 0 fail, duration_ms 5550.66817. |
 | `node scripts/test-release-manifest.mjs` | PASS. 2 pass, 0.18s. Direct run still executes once. Not a second scheduled gate. |
 | `make lint-python` | PASS. 226 files formatted. ruff 101. suppressions 6. |
 | `make typecheck-python` | PASS. mypy 87. |
