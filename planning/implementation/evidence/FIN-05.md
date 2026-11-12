@@ -53,8 +53,8 @@
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending the commit that contains this file. The pull request will use `Closes #224` only.
-- Roadmap #134 append-only status-note URL: pending the pull request.
-- Merged/activation status: not merged. Not a deployment.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/356 (`Closes #224` only). Parent #65 and retained #128 are named in the body and stay open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6812213050
+- Merged/activation status: pull request #356 is open. Not merged. Not a deployment.
 - Remaining external prerequisites or approved scope decisions: #65 and #128 stay open. FIN-04 owns the custom CSV adapter.
-- Next actor: open the pull request, append the #134 note, wait for Backend, Frontend, Unified Site Release, and Playwright, then squash-merge.
+- Next actor: wait for Backend, Frontend, Unified Site Release, and Playwright, then squash-merge.
