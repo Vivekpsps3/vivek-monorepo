@@ -28,6 +28,10 @@ async function choose(dialog: Locator, label: string, value: string): Promise<vo
   await control.selectOption({ label: value });
 }
 
+function commitAlert(dialog: Locator): Locator {
+  return dialog.locator('.import-preview-actions').locator('xpath=preceding-sibling::*[1]');
+}
+
 test('CSV1 maps signed and debit-credit files, commits the selected rows, and reloads the receipt', async ({ page }) => {
   const signed = [
     'Date,Description,Amount,Account,Category,Note',
@@ -117,7 +121,7 @@ test('CSV2 shows actionable currency and mapping errors and commits only the cor
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
   await expect(dialog.locator('.import-file-preview')).toContainText('That file has no transactions in it.');
   await dialog.getByRole('button', { name: 'Nothing importable in these files', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText('no transactions');
+  await expect(commitAlert(dialog)).toContainText('no transactions');
   expect(vault.data('transactions')).toEqual([]);
   expect(vault.data('import_batches')).toEqual([]);
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -136,7 +140,7 @@ test('CSV2 shows actionable currency and mapping errors and commits only the cor
   await dialog.getByLabel('Account name', { exact: true }).fill('Cash');
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
   await dialog.getByRole('button', { name: 'Nothing importable in these files', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toBeVisible();
+  await expect(commitAlert(dialog)).toContainText('unsupported currency EUR');
   expect(vault.data('transactions')).toEqual([]);
   expect(vault.data('import_batches').filter(row => row.record_type === 'bank_receipt')).toEqual([]);
 
