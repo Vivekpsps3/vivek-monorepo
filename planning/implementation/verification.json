@@ -10,5 +10,5 @@
   "media_back": ["make lint-python", "make typecheck-python", "./scripts/coverage-gate.sh media", "node --test apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs"],
   "server_back": ["make lint-python", "make typecheck-python", "./scripts/coverage-gate.sh server"],
   "schema": ["make lint-python", "make typecheck-python", "make db-check", "make db-validate-seeded"],
-  "ops": ["make lint-python", "make typecheck-python", "node scripts/test-release-manifest.mjs", "make docker-build", "make test-suite-routes", "make db-validate-seeded"]
+  "ops": ["make lint-python", "make typecheck-python", "make docker-build", "make test-suite-routes", "make db-validate-seeded"]
 }

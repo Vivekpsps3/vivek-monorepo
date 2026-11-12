@@ -14,7 +14,7 @@ Run the affected checks locally before opening a PR. CI is the second run. The s
 | All browser projects including cross-app/a11y | `make build-frontends` then `npm run e2e` |
 | One domain's browser checks | `npx playwright test --project=finance`, `--project=travel`, or `--project=media` |
 | Root/public acceptance | `npx playwright test --project=suite` |
-| Release manifest | `node --test scripts/test-release-manifest.mjs` |
+| Release manifest | Once inside `make test-fast` (`scripts/test-release-manifest.mjs`). Not a second command. |
 | Built image and assembled routes | `make docker-build test-suite-routes` |
 | Migration/data preservation | `bash scripts/validate-seeded-adoption.sh` |
 | Production browser policy | `SITE_TEST_URL=http://127.0.0.1:PORT node scripts/test-site-browser.mjs` against an empty disposable image database |

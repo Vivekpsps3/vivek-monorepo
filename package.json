@@ -8,8 +8,7 @@
     "test:site": "SUITE_TEST_PROJECT=personal-website ng test personal-website",
     "test:web": "SUITE_TEST_PROJECT=web ng test web",
     "lint": "eslint apps packages",
-    "e2e": "playwright test",
-    "test:release-manifest": "node scripts/test-release-manifest.mjs"
+    "e2e": "playwright test"
   },
   "private": true,
   "dependencies": {
