@@ -2,7 +2,7 @@ import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { openTripAdd, openTripFromList, ptoChoice, runRowAction } from './dates.mjs';
+import { openTripAdd, openTripFromList, ptoOption, runRowAction } from './dates.mjs';
 import AxeBuilder from '@axe-core/playwright';
 
 const tile = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
@@ -256,15 +256,14 @@ test('missing map module reload protects unsaved PTO and works after the module 
   await expect(mapRegion(page).getByRole('status')).toContainText('The map could not start');
   await expect(mapRegion(page).getByRole('link', { name: 'Open map', exact: false })).toBeVisible();
   await page.getByText('PTO · 3 days', { exact: true }).click();
-  const pto = ptoChoice(page, '2026-11-01');
-  await pto.selectOption({ label: 'PTO' });
+  await ptoOption(page, '2026-11-01', 'Full').click();
   const warning = page.waitForEvent('dialog');
   const reload = mapRegion(page).getByRole('button', { name: 'Reload map page' }).click();
   const prompt = await warning;
   expect(prompt.type()).toBe('beforeunload');
   await prompt.dismiss();
   await reload;
-  await expect(pto.locator('option:checked')).toHaveText('PTO');
+  await expect(ptoOption(page, '2026-11-01', 'Full')).toBeChecked();
   await expect(mapRegion(page).getByRole('button', { name: 'Reload map page' })).toBeVisible();
   missing = false;
   page.once('dialog', dialog => dialog.accept());

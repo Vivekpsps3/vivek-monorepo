@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { expectSectionHeading, openTripAdd, ptoChoice } from './dates.mjs';
+import { expectSectionHeading, openTripAdd, ptoOption } from './dates.mjs';
 
 async function trip(request, extra = {}) {
   const response = await request.post('/travel/api/trips', { data: {
@@ -212,11 +212,11 @@ test('legacy aggregate PTO stays recorded until a confirmed dated allocation and
   expect(created.pto_mode).toBe('legacy');
   await page.goto('/travel/trips/' + created.id);
   await page.getByText('PTO · 1.5 days', { exact: true }).click();
-  await expect(page.locator('.pto-dates select')).toHaveCount(7);
-  await ptoChoice(page, '2026-10-26').selectOption({ label: 'PTO' });
+  await expect(page.locator('.pto-dates [role="radiogroup"]')).toHaveCount(7);
+  await ptoOption(page, '2026-10-26', 'Full').click();
   await page.getByRole('navigation', { name: 'Travel sections', exact: true }).getByRole('link', { name: 'PTO', exact: true }).click();
   await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
-  await expect(page.locator('.pto-dates select').nth(2).locator('option:checked')).toHaveText('PTO');
+  await expect(ptoOption(page, '2026-10-26', 'Full')).toBeChecked();
   expect((await (await request.get('/travel/api/trips/' + created.id)).json()).pto_days_effective).toBe('1.5');
   await page.getByRole('button', { name: 'Save PTO dates' }).click();
   await page.getByRole('button', { name: 'Keep legacy total' }).click();

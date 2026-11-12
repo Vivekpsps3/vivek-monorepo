@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { formatDateRange, formatDay, ptoChoice, tripHeader } from './dates.mjs';
+import { formatDateRange, formatDay, ptoOption, tripHeader } from './dates.mjs';
 
 test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
@@ -93,8 +93,8 @@ test('a return before departure stays on the draft', async ({ page }) => {
 test('a leap-day trip keeps February 29 and weekday PTO across March', async ({ page }) => {
   await plan(page, '2028-02-29', '2028-03-01', 'Reykjavik');
   await page.getByText('Time off', { exact: true }).click();
-  await expectChoice(page, '2028-02-29', 'PTO');
-  await expectChoice(page, '2028-03-01', 'PTO');
+  await expectChoice(page, '2028-02-29', 'Full');
+  await expectChoice(page, '2028-03-01', 'Full');
   await expect(page.getByText('2 PTO days selected.')).toBeVisible();
   await page.getByRole('button', { name: 'Save trip', exact: true }).click();
   const saved = header(page, 'Reykjavik');
@@ -102,20 +102,20 @@ test('a leap-day trip keeps February 29 and weekday PTO across March', async ({ 
   await expect(saved).toContainText('· 1 night ·');
   await expect(saved).toContainText('2 PTO days');
   await page.getByText('PTO · 2 days', { exact: true }).click();
-  await expectChoice(page, '2028-02-29', 'PTO');
-  await expectChoice(page, '2028-03-01', 'PTO');
+  await expectChoice(page, '2028-02-29', 'Full');
+  await expectChoice(page, '2028-03-01', 'Full');
 });
 
 test('a half-day PTO choice saves as 0.5', async ({ page }) => {
   await plan(page, '2026-12-15', '2026-12-15', 'Coimbra');
   await page.getByText('Time off', { exact: true }).click();
-  await ptoChoice(page, '2026-12-15').selectOption({ label: 'Half day' });
-  await expectChoice(page, '2026-12-15', 'Half day');
+  await ptoOption(page, '2026-12-15', 'Half').click();
+  await expectChoice(page, '2026-12-15', 'Half');
   await expect(page.getByText('0.5 PTO days selected.')).toBeVisible();
   await page.getByRole('button', { name: 'Save trip', exact: true }).click();
   await expect(header(page, 'Coimbra')).toContainText('0.5 PTO days');
   await page.getByText('PTO · 0.5 days', { exact: true }).click();
-  await expectChoice(page, '2026-12-15', 'Half day');
+  await expectChoice(page, '2026-12-15', 'Half');
 });
 
 async function plan(page, start, end, city) {
@@ -130,7 +130,7 @@ function header(page, title) {
 }
 
 async function expectChoice(page, day, label) {
-  await expect(ptoChoice(page, day).locator('option:checked')).toHaveText(label);
+  await expect(ptoOption(page, day, label)).toBeChecked();
 }
 
 async function createTrip(request, title, start, end) {

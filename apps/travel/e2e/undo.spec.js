@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { ptoChoice, removeRow } from './dates.mjs';
+import { ptoOption, removeRow } from './dates.mjs';
 
 const cases = [
   ['stays', 'destination', { city: 'Restore destination', arrive_on: '2026-12-01', leave_on: '2026-12-03', notes: 'Keep lodging note' }],
@@ -51,8 +51,8 @@ test('PTO typed during a save stays a draft until the next save', async ({ page,
   const trip = await (await request.post('/travel/api/trips', { data: { title: 'PTO save race', start_date: '2026-12-01', end_date: '2026-12-02' } })).json();
   await page.goto('/travel/trips/' + trip.id);
   await page.locator('summary').filter({ hasText: /^PTO ·/ }).click();
-  const choice = ptoChoice(page, '2026-12-01');
-  await choice.selectOption({ label: 'Half day' });
+  const half = ptoOption(page, '2026-12-01', 'Half');
+  await half.click();
   let release;
   const gate = new Promise(resolve => { release = resolve; });
   let stored;
@@ -66,10 +66,10 @@ test('PTO typed during a save stays a draft until the next save', async ({ page,
   });
   await page.getByRole('button', { name: 'Save PTO dates' }).click();
   await saved;
-  await choice.selectOption({ label: 'Not PTO' });
+  await ptoOption(page, '2026-12-01', 'None').click();
   release();
   await expect(page.getByRole('button', { name: 'Save PTO dates' })).toBeEnabled();
-  await expect(choice.locator('option:checked')).toHaveText('Not PTO');
+  await expect(ptoOption(page, '2026-12-01', 'None')).toBeChecked();
   let persisted = await (await request.get('/travel/api/trips/' + trip.id)).json();
   expect(Number(persisted.pto_dates.find(day => day.on_date === '2026-12-01').amount)).toBe(0.5);
   await page.getByRole('button', { name: 'Save PTO dates' }).click();

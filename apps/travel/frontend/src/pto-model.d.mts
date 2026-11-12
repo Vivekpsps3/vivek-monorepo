@@ -85,5 +85,17 @@ export function policyBody(
   accrual_anchor: string | null;
   accrual_version: number;
 };
+export const ALLOCATION_CHOICES: { id: string; label: string; amount: string }[];
+export function allocationText(raw: unknown): string;
+export function defaultAllocation(iso: string): string;
+export function allocationDraft(
+  dates: readonly string[] | null | undefined,
+  amounts: Readonly<Record<string, string | number>> | null | undefined,
+  enabled?: boolean,
+): {
+  total: string;
+  payload: { on_date: string; amount: string }[];
+  rows: { on_date: string; amount: string; choice: string; label: string }[];
+};
 export function bucketLabel(bucket: string): string;
 export function chipText(entry: { trip_id?: number | null; bucket?: string }): string;

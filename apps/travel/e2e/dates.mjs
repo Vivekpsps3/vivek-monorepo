@@ -3,10 +3,13 @@ import { formatDateRange, formatDay } from '../../../packages/browser/runtime/ca
 
 export { formatDateRange, formatDay };
 
-/** Saved trips label each day with formatDay. The new-trip form still uses the ISO day. */
+/** Both trip forms label each day with formatDay and offer Full, Half, and None. */
 export function ptoChoice(page, day) {
-  return page.getByRole('combobox', { name: formatDay(day), exact: true })
-    .or(page.getByRole('combobox', { name: day, exact: true }));
+  return page.getByRole('radiogroup', { name: formatDay(day), exact: true });
+}
+
+export function ptoOption(page, day, label) {
+  return ptoChoice(page, day).getByRole('radio', { name: label, exact: true });
 }
 
 /** Section titles stay in the accessibility tree and are clipped out of view. */

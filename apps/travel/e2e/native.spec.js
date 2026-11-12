@@ -1,6 +1,6 @@
 import {expect,test} from '../../../tests/e2e/fixtures';
 import AxeBuilder from '@axe-core/playwright';
-import {expectSectionHeading,openTripAdd,openTripFromList,ptoChoice} from './dates.mjs';
+import {expectSectionHeading,openTripAdd,openTripFromList,ptoOption} from './dates.mjs';
 
 test.beforeEach(async({request})=>{expect((await request.post('/e2e/reset')).ok()).toBeTruthy();});
 
@@ -36,7 +36,7 @@ test('quiet itinerary, manual transport, and per-date PTO survive reload',async(
  await page.getByRole('combobox',{name:'Mode',exact:true}).selectOption('drive');await page.getByLabel('From',{exact:true}).fill('Home');await page.getByLabel('To',{exact:true}).fill('Kyoto');
  await page.getByRole('button',{name:'Save transport',exact:true}).click();await expect(page.getByRole('heading',{name:'Drive',exact:true})).toBeVisible();
  await openTripAdd(page,'Activity');await page.getByLabel('Activity title').fill('Museum');await page.getByRole('button',{name:'Save activity'}).click();await expect(page.getByText('Museum',{exact:false}).first()).toBeVisible();
- await page.getByText('PTO · 2 days',{exact:true}).click();await ptoChoice(page,'2026-11-06').selectOption({label:'Not PTO'});await page.getByRole('button',{name:'Save PTO dates'}).click();
+ await page.getByText('PTO · 2 days',{exact:true}).click();await ptoOption(page,'2026-11-06','None').click();await page.getByRole('button',{name:'Save PTO dates'}).click();
  await page.reload();const saved=await(await request.get('/travel/api/trips/'+created.id)).json();expect(saved.pto_days_effective).toBe('1');expect(saved.transports[0].mode).toBe('drive');expect(saved.days.flatMap(day=>day.items).map(item=>item.title)).toEqual(['Museum']);
 });
 

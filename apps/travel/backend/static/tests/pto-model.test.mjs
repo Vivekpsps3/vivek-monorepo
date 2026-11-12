@@ -11,8 +11,12 @@ import {
   START_COPY,
   YEAR_COPY,
   asOfCopy,
+  ALLOCATION_CHOICES,
+  allocationDraft,
+  allocationText,
   blurHours,
   blurHoursPerDay,
+  defaultAllocation,
   commitHour,
   entryErrors,
   fieldErrorMap,
@@ -181,4 +185,48 @@ test("a schedule needs an explicit anchor and daily does not send one", () => {
   const daily = policyBody({ ...dated, accrual_mode: "daily" }, null, new Set());
   assert.equal(daily.accrual_mode, "daily");
   assert.equal(daily.accrual_anchor, null);
+});
+
+const PICK_DAYS = ["2026-12-14", "2026-12-15", "2026-12-16"];
+
+test("Full, Half, and None stay exact and a fraction is not quarter-rounded", () => {
+  assert.deepEqual(
+    ALLOCATION_CHOICES.map((choice) => [choice.label, choice.amount]),
+    [["Full", "1"], ["Half", "0.5"], ["None", "0"]],
+  );
+  assert.equal(defaultAllocation("2026-12-14"), "1");
+  assert.equal(defaultAllocation("2026-11-07"), "0");
+  assert.equal(allocationText("1.00"), "1");
+  assert.equal(allocationText("0.50"), "0.5");
+  assert.equal(allocationText("0.2500"), "0.25");
+  assert.equal(allocationText("0.10"), "0.1");
+  assert.equal(allocationText("0.125"), "0.125");
+  assert.equal(allocationText("0.3"), "0.3");
+  assert.equal(blurHours("0.3").text, "0.25");
+  assert.notEqual(allocationText("0.3"), blurHours("0.3").text);
+  const same = { "2026-12-14": "1", "2026-12-15": "0.5", "2026-12-16": "0" };
+  const draft = allocationDraft(PICK_DAYS, same);
+  assert.equal(draft.total, "1.5");
+  assert.deepEqual(draft.payload, [
+    { on_date: "2026-12-14", amount: "1" },
+    { on_date: "2026-12-15", amount: "0.5" },
+    { on_date: "2026-12-16", amount: "0" },
+  ]);
+  assert.deepEqual(draft.rows.map((row) => row.choice), ["full", "half", "none"]);
+  assert.deepEqual(allocationDraft(PICK_DAYS, same), draft);
+  const fraction = allocationDraft(PICK_DAYS, { "2026-12-14": "0.25", "2026-12-15": "0.1", "2026-12-16": "0.1" });
+  assert.equal(fraction.total, "0.45");
+  assert.equal(fraction.rows[0].choice, "exact");
+  assert.equal(fraction.rows[0].label, "0.25");
+  assert.equal(fraction.rows[0].amount, "0.25");
+  assert.equal(allocationDraft(["2026-12-14"], { "2026-12-14": "0.1", "2026-12-15": "1", "2026-12-16": "1" }).total, "0.1");
+  assert.equal(allocationDraft(PICK_DAYS, { "2026-12-14": "0.1", "2026-12-15": "0.1", "2026-12-16": "0.1" }).total, "0.3");
+  const failed = allocationDraft(PICK_DAYS, { "2026-12-14": "0.25", "2026-12-15": "0.5", "2026-12-16": "0.1" });
+  const retried = allocationDraft(PICK_DAYS, { "2026-12-14": "0.25", "2026-12-15": "0.5", "2026-12-16": "0" });
+  assert.equal(failed.payload[0].amount, "0.25");
+  assert.notDeepEqual(failed.payload, retried.payload);
+  assert.equal(retried.payload[0].amount, "0.25");
+  assert.equal(retried.payload[2].amount, "0");
+  assert.equal(allocationDraft(PICK_DAYS, same, false).total, "0");
+  assert.equal(allocationDraft(PICK_DAYS, same, false).payload[1].amount, "0.5");
 });
