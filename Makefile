@@ -59,7 +59,7 @@ test-fast:
 	python3 scripts/check-finance-ux-f1.py
 	python3 -m unittest scripts/test_quality_ratchet.py scripts/test_check_shared_boundaries.py scripts/test_migration_preservation.py scripts/test_deploy_site.py scripts/test_backup_retention.py scripts/test_backup_offhost.py ops/actions-runner/test_routing.py
 	node scripts/check-e2e-discovery.mjs
-	node --test scripts/serve-spa.test.mjs scripts/composition-path.test.mjs scripts/check-e2e-discovery.test.mjs
+	node --test scripts/serve-spa.test.mjs scripts/composition-path.test.mjs scripts/check-e2e-discovery.test.mjs scripts/test-release-manifest.mjs scripts/verification-ownership.test.mjs
 
 test-backend:
 	./scripts/coverage-gate.sh finance
@@ -68,8 +68,8 @@ test-backend:
 	./scripts/coverage-gate.sh server
 
 test-frontend:
-	npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI
-	npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI
+	npm run test:finance -- --watch=false --browsers=ChromeHeadlessCI
+	npm run test:site -- --watch=false --browsers=ChromeHeadlessCI
 	npm run test:web -- --watch=false --browsers=ChromeHeadlessCI
 
 # Fast local iteration only — NOT a gate. Same suites and specs as
@@ -82,8 +82,9 @@ test-frontend-quick:
 	SUITE_KARMA_COVERAGE=0 npm run test:web -- --watch=false --browsers=ChromeHeadlessCI --code-coverage=false
 
 # One canonical local verification: every gate exactly once (fast checks,
-# lint, typecheck, backend coverage gates, frontend Karma gates, node
-# suites). `make test` remains the test-only subset.
+# including the release-manifest fixtures, lint, typecheck, backend
+# coverage gates, frontend Karma gates, node suites). `make test` remains
+# the test-only subset. `test-frontend-quick` is not a gate.
 verify-fast:
 	$(MAKE) test-fast
 	$(MAKE) lint
