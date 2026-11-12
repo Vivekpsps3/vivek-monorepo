@@ -460,3 +460,28 @@
   color: var(--text-secondary);
   font-size: var(--text-sm);
 }
+
+.media-page .popular {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+  min-width: 0;
+}
+.media-page .popular h2,
+.media-page .popular h3 {
+  margin: 0;
+}
+.media-page .popular-list,
+.media-page .popular-skeletons {
+  display: grid;
+  gap: 1rem;
+}
+.media-page .popular-skeleton {
+  height: 5.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+.media-page .popular-error p {
+  margin: 0 0 0.75rem;
+}

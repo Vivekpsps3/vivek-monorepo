@@ -8,30 +8,17 @@ export type PopularState = "idle" | "loading" | "ready" | "error";
 @Injectable({ providedIn: "root" })
 export class PopularMoviesService {
   private readonly http = inject(HttpClient);
+  private request = 0;
   readonly state = signal<PopularState>("idle");
   readonly rows = signal<SearchHit[]>([]);
   readonly error = signal("");
   load(): void {
     if (this.state() === "loading" || this.state() === "ready") return;
-    this.state.set("loading");
-    this.error.set("");
-    this.http
-      .get<{ results: SearchHit[] }>("/media/api/movies")
-      .subscribe({
-        next: (r) => {
-          this.rows.set(cleanPopular(r.results));
-          this.state.set("ready");
-        },
-        error: (e) => {
-          this.error.set(
-            popularError(e instanceof HttpErrorResponse ? e.status : 0),
-          );
-          this.state.set("error");
-        },
-      });
+    this.fetch();
   }
   retry(): void {
-    this.load();
+    if (this.state() === "loading") return;
+    this.fetch();
   }
   markSaved(key: string, savedId: number): void {
     this.rows.update((rows) =>
@@ -41,5 +28,24 @@ export class PopularMoviesService {
           : row,
       ),
     );
+  }
+  private fetch(): void {
+    const request = ++this.request;
+    this.state.set("loading");
+    this.error.set("");
+    this.http.get<{ results?: unknown } | null>("/media/api/movies").subscribe({
+      next: (body) => {
+        if (request !== this.request) return;
+        this.rows.set(cleanPopular(body?.results));
+        this.state.set("ready");
+      },
+      error: (error) => {
+        if (request !== this.request) return;
+        this.error.set(
+          popularError(error instanceof HttpErrorResponse ? error.status : 0),
+        );
+        this.state.set("error");
+      },
+    });
   }
 }
