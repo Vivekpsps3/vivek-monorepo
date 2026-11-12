@@ -30,6 +30,12 @@ import {
   UiPageHeaderComponent,
 } from "@vivek/ui";
 import { MapComponent, TravelPlace } from "./map.component";
+import { PtoDaysComponent } from "./pto-days.component";
+import {
+  allocationDraft,
+  allocationText,
+  defaultAllocation,
+} from "./pto-model.mjs";
 import { TransportEditorComponent } from "./transport-editor.component";
 import { TripCostsComponent } from "./trip-costs.component";
 import { TripRemindersComponent } from "./trip-reminders.component";
@@ -66,6 +72,7 @@ import { fieldErrors } from "./validate.mjs";
     TransportEditorComponent,
     TripCostsComponent,
     TripRemindersComponent,
+    PtoDaysComponent,
   ],
   templateUrl: "./trip.component.html",
 })
@@ -377,7 +384,7 @@ export class TripComponent {
     return day.entries.length > 0 || day.unscheduled.length > 0 || this.selectedDay === day.onDate;
   }
   transport: Record<string, unknown> | null = null;
-  charges: Record<string, number> = {};
+  charges: Record<string, string> = {};
   ptoEnabled = true;
   private ptoSaved = "";
   placeStay: Stay | null = null;
@@ -461,10 +468,13 @@ export class TripComponent {
           this.data.set(d);
           if (!preservePto) {
             const amounts = new Map(
-              d.pto_dates.map((day) => [day.on_date, Number(day.amount)]),
+              d.pto_dates.map((day) => [day.on_date, day.amount]),
             );
             this.charges = Object.fromEntries(
-              d.days.map((day) => [day.on_date, amounts.get(day.on_date) ?? 0]),
+              d.days.map((day) => [
+                day.on_date,
+                allocationText(amounts.get(day.on_date) ?? "0"),
+              ]),
             );
             this.ptoEnabled = d.counts_as_pto;
             this.ptoSaved = this.ptoSnapshot();
@@ -758,19 +768,24 @@ export class TripComponent {
       return;
     this.mutate(this.path(), this.meta, "patch");
   }
-  totalPto(): number {
-    return this.ptoEnabled
-      ? Object.values(this.charges).reduce((sum, amount) => sum + amount, 0)
-      : 0;
+  ptoDates(): string[] {
+    return this.data()?.days.map((day) => day.on_date) ?? [];
+  }
+  chooseDay(choice: { on_date: string; amount: string }): void {
+    this.charges = { ...this.charges, [choice.on_date]: choice.amount };
+  }
+  totalPto(): string {
+    return allocationDraft(this.ptoDates(), this.charges, this.ptoEnabled).total;
   }
   weekdays(): void {
-    for (const day of this.data()!.days) {
-      const weekday = new Date(day.on_date + "T12:00:00").getDay();
-      this.charges[day.on_date] = weekday === 0 || weekday === 6 ? 0 : 1;
-    }
+    const amounts = { ...this.charges };
+    for (const day of this.ptoDates()) amounts[day] = defaultAllocation(day);
+    this.charges = amounts;
   }
   clearPto(): void {
-    for (const day of this.data()!.days) this.charges[day.on_date] = 0;
+    const amounts = { ...this.charges };
+    for (const day of this.ptoDates()) amounts[day] = "0";
+    this.charges = amounts;
   }
   async savePto(): Promise<void> {
     if (
@@ -791,10 +806,7 @@ export class TripComponent {
       this.path(),
       {
         counts_as_pto: this.ptoEnabled,
-        pto_dates: Object.entries(this.charges).map(([on_date, amount]) => ({
-          on_date,
-          amount,
-        })),
+        pto_dates: allocationDraft(this.ptoDates(), this.charges).payload,
       },
       "patch",
       false,

@@ -1,6 +1,6 @@
 /** Hours, days, and leave-form checks. The page only wires these. */
 
-import { formatDate } from "../../../../packages/browser/runtime/date.mjs";
+import { formatDate, parseDateOnly } from "../../../../packages/browser/runtime/date.mjs";
 
 export const MINUS = "\u2212";
 export const DOT = "\u00b7";
@@ -429,6 +429,74 @@ export function policyBody(draft, stored, edited) {
     accrual_mode: draft.accrual_mode === "scheduled" ? "scheduled" : "daily",
     accrual_anchor: draft.accrual_mode === "scheduled" ? String(draft.accrual_anchor || "") : null,
     accrual_version: Number.isInteger(draft.accrual_version) && draft.accrual_version >= 0 ? draft.accrual_version : 0,
+  };
+}
+
+/**
+ * Trip day presentation. Full, Half, and None are the three choices.
+ * Any other stored decimal stays exact: this does not quarter-round.
+ * The server in pto.py decides what is saved. This does not forecast
+ * balances, overlaps, or accrual.
+ */
+export const ALLOCATION_CHOICES = [
+  { id: "full", label: "Full", amount: "1" },
+  { id: "half", label: "Half", amount: "0.5" },
+  { id: "none", label: "None", amount: "0" },
+];
+
+/** Canonical day text. Trailing zeros drop. The value is not quarter-rounded. */
+export function allocationText(raw) {
+  if (raw == null || raw === "") return "0";
+  const text = typeof raw === "number" ? String(raw) : raw;
+  const parsed = parseHours(text);
+  if (!parsed.ok || parsed.blank || !parsed.text) return String(text).trim();
+  return parsed.text;
+}
+
+/** Monday–Friday starts as one day on an unsaved form. The server stores the choice. */
+export function defaultAllocation(iso) {
+  const date = parseDateOnly(String(iso || ""));
+  if (!date) return "0";
+  const weekday = date.getDay();
+  return weekday === 0 || weekday === 6 ? "0" : "1";
+}
+
+function addAmounts(left, right) {
+  const a = parseHours(left);
+  const b = parseHours(right);
+  if (!a.ok || a.blank || !b.ok || b.blank) return allocationText(left);
+  const scale = Math.max(a.frac.length, b.frac.length);
+  const total = scaled(a.whole, a.frac, scale) + scaled(b.whole, b.frac, scale);
+  const base = 10n ** BigInt(scale);
+  const whole = total / base;
+  const frac = (total % base).toString().padStart(scale, "0").replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : whole.toString();
+}
+
+/**
+ * Fresh totals and payload for these dates only.
+ * A previous return is stale once the dates or amounts change: call again.
+ * `enabled` changes the shown total and leaves each day's amount in the payload.
+ */
+export function allocationDraft(dates, amounts, enabled = true) {
+  const source = amounts || {};
+  const rows = [];
+  let total = "0";
+  for (const on_date of dates || []) {
+    const amount = allocationText(source[on_date] ?? "0");
+    const known = ALLOCATION_CHOICES.find((choice) => choice.amount === amount);
+    rows.push({
+      on_date,
+      amount,
+      choice: known ? known.id : "exact",
+      label: known ? known.label : amount,
+    });
+    total = addAmounts(total, amount);
+  }
+  return {
+    total: enabled ? total : "0",
+    payload: rows.map(({ on_date, amount }) => ({ on_date, amount })),
+    rows,
   };
 }
 

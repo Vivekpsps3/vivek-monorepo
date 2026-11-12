@@ -33,6 +33,8 @@ import {
   summaryText,
 } from "./composer-model.mjs";
 import { showDay, showRange } from "./display";
+import { PtoDaysComponent } from "./pto-days.component";
+import { allocationDraft, defaultAllocation } from "./pto-model.mjs";
 import { TransportEditorComponent } from "./transport-editor.component";
 import { Trip, travelError } from "./travel.models";
 import { dateOrderError, requiredText } from "./validate.mjs";
@@ -48,6 +50,7 @@ import { dateOrderError, requiredText } from "./validate.mjs";
     UiFieldComponent,
     UiFieldControlDirective,
     UiPageHeaderComponent,
+    PtoDaysComponent,
   ],
   template: `<main class="page travel-page">
     <ui-page-header
@@ -175,8 +178,8 @@ import { dateOrderError, requiredText } from "./validate.mjs";
             />Count selected dates as PTO</label
           >
           <p class="muted">
-            Weekdays start as one day. Weekends start as Not PTO. Turning PTO
-            off keeps your choices.
+            Weekdays start as Full. Weekends start as None. Turning PTO off
+            keeps your choices.
           </p>
           <div class="button-row">
             <ui-button
@@ -195,22 +198,11 @@ import { dateOrderError, requiredText } from "./validate.mjs";
               Clear PTO
             </ui-button>
           </div>
-          <div class="pto-dates">
-            @for (day of dates(); track day) {
-              <ui-field [label]="day"
-                ><select
-                  uiFieldControl
-                  [name]="'pto-' + day"
-                  [ngModel]="charges[day]"
-                  (ngModelChange)="charges[day] = +$event"
-                >
-                  <option [ngValue]="0">Not PTO</option>
-                  <option [ngValue]="0.5">Half day</option>
-                  <option [ngValue]="1">PTO</option>
-                </select></ui-field
-              >
-            }
-          </div>
+          <travel-pto-days
+            [dates]="dates()"
+            [amounts]="charges"
+            (picked)="chooseDay($event)"
+          />
           <p>{{ total() }} PTO days selected.</p>
         </details>
         @if (transports.length) {
@@ -304,7 +296,7 @@ export class NewTripComponent {
     this.endDate.set(value);
   }
   changeDate = "";
-  charges: Record<string, number> = {};
+  charges: Record<string, string> = {};
   transports: Record<string, unknown>[] = [];
   transportOpen = false;
   readonly error = signal("");
@@ -401,9 +393,10 @@ export class NewTripComponent {
       next = confirmSpan(next);
     }
     this.model.set(next);
+    const amounts = { ...this.charges };
     for (const day of this.dates())
-      if (this.charges[day] === undefined)
-        this.charges[day] = this.weekday(day);
+      if (amounts[day] === undefined) amounts[day] = defaultAllocation(day);
+    this.charges = amounts;
     this.live();
   }
   city(key: string, value: string): void {
@@ -444,20 +437,21 @@ export class NewTripComponent {
       days.push(new Date(time).toISOString().slice(0, 10));
     return days;
   }
-  private weekday(day: string): number {
-    const weekday = new Date(day + "T12:00:00").getDay();
-    return weekday === 0 || weekday === 6 ? 0 : 1;
+  chooseDay(choice: { on_date: string; amount: string }): void {
+    this.charges = { ...this.charges, [choice.on_date]: choice.amount };
   }
   weekdays(): void {
-    for (const day of this.dates()) this.charges[day] = this.weekday(day);
+    const amounts = { ...this.charges };
+    for (const day of this.dates()) amounts[day] = defaultAllocation(day);
+    this.charges = amounts;
   }
   clearPto(): void {
-    for (const day of this.dates()) this.charges[day] = 0;
+    const amounts = { ...this.charges };
+    for (const day of this.dates()) amounts[day] = "0";
+    this.charges = amounts;
   }
-  total(): number {
-    return this.model().pto
-      ? this.dates().reduce((sum, day) => sum + (this.charges[day] || 0), 0)
-      : 0;
+  total(): string {
+    return allocationDraft(this.dates(), this.charges, this.model().pto).total;
   }
   save(): void {
     if (this.saving()) return;
@@ -478,10 +472,7 @@ export class NewTripComponent {
         leave_on: part.leave,
       })),
       transports: this.transports,
-      pto_dates: this.dates().map((on_date) => ({
-        on_date,
-        amount: this.charges[on_date] || 0,
-      })),
+      pto_dates: allocationDraft(this.dates(), this.charges).payload,
     };
     const encoded = JSON.stringify(payload);
     if (encoded !== this.attemptBody) {

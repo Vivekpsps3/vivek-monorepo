@@ -313,7 +313,7 @@
           dates as PTO</label
         >
         <p class="muted">
-          Weekends default to Not PTO. Turning PTO off keeps these selections.
+          Weekends default to None. Turning PTO off keeps these selections.
         </p>
         <div class="button-row">
           <ui-button variant="ghost" size="sm" (click)="weekdays()">
@@ -322,21 +322,11 @@
             >Clear PTO</ui-button
           >
         </div>
-        <div class="pto-dates">
-          @for (day of trip.days; track day.on_date) {
-            <ui-field [label]="showDay(day.on_date)"
-              ><select
-                uiFieldControl
-                [ngModel]="charges[day.on_date]"
-                (ngModelChange)="charges[day.on_date] = +$event"
-              >
-                <option [ngValue]="0">Not PTO</option>
-                <option [ngValue]="0.5">Half day</option>
-                <option [ngValue]="1">PTO</option>
-              </select></ui-field
-            >
-          }
-        </div>
+        <travel-pto-days
+          [dates]="ptoDates()"
+          [amounts]="charges"
+          (picked)="chooseDay($event)"
+        />
         <p>{{ totalPto() }} PTO days selected.</p>
         @if (trip.pto.configured) {
           <p class="muted">

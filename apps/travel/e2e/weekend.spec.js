@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { ptoChoice, tripHeader } from './dates.mjs';
+import { ptoOption, tripHeader } from './dates.mjs';
 
 test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
@@ -24,5 +24,5 @@ test('a Saturday to Sunday trip saves with weekends left off PTO', async ({ page
 });
 
 async function expectNotPto(page, day) {
-  await expect(ptoChoice(page, day).locator('option:checked')).toHaveText('Not PTO');
+  await expect(ptoOption(page, day, 'None')).toBeChecked();
 }
