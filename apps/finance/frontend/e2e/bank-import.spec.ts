@@ -21,7 +21,7 @@ async function addFileAndChooseBank(page: Page, name: string, csv: string) {
 
 test('a wrong-shape CSV gets the plain not-a-bank-export sentence, never raw parser text', async ({ page }) => {
   const vault = await syntheticVault(page, {});
-  await vault.open('/spending?t=imports');
+  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
   await openImport(page);
   await addFileAndChooseBank(page, 'wrong.csv', chaseWrong);
   await expect(page.locator('.import-file-entry')).toContainText('wrong.csv');
@@ -31,7 +31,7 @@ test('a wrong-shape CSV gets the plain not-a-bank-export sentence, never raw par
 
 test('an empty CSV says the file has no transactions', async ({ page }) => {
   const vault = await syntheticVault(page, {});
-  await vault.open('/spending?t=imports');
+  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
   await openImport(page);
   await addFileAndChooseBank(page, 'empty.csv', chaseEmpty);
   await page.getByRole('button', { name: 'Preview all files' }).click();
@@ -40,7 +40,7 @@ test('an empty CSV says the file has no transactions', async ({ page }) => {
 
 test('a good Chase CSV previews with the shared summary line and imports', async ({ page }) => {
   const vault = await syntheticVault(page, {});
-  await vault.open('/spending?t=imports');
+  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
   await openImport(page);
   await addFileAndChooseBank(page, 'chase.csv', chaseGood);
   await page.getByRole('button', { name: 'Preview all files' }).click();

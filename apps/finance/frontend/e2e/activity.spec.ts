@@ -140,9 +140,8 @@ for (const width of [390, 1280]) {
         const violations = watchConsole(page);
         await setup(page);
         const table = page.getByRole('table', { name: 'Transactions history' });
-        const headers = await table.getByRole('columnheader').allTextContents();
-        expect(headers.map(text => text.trim())).toEqual([
-          expect.stringContaining('Date'), 'Description', expect.stringContaining('Amount'), 'Actions',
+        await expect(table.getByRole('columnheader')).toHaveText([
+          /Date/, 'Description', /Amount/, 'Actions',
         ]);
         const cafeRow = table.getByRole('row').filter({ hasText: 'Corner Cafe' });
         await expect(cafeRow).toContainText('Food and Drink · Daily card');
