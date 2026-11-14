@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, Injector, OnInit, ViewChild, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SESSION_CONTEXT, ToastService, UiButtonComponent, UiCardComponent, UiInputComponent, UiStateComponent } from '@vivek/ui';
-import { FinanceLockService, type AutoLockSetting, exportFinanceRecovery, openFinanceVault, prepareFinanceRestore, type RecoveryRestorePlan, type RestoreMode } from '../../../../finance/frontend/src/public-api';
+import { FinanceLockService, type AutoLockSetting, bindLockSnapshots, exportFinanceRecovery, openFinanceVault, prepareFinanceRestore, type RecoveryRestorePlan, type RestoreMode } from '../../../../finance/frontend/src/public-api';
 
 @Component({
   selector: 'app-finance-section',
@@ -136,6 +136,11 @@ export class FinanceSectionComponent implements OnInit {
   }
 
   constructor() {
+    const unbindSnapshots = bindLockSnapshots(() => {
+      this.cancelBackup(); this.cancelRestore();
+      this.locked = true; this.cdr.markForCheck();
+    });
+    this.destroyRef.onDestroy(unbindSnapshots);
     this.destroyRef.onDestroy(() => { this.cancelBackup(); this.cancelRestore(); });
   }
 

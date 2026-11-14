@@ -195,10 +195,14 @@ Any conflict, interrupted batch, validation/write/commit failure leaves the old
 active vault intact. Replaying the same committed activation returns its receipt
 without rewriting records. Ordinary writes with a non-null expected revision
 refuse a missing row, so an old update cannot recreate data removed by replace;
-explicit new creates retain the null-revision contract. A completed receipt is visible when the same file is
+explicit new creates retain the null-revision contract. Ordinary and reindex
+updates compare revisions in the SQL write itself, so a read held across activation
+cannot overwrite the restored revision. A completed receipt is visible when the same file is
 previewed again. Plaintext previews and held operations obey the same owner,
 lock/logout, cancel and route-disposal eligibility. Fresh status reads are silent,
-cancellable and never publish into the shared vault-status cache.
+cancellable and never publish into the shared vault-status cache. Recovery previews
+and form drafts clear through the immediate lock-snapshot hook. The existing lock
+service subscribes to validated remote notices even in a Settings-only tab.
 
 The explicit activation request is the commit boundary: a remote server that has
 accepted it cannot be rolled back by a later local abort. Its outcome is wholly

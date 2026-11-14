@@ -9,6 +9,7 @@ from sqlalchemy import delete
 
 from apps.finance.backend.main import Base, app, engine
 from apps.finance.backend.models import (
+    EncryptedRecord,
     EncryptedRecordIndex,
     VaultRestoreStage,
     utc_now,
@@ -475,3 +476,33 @@ def test_new_registered_collection_restores_without_another_membership_list(monk
     assert upload(c, stage, 0, records).status_code == 200
     assert activate(c, stage).status_code == 200
     assert snapshot(c)["records"][0]["collection"] == "future_review"
+
+
+@pytest.mark.parametrize("operation", ["upsert", "reindex"])
+def test_read_held_before_activation_cannot_overwrite_the_restored_revision(operation):
+    from fastapi import HTTPException
+
+    c = client()
+    old = wire("assets", "same_asset_1")
+    c.post("/api/vault/records/upsert", json={"records": [old]})
+    incoming = {**old, "ciphertext_b64": b64(b"restored synthetic ciphertext" * 3)}
+    stage, _ = create(c, [incoming], "replace")
+    upload(c, stage, 0, [incoming])
+    owner = c.get("/api/auth/me").json()["user"]["id"]
+    with SessionLocal() as db:
+        stale = db.query(EncryptedRecord).filter_by(user_id=owner, client_id=old["client_id"]).one()
+        db.commit()  # Retain the ORM identity while the other request commits.
+        assert stale.revision == 1
+        assert activate(c, stage, "REPLACE").status_code == 200
+        after = snapshot(c)
+        assert stale.revision == 1
+        try:
+            with pytest.raises(HTTPException) as error:
+                if operation == "upsert":
+                    store.upsert_records(db, owner, [{**old, "expected_revision": 1}])
+                else:
+                    store.reindex_records(db, owner, [{**old, "expected_revision": 1}])
+            assert error.value.status_code == 409
+        finally:
+            db.rollback()
+        assert snapshot(c) == after

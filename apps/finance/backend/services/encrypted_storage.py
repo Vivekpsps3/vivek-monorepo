@@ -263,6 +263,43 @@ def validate_record(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _update_existing_record(
+    db: Session,
+    user_id: int,
+    row: EncryptedRecord,
+    expected: int,
+    ciphertext_b64: str,
+    schema_version: int,
+    key_version: int,
+) -> None:
+    # The revision is checked by the write itself, including a stale read held
+    # while another transaction activates a restore. Refresh the ORM identity
+    # only after winning; never flush old attributes over a newer record.
+    changed = (
+        db.query(EncryptedRecord)
+        .filter(
+            EncryptedRecord.id == row.id,
+            EncryptedRecord.user_id == user_id,
+            EncryptedRecord.collection == row.collection,
+            EncryptedRecord.client_id == row.client_id,
+            EncryptedRecord.revision == expected,
+        )
+        .update(
+            {
+                "ciphertext_b64": ciphertext_b64,
+                "schema_version": schema_version,
+                "key_version": key_version,
+                "revision": expected + 1,
+                "updated_at": utc_now(),
+            },
+            synchronize_session=False,
+        )
+    )
+    if changed != 1:
+        raise HTTPException(409, "Record changed while saving. Reload before retrying.")
+    db.refresh(row)
+
+
 def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> list[EncryptedRecord]:
     if not items:
         raise HTTPException(status_code=400, detail="No records provided")
@@ -297,11 +334,9 @@ def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> li
                     status_code=409,
                     detail=f"Revision conflict for {collection}/{client_id}",
                 )
-            row.ciphertext_b64 = ciphertext_b64
-            row.schema_version = schema_version
-            row.key_version = key_version
-            row.revision = row.revision + 1
-            row.updated_at = utc_now()
+            _update_existing_record(
+                db, user_id, row, expected, ciphertext_b64, schema_version, key_version
+            )
         else:
             if item.get("expected_revision") is not None:
                 raise HTTPException(409, "Record was deleted. Reload before saving.")
@@ -392,11 +427,9 @@ def reindex_records(
         # the second row. Skip it so re-index can finish instead of retrying forever.
         savepoint = db.begin_nested()
         try:
-            row.ciphertext_b64 = ciphertext_b64
-            row.schema_version = schema_version
-            row.key_version = key_version
-            row.revision = row.revision + 1
-            row.updated_at = utc_now()
+            _update_existing_record(
+                db, user_id, row, expected, ciphertext_b64, schema_version, key_version
+            )
             db.query(EncryptedRecordIndex).filter(
                 EncryptedRecordIndex.user_id == user_id,
                 EncryptedRecordIndex.collection == collection,

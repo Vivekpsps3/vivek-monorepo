@@ -62,7 +62,7 @@ schema-1 source rows), staging is invisible to active reads, and activation lock
 the vault. The same browser suite verifies wrong password/tamper/version/oversize
 produce zero mutating requests, and a failed middle batch survives refresh and
 resumes completed checkpoints without double uploads. Held uploads after lock,
-route removal and cancel cannot activate. Markers/passwords stay absent from
+route removal, another-tab lock and cancel cannot activate. Markers/passwords stay absent from
 requests, console, browser storage and the encrypted file.
 
 Finance Karma restore tests independently check destination-key/AAD decryption,
@@ -74,7 +74,8 @@ Backend `test_vault_restore.py` exercises all collection writes, owner/CSRF
 isolation, version/ID/count/size/quota refusal, idempotent checkpoint/activation,
 delete/recreate ABA conflict, changed destination wraps, explicit empty replace,
 expiry/reset cleanup, injected deletion and first/later upsert failures, real
-commit failure and two competing SQLite-file activations. Old records/indexes and
+commit failure, two competing SQLite-file activations, missing-record stale
+updates and upsert/reindex reads held across activation. Old records/indexes and
 pending jobs survive rolled-back activation. The migration regression preserves
 existing ciphertext/revisions and proves older-image account deletion cascades
 new temporary tables. Run `make db-check` on a disposable migrated database and

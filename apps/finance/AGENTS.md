@@ -11,6 +11,8 @@ Start with the existing owner:
   membership comes from the server collection policy, never a second app list.
   Restore stages are temporary ciphertext; only atomic activation changes active
   records. Successful activation locks participating tabs before normal reload.
+  [Lock service](frontend/src/app/core/finance-lock.service.ts) owns validated
+  remote lock delivery, including Settings-only tabs.
 - [Import service](frontend/src/app/services/finance-import.service.ts) and existing
   bank/brokerage import modules own preview, deduplication, receipts and Undo.
 - [Public API](frontend/src/public-api.ts) is the cross-app entry point. Consumers

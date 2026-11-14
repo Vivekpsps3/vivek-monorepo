@@ -3,16 +3,20 @@ import { SESSION_CONTEXT } from '@vivek/ui';
 import { readLockEpoch } from './dek-holder';
 import { createVaultRecordCapability, type VaultRecordEligibility } from './vault-record-capability';
 import { VaultService } from './vault.service';
+import { FinanceLockService } from '../core/finance-lock.service';
 import { RecoveryError } from './recovery-bundle';
+import { bindLockSnapshots } from './lock-finance';
 
 /** One Finance recovery lifetime; export closes after download, restore after disposal. */
 export function openRecoveryScope(injector: Injector, parent: AbortSignal) {
   const vault = injector.get(VaultService);
+  injector.get(FinanceLockService);
   const session = injector.get(SESSION_CONTEXT);
   const controller = new AbortController();
   const read = (): VaultRecordEligibility => ({ ownerId: session.currentUser?.id ?? null, generation: readLockEpoch(), unlocked: vault.isUnlocked });
   const ticket = read();
   const abort = (): void => controller.abort();
+  const unbindSnapshot = bindLockSnapshots(abort);
   const ownerSubscription = session.user$.subscribe(user => { if (user?.id !== ticket.ownerId) abort(); });
   const lockSubscription = vault.unlocked$.subscribe(unlocked => { if (!unlocked) abort(); });
   parent.addEventListener('abort', abort, { once: true });
@@ -27,7 +31,7 @@ export function openRecoveryScope(injector: Injector, parent: AbortSignal) {
   return {
     vault, records: createVaultRecordCapability(vault, read), read, signal: controller.signal, check,
     dispose(): void {
-      abort(); ownerSubscription.unsubscribe(); lockSubscription.unsubscribe();
+      abort(); unbindSnapshot(); ownerSubscription.unsubscribe(); lockSubscription.unsubscribe();
       parent.removeEventListener('abort', abort);
     },
   };

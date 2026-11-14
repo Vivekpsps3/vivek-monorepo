@@ -2,6 +2,7 @@ import { Injectable, Injector, NgZone, OnDestroy, inject, signal } from '@angula
 import { Router } from '@angular/router';
 import { lockFinance } from '../crypto/lock-finance';
 import { VaultService } from '../crypto/vault.service';
+import { bindLockNotices } from '../crypto/lock-notice';
 
 export type AutoLockSetting = 'off' | 5 | 15 | 60;
 
@@ -52,12 +53,17 @@ export class FinanceLockService implements OnDestroy {
   private lastLocalActivity = 0;
   private lastActivityWrite = 0;
 
+  private readonly unbindRemote = bindLockNotices(() => {
+    if (this.vault.isUnlocked) void this.lockNow({ navigate: this.onFinanceRoute() });
+  });
+
   private readonly subscription = this.vault.unlocked$?.subscribe(unlocked => {
     if (unlocked) this.startWatching();
     else this.stopWatching();
   });
 
   ngOnDestroy(): void {
+    this.unbindRemote();
     this.subscription?.unsubscribe();
     this.stopWatching();
   }
@@ -139,6 +145,11 @@ export class FinanceLockService implements OnDestroy {
     if (document.visibilityState === 'visible') this.checkIdle();
   };
 
+  private onFinanceRoute(): boolean {
+    const url = this.router.url || '';
+    return url.startsWith('/finance/') && !url.startsWith('/finance/vault/');
+  }
+
   private checkIdle(): void {
     const setting = this.autoLockSignal();
     if (setting === 'off') return;
@@ -151,10 +162,8 @@ export class FinanceLockService implements OnDestroy {
     }
     const idleFor = Date.now() - Math.max(this.lastLocalActivity, shared);
     if (idleFor < setting * 60_000) return;
-    const url = this.router.url || '';
-    const onFinanceRoute = url.startsWith('/finance/') && !url.startsWith('/finance/vault/');
     this.zone.run(() => {
-      void this.lockNow({ navigate: onFinanceRoute, reason: 'auto' });
+      void this.lockNow({ navigate: this.onFinanceRoute(), reason: 'auto' });
     });
   }
 }

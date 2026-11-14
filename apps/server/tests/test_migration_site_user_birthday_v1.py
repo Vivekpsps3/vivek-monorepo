@@ -21,8 +21,11 @@ COMPATIBLE_HEADS = {
 }
 INDEX = "ix_episode_progress_user_watched_on"
 # model_diff against current models. These tests stop at this revision, so the
-# later leave-bucket objects are the whole drift. Head tests still require [].
+# explicitly named later objects are the whole drift. Head tests still require [].
 LATER_THAN_BIRTHDAY = {
+    "add_table:vault_restore_stages",
+    "add_index:ix_vault_restore_stages_user_id",
+    "add_table:vault_restore_batches",
     "add_table:leave_policies",
     "add_index:ix_leave_policies_user_id",
     "add_column:pto_entries.bucket",
