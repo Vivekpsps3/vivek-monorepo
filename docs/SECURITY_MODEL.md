@@ -115,7 +115,62 @@ Challenge issue, verify, and username change bind the signed message to one conf
 ## Recovery rules
 
 - There is no password reset. Admins cannot reset a vault passphrase, generate a signing key, or alter encrypted vault material.
-- There is no recovery-key path. If a user loses their vault passphrase, encrypted finance data cannot be recovered; admins can only delete the encrypted data and let the user start over.
+- There is no alternate account recovery-key path. Losing the vault passphrase still prevents sign-in/unlock; admins can only delete encrypted data and let the user start over. A portable backup and its separate password are independent recovery material, with restore delivered by SEC-06 below.
+
+## Portable encrypted recovery export
+
+Finance Settings downloads `.vvr` recovery files independently of CSV exports.
+The authenticated `/api/vault/recovery-snapshot` returns only the current owner's
+ciphertext and collection/schema/count descriptors derived from `COLLECTION_POLICY`.
+One ordered database cursor covers every allowed collection, including empty
+collections and Health. Unknown rows or unsupported versions fail the entire
+snapshot. A later private collection joins recovery through that same owner
+contract; no separate recovery membership list exists.
+
+The browser verifies the current passphrase against fresh vault wraps and the
+held DEK without replacing or persisting either key. A separate 12–1,024-character
+backup password derives a non-extractable AES-256-GCM key using the existing
+PBKDF2-HMAC-SHA256 primitive, 600,000 iterations and a fresh 16-byte salt. The
+packed ciphertext uses a fresh 12-byte IV and a 128-bit authentication tag.
+
+Version 1 is a UTF-8 JSON envelope with exactly `header` and `ciphertext_b64`.
+The header has `format: "vivek-vault-recovery"`, `version: 1`, ISO `created_at`,
+`kdf: "PBKDF2-SHA256"`, `iterations: 600000`, `salt_b64` and
+`cipher: "AES-256-GCM"`. Additional authenticated data is the UTF-8 JSON array
+of those seven values in that order. The base64 packed bytes are IV, ciphertext,
+then tag. The encrypted JSON body has exactly `collections` and `records`:
+
+```json
+{
+  "collections": [{"collection":"health_stats","schema_versions":[2],"count":1}],
+  "records": [{"collection":"health_stats","client_id":"synthetic_health_1","schema_version":2,"key_version":1,"value":{"id":1,"marker":"synthetic-only"}}]
+}
+```
+
+This is an illustrative synthetic body; real bundles include every descriptor.
+The codec validates unique collection/record identities, exact fields, supported
+record schemas, key versions and matching counts. Existing schema-1 Finance
+ciphertext remains readable without AAD; schema 2 retains its existing
+collection/client-id/schema/key-version AAD. The portable envelope does not change
+that record protocol. Bundle versions and KDF work outside version 1's fixed
+contract are rejected before deriving a key.
+
+Limits are 64 collections, 10,000 records, 512,000 serialized bytes per record,
+16 MiB serialized body and 24 MiB file. The server caps aggregate ciphertext at
+24 MiB before producing a response. Enumeration, decryption and encryption share
+one 120-second action deadline. Cancel, lock, sign-out, owner change or route
+removal aborts publication, unsubscribes pending record reads, drops application
+plaintext references and clears owned byte buffers. WebCrypto already in progress
+cannot be cancelled; its late result is ineligible. JavaScript strings and browser
+internal crypto copies cannot be promised secure erasure. No plaintext temporary
+file, network upload, browser storage or log is used.
+
+Keep both the downloaded file and backup password. Neither contains account
+credentials, the source DEK, cookies, tokens, signing keys or server secrets.
+SEC-05 supplies export and the local decoder/compatibility contract; restore UI,
+conflict preview and atomic destination activation belong to SEC-06. An exported
+file alone does not establish a successful recovery drill or close the full
+recovery requirement. Admins still cannot reset vault credentials.
 
 ## Holdings price privacy
 

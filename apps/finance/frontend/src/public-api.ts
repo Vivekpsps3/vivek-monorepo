@@ -125,3 +125,13 @@ export function startFinanceTripSpend(injector: Injector): { sync(): void; stop(
     },
   };
 }
+
+export async function exportFinanceRecovery(
+  injector: Injector,
+  currentPassphrase: string,
+  backupPassword: string,
+  signal: AbortSignal,
+  publish: (file: string, count: number) => void,
+): Promise<void> {
+  return (await import('./app/crypto/recovery-export')).exportFinanceRecovery(injector, currentPassphrase, backupPassword, signal, publish);
+}

@@ -5,6 +5,9 @@ Start with the existing owner:
 - [FinanceService](frontend/src/app/services/finance.service.ts) owns published views;
   [encrypted store](frontend/src/app/crypto/encrypted-store.service.ts) owns records;
   [persistence](frontend/src/app/crypto/encrypted-store.persistence.ts) owns their wire lifecycle.
+- [Recovery export](frontend/src/app/crypto/recovery-export.ts) and its
+  [bundle codec](frontend/src/app/crypto/recovery-bundle.ts) own portable backups;
+  membership comes from the server collection policy, never a second app list.
 - [Import service](frontend/src/app/services/finance-import.service.ts) and existing
   bank/brokerage import modules own preview, deduplication, receipts and Undo.
 - [Public API](frontend/src/public-api.ts) is the cross-app entry point. Consumers

@@ -233,3 +233,11 @@ def encrypted_counts(
     db: Session = Depends(get_db, scope="function"),
 ):
     return {"counts": store.collection_counts(db, current_user.id)}
+
+
+@router.get("/recovery-snapshot")
+def encrypted_recovery_snapshot(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db, scope="function"),
+):
+    return store.recovery_snapshot(db, _user_id(current_user))

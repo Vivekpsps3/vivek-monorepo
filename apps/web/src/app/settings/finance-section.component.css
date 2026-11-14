@@ -33,3 +33,15 @@
   font-size: var(--text-sm);
   line-height: 1.55;
 }
+
+.backup-form {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

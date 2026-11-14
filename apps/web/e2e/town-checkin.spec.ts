@@ -52,10 +52,11 @@ test.describe('Town check-in', () => {
   });
 
   test('13: visibility after the local date changes refetches unchecked rows', async ({ page, request }) => {
+    // Keep HTTP timer advancement stable across this synthetic wall-clock change.
+    await page.clock.pauseAt(new Date('2026-10-29T19:00:00Z'));
     expect((await request.post('/e2e/town/clock', { data: { iso: '2026-10-30T07:10:00Z' } })).ok()).toBeTruthy();
     let body: TownResponse | undefined;
-    // Arm the waiter before the clock moves. setFixedTime runs timers that
-    // elapsed during the jump, so the refresh can finish before a later wait.
+    // Arm the waiter before the explicit visibility event starts the refresh.
     const refresh = page.waitForResponse(async response => {
       if (new URL(response.url()).pathname !== '/api/town' || response.request().method() !== 'GET') return false;
       try {
@@ -72,6 +73,7 @@ test.describe('Town check-in', () => {
     await page.clock.setFixedTime(new Date('2026-10-30T07:10:00Z'));
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await refresh;
+    await page.clock.resume();
     expect(body?.town.tz).toBe('America/Los_Angeles');
     expect(body?.town.today).toBe('2026-10-30');
     await expect(page.getByRole('button', { name: 'Mark Read 20 pages done for today' })).toHaveAttribute('aria-pressed', 'false');
