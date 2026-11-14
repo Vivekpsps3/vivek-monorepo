@@ -88,4 +88,4 @@ counterexamples and compare actual production rendering, not just static search 
 ## Completion evidence
 
 Use [DEL-06 evidence](../evidence/DEL-06.md) for exact results, surviving owners,
-physical deltas and handoff. Close only #358; reference #200. No merge/deployment requested.
+physical deltas and handoff. Close only #358; reference #200. Merge/deployment requires owner authorization.
