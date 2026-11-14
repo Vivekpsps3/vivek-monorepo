@@ -480,3 +480,65 @@ def wipe_encrypted_user_data(db: Session, user_id: int) -> None:
         synchronize_session=False
     )
     db.query(UserVault).filter(UserVault.user_id == user_id).delete(synchronize_session=False)
+
+
+# Recovery returns only ciphertext. Read through one cursor so the manifest and
+# records describe one database snapshot, not independently paginated collections.
+MAX_RECOVERY_RECORDS = 10_000
+MAX_RECOVERY_CIPHERTEXT_CHARS = 24 * 1024 * 1024
+
+
+def recovery_snapshot(db: Session, user_id: int) -> dict[str, Any]:
+    counts = dict.fromkeys(sorted(COLLECTION_POLICY.recovery), 0)
+    records: list[dict[str, Any]] = []
+    size = 0
+    rows = (
+        db.query(EncryptedRecord)
+        .filter(EncryptedRecord.user_id == user_id)
+        .order_by(EncryptedRecord.collection, EncryptedRecord.client_id)
+        .yield_per(100)
+    )
+    for row in rows:
+        if row.collection not in counts:
+            raise HTTPException(
+                422, "Recovery cannot include an unsupported collection. Update the app."
+            )
+        versions = (
+            (CURRENT_RECORD_SCHEMA_VERSION,)
+            if row.collection in COLLECTION_POLICY.health
+            else (1, CURRENT_RECORD_SCHEMA_VERSION)
+        )
+        if row.schema_version not in versions or row.key_version < 1:
+            raise HTTPException(
+                422, "Recovery cannot include an unsupported record version. Update the app."
+            )
+        size += len(row.ciphertext_b64)
+        if len(records) >= MAX_RECOVERY_RECORDS or size > MAX_RECOVERY_CIPHERTEXT_CHARS:
+            raise HTTPException(
+                413, "Vault exceeds the portable recovery limit. No partial backup was created."
+            )
+        counts[row.collection] += 1
+        records.append(
+            {
+                "collection": row.collection,
+                "client_id": row.client_id,
+                "ciphertext_b64": row.ciphertext_b64,
+                "schema_version": row.schema_version,
+                "key_version": row.key_version,
+                "revision": row.revision,
+                "updated_at": row.updated_at.isoformat(),
+            }
+        )
+    return {
+        "collections": [
+            {
+                "collection": name,
+                "schema_versions": [CURRENT_RECORD_SCHEMA_VERSION]
+                if name in COLLECTION_POLICY.health
+                else [1, CURRENT_RECORD_SCHEMA_VERSION],
+                "count": count,
+            }
+            for name, count in counts.items()
+        ],
+        "records": records,
+    }

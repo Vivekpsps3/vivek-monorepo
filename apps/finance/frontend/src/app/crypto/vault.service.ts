@@ -372,6 +372,27 @@ export class VaultService {
     return this.isUnlocked;
   }
 
+  /** Verify against fresh server wraps without unlocking, persisting, or replacing keys. */
+  async verifyRecoveryPassphrase(passphrase: string): Promise<void> {
+    const epoch = this.epoch;
+    const lockAt = readLockEpoch();
+    const userId = this.ownerId();
+    if (!this.owns(epoch, lockAt, userId)) throw new Error('Vault is locked');
+    const status = await firstValueFrom(this.http.get<VaultStatus>(apiUrl('/vault/status'), { context: silentErrorToast() }));
+    if (!this.owns(epoch, lockAt, userId)) throw new Error('Vault is locked');
+    if (!status.kdf_salt_b64 || !status.kdf_iterations || !status.wrapped_dek_b64) throw new Error('Vault is unavailable');
+    const verified = await unlockWithPassphrase(passphrase, status.kdf_salt_b64, status.kdf_iterations, status.wrapped_dek_b64);
+    if (!this.owns(epoch, lockAt, userId)) throw new Error('Vault is locked');
+    // Prove the verified wrap is for the currently held DEK; do not replace it.
+    const probe = await encryptJson(this.requireDek(), { recovery: true });
+    await decryptJson(verified, probe);
+    if (!this.owns(epoch, lockAt, userId)) throw new Error('Vault is locked');
+  }
+
+  recoverySnapshot(): Observable<import('./recovery-export').RecoverySnapshot> {
+    return this.http.get<import('./recovery-export').RecoverySnapshot>(apiUrl('/vault/recovery-snapshot'), { context: silentErrorToast() });
+  }
+
   requireDek(): CryptoKey {
     if (!this.dek) throw new Error('Vault is locked');
     return this.dek;
