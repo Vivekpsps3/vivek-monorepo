@@ -3,7 +3,7 @@
 - Leaf issue and parent(s): [#264](https://github.com/Vivekpsps3/vivek-monorepo/issues/264) DISC-01; parent [#194](https://github.com/Vivekpsps3/vivek-monorepo/issues/194). Parent stays open.
 - Agent/context, branch/worktree: Cursor session, sole author; `agent/disc-01`; `/tmp/vivek-disc-01`.
 - Base main SHA, current tested SHA: base `0022c5ef8065e08892b6eecdfa6450158ee69ef6`. Design commit `b578fb947084300ac017edc2cce2baaf00174429` is the tree that passed `make test-fast` before the pull request. This handoff update was rechecked with the same command before its follow-up commit.
-- Fresh-main/prerequisite/active-PR checks: `git fetch origin main` matched `0022c5ef8065e08892b6eecdfa6450158ee69ef6`. Packet dependencies: none. #194 is open. #264 had no claim comments before the claim on this branch. Open PR [#362](https://github.com/Vivekpsps3/vivek-monorepo/pull/362) (SEC-05, `agent/sec-05-recovery-20261114`) changes vault recovery and Finance `public-api.ts`. It does not edit these planning files. Its recovery behavior is unmerged and is not treated as current. Merged PR #193 is history on this base and has no Sidequests surface. Shared checkout and other worktrees were not edited. No `apps/sidequests` path, route, or vault collection exists on the base.
+- Fresh-main/prerequisite/active-PR checks: at claim, `git fetch origin main` matched `0022c5ef8065e08892b6eecdfa6450158ee69ef6`. Packet dependencies: none. #194 is open. #264 had no claim comments before the claim on this branch. SEC-05 [#362](https://github.com/Vivekpsps3/vivek-monorepo/pull/362) was open then and later merged to `origin/main` `c461fe791251b13e02a05911531246f01f0e8290`. This branch does not edit those recovery files. The design records that merge from the pull request and the roadmap note, and tells the collection leaf to re-read the merged policy. Merged PR #193 is history on the design base and has no Sidequests surface. Shared checkout and other worktrees were not edited. No `apps/sidequests` path, route, or vault collection exists on the design base.
 
 ## Acceptance
 
@@ -38,10 +38,11 @@ Recorded after the local run. A failed command stays FAIL.
 | Command | Tested SHA | Result |
 | --- | --- | --- |
 | `make test-fast` | worktree on base `0022c5ef8065e08892b6eecdfa6450158ee69ef6` plus this design diff, re-run after this table was written | PASS |
+| `make test-fast` | same worktree after the SEC-05 merge note in the design and this file | PASS |
 
 Passing run, from `/tmp/vivek-disc-01`: doc paths OK; planning validation PASS (95 packets, 17 parents, forty TD owners); blame-ignore revisions OK; shared boundaries OK; Finance UX F1 OK; 98 Python unittest tests OK; e2e discovery guard OK (projects listed, not executed); Node tests 21 pass / 0 fail. `git diff --check` on the planning diff reported no whitespace errors.
 
-The fresh worktree has no install of its own. The passing run linked `.venv` and `node_modules` from the main checkout at the same base SHA so `typescript`, `fastapi`, and `pytest` resolve. An earlier invocation failed before those suites for that reason. The failure was not skipped; the same `make test-fast` command was re-run and passed. No application Karma or Playwright suite was required for this docs-only diff. CI, merge, and deployment have not run.
+The fresh worktree has no install of its own. The passing runs linked `.venv` and `node_modules` from the main checkout at the design base so `typescript`, `fastapi`, and `pytest` resolve. An earlier invocation failed before those suites for that reason. The failure was not skipped; the same `make test-fast` command was re-run and passed. The follow-up run after the SEC-05 note also passed: doc paths, planning validation (95 packets, 17 parents, forty TD owners), shared boundaries, Finance UX F1, 98 Python unittest tests, e2e discovery listed and not executed, and 21 Node tests. No application Karma or Playwright suite was required for this docs-only diff. CI on the pull request is a separate run. Merge and deployment have not run.
 
 ## Handoff
 
@@ -49,7 +50,7 @@ The fresh worktree has no install of its own. The passing run linked `.venv` and
 - Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6882943873
 - Leaf note: https://github.com/Vivekpsps3/vivek-monorepo/issues/264#issuecomment-6882943669
 - Merged/activation status (actual evidence, not assumption): pull request open. Not merged, not deployed, not activated. No app exists.
-- Remaining external prerequisites or approved scope decisions: owner has not selected implementation. Open choices are the center of gravity, stamp metaphor, lead ritual, band vocabulary, and whether the suggested field notebook is the identity. Writable records wait on open #121 and the merged export/restore contract. #362 is open and unmerged. #125 still owns operational backup.
+- Remaining external prerequisites or approved scope decisions: owner has not selected implementation. Open choices are the center of gravity, stamp metaphor, lead ritual, band vocabulary, and whether the suggested field notebook is the identity. SEC-05 export has merged; restore has not. Writable records wait on open #121 until restore covers the collection. #125 still owns operational backup.
 - Next actor: review the pull request. Do not close #194 from this leaf.
 
 No unstated decision from this context is necessary to continue.

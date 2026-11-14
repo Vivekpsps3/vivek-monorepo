@@ -172,13 +172,16 @@ recovery is their union. A future Sidequests collection is a third disjoint
 owner. Finance must not decrypt it. Health must not decrypt it. That policy
 change is an implementation leaf. This PR does not make it.
 
-Open [PR #362](https://github.com/Vivekpsps3/vivek-monorepo/pull/362) (SEC-05)
-proposes exporting every collection in the server owner policy and says a
-newly registered name is included without a separate export list. It is
-unmerged. Restore is still a later security leaf. Parent #121 is open.
-Writable Sidequests rows wait until the merged export and restore contracts
-include this owner. #125 continues to own operational backup. This design
-does not fork a recovery format.
+This design was read on base `0022c5ef`, where recovery membership is the
+finance/health union. [SEC-05](https://github.com/Vivekpsps3/vivek-monorepo/pull/362)
+later merged to `origin/main` as `c461fe791251b13e02a05911531246f01f0e8290`.
+That pull request states export follows the server owner policy, including a
+newly registered collection, without a second export list. This branch does
+not take that diff. Restore is still a later security leaf, and parent #121
+is open. Writable Sidequests rows wait until restore covers this owner. The
+collection leaf must re-read the merged policy before adding a name. #125
+continues to own operational backup. This design does not fork a recovery
+format.
 
 No `apps/sidequests` tree, route, or collection name exists on this base.
 Nothing to delete. Do not add a scaffold, sample store, or second write-up
@@ -276,7 +279,7 @@ queue entries, and DISC-01 does not authorize them.
 3. **Shelf, attempt, stamp.** Idea and attempt screens, reload, conflict, undo, archive, delete, repeat. Lock and privacy tests. Depends on boundary 1, and on merged export/restore that includes the collection.
 4. **Deck and cabinet.** Versioned deck, draw, list, cabinet, empty state, 390/1280, theme, keyboard, reduced motion. Depends on boundary 3.
 5. **Source links.** Optional trip and library-entry ids, missing-target state, narrow public lookups. No provider calls. Depends on boundary 3.
-6. **Recovery proof.** Round-trip the collection through the recovery contract that has actually merged. Do not start this against unmerged #362. Restore stays with the security leaf that owns it.
+6. **Recovery proof.** Round-trip the collection through the export contract merged in SEC-05 and the restore leaf that actually lands. Restore stays with that security owner.
 
 Likely files once implementation is selected: a new `apps/sidequests/` owner;
 `apps/web/src/app/routes.ts`; `apps/web/routes.json`;
