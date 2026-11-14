@@ -56,9 +56,9 @@ Not run: `npm run test:web` (no `packages/ui` or `apps/web` source change, and n
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded after `gh pr create`. `Closes #240` only. #85 is referenced and stays open.
-- Roadmap #134 append-only status-note URL: recorded after the scoped comment. The issue body was not edited.
-- Merged/activation status: not merged. Local verification passed. CI is not recorded yet. Not deployed.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/364 (`Closes #240` only). #85 is referenced and stays open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6883714481. The issue body was not edited.
+- Merged/activation status: PR #364 is open. Not merged. Local verification passed. CI is not recorded yet. Not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Library and Add artwork stay with MED-09. Parent #85 stays open.
 - Next actor: watch CI on the pull request, squash-merge only with authorization, then record the squash SHA on #240 and #134.
 
