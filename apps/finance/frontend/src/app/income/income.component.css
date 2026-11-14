@@ -26,41 +26,8 @@
   box-shadow: var(--shadow-card);
 }
 
-.income-summary .stat-display {
-  font-size: clamp(2rem, 5vw, 3rem);
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
 .summary-caption {
   margin: var(--space-2) 0 0;
-}
-
-.summary-pill {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  max-width: 100%;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  padding: var(--space-2) var(--space-3);
-  color: var(--text-secondary);
-  background: var(--surface-2);
-}
-
-.income-summary-metrics {
-  display: flex;
-  flex: 1 1 16rem;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  justify-content: flex-end;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.summary-pill strong {
-  font-size: var(--text-sm);
 }
 
 .net-preview {
@@ -85,7 +52,6 @@
   margin-bottom: var(--space-1);
 }
 
-.income-guidance,
 .tax-helper {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -94,25 +60,11 @@
   margin-bottom: var(--space-4);
 }
 
-.income-guidance {
-  display: grid;
-  gap: var(--space-3);
-  min-width: 0;
-  max-width: 100%;
-}
-
-.income-guidance p,
 .tax-helper p,
 .tax-helper small {
   margin: var(--space-1) 0 0;
   color: var(--text-secondary);
   font-size: var(--text-sm);
-  overflow-wrap: anywhere;
-}
-
-.income-guidance__note {
-  margin: 0;
-  max-width: 100%;
   overflow-wrap: anywhere;
 }
 
@@ -179,18 +131,11 @@
     align-items: stretch;
   }
 
-  .summary-pill {
-    align-self: flex-start;
-    width: fit-content;
-  }
-
-  .income-summary-metrics,
   .net-preview {
     justify-content: flex-start;
   }
 
   .income-summary,
-  .income-guidance,
   .tax-helper {
     padding: var(--space-5);
   }

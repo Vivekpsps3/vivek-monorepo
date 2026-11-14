@@ -10,6 +10,10 @@ provider identity and persistence policy with their domain. A new shared abstrac
 must replace real copies in the same PR and have a bounded public API and clear
 disposal/error ownership. Use a plain function before a configurable framework.
 
+Angular controls own their styles. Menu triggers reuse the button stylesheet;
+do not copy component rules into the global kit. Keep global tokens and native
+control utilities separate from component presentation.
+
 For UI changes, preserve accessible names, linked errors, keyboard/focus return,
 dialog scroll, hit targets and theme tokens. Resolve cascade ownership instead of
 stacking specificity overrides. Migrate consumers and remove their old selectors.

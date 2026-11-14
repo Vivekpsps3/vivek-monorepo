@@ -1,100 +1,5 @@
-/**
- * Shared controls for the static Travel and Media apps.
- * Matches packages/ui/src/ui-button and the warm token set in tokens.css.
- */
-
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: var(--navbar-bg);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.topbar-inner,
-.shell,
-.footer {
-  width: min(72rem, calc(100% - 2rem));
-  margin-inline: auto;
-}
-
-.topbar-inner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  min-height: 64px;
-}
-
-.brand {
-  color: var(--text);
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  text-decoration: none;
-  flex-shrink: 0;
-}
-
-.identity {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
-.suite-hub {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 0 0 auto;
-  box-sizing: border-box;
-  min-height: 44px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-md);
-  color: var(--text);
-  font-size: var(--text-sm);
-  font-weight: 650;
-  line-height: 1;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.suite-hub svg {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-}
-
-.suite-hub:hover {
-  background: var(--surface-2);
-}
-
-.suite-hub:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.nav {
-  display: flex;
-  gap: var(--space-1);
-  align-items: center;
-}
-
-.nav a {
-  color: var(--text-secondary);
-  text-decoration: none;
-}
-
-.nav a[aria-current="page"] {
-  color: var(--text);
-  box-shadow: inset 0 -2px var(--accent);
-}
-
-.topbar-actions {
-  margin-left: auto;
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-}
+/* Native controls used by the private shell and app-owned templates.
+ * Angular controls keep their own component styles. */
 
 .btn {
   display: inline-flex;
@@ -126,18 +31,6 @@
   cursor: not-allowed;
 }
 
-.btn-sm {
-  min-height: var(--control-h-sm);
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--text-sm);
-}
-
-@media (max-width: 640px) {
-  .btn-sm {
-    min-height: var(--control-h);
-  }
-}
-
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -148,16 +41,6 @@
   background: var(--accent-hover);
 }
 
-.btn-secondary {
-  background: color-mix(in srgb, var(--surface-2) 78%, transparent);
-  color: var(--text);
-  border-color: var(--border);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--surface-hover);
-}
-
 .btn-ghost {
   background: transparent;
   color: var(--accent);
@@ -165,16 +48,6 @@
 
 .btn-ghost:hover:not(:disabled) {
   background: var(--surface-2);
-}
-
-.btn-danger {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: var(--on-accent);
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: var(--danger-hover);
 }
 
 input:not([type="checkbox"]):not([type="radio"]),
@@ -220,10 +93,6 @@ textarea {
 .suite-empty p {
   margin: 0 0 var(--space-4);
   color: var(--text-secondary);
-}
-
-.field-note {
-  font-weight: 500;
 }
 
 /* Hover stops at an invalid control so this rule cannot outrank the danger border below. */

@@ -3,13 +3,15 @@ import { TestBed } from "@angular/core/testing";
 import { By } from "@angular/platform-browser";
 import { UiMenuComponent } from "./ui-menu.component";
 import { UiMenuItemDirective } from "./ui-menu-item.directive";
+import { UiButtonComponent } from "../ui-button/ui-button.component";
 
 @Component({
   standalone: true,
-  imports: [UiMenuComponent, UiMenuItemDirective],
+  imports: [UiMenuComponent, UiMenuItemDirective, UiButtonComponent],
   template: `
     <button id="outside">Outside</button>
-    <ui-menu label="Add" icon="plus" (opened)="addOpened($event)">
+    <ui-button style="display: inline-block" [variant]="variant">Reference action</ui-button>
+    <ui-menu label="Add" icon="plus" [variant]="variant" (opened)="addOpened($event)">
       <button uiMenuItem (select)="picked('transport')">Transport</button>
       <button uiMenuItem [disabled]="true" (select)="picked('blocked')">
         Blocked
@@ -29,6 +31,7 @@ import { UiMenuItemDirective } from "./ui-menu-item.directive";
   `,
 })
 class MenuHost {
+  variant: "secondary" | "ghost" = "secondary";
   readonly events: string[] = [];
   picked(name: string): void {
     this.events.push(name);
@@ -69,6 +72,22 @@ describe("ui-menu", () => {
 
   function trigger(index: number): HTMLButtonElement {
     return root.querySelectorAll<HTMLButtonElement>("ui-menu > button")[index];
+  }
+
+  for (const variant of ["secondary", "ghost"] as const) {
+    it(`keeps the ${variant} trigger styled like a button with a 44px target`, () => {
+      host.variant = variant;
+      fixture.detectChanges();
+      const reference = root.querySelector<HTMLButtonElement>("ui-button button")!;
+      const actual = getComputedStyle(trigger(0));
+      const expected = getComputedStyle(reference);
+      for (const property of ["display", "padding", "color", "background-color", "border", "font-size", "font-weight"]) {
+        expect(actual.getPropertyValue(property)).withContext(property)
+          .toBe(expected.getPropertyValue(property));
+      }
+      expect(trigger(0).getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+      expect(trigger(1).getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    });
   }
   function panel(index: number): HTMLElement {
     return root.querySelectorAll<HTMLElement>("ui-menu > .ui-menu__panel")[index];

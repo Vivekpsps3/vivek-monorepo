@@ -6,6 +6,7 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 
 - **Plain CSS** with shared design tokens from `packages/ui/tokens.css` (near-neutral light default; explicit light/dark choice)
 - **Shared UI** — generic Angular components, confirmation/toast services, theme preference helpers, and chart colors live in `@vivek/ui` (`packages/ui`); Finance imports them from the package API
+- Shared Angular controls own their component styles. Menu triggers reuse the button stylesheet; `packages/ui/kit.css` supplies public navigation and small global utilities, not a second card/header/button implementation. Use `ui-button` for public-page actions too.
 - **State** — `FinanceService` over `EncryptedStoreService` after vault unlock (RxJS `BehaviorSubject`s for ledger, balance sheet, recurring cashflow); `PlanningService`; `AuthService`
 - Stock Lab uses `MarketResearchService` for explicit ticker lookups and `EncryptedStoreService` for encrypted `stock_lab_scenarios`.
 - **Charts** — Chart.js via dynamic `import('chart.js/auto')` (dashboard/charts components and planning fan chart)

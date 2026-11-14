@@ -102,10 +102,6 @@ export function assetReviewState(asset: Asset, asOf = todayDate()): ReviewState 
   return balanceReviewState(asset.as_of_date, assetReviewIntervalDays(asset), asOf);
 }
 
-export function liabilityReviewState(liability: Liability, asOf = todayDate()): ReviewState {
-  return balanceReviewState(liability.as_of_date, liabilityReviewIntervalDays(liability), asOf);
-}
-
 export function balanceReviewState(asOfDate: string | null | undefined, intervalDays: number, today = todayDate()): ReviewState {
   const age = calendarAgeDays(asOfDate, today);
   if (age == null || age < 0 || !Number.isFinite(intervalDays) || intervalDays <= 0) return 'unknown';

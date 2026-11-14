@@ -44,7 +44,7 @@ The parent reviewed code, repository guidance, package/configuration boundaries,
 root tooling and live issue bodies. A separately spawned agent performed a
 read-only antagonistic investigation and executed controlled probes of unchanged
 application classes. The parent cross-checked the central findings in source.
-The earlier [frontend walkthrough](../frontend-ux-review-2026-11-08.md) supplies
+The earlier [frontend walkthrough](https://github.com/Vivekpsps3/vivek-monorepo/blob/5bc07c2aab4345446f408d6e331cd1bef193f4d6/planning/frontend-ux-review-2026-11-08.md) supplies
 actual synthetic browser observations for route and UX findings.
 
 The inspected checkout was `8b53c8005008839208bc3d9160fb2c02078119f7`, with concurrent

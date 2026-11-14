@@ -17,19 +17,12 @@ meaningful interaction and informative dated memories. Read its scope reconcilia
 for retained Town/UX/Health/Hub commitments. PLACE-01–14 packets are in the same
 execution queue; they add future scope without reopening completed #100/#102.
 
-## Reference only
+## Supporting guidance and history
 
-Read these when the selected packet needs their context:
+- [Development practices](technical-debt/feature-addition-playbook.md) explains feature recipes.
+- [Technical-debt review](technical-debt/README.md) retains original TD-00–TD-39 rationale.
+- [Completed suite remediation](suite-experience-remediation/README.md) links its immutable acceptance and merge evidence.
+- [Historical planning snapshot](https://github.com/Vivekpsps3/vivek-monorepo/tree/5bc07c2aab4345446f408d6e331cd1bef193f4d6/planning) preserves the superseded product brief and dated roadmap, frontend and code-growth reviews.
 
-| Reference | Purpose |
-| --- | --- |
-| [Code growth and monorepo review](loc-review-2026-11-10.md) | PR measurements, deletion candidates and test-readability findings |
-| [Development practices](technical-debt/feature-addition-playbook.md) | Feature recipes and researched coding practices |
-| [Technical-debt review](technical-debt/README.md) | Dated assessment and original TD-00–TD-39 rationale |
-| [Roadmap review](roadmap-review-2026-11-08.md) | Historical scope reconciliation |
-| [Frontend review](frontend-ux-review-2026-11-08.md) | Historical UX findings and evidence |
-| [Completed suite remediation](suite-experience-remediation/README.md) | PR #22 requirements, deletion record and merge evidence |
-| [Original product brief](personal-operating-system.md) | Product history |
-
-These records do not establish current task order, readiness or completion.
+Historical records do not establish current priority, readiness or completion.
 Current architecture, setup and commands live in the [documentation index](../docs/README.md).

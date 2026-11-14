@@ -2,30 +2,6 @@
   color: var(--text);
   min-height: calc(100dvh - var(--header-h));
 }
-.travel-workspace .feature-nav {
-  display: flex;
-  gap: 0.4rem;
-  overflow: auto;
-  padding: var(--space-2) var(--gutter);
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-.travel-workspace .feature-nav a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  box-sizing: border-box;
-  white-space: nowrap;
-  text-decoration: none;
-  padding: 0.55rem 0.85rem;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-}
-.travel-workspace .feature-nav a.active {
-  background: var(--surface-2);
-  color: var(--text);
-  font-weight: 600;
-}
 .page.travel-page {
   box-sizing: border-box;
   width: min(100%, var(--content-max));
@@ -58,13 +34,6 @@
 .travel-page .muted {
   color: var(--text-secondary);
   font-size: 0.875rem;
-}
-.travel-page .page-heading {
-  display: flex;
-  gap: 1.5rem;
-  align-items: center;
-  justify-content: space-between;
-  margin: 1.5rem 0;
 }
 .travel-page .surface {
   background: var(--surface);
@@ -268,12 +237,6 @@
   padding: 1.25rem 0;
   border-bottom: 1px solid var(--border);
 }
-.travel-page .empty-state {
-  padding: 2.5rem 1.5rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-}
 .travel-page .place-choice {
   display: block;
   margin: 0.75rem 0;
@@ -284,46 +247,15 @@
   width: 100%;
   justify-content: flex-start;
 }
-.travel-page .balance-number {
-  font-size: 2rem;
-  font-weight: 600;
-}
-.travel-page .balance-number span {
-  font-size: 1rem;
-  color: var(--text-secondary);
-}
 .travel-page .pto-chart {
   width: 100%;
   height: 200px;
   display: block;
 }
-.travel-page .pto-chart-line {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
-}
-.travel-page .pto-chart-zero {
-  stroke: var(--text-secondary);
-  stroke-width: 1;
-  stroke-dasharray: 4 4;
-  vector-effect: non-scaling-stroke;
-}
-.travel-page .pto-chart-today {
-  fill: var(--accent);
-}
-.travel-page .pto-chart-caption {
-  margin-top: 0.25rem;
-}
 @media (max-width: 640px) {
   .page.travel-page {
     padding: 1.25rem max(var(--gutter), env(safe-area-inset-right)) 3rem
       max(var(--gutter), env(safe-area-inset-left));
-  }
-  .travel-page .page-heading {
-    align-items: start;
-    flex-direction: column;
-    gap: 0.5rem;
   }
   .travel-page .surface {
     padding: 1rem;

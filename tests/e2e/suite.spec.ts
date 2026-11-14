@@ -18,6 +18,28 @@ test('public pages prerender meaningful HTML and never request private APIs', as
   expect((await request.get('/unknown-page')).status()).toBe(404);
 });
 
+for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const) {
+  test(`shared demo buttons encrypt and decrypt at ${width}px ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/secrets');
+    await page.getByRole('button', { name: `Use ${theme} theme` }).click();
+    const encrypt = page.getByRole('button', { name: 'Encrypt message', exact: true });
+    await expect(encrypt).toBeEnabled();
+    await page.getByLabel('Message', { exact: true }).fill('A browser-local round trip.');
+    await encrypt.click();
+    const decrypt = page.getByRole('button', { name: 'Decrypt message', exact: true });
+    await expect(decrypt).toBeEnabled();
+    await decrypt.click();
+    await expect(page.locator('.decrypted-message')).toHaveText('A browser-local round trip.');
+    await expect(page.getByLabel('Message', { exact: true })).toHaveValue('A browser-local round trip.');
+    for (const button of [encrypt, decrypt]) {
+      const size = await button.boundingBox();
+      expect(size?.height).toBeGreaterThanOrEqual(44);
+    }
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  });
+}
+
 for (const width of [320, 1440]) for (const theme of ['light', 'dark'] as const) test(`the persistent shell works at ${width}px ${theme} with a locked Finance vault`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 });
   await page.goto('/hub');

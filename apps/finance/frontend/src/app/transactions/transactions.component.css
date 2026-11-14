@@ -4,25 +4,21 @@
   max-width: 100%;
 }
 
-.imports-page,
 .embed,
 .page {
   min-width: 0;
   max-width: 100%;
 }
 
-.imports-lead,
 .list-hint,
 .import-hint,
 .import-summary,
-.file-name,
-.empty-import-copy {
+.file-name {
   color: var(--text-secondary);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
-.imports-lead,
 .list-hint {
   margin: 0;
 }
@@ -40,7 +36,6 @@
 }
 
 .month-hero,
-.import-guide-card,
 .import-file-entry,
 .category-tools,
 .import-instructions {
@@ -61,45 +56,6 @@
 .month-hero .section-eyebrow {
   margin: 0;
   color: var(--text);
-}
-
-.import-guide-card {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-5);
-  align-items: center;
-  background: var(--card-bg);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  padding: var(--space-6);
-  box-shadow: var(--shadow-card);
-}
-
-.import-guide-card h2 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-xl);
-  overflow-wrap: anywhere;
-}
-
-.import-guide-card p {
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.import-guide-steps {
-  display: grid;
-  gap: var(--space-2);
-  min-width: min(16rem, 100%);
-}
-
-.import-guide-steps span {
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: var(--surface-2);
-  padding: var(--space-2) var(--space-3);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  font-weight: 600;
 }
 
 .month-summary-row {
@@ -551,7 +507,6 @@ label.form-group,
   text-align: inherit;
 }
 
-.account-cell,
 .desc {
   max-width: 16rem;
   white-space: normal;
@@ -640,11 +595,6 @@ label.form-group,
   opacity: 0.65;
 }
 
-.import-summary-error {
-  color: var(--danger);
-  font-weight: 600;
-}
-
 .import-notes {
   margin: var(--space-3) 0;
   display: flex;
@@ -691,21 +641,6 @@ label.form-group,
 
 .import-notes-list li + li {
   margin-top: var(--space-1);
-}
-
-.import-notes-hint {
-  margin: 0;
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-.import-tag {
-  display: inline-block;
-  margin-left: var(--space-2);
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .suggestion-button {
@@ -866,7 +801,6 @@ label.form-group,
 
 @media (max-width: 768px) {
   .month-hero,
-  .import-guide-card,
   .import-file-entry {
     padding: var(--space-4);
   }
@@ -911,11 +845,6 @@ label.form-group,
 
   .work-income-source {
     gap: var(--space-2);
-  }
-
-  .import-guide-card {
-    flex-direction: column;
-    align-items: stretch;
   }
 
   .table-actions--toolbar,

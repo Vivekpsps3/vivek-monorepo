@@ -44,7 +44,7 @@ function releaseOpenMenu(menu: UiMenuComponent): void {
   standalone: true,
   imports: [UiIconComponent],
   templateUrl: "./ui-menu.component.html",
-  styleUrl: "./ui-menu.component.css",
+  styleUrls: ["../ui-button/ui-button.component.css", "./ui-menu.component.css"],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UiMenuComponent implements OnDestroy {
