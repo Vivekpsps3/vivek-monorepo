@@ -2259,6 +2259,27 @@
         "server_back",
         "schema"
       ]
+    },
+    {
+      "id": "DEL-06",
+      "title": "Remove obsolete UI styling paths and completed planning archives",
+      "parent_issues": [
+        200
+      ],
+      "kind": "implementation",
+      "issue": 358,
+      "dependencies": [],
+      "conflict_groups": [
+        "shared-styles",
+        "finance-presentation",
+        "private-shell",
+        "planning-guidance"
+      ],
+      "verification_profiles": [
+        "shared_front",
+        "server_back",
+        "docs"
+      ]
     }
   ],
   "format_version": 2,

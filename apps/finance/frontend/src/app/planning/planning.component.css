@@ -145,13 +145,6 @@ ui-button {
   margin-bottom: var(--space-3);
 }
 
-.mc-cost-warning {
-  margin: var(--space-3) 0;
-  padding: var(--space-3);
-  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
-  background: color-mix(in srgb, var(--warning) 10%, var(--surface-2));
-}
-
 .mc-field-error {
   display: block;
   margin-top: var(--space-1);
@@ -208,13 +201,6 @@ ui-button {
   min-width: 0;
 }
 
-.mc-saved-hint {
-  margin: 0 0 var(--space-4);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  color: var(--text-tertiary);
-}
-
 .mc-field--grow {
   min-width: 0;
 }
@@ -238,25 +224,17 @@ ui-button {
   outline-offset: 2px;
 }
 
-.mc-summary-band,
-.mc-kpis {
+.mc-summary-band {
   display: grid;
   gap: var(--space-3);
   margin-bottom: var(--space-5);
 }
 
-.mc-summary-band,
-.mc-kpis {
+.mc-summary-band {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 11.5rem), 1fr));
 }
 
-.mc-kpis {
-  margin-bottom: 0;
-}
-
-.mc-metric,
-.mc-kpi,
-.tool-results-grid > div {
+.mc-metric {
   min-width: 0;
   padding: var(--space-4);
   background: var(--card-bg);
@@ -264,13 +242,7 @@ ui-button {
   border-radius: var(--radius-lg);
 }
 
-.tool-results-grid > div {
-  background: var(--surface-2);
-}
-
-.mc-metric span,
-.mc-kpi span,
-.tool-results-grid span {
+.mc-metric span {
   display: block;
   margin-bottom: var(--space-2);
   overflow-wrap: anywhere;
@@ -282,9 +254,7 @@ ui-button {
   color: var(--text-secondary);
 }
 
-.mc-metric strong,
-.mc-kpi strong,
-.tool-results-grid strong {
+.mc-metric strong {
   display: block;
   overflow-wrap: anywhere;
   font-size: 1.35rem;
@@ -292,12 +262,7 @@ ui-button {
   color: var(--text);
 }
 
-.tool-results-grid strong {
-  font-size: 1.2rem;
-}
-
-.mc-metric small,
-.mc-kpi small {
+.mc-metric small {
   display: block;
   margin-top: var(--space-2);
   font-size: 0.78rem;
@@ -314,7 +279,6 @@ ui-button {
 }
 
 .mc-panel,
-.mc-results,
 .mc-list,
 .mc-control-grid,
 .mc-editor-row {
@@ -393,7 +357,6 @@ ui-button {
 
 .mc-control-grid > .mc-field,
 .mc-editor-row > .mc-field,
-.tool-form-grid > .mc-field,
 .mc-profiles-row > .mc-field,
 .planning-question .mc-field {
   margin-bottom: 0;
@@ -482,130 +445,6 @@ ui-button {
   align-self: end;
 }
 
-.mc-secondary-action-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  margin-top: var(--space-3);
-}
-
-.mc-secondary-action-wrap ::ng-deep .ui-btn {
-  width: auto;
-  max-width: 100%;
-}
-
-.mc-results {
-  gap: var(--space-5);
-  min-width: 0;
-}
-
-.mc-empty-state {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: var(--space-2);
-  min-height: 16rem;
-  padding: var(--space-6);
-  text-align: center;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-}
-
-.mc-empty-state h2 {
-  margin: var(--space-3) 0 var(--space-2);
-  color: var(--text);
-}
-
-.mc-empty-state p {
-  max-width: 520px;
-  margin: 0;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
-.mc-kpi__value--success {
-  color: var(--success);
-}
-
-.mc-kpi__value--warning {
-  color: var(--warning);
-}
-
-.mc-kpi__value--danger {
-  color: var(--danger);
-}
-
-.mc-narrative {
-  margin: 0;
-  padding-left: 1.1rem;
-  color: var(--text-secondary);
-  line-height: 1.65;
-}
-
-.mc-narrative li + li {
-  margin-top: var(--space-3);
-}
-
-.mc-results table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.mc-results th,
-.mc-results td {
-  padding: var(--space-3);
-  text-align: left;
-  overflow-wrap: anywhere;
-  border-bottom: 1px solid var(--border);
-  font-variant-numeric: tabular-nums;
-}
-
-@media (min-width: 769px) {
-  .mc-results th,
-  .mc-results td {
-    white-space: nowrap;
-  }
-}
-
-.mc-results th {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.mc-results td {
-  font-size: 0.875rem;
-  color: var(--text);
-}
-
-.planning-tabs {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  margin: var(--space-4) 0 var(--space-6);
-}
-
-.planning-tabs button {
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  padding: 0.55rem 0.8rem;
-  background: var(--surface-2);
-  color: var(--text-secondary);
-  font: inherit;
-  cursor: pointer;
-}
-
-.planning-tabs button.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-}
-
 .planning-tools-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
@@ -681,12 +520,9 @@ ui-button {
 @media (max-width: 768px) {
   .planning-facts-grid,
   .mc-summary-band,
-  .mc-kpis,
   .mc-control-grid,
   .mc-editor-row,
   .planning-tools-grid,
-  .tool-form-grid,
-  .tool-results-grid,
   .spending-choice-group,
   .mc-profiles-row {
     grid-template-columns: 1fr;
@@ -696,14 +532,11 @@ ui-button {
     grid-column: auto;
   }
 
-  .mc-metric strong,
-  .mc-kpi strong,
-  .tool-results-grid strong {
+  .mc-metric strong {
     font-size: 1.15rem;
   }
 
   .mc-callout,
-  .mc-empty-state,
   .planning-question {
     padding: var(--space-4);
   }
@@ -716,7 +549,6 @@ ui-button {
     min-height: 44px;
   }
 
-  .tool-check,
   .mc-check--compact {
     align-self: stretch;
     min-height: 44px;

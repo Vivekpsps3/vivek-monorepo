@@ -8,10 +8,9 @@ import {
   isSafeCents,
   parseMoneyInput,
   dollarsFromCountedCents,
-  toDollars,
   type Cents,
 } from '@vivek/browser';
-import { isOnOrBeforeToday, parseDateOnly, todayIsoDate } from '@vivek/browser';
+import { parseDateOnly, todayIsoDate } from '@vivek/browser';
 
 export interface FieldIssue {
   field: string;
@@ -291,25 +290,4 @@ function nameIssue(raw: unknown, field = 'name', label = 'Name'): FieldIssue | n
 function blankAsZero(value: unknown): unknown {
   if (value == null || value === '') return 0;
   return value;
-}
-
-export function validatePlanningPaths(raw: unknown): string | null {
-  const paths = Number(raw);
-  if (!Number.isInteger(paths) || paths < 100 || paths > 5000) return 'Choose 100 to 5,000 paths.';
-  return null;
-}
-
-export function validateGrowthPercent(raw: unknown): string | null {
-  const text = String(raw ?? '').trim().replace(/%$/, '').replace('\u2212', '-');
-  const rate = Number(text);
-  if (!Number.isFinite(rate) || rate < -20 || rate > 30) return 'Enter a yearly growth rate from \u221220% to 30%.';
-  return null;
-}
-
-export function isRecordedDate(value: string | null | undefined, today = todayIsoDate()): boolean {
-  return isOnOrBeforeToday(value, today);
-}
-
-export function centsToStoredDollars(cents: Cents): number {
-  return toDollars(cents);
 }

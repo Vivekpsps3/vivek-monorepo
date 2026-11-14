@@ -20,7 +20,6 @@ h3 {
   letter-spacing: -0.02em;
 }
 
-.scope-note,
 .hint,
 .company-sub,
 .price-check-result,
@@ -33,7 +32,6 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.scope-note,
 .hint {
   margin: 0;
 }
@@ -41,10 +39,6 @@ h3 {
 .summary .hint,
 .summary + .hint {
   margin-top: var(--space-3);
-}
-
-.holdings-tip {
-  margin: 0 0 var(--space-3);
 }
 
 .resume-stage {
@@ -257,12 +251,6 @@ details.account-sub[open] > summary::before {
   font-weight: 600;
 }
 
-.account-sub .toggle-hint {
-  flex: 0 0 auto;
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
 .account-sub .sub-table {
   padding: var(--space-3);
   background: var(--card-bg);
@@ -288,28 +276,20 @@ details.account-sub[open] > summary::before {
   font-weight: 400;
 }
 
-.price-cell,
-.position-cell {
+.price-cell {
   min-width: 0;
   max-width: none;
   white-space: normal;
 }
 
 .price-cell .as-of-small,
-.price-cell .price-hint,
-.position-cell .as-of-small {
+.price-cell .price-hint {
   display: block;
   margin-top: var(--space-1);
   color: var(--text-tertiary);
   font-size: var(--text-xs);
   line-height: 1.35;
   overflow-wrap: anywhere;
-}
-
-.position-cell .as-of-small {
-  margin-top: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
 }
 
 .actions {
@@ -585,10 +565,6 @@ details.account-sub[open] > summary::before {
   .account-sub .sub-table {
     padding: 0;
     background: transparent;
-  }
-
-  .account-sub .toggle-hint {
-    display: none;
   }
 
   .nickname-input {

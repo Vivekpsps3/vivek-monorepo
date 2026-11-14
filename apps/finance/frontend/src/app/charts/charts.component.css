@@ -37,15 +37,6 @@
   margin-bottom: var(--space-4);
 }
 
-.chart-data { margin-top: var(--space-3); }
-.chart-data summary {
-  width: fit-content;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-.chart-data[open] summary { margin-bottom: var(--space-2); }
-
 .chart-note .muted {
   display: block;
   margin-top: var(--space-1);
@@ -97,18 +88,6 @@
   font-size: var(--text-sm);
   cursor: pointer;
 }
-
-.chart-drilldown-link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.chart-drilldown-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .chart-fallback a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .chart-fallback a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .chart-company-name { display: block; color: var(--text-secondary); }

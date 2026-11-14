@@ -142,14 +142,6 @@ export function transactionEffects(
   return directedEffects(tx, dollarsFromCents(cents));
 }
 
-export function transactionIncome(tx: Transaction): number {
-  return transactionEffects(tx).income;
-}
-
-export function transactionSpending(tx: Transaction): number {
-  return transactionEffects(tx).spending;
-}
-
 function monthlyAmount(amount: number, frequency: string): number {
   const cents = fromDollars(Number(amount));
   if (cents == null) return 0;

@@ -330,11 +330,6 @@ h2:focus-visible,
   font-size: var(--text-sm);
 }
 
-.error-text {
-  color: var(--danger);
-  margin-bottom: var(--space-4);
-}
-
 .positive {
   color: var(--success);
 }
@@ -387,34 +382,6 @@ h2:focus-visible,
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 640px;
-}
-
-.data-table th,
-.data-table td {
-  padding: var(--space-3) var(--space-4);
-  text-align: left;
-  border-bottom: 1px solid var(--border);
-}
-
-.data-table th {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.data-table th.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-
-.data-table th.sortable:hover {
-  color: var(--text);
 }
 
 .import-help {
@@ -666,13 +633,9 @@ h2:focus-visible,
     border-bottom-color: transparent;
   }
 
-  .table-scroll,
-  .data-table {
+  .table-scroll {
     max-width: 100%;
     min-width: 0;
-  }
-
-  .table-scroll {
     overflow: visible;
   }
 

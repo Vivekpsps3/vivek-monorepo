@@ -48,14 +48,6 @@ h3 {
   color: var(--text-tertiary);
 }
 
-.hint {
-  margin: var(--space-4) 0 0;
-  font-size: var(--text-sm);
-  line-height: 1.45;
-  color: var(--text-secondary);
-  overflow-wrap: anywhere;
-}
-
 .source-dates {
   margin: var(--space-2) 0 0;
   font-size: var(--text-sm);
@@ -143,25 +135,6 @@ h3 {
 }
 
 @media (max-width: 640px) {
-  .summary-card .summary-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-    padding-top: var(--space-3);
-  }
-
-  .breakdown-item {
-    flex-direction: row;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-3) 0;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .breakdown-item:last-child {
-    border-bottom: 0;
-    padding-bottom: 0;
-  }
 
   .source-dates {
     flex-direction: column;

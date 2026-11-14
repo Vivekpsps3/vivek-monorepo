@@ -1,12 +1,13 @@
 import { ChangeDetectorRef, Component, OnInit, PLATFORM_ID, inject } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { UiButtonComponent } from '@vivek/ui';
 import { EcdhService } from '../../services/ecdh.service';
 
 @Component({
   selector: 'app-secrets',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, UiButtonComponent],
   templateUrl: './secrets.component.html',
 })
 export class SecretsComponent implements OnInit {
