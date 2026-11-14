@@ -320,6 +320,14 @@ def test_source_writes_retract_instead_of_stacking(tmp_path, monkeypatch):
     now = datetime(2026, 11, 11, 20, 0, tzinfo=UTC)
     today = now.astimezone(ZoneInfo("America/Los_Angeles")).date()
     monkeypatch.setenv("MEDIA_TODAY", today.isoformat())
+
+    class ReminderClock:
+        @staticmethod
+        def now(tz):
+            return now.astimezone(tz)
+
+    # Reminder writes and the Town projection must observe the same fixture day.
+    monkeypatch.setattr("apps.travel.backend.routers.trips.datetime", ReminderClock)
     application, database = _open(folder, now)
     db = database.sessionmaker()
     _habit(db, 1, created=date(2026, 10, 1))
