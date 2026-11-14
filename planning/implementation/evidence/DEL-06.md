@@ -41,7 +41,7 @@ Physical full-PR accounting against the base (including this evidence):
 | --- | ---: | ---: | ---: |
 | Production | 21 | 1,084 | −1,063 |
 | Tests | 50 | 3 | +47 |
-| Planning/documentation | 215 | 10,362 | −10,147 |
+| Planning/documentation | 216 | 10,362 | −10,146 |
 
 Four historical screenshot binaries are removed separately and are not counted as text lines.
 
@@ -73,7 +73,8 @@ Resolved attempts: first doc gate found one incoming historical review link, now
 
 ## Handoff
 
-- PR: not opened yet; all runtime gates pass. Final fast gate and publication follow.
-- Merged/activation: neither merged nor deployed.
+- PR: [#359](https://github.com/Vivekpsps3/vivek-monorepo/pull/359). Its live checks and merge result are authoritative.
+- Scoped roadmap note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6873942721
+- Activation: no deployment or external activation is claimed.
 - Owner authorized opening and merging after review on 2026-11-14. Deployment is not claimed.
-- Next action: run final fast gate, push/open a PR closing #358 only, append scoped status to #134, and merge only after required CI passes.
+- Delivery rule: merge #359 only after required CI passes, closing #358 only; #200 and #214 remain open.
