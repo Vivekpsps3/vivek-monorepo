@@ -1,8 +1,14 @@
 import { expect, type Page, test } from '../../../tests/e2e/fixtures';
 import { deferred, resetMedia } from './media-test';
 
-test.beforeEach(async ({ request }) => {
+test.beforeEach(async ({ request, page }) => {
   await resetMedia(request);
+  // A remote poster failure intentionally removes the image from the UI. Keep
+  // these URL-policy assertions independent of the real image provider.
+  await page.route('https://image.tmdb.org/**', route => route.fulfill({
+    contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64'),
+  }));
 });
 
 function watchMovies(page: Page): string[] {
