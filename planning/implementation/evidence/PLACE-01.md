@@ -69,7 +69,11 @@ or committed screenshot binaries.
 
 ## Handoff
 
-- PR / roadmap status note: not published at this local checkpoint.
+- PR: [#360](https://github.com/Vivekpsps3/vivek-monorepo/pull/360), open for review;
+  design commit `81c2765`. Initial CI is running; no CI pass is claimed here.
+- Scoped status receipts: [leaf #305](https://github.com/Vivekpsps3/vivek-monorepo/issues/305#issuecomment-6874169259)
+  and [roadmap #134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6874169620).
+  Parent bodies and queue metadata were not rewritten.
 - Merge/deploy/activation: not performed; no application changes are claimed.
 - Current design: one proposed coastal reference, owner taste review pending.
 - Next actor: use the [roadmap handoff](../../living-world/design/next.md), rerun
