@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.finance.backend.database import get_db
@@ -12,6 +13,9 @@ from apps.finance.backend.schemas_vault import (
     EncryptedRecordBatchUpsert,
     EncryptedRecordReindexResponse,
     EncryptedRecordResponse,
+    RestoreActivateRequest,
+    RestoreBatchRequest,
+    RestoreCreateRequest,
     VaultCreateRequest,
     VaultResponse,
     VaultUpdateRequest,
@@ -241,3 +245,99 @@ def encrypted_recovery_snapshot(
     db: Session = Depends(get_db, scope="function"),
 ):
     return store.recovery_snapshot(db, _user_id(current_user))
+
+
+@router.get("/restore/stages")
+def restore_stages(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    from apps.finance.backend.services import vault_restore
+
+    result = vault_restore.list_stages(db, _user_id(current_user))
+    db.commit()
+    return result
+
+
+@router.post("/restore/stages")
+def create_restore_stage(
+    body: RestoreCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db, scope="function"),
+):
+    from apps.finance.backend.services import vault_restore
+
+    result = vault_restore.create_stage(db, _user_id(current_user), body.model_dump())
+    db.commit()
+    return result
+
+
+@router.get("/restore/stages/{stage_id}")
+def get_restore_stage(
+    stage_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db, scope="function"),
+):
+    from apps.finance.backend.services import vault_restore
+
+    return vault_restore.describe(db, vault_restore.get_stage(db, _user_id(current_user), stage_id))
+
+
+@router.put("/restore/stages/{stage_id}/batches/{batch_index}")
+def put_restore_batch(
+    stage_id: str,
+    batch_index: int,
+    body: RestoreBatchRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db, scope="function"),
+):
+    from apps.finance.backend.services import vault_restore
+
+    try:
+        result = vault_restore.put_batch(
+            db,
+            _user_id(current_user),
+            stage_id,
+            batch_index,
+            [record.model_dump() for record in body.records],
+        )
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.post("/restore/stages/{stage_id}/activate")
+def activate_restore_stage(
+    stage_id: str,
+    body: RestoreActivateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db, scope="function"),
+):
+    from apps.finance.backend.services import vault_restore
+
+    try:
+        result = vault_restore.activate(db, _user_id(current_user), stage_id, body.confirmation)
+        db.commit()
+        return result
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            409, "Restore conflicts with current record indexes. Active data was not changed."
+        ) from None
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.delete("/restore/stages/{stage_id}")
+def discard_restore_stage(
+    stage_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db, scope="function"),
+):
+    from apps.finance.backend.services import vault_restore
+
+    vault_restore.discard(db, _user_id(current_user), stage_id)
+    db.commit()
+    return {"discarded": True}

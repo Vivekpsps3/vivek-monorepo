@@ -83,3 +83,23 @@ class BlindIndexLookupRequest(BaseModel):
     collection: str
     index_name: str
     index_value_b64: str
+
+
+class RestoreCreateRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    source_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    base_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+    mode: str = Field(pattern=r"^(merge|replace)$")
+    key_version: int = Field(ge=1)
+    expected_counts: dict[str, int]
+    batch_count: int = Field(ge=0, le=128)
+
+
+class RestoreBatchRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    records: list[EncryptedRecordInput] = Field(min_length=1, max_length=200)
+
+
+class RestoreActivateRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    confirmation: str = Field(default="", max_length=7)

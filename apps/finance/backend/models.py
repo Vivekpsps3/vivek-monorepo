@@ -94,3 +94,32 @@ class EncryptedRecordIndex(Base):
     index_name: Mapped[str] = mapped_column(String, nullable=False, index=True)
     index_value_b64: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
+class VaultRestoreStage(Base):
+    """Bounded temporary ciphertext job; never part of the active vault."""
+
+    __tablename__ = "vault_restore_stages"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    vault_wrap_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    base_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    mode: Mapped[str] = mapped_column(String(8), nullable=False)
+    key_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    expected_counts_json: Mapped[str] = mapped_column(Text, nullable=False)
+    batch_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="pending")
+    result_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now)
+
+
+class VaultRestoreBatch(Base):
+    __tablename__ = "vault_restore_batches"
+    stage_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("vault_restore_stages.id", ondelete="CASCADE"), primary_key=True
+    )
+    batch_index: Mapped[int] = mapped_column(Integer, primary_key=True)
+    records_json: Mapped[str] = mapped_column(Text, nullable=False)

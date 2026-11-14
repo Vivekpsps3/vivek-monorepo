@@ -1,6 +1,7 @@
+import type { RestoreStage, RestoreWireRecord } from '../src/app/crypto/recovery-restore';
 import { readFileSync } from 'node:fs';
 import { repositoryRoot } from '../../../../tests/e2e/config';
-import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { errors, expect, Locator, Page } from '@playwright/test';
 import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
 import { frozenNow } from './frozen-clock';
@@ -147,6 +148,16 @@ export async function syntheticVault(
   const quoteRequestDetails: Array<{ symbol: string; refresh: boolean }> = [];
   const quoteResponses = new Map<string, QuoteResponse>();
   const mutations: Array<{ path: string; body: any }> = [];
+  const restoreStages = new Map<string, RestoreStage & { batches: Map<number, RestoreWireRecord[]> }>();
+  let nextRestoreStage = 1;
+  let failedRestoreBatch = -1;
+  let heldRestoreGate: Promise<void> | null = null;
+  let releaseRestore: (() => void) | null = null;
+  let restoreArrived: (() => void) | null = null;
+  let restoreArrivedPromise: Promise<void> | null = null;
+  const fingerprint = () => createHash('sha256').update(JSON.stringify([...records.values()].sort((a, b) => `${a.collection}/${a.client_id}`.localeCompare(`${b.collection}/${b.client_id}`)))).digest('hex');
+  const restoreDescription = (stage: NonNullable<ReturnType<typeof restoreStages.get>>) => ({ ...stage, batches: undefined });
+
   let failedWrites = 0;
   let collectionFailure: { collection: string; remaining: number } | null = null;
   let heldUpsertsTarget = 0;
@@ -165,7 +176,7 @@ export async function syntheticVault(
     const ciphertext = Buffer.concat([cipher.update(JSON.stringify(data)), cipher.final(), cipher.getAuthTag()]);
     return Buffer.concat([iv, ciphertext]).toString('base64');
   }
-  function plaintext(row: RecordRow): Payload {
+  function plaintext(row: Pick<RecordRow, 'collection' | 'client_id' | 'ciphertext_b64' | 'schema_version' | 'key_version'>): Payload {
     const packed = Buffer.from(row.ciphertext_b64, 'base64');
     const cipher = createDecipheriv('aes-256-gcm', key, packed.subarray(0, 12));
     if (row.schema_version !== 1) cipher.setAAD(aad(row));
@@ -217,9 +228,55 @@ export async function syntheticVault(
     }
     if (path === '/api/vault/recovery-snapshot') {
       return respond({
+        fingerprint: fingerprint(),
         collections: syntheticRecoveryCollections().map(row => ({ ...row, count: [...records.values()].filter(record => record.collection === row.collection).length })),
         records: [...records.values()],
       });
+    }
+
+    if (path === '/api/vault/restore/stages') {
+      if (request.method() === 'GET') return respond([...restoreStages.values()].map(restoreDescription));
+      const body = request.postDataJSON(); mutations.push({ path, body });
+      const prior = [...restoreStages.values()].find(stage => stage.status === 'pending' && stage.source_hash === body.source_hash && stage.base_fingerprint === body.base_fingerprint && stage.mode === body.mode);
+      if (prior) return respond(restoreDescription(prior));
+      if (body.base_fingerprint !== fingerprint()) return respond({ detail: 'Changed preview' }, 409);
+      const id = `synthetic-stage-${nextRestoreStage++}`;
+      const stage: RestoreStage & { batches: Map<number, RestoreWireRecord[]> } = { ...body, id, status: 'pending', received_batches: [], batches: new Map(), result: {} };
+      restoreStages.set(id, stage);
+      return respond(restoreDescription(stage));
+    }
+    if (path.startsWith('/api/vault/restore/stages/')) {
+      const parts = path.split('/'); const stage = restoreStages.get(parts[5]);
+      if (!stage) return respond({ detail: 'Unknown stage' }, 404);
+      if (request.method() === 'GET') return respond(restoreDescription(stage));
+      if (request.method() === 'DELETE') { restoreStages.delete(stage.id); return respond({ discarded: true }); }
+      const body = request.postDataJSON(); mutations.push({ path, body });
+      if (parts[6] === 'batches') {
+        const index = Number(parts[7]);
+        if (heldRestoreGate) { restoreArrived?.(); await heldRestoreGate; }
+        if (failedRestoreBatch === index) { failedRestoreBatch = -1; return respond({ detail: 'Synthetic interrupted batch' }, 503); }
+        if (!stage.batches.has(index)) {
+          for (const input of body.records) plaintext(input);
+          stage.batches.set(index, body.records); stage.received_batches.push(index);
+        }
+        return respond(restoreDescription(stage));
+      }
+      if (parts[6] === 'activate') {
+        if (stage.status === 'committed') return respond(stage.result);
+        if (stage.base_fingerprint !== fingerprint() || stage.received_batches.length !== stage.batch_count) return respond({ detail: 'Changed or incomplete stage' }, 409);
+        if (stage.mode === 'replace' && body.confirmation !== 'REPLACE') return respond({ detail: 'Type REPLACE' }, 422);
+        const incoming = [...stage.batches.entries()].sort((a, b) => a[0] - b[0]).flatMap(([, rows]) => rows);
+        const previous = new Map(records); const incomingKeys = new Set(incoming.map(row => identity(row.collection, row.client_id)));
+        let removed = 0;
+        if (stage.mode === 'replace') for (const key of records.keys()) if (!incomingKeys.has(key)) { records.delete(key); removed++; }
+        for (const input of incoming) {
+          plaintext(input);
+          const key = identity(input.collection, input.client_id);
+          records.set(key, { ...input, revision: (previous.get(key)?.revision ?? 0) + 1, updated_at: new Date().toISOString() });
+        }
+        stage.status = 'committed'; stage.result = { restored: incoming.length, removed, mode: stage.mode };
+        return respond(stage.result);
+      }
     }
     if (path === '/api/vault/counts') {
       const counts: Record<string, number> = {};
@@ -358,13 +415,25 @@ export async function syntheticVault(
   return {
     quoteRequests, quoteRequestDetails, mutations,
     /** Add encrypted synthetic markers after opening Settings, avoiding unrelated domain hydration. */
-    seedRecoveryMarkers() {
+
+    seedRecoveryMarkers(copies = 1, prefix = 'PRIVATE_RECOVERY_') {
       for (const { collection } of syntheticRecoveryCollections()) {
-        const row: RecordRow = { collection, client_id: `recovery_${collection}`, ciphertext_b64: '', schema_version: 2, key_version: 1, revision: 1, updated_at: new Date().toISOString() };
-        row.ciphertext_b64 = encrypt({ marker: `PRIVATE_RECOVERY_${collection}`, id: 1 }, row);
-        records.set(identity(collection, row.client_id), row);
+        for (let index = 0; index < copies; index++) {
+          const clientId = `recovery_${collection}${index ? `_${index + 1}` : ''}`;
+          const row: RecordRow = { collection, client_id: clientId, ciphertext_b64: '', schema_version: index && collection === 'transactions' ? 1 : 2, key_version: 1, revision: 1, updated_at: new Date().toISOString() };
+          row.ciphertext_b64 = encrypt({ marker: `${prefix}${collection}`, id: index + 1, nested: { synthetic: true, value: index + 0.25 } }, row);
+          records.set(identity(collection, row.client_id), row);
+        }
       }
     },
+    failRestoreBatch(index: number) { failedRestoreBatch = index; },
+    holdRestoreBatch() {
+      heldRestoreGate = new Promise<void>(resolve => { releaseRestore = resolve; });
+      restoreArrivedPromise = new Promise<void>(resolve => { restoreArrived = resolve; });
+    },
+    waitForRestoreBatch() { return restoreArrivedPromise ?? Promise.resolve(); },
+    releaseRestoreBatch() { releaseRestore?.(); heldRestoreGate = null; },
+    stagedRestoreCount() { return [...restoreStages.values()].filter(stage => stage.status === 'pending').length; },
     async open(path: string, target: Page = page, expected?: string | RegExp) {
       attach(target);
       if (!enteredPages.has(target)) { await target.goto('vault/unlock'); await unlock(target); }

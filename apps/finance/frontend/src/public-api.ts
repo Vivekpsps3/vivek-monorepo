@@ -135,3 +135,8 @@ export async function exportFinanceRecovery(
 ): Promise<void> {
   return (await import('./app/crypto/recovery-export')).exportFinanceRecovery(injector, currentPassphrase, backupPassword, signal, publish);
 }
+
+export type { RecoveryRestorePlan, RestoreMode, RestorePreviewRow } from './app/crypto/recovery-restore';
+export async function prepareFinanceRestore(injector: Injector, file: Blob, password: string, mode: 'merge' | 'replace', signal: AbortSignal) {
+  return (await import('./app/crypto/recovery-restore')).openFinanceRestore(injector, file, password, mode, signal);
+}
