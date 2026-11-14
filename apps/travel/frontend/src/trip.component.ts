@@ -4,6 +4,8 @@ import {
   DestroyRef,
   ElementRef,
   HostListener,
+  Injector,
+  afterNextRender,
   computed,
   inject,
   signal,
@@ -77,6 +79,7 @@ import { fieldErrors } from "./validate.mjs";
   templateUrl: "./trip.component.html",
 })
 export class TripComponent {
+  private readonly injector = inject(Injector);
   readonly showDay = showDay;
   readonly showMoney = showMoney;
   readonly showRange = showRange;
@@ -304,9 +307,13 @@ export class TripComponent {
       });
     }
     if (focusContent) {
-      setTimeout(() => {
-        document.getElementById("itinerary-day-" + iso)?.focus();
-      });
+      // An empty day's panel is created by this selection. A timer can fire
+      // before Angular renders it, so focus only after the panel exists.
+      afterNextRender(() => {
+        if (!this.destroy.destroyed && this.selectedDay === iso) {
+          document.getElementById("itinerary-day-" + iso)?.focus();
+        }
+      }, { injector: this.injector });
     }
   }
 

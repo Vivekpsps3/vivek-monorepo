@@ -78,9 +78,15 @@ test('DAY2 one roving tab stop selects the day and Add a plan keeps that date', 
   await page.keyboard.press('ArrowRight');
   await expect(tabs.nth(1)).toBeFocused();
   await expect.poll(async () => tabs.evaluateAll((nodes) => nodes.filter((node) => node.tabIndex === 0).length)).toBe(1);
+  // Hold rendering until after the selection timer would have fired. Empty
+  // days do not have a panel yet; focus must follow its first rendered frame.
+  await page.clock.install({ time: new Date('2026-12-01T12:00:00Z') });
+  await page.clock.pauseAt(new Date('2026-12-01T12:01:00Z'));
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/day=2026-12-13/);
+  await page.clock.runFor(50);
   await expect(tripDay(page, '2026-12-13')).toBeFocused();
+  await page.clock.resume();
   await page.getByRole('button', { name: 'Add a plan', exact: true }).click();
   await expect(page.locator('input[name="date"]')).toHaveValue('2026-12-13');
   await page.locator('input[name="title"]').fill('Free day plan');
