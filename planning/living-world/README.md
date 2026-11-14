@@ -57,6 +57,15 @@ these milestones describe review outcomes, not extra readiness rules.
 
 See the [planning delivery record](planning-delivery.md) for issue locators, reconciliation and checks performed on this amendment.
 
+## Reviewable design
+
+The [design pack](design/README.md) contains editable coastal compositions for
+Town, World, Pixels and Hall, light/dark and phone/desktop/stress studies, the
+first-playable interaction storyboard, source performance measurements and a
+roadmap handoff. It makes PLACE-01 concrete; owner visual approval, feature
+implementation and production activation remain distinct. See its
+[execution evidence](../implementation/evidence/PLACE-01.md) for actual checks.
+
 ## Deliberate limits
 
 No avatar platformer, combat, crafting economy, universal XP, multiplayer, social

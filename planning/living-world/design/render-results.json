@@ -1,0 +1,392 @@
+[
+  {
+    "file": "catalog.svg",
+    "width": 768,
+    "height": 288,
+    "overflow": []
+  },
+  {
+    "file": "hall-1280-dark.svg",
+    "width": 1280,
+    "height": 1050,
+    "overflow": []
+  },
+  {
+    "file": "hall-1280-light.svg",
+    "width": 1280,
+    "height": 1050,
+    "overflow": []
+  },
+  {
+    "file": "hall-320-dark.svg",
+    "width": 320,
+    "height": 1298,
+    "overflow": []
+  },
+  {
+    "file": "hall-320-light.svg",
+    "width": 320,
+    "height": 1298,
+    "overflow": []
+  },
+  {
+    "file": "hall-390-dark-text200.svg",
+    "width": 390,
+    "height": 3564,
+    "overflow": []
+  },
+  {
+    "file": "hall-390-dark.svg",
+    "width": 390,
+    "height": 1213,
+    "overflow": []
+  },
+  {
+    "file": "hall-390-light-text200.svg",
+    "width": 390,
+    "height": 3564,
+    "overflow": []
+  },
+  {
+    "file": "hall-390-light.svg",
+    "width": 390,
+    "height": 1213,
+    "overflow": []
+  },
+  {
+    "file": "pixels-empty-1280-dark.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "pixels-empty-1280-light.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "pixels-empty-320-dark.svg",
+    "width": 320,
+    "height": 1100,
+    "overflow": []
+  },
+  {
+    "file": "pixels-empty-320-light.svg",
+    "width": 320,
+    "height": 1100,
+    "overflow": []
+  },
+  {
+    "file": "pixels-empty-390-dark-text200.svg",
+    "width": 390,
+    "height": 2579,
+    "overflow": []
+  },
+  {
+    "file": "pixels-empty-390-dark.svg",
+    "width": 390,
+    "height": 1252,
+    "overflow": []
+  },
+  {
+    "file": "pixels-empty-390-light-text200.svg",
+    "width": 390,
+    "height": 2579,
+    "overflow": []
+  },
+  {
+    "file": "pixels-empty-390-light.svg",
+    "width": 390,
+    "height": 1252,
+    "overflow": []
+  },
+  {
+    "file": "pixels-partial-1280-dark.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "pixels-partial-1280-light.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "pixels-partial-320-dark.svg",
+    "width": 320,
+    "height": 1273,
+    "overflow": []
+  },
+  {
+    "file": "pixels-partial-320-light.svg",
+    "width": 320,
+    "height": 1273,
+    "overflow": []
+  },
+  {
+    "file": "pixels-partial-390-dark-text200.svg",
+    "width": 390,
+    "height": 3132,
+    "overflow": []
+  },
+  {
+    "file": "pixels-partial-390-dark.svg",
+    "width": 390,
+    "height": 1379,
+    "overflow": []
+  },
+  {
+    "file": "pixels-partial-390-light-text200.svg",
+    "width": 390,
+    "height": 3132,
+    "overflow": []
+  },
+  {
+    "file": "pixels-partial-390-light.svg",
+    "width": 390,
+    "height": 1379,
+    "overflow": []
+  },
+  {
+    "file": "town-first-1280-dark.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "town-first-1280-light.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "town-first-320-dark.svg",
+    "width": 320,
+    "height": 1241,
+    "overflow": []
+  },
+  {
+    "file": "town-first-320-light.svg",
+    "width": 320,
+    "height": 1241,
+    "overflow": []
+  },
+  {
+    "file": "town-first-390-dark-text200.svg",
+    "width": 390,
+    "height": 2815,
+    "overflow": []
+  },
+  {
+    "file": "town-first-390-dark.svg",
+    "width": 390,
+    "height": 1202,
+    "overflow": []
+  },
+  {
+    "file": "town-first-390-light-text200.svg",
+    "width": 390,
+    "height": 2815,
+    "overflow": []
+  },
+  {
+    "file": "town-first-390-light.svg",
+    "width": 390,
+    "height": 1202,
+    "overflow": []
+  },
+  {
+    "file": "town-mature-1280-dark.svg",
+    "width": 1280,
+    "height": 902,
+    "overflow": []
+  },
+  {
+    "file": "town-mature-1280-light.svg",
+    "width": 1280,
+    "height": 902,
+    "overflow": []
+  },
+  {
+    "file": "town-mature-320-dark.svg",
+    "width": 320,
+    "height": 1306,
+    "overflow": []
+  },
+  {
+    "file": "town-mature-320-light.svg",
+    "width": 320,
+    "height": 1306,
+    "overflow": []
+  },
+  {
+    "file": "town-mature-390-dark-text200.svg",
+    "width": 390,
+    "height": 2985,
+    "overflow": []
+  },
+  {
+    "file": "town-mature-390-dark.svg",
+    "width": 390,
+    "height": 1244,
+    "overflow": []
+  },
+  {
+    "file": "town-mature-390-light-text200.svg",
+    "width": 390,
+    "height": 2985,
+    "overflow": []
+  },
+  {
+    "file": "town-mature-390-light.svg",
+    "width": 390,
+    "height": 1244,
+    "overflow": []
+  },
+  {
+    "file": "town-unfounded-1280-dark.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "town-unfounded-1280-light.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "town-unfounded-320-dark.svg",
+    "width": 320,
+    "height": 907,
+    "overflow": []
+  },
+  {
+    "file": "town-unfounded-320-light.svg",
+    "width": 320,
+    "height": 907,
+    "overflow": []
+  },
+  {
+    "file": "town-unfounded-390-dark-text200.svg",
+    "width": 390,
+    "height": 1998,
+    "overflow": []
+  },
+  {
+    "file": "town-unfounded-390-dark.svg",
+    "width": 390,
+    "height": 868,
+    "overflow": []
+  },
+  {
+    "file": "town-unfounded-390-light-text200.svg",
+    "width": 390,
+    "height": 1998,
+    "overflow": []
+  },
+  {
+    "file": "town-unfounded-390-light.svg",
+    "width": 390,
+    "height": 868,
+    "overflow": []
+  },
+  {
+    "file": "world-current-1280-dark.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "world-current-1280-light.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "world-current-320-dark.svg",
+    "width": 320,
+    "height": 1201,
+    "overflow": []
+  },
+  {
+    "file": "world-current-320-light.svg",
+    "width": 320,
+    "height": 1201,
+    "overflow": []
+  },
+  {
+    "file": "world-current-390-dark-text200.svg",
+    "width": 390,
+    "height": 2823,
+    "overflow": []
+  },
+  {
+    "file": "world-current-390-dark.svg",
+    "width": 390,
+    "height": 1138,
+    "overflow": []
+  },
+  {
+    "file": "world-current-390-light-text200.svg",
+    "width": 390,
+    "height": 2823,
+    "overflow": []
+  },
+  {
+    "file": "world-current-390-light.svg",
+    "width": 390,
+    "height": 1138,
+    "overflow": []
+  },
+  {
+    "file": "world-memory-1280-dark.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "world-memory-1280-light.svg",
+    "width": 1280,
+    "height": 900,
+    "overflow": []
+  },
+  {
+    "file": "world-memory-320-dark.svg",
+    "width": 320,
+    "height": 1277,
+    "overflow": []
+  },
+  {
+    "file": "world-memory-320-light.svg",
+    "width": 320,
+    "height": 1277,
+    "overflow": []
+  },
+  {
+    "file": "world-memory-390-dark-text200.svg",
+    "width": 390,
+    "height": 2744,
+    "overflow": []
+  },
+  {
+    "file": "world-memory-390-dark.svg",
+    "width": 390,
+    "height": 1160,
+    "overflow": []
+  },
+  {
+    "file": "world-memory-390-light-text200.svg",
+    "width": 390,
+    "height": 2744,
+    "overflow": []
+  },
+  {
+    "file": "world-memory-390-light.svg",
+    "width": 390,
+    "height": 1160,
+    "overflow": []
+  }
+]

@@ -1,0 +1,1379 @@
+{
+  "system": {
+    "node": "v20.20.2",
+    "platform": "linux",
+    "arch": "x64",
+    "browser": "156.0.8078.4",
+    "clock": "2026-10-29T19:00:00Z",
+    "viewport": "1280x900",
+    "cpuThrottle": 1,
+    "networkThrottle": "none",
+    "note": "Local uncompressed fixture HTTP; gzip numbers calculated from fetched production files, not claimed network transfer."
+  },
+  "records": [
+    {
+      "name": "town",
+      "url": "/town",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/town"
+        },
+        {
+          "method": "GET",
+          "url": "/styles-CLFA575U.css"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-A76DYSFD.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-KR5UVPCG.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-5YTIGNWS.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-GJVKZYKD.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-6X2SWAGN.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-LWRPUARI.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-UJ5IVQJI.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-F4Z5EXW3.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-5UOFU5OZ.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-5F6FH7VM.js"
+        },
+        {
+          "method": "GET",
+          "url": "/polyfills-5CFQRCPP.js"
+        },
+        {
+          "method": "GET",
+          "url": "/main-GREPI23W.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-554XXKWF.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-MMPUURLF.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-MEWB7OID.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-BUFLAL2F.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-4CLCTAJ7.js"
+        },
+        {
+          "method": "GET",
+          "url": "/version.json"
+        },
+        {
+          "method": "GET",
+          "url": "/api/auth/me"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-MN2HJ3RI.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-RVLQ2JGR.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-63FQBISP.js"
+        },
+        {
+          "method": "GET",
+          "url": "/api/town?tz=America/Los_Angeles"
+        },
+        {
+          "method": "GET",
+          "url": "/town/forge-3.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/town/garden-3.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/town/cottage-3.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/town/library-2.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/town/inn-1.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/town/treasury-locked.svg"
+        }
+      ],
+      "api": [
+        {
+          "url": "/api/auth/me",
+          "status": 200,
+          "bytes": 306
+        },
+        {
+          "url": "/api/town?tz=America/Los_Angeles",
+          "status": 200,
+          "bytes": 4136
+        }
+      ],
+      "resources": [
+        {
+          "url": "/styles-CLFA575U.css",
+          "encoded": 58319,
+          "decoded": 58319,
+          "transfer": 58619,
+          "duration": 18.40000009536743
+        },
+        {
+          "url": "/chunk-KR5UVPCG.js",
+          "encoded": 263,
+          "decoded": 263,
+          "transfer": 563,
+          "duration": 18.200000047683716
+        },
+        {
+          "url": "/chunk-A76DYSFD.js",
+          "encoded": 1336,
+          "decoded": 1336,
+          "transfer": 1636,
+          "duration": 21.5
+        },
+        {
+          "url": "/chunk-5YTIGNWS.js",
+          "encoded": 6435,
+          "decoded": 6435,
+          "transfer": 6735,
+          "duration": 25.399999856948853
+        },
+        {
+          "url": "/chunk-GJVKZYKD.js",
+          "encoded": 4293,
+          "decoded": 4293,
+          "transfer": 4593,
+          "duration": 23.5
+        },
+        {
+          "url": "/chunk-6X2SWAGN.js",
+          "encoded": 2914,
+          "decoded": 2914,
+          "transfer": 3214,
+          "duration": 25.600000143051147
+        },
+        {
+          "url": "/chunk-LWRPUARI.js",
+          "encoded": 2674,
+          "decoded": 2674,
+          "transfer": 2974,
+          "duration": 32.40000009536743
+        },
+        {
+          "url": "/chunk-UJ5IVQJI.js",
+          "encoded": 11788,
+          "decoded": 11788,
+          "transfer": 12088,
+          "duration": 35.700000047683716
+        },
+        {
+          "url": "/chunk-5F6FH7VM.js",
+          "encoded": 5353,
+          "decoded": 5353,
+          "transfer": 5653,
+          "duration": 38.40000009536743
+        },
+        {
+          "url": "/chunk-F4Z5EXW3.js",
+          "encoded": 127134,
+          "decoded": 127134,
+          "transfer": 127434,
+          "duration": 37.40000009536743
+        },
+        {
+          "url": "/chunk-5UOFU5OZ.js",
+          "encoded": 119940,
+          "decoded": 119940,
+          "transfer": 120240,
+          "duration": 38
+        },
+        {
+          "url": "/polyfills-5CFQRCPP.js",
+          "encoded": 34585,
+          "decoded": 34585,
+          "transfer": 34885,
+          "duration": 37.59999990463257
+        },
+        {
+          "url": "/main-GREPI23W.js",
+          "encoded": 40080,
+          "decoded": 40080,
+          "transfer": 40380,
+          "duration": 38.200000047683716
+        },
+        {
+          "url": "/chunk-MEWB7OID.js",
+          "encoded": 1442,
+          "decoded": 1442,
+          "transfer": 1742,
+          "duration": 7.5
+        },
+        {
+          "url": "/chunk-554XXKWF.js",
+          "encoded": 27372,
+          "decoded": 27372,
+          "transfer": 27672,
+          "duration": 7.5
+        },
+        {
+          "url": "/chunk-MMPUURLF.js",
+          "encoded": 182440,
+          "decoded": 182440,
+          "transfer": 182740,
+          "duration": 8.799999952316284
+        },
+        {
+          "url": "/chunk-BUFLAL2F.js",
+          "encoded": 10140,
+          "decoded": 10140,
+          "transfer": 10440,
+          "duration": 6.900000095367432
+        },
+        {
+          "url": "/chunk-4CLCTAJ7.js",
+          "encoded": 830,
+          "decoded": 830,
+          "transfer": 1130,
+          "duration": 8
+        },
+        {
+          "url": "/version.json",
+          "encoded": 79,
+          "decoded": 79,
+          "transfer": 379,
+          "duration": 2.799999952316284
+        },
+        {
+          "url": "/api/auth/me",
+          "encoded": 306,
+          "decoded": 306,
+          "transfer": 606,
+          "duration": 10.200000047683716
+        },
+        {
+          "url": "/chunk-MN2HJ3RI.js",
+          "encoded": 40766,
+          "decoded": 40766,
+          "transfer": 41066,
+          "duration": 2.700000047683716
+        },
+        {
+          "url": "/chunk-RVLQ2JGR.js",
+          "encoded": 4098,
+          "decoded": 4098,
+          "transfer": 4398,
+          "duration": 2.0999999046325684
+        },
+        {
+          "url": "/chunk-63FQBISP.js",
+          "encoded": 1130,
+          "decoded": 1130,
+          "transfer": 1430,
+          "duration": 3.799999952316284
+        },
+        {
+          "url": "/api/town",
+          "encoded": 4136,
+          "decoded": 4136,
+          "transfer": 4436,
+          "duration": 20.299999952316284
+        },
+        {
+          "url": "/town/garden-3.svg",
+          "encoded": 15938,
+          "decoded": 15938,
+          "transfer": 16238,
+          "duration": 11.099999904632568
+        },
+        {
+          "url": "/town/forge-3.svg",
+          "encoded": 10578,
+          "decoded": 10578,
+          "transfer": 10878,
+          "duration": 11.299999952316284
+        },
+        {
+          "url": "/town/cottage-3.svg",
+          "encoded": 9536,
+          "decoded": 9536,
+          "transfer": 9836,
+          "duration": 12.599999904632568
+        },
+        {
+          "url": "/town/library-2.svg",
+          "encoded": 6488,
+          "decoded": 6488,
+          "transfer": 6788,
+          "duration": 10.300000190734863
+        },
+        {
+          "url": "/town/inn-1.svg",
+          "encoded": 4564,
+          "decoded": 4564,
+          "transfer": 4864,
+          "duration": 10.400000095367432
+        },
+        {
+          "url": "/town/treasury-locked.svg",
+          "encoded": 13636,
+          "decoded": 13636,
+          "transfer": 13936,
+          "duration": 13.100000143051147
+        }
+      ],
+      "jsBytes": 625013,
+      "jsGzip": 197963,
+      "artBytes": 60740,
+      "art": [
+        "/town/garden-3.svg",
+        "/town/forge-3.svg",
+        "/town/cottage-3.svg",
+        "/town/library-2.svg",
+        "/town/inn-1.svg",
+        "/town/treasury-locked.svg"
+      ],
+      "pan": null,
+      "errors": []
+    },
+    {
+      "name": "world",
+      "url": "/town/world?week=2026-10-12",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/town/world?week=2026-10-12"
+        },
+        {
+          "method": "GET",
+          "url": "/styles-CLFA575U.css"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-A76DYSFD.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-KR5UVPCG.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-5YTIGNWS.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-GJVKZYKD.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-6X2SWAGN.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-LWRPUARI.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-UJ5IVQJI.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-F4Z5EXW3.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-5UOFU5OZ.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-5F6FH7VM.js"
+        },
+        {
+          "method": "GET",
+          "url": "/polyfills-5CFQRCPP.js"
+        },
+        {
+          "method": "GET",
+          "url": "/main-GREPI23W.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-554XXKWF.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-MMPUURLF.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-MEWB7OID.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-BUFLAL2F.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-4CLCTAJ7.js"
+        },
+        {
+          "method": "GET",
+          "url": "/version.json"
+        },
+        {
+          "method": "GET",
+          "url": "/api/auth/me"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-SAJKPJDT.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-RVLQ2JGR.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-63FQBISP.js"
+        },
+        {
+          "method": "GET",
+          "url": "/api/town?tz=America/Los_Angeles"
+        },
+        {
+          "method": "GET",
+          "url": "/api/world?tz=America/Los_Angeles"
+        },
+        {
+          "method": "GET",
+          "url": "/world/flower.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/rock.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/oak.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/pine.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/snowrock.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/cactus.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/bones.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/palm.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/fern.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/beacon.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/pile.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/guide.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/vivekbot.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/terrarian.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/manager.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/chest-sealed.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/chest-gold.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/tome.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/reel.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/scroll.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/gem.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/signpost.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/world/pier.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/town/library-3.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/town/inn-3.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/town/treasury-locked.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/town/clinic-locked.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/town/gym-locked.svg"
+        },
+        {
+          "method": "GET",
+          "url": "/town/lot-empty.svg"
+        }
+      ],
+      "api": [
+        {
+          "url": "/api/auth/me",
+          "status": 200,
+          "bytes": 306
+        },
+        {
+          "url": "/api/world?tz=America/Los_Angeles",
+          "status": 200,
+          "bytes": 27638
+        },
+        {
+          "url": "/api/town?tz=America/Los_Angeles",
+          "status": 200,
+          "bytes": 4136
+        }
+      ],
+      "resources": [
+        {
+          "url": "/styles-CLFA575U.css",
+          "encoded": 58319,
+          "decoded": 58319,
+          "transfer": 58619,
+          "duration": 13.600000143051147
+        },
+        {
+          "url": "/chunk-KR5UVPCG.js",
+          "encoded": 263,
+          "decoded": 263,
+          "transfer": 563,
+          "duration": 12
+        },
+        {
+          "url": "/chunk-A76DYSFD.js",
+          "encoded": 1336,
+          "decoded": 1336,
+          "transfer": 1636,
+          "duration": 16
+        },
+        {
+          "url": "/chunk-5YTIGNWS.js",
+          "encoded": 6435,
+          "decoded": 6435,
+          "transfer": 6735,
+          "duration": 19.09999990463257
+        },
+        {
+          "url": "/chunk-GJVKZYKD.js",
+          "encoded": 4293,
+          "decoded": 4293,
+          "transfer": 4593,
+          "duration": 13.5
+        },
+        {
+          "url": "/chunk-6X2SWAGN.js",
+          "encoded": 2914,
+          "decoded": 2914,
+          "transfer": 3214,
+          "duration": 13.700000047683716
+        },
+        {
+          "url": "/chunk-LWRPUARI.js",
+          "encoded": 2674,
+          "decoded": 2674,
+          "transfer": 2974,
+          "duration": 21.700000047683716
+        },
+        {
+          "url": "/chunk-UJ5IVQJI.js",
+          "encoded": 11788,
+          "decoded": 11788,
+          "transfer": 12088,
+          "duration": 25.5
+        },
+        {
+          "url": "/chunk-5F6FH7VM.js",
+          "encoded": 5353,
+          "decoded": 5353,
+          "transfer": 5653,
+          "duration": 28
+        },
+        {
+          "url": "/chunk-F4Z5EXW3.js",
+          "encoded": 127134,
+          "decoded": 127134,
+          "transfer": 127434,
+          "duration": 26.09999990463257
+        },
+        {
+          "url": "/chunk-5UOFU5OZ.js",
+          "encoded": 119940,
+          "decoded": 119940,
+          "transfer": 120240,
+          "duration": 26.700000047683716
+        },
+        {
+          "url": "/polyfills-5CFQRCPP.js",
+          "encoded": 34585,
+          "decoded": 34585,
+          "transfer": 34885,
+          "duration": 28.299999952316284
+        },
+        {
+          "url": "/main-GREPI23W.js",
+          "encoded": 40080,
+          "decoded": 40080,
+          "transfer": 40380,
+          "duration": 29
+        },
+        {
+          "url": "/chunk-554XXKWF.js",
+          "encoded": 27372,
+          "decoded": 27372,
+          "transfer": 27672,
+          "duration": 8.899999856948853
+        },
+        {
+          "url": "/chunk-MEWB7OID.js",
+          "encoded": 1442,
+          "decoded": 1442,
+          "transfer": 1742,
+          "duration": 7.400000095367432
+        },
+        {
+          "url": "/chunk-MMPUURLF.js",
+          "encoded": 182440,
+          "decoded": 182440,
+          "transfer": 182740,
+          "duration": 9.600000143051147
+        },
+        {
+          "url": "/chunk-BUFLAL2F.js",
+          "encoded": 10140,
+          "decoded": 10140,
+          "transfer": 10440,
+          "duration": 7.3999998569488525
+        },
+        {
+          "url": "/chunk-4CLCTAJ7.js",
+          "encoded": 830,
+          "decoded": 830,
+          "transfer": 1130,
+          "duration": 8.899999856948853
+        },
+        {
+          "url": "/version.json",
+          "encoded": 79,
+          "decoded": 79,
+          "transfer": 379,
+          "duration": 2.9000000953674316
+        },
+        {
+          "url": "/api/auth/me",
+          "encoded": 306,
+          "decoded": 306,
+          "transfer": 606,
+          "duration": 6.900000095367432
+        },
+        {
+          "url": "/chunk-SAJKPJDT.js",
+          "encoded": 81729,
+          "decoded": 81729,
+          "transfer": 82029,
+          "duration": 2.799999952316284
+        },
+        {
+          "url": "/chunk-RVLQ2JGR.js",
+          "encoded": 4098,
+          "decoded": 4098,
+          "transfer": 4398,
+          "duration": 2.0999999046325684
+        },
+        {
+          "url": "/chunk-63FQBISP.js",
+          "encoded": 1130,
+          "decoded": 1130,
+          "transfer": 1430,
+          "duration": 2.3000001907348633
+        },
+        {
+          "url": "/api/town",
+          "encoded": 4136,
+          "decoded": 4136,
+          "transfer": 4436,
+          "duration": 27.40000009536743
+        },
+        {
+          "url": "/api/world",
+          "encoded": 27638,
+          "decoded": 27638,
+          "transfer": 27938,
+          "duration": 25.200000047683716
+        },
+        {
+          "url": "/world/flower.svg",
+          "encoded": 1413,
+          "decoded": 1413,
+          "transfer": 1713,
+          "duration": 14
+        },
+        {
+          "url": "/world/cactus.svg",
+          "encoded": 1413,
+          "decoded": 1413,
+          "transfer": 1713,
+          "duration": 10.200000047683716
+        },
+        {
+          "url": "/world/rock.svg",
+          "encoded": 1469,
+          "decoded": 1469,
+          "transfer": 1769,
+          "duration": 10.799999952316284
+        },
+        {
+          "url": "/world/pine.svg",
+          "encoded": 1867,
+          "decoded": 1867,
+          "transfer": 2167,
+          "duration": 8.799999952316284
+        },
+        {
+          "url": "/world/oak.svg",
+          "encoded": 1811,
+          "decoded": 1811,
+          "transfer": 2111,
+          "duration": 11.900000095367432
+        },
+        {
+          "url": "/world/snowrock.svg",
+          "encoded": 1530,
+          "decoded": 1530,
+          "transfer": 1830,
+          "duration": 12.100000143051147
+        },
+        {
+          "url": "/world/bones.svg",
+          "encoded": 1640,
+          "decoded": 1640,
+          "transfer": 1940,
+          "duration": 19.600000143051147
+        },
+        {
+          "url": "/world/fern.svg",
+          "encoded": 1066,
+          "decoded": 1066,
+          "transfer": 1366,
+          "duration": 26.299999952316284
+        },
+        {
+          "url": "/world/pile.svg",
+          "encoded": 1637,
+          "decoded": 1637,
+          "transfer": 1937,
+          "duration": 26.59999990463257
+        },
+        {
+          "url": "/world/beacon.svg",
+          "encoded": 1470,
+          "decoded": 1470,
+          "transfer": 1770,
+          "duration": 28.899999856948853
+        },
+        {
+          "url": "/world/palm.svg",
+          "encoded": 895,
+          "decoded": 895,
+          "transfer": 1195,
+          "duration": 29.09999990463257
+        },
+        {
+          "url": "/world/guide.svg",
+          "encoded": 1526,
+          "decoded": 1526,
+          "transfer": 1826,
+          "duration": 28.40000009536743
+        },
+        {
+          "url": "/world/vivekbot.svg",
+          "encoded": 1757,
+          "decoded": 1757,
+          "transfer": 2057,
+          "duration": 32.09999990463257
+        },
+        {
+          "url": "/world/terrarian.svg",
+          "encoded": 1471,
+          "decoded": 1471,
+          "transfer": 1771,
+          "duration": 34
+        },
+        {
+          "url": "/world/manager.svg",
+          "encoded": 1927,
+          "decoded": 1927,
+          "transfer": 2227,
+          "duration": 37.60000014305115
+        },
+        {
+          "url": "/world/chest-gold.svg",
+          "encoded": 1821,
+          "decoded": 1821,
+          "transfer": 2121,
+          "duration": 45
+        },
+        {
+          "url": "/world/tome.svg",
+          "encoded": 1239,
+          "decoded": 1239,
+          "transfer": 1539,
+          "duration": 46.90000009536743
+        },
+        {
+          "url": "/world/chest-sealed.svg",
+          "encoded": 1936,
+          "decoded": 1936,
+          "transfer": 2236,
+          "duration": 48.40000009536743
+        },
+        {
+          "url": "/world/scroll.svg",
+          "encoded": 1461,
+          "decoded": 1461,
+          "transfer": 1761,
+          "duration": 48.09999990463257
+        },
+        {
+          "url": "/world/reel.svg",
+          "encoded": 2494,
+          "decoded": 2494,
+          "transfer": 2794,
+          "duration": 48.59999990463257
+        },
+        {
+          "url": "/world/gem.svg",
+          "encoded": 1581,
+          "decoded": 1581,
+          "transfer": 1881,
+          "duration": 49.700000047683716
+        },
+        {
+          "url": "/world/signpost.svg",
+          "encoded": 1354,
+          "decoded": 1354,
+          "transfer": 1654,
+          "duration": 53
+        },
+        {
+          "url": "/world/pier.svg",
+          "encoded": 3795,
+          "decoded": 3795,
+          "transfer": 4095,
+          "duration": 62.39999985694885
+        },
+        {
+          "url": "/town/library-3.svg",
+          "encoded": 13325,
+          "decoded": 13325,
+          "transfer": 13625,
+          "duration": 65.89999985694885
+        },
+        {
+          "url": "/town/clinic-locked.svg",
+          "encoded": 9481,
+          "decoded": 9481,
+          "transfer": 9781,
+          "duration": 65.5
+        },
+        {
+          "url": "/town/inn-3.svg",
+          "encoded": 10856,
+          "decoded": 10856,
+          "transfer": 11156,
+          "duration": 66
+        },
+        {
+          "url": "/town/gym-locked.svg",
+          "encoded": 8111,
+          "decoded": 8111,
+          "transfer": 8411,
+          "duration": 66.29999995231628
+        },
+        {
+          "url": "/town/treasury-locked.svg",
+          "encoded": 13636,
+          "decoded": 13636,
+          "transfer": 13936,
+          "duration": 66.60000014305115
+        },
+        {
+          "url": "/town/lot-empty.svg",
+          "encoded": 5919,
+          "decoded": 5919,
+          "transfer": 6219,
+          "duration": 68.40000009536743
+        }
+      ],
+      "jsBytes": 665976,
+      "jsGzip": 210728,
+      "artBytes": 99901,
+      "art": [
+        "/world/flower.svg",
+        "/world/cactus.svg",
+        "/world/rock.svg",
+        "/world/pine.svg",
+        "/world/oak.svg",
+        "/world/snowrock.svg",
+        "/world/bones.svg",
+        "/world/fern.svg",
+        "/world/pile.svg",
+        "/world/beacon.svg",
+        "/world/palm.svg",
+        "/world/guide.svg",
+        "/world/vivekbot.svg",
+        "/world/terrarian.svg",
+        "/world/manager.svg",
+        "/world/chest-gold.svg",
+        "/world/tome.svg",
+        "/world/chest-sealed.svg",
+        "/world/scroll.svg",
+        "/world/reel.svg",
+        "/world/gem.svg",
+        "/world/signpost.svg",
+        "/world/pier.svg",
+        "/town/library-3.svg",
+        "/town/clinic-locked.svg",
+        "/town/inn-3.svg",
+        "/town/gym-locked.svg",
+        "/town/treasury-locked.svg",
+        "/town/lot-empty.svg"
+      ],
+      "pan": {
+        "frameIntervals": 165,
+        "p95FrameInterval": 16.700000000000273,
+        "longTasks": [],
+        "mainThreadTasks": 1768,
+        "p95RunTaskMs": 1.693
+      },
+      "errors": []
+    },
+    {
+      "name": "pixels",
+      "url": "/pixels?year=2026&day=2026-08-15",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/pixels?year=2026&day=2026-08-15"
+        },
+        {
+          "method": "GET",
+          "url": "/styles-CLFA575U.css"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-A76DYSFD.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-KR5UVPCG.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-5YTIGNWS.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-GJVKZYKD.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-6X2SWAGN.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-LWRPUARI.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-UJ5IVQJI.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-F4Z5EXW3.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-5UOFU5OZ.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-5F6FH7VM.js"
+        },
+        {
+          "method": "GET",
+          "url": "/polyfills-5CFQRCPP.js"
+        },
+        {
+          "method": "GET",
+          "url": "/main-GREPI23W.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-554XXKWF.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-MMPUURLF.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-MEWB7OID.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-BUFLAL2F.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-4CLCTAJ7.js"
+        },
+        {
+          "method": "GET",
+          "url": "/version.json"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-STHDNAT7.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-KPRBSVHT.js"
+        },
+        {
+          "method": "GET",
+          "url": "/api/auth/me"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-NMR2Q3MT.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-23GVWXM4.js"
+        },
+        {
+          "method": "GET",
+          "url": "/chunk-63FQBISP.js"
+        },
+        {
+          "method": "GET",
+          "url": "/api/pixels?from=2026-01-01&to=2026-12-31"
+        },
+        {
+          "method": "GET",
+          "url": "/travel/api/home"
+        }
+      ],
+      "api": [
+        {
+          "url": "/api/auth/me",
+          "status": 200,
+          "bytes": 306
+        },
+        {
+          "url": "/api/pixels?from=2026-01-01&to=2026-12-31",
+          "status": 200,
+          "bytes": 9923
+        },
+        {
+          "url": "/travel/api/home",
+          "status": 200,
+          "bytes": 25184
+        }
+      ],
+      "resources": [
+        {
+          "url": "/styles-CLFA575U.css",
+          "encoded": 58319,
+          "decoded": 58319,
+          "transfer": 58619,
+          "duration": 15.299999952316284
+        },
+        {
+          "url": "/chunk-A76DYSFD.js",
+          "encoded": 1336,
+          "decoded": 1336,
+          "transfer": 1636,
+          "duration": 13.599999904632568
+        },
+        {
+          "url": "/chunk-6X2SWAGN.js",
+          "encoded": 2914,
+          "decoded": 2914,
+          "transfer": 3214,
+          "duration": 11.200000047683716
+        },
+        {
+          "url": "/chunk-KR5UVPCG.js",
+          "encoded": 263,
+          "decoded": 263,
+          "transfer": 563,
+          "duration": 12.299999952316284
+        },
+        {
+          "url": "/chunk-GJVKZYKD.js",
+          "encoded": 4293,
+          "decoded": 4293,
+          "transfer": 4593,
+          "duration": 14.700000047683716
+        },
+        {
+          "url": "/chunk-5YTIGNWS.js",
+          "encoded": 6435,
+          "decoded": 6435,
+          "transfer": 6735,
+          "duration": 17
+        },
+        {
+          "url": "/chunk-UJ5IVQJI.js",
+          "encoded": 11788,
+          "decoded": 11788,
+          "transfer": 12088,
+          "duration": 19.700000047683716
+        },
+        {
+          "url": "/chunk-LWRPUARI.js",
+          "encoded": 2674,
+          "decoded": 2674,
+          "transfer": 2974,
+          "duration": 21.600000143051147
+        },
+        {
+          "url": "/chunk-F4Z5EXW3.js",
+          "encoded": 127134,
+          "decoded": 127134,
+          "transfer": 127434,
+          "duration": 24.199999809265137
+        },
+        {
+          "url": "/chunk-5F6FH7VM.js",
+          "encoded": 5353,
+          "decoded": 5353,
+          "transfer": 5653,
+          "duration": 24.90000009536743
+        },
+        {
+          "url": "/polyfills-5CFQRCPP.js",
+          "encoded": 34585,
+          "decoded": 34585,
+          "transfer": 34885,
+          "duration": 24.40000009536743
+        },
+        {
+          "url": "/chunk-5UOFU5OZ.js",
+          "encoded": 119940,
+          "decoded": 119940,
+          "transfer": 120240,
+          "duration": 25.200000047683716
+        },
+        {
+          "url": "/main-GREPI23W.js",
+          "encoded": 40080,
+          "decoded": 40080,
+          "transfer": 40380,
+          "duration": 25.700000047683716
+        },
+        {
+          "url": "/chunk-554XXKWF.js",
+          "encoded": 27372,
+          "decoded": 27372,
+          "transfer": 27672,
+          "duration": 12
+        },
+        {
+          "url": "/chunk-4CLCTAJ7.js",
+          "encoded": 830,
+          "decoded": 830,
+          "transfer": 1130,
+          "duration": 7.400000095367432
+        },
+        {
+          "url": "/chunk-BUFLAL2F.js",
+          "encoded": 10140,
+          "decoded": 10140,
+          "transfer": 10440,
+          "duration": 7.5
+        },
+        {
+          "url": "/chunk-MEWB7OID.js",
+          "encoded": 1442,
+          "decoded": 1442,
+          "transfer": 1742,
+          "duration": 10.800000190734863
+        },
+        {
+          "url": "/chunk-MMPUURLF.js",
+          "encoded": 182440,
+          "decoded": 182440,
+          "transfer": 182740,
+          "duration": 11.400000095367432
+        },
+        {
+          "url": "/version.json",
+          "encoded": 79,
+          "decoded": 79,
+          "transfer": 379,
+          "duration": 2.3999998569488525
+        },
+        {
+          "url": "/chunk-STHDNAT7.js",
+          "encoded": 4334,
+          "decoded": 4334,
+          "transfer": 4634,
+          "duration": 2.0999999046325684
+        },
+        {
+          "url": "/chunk-KPRBSVHT.js",
+          "encoded": 11695,
+          "decoded": 11695,
+          "transfer": 11995,
+          "duration": 1.7999999523162842
+        },
+        {
+          "url": "/api/auth/me",
+          "encoded": 306,
+          "decoded": 306,
+          "transfer": 606,
+          "duration": 6.8999998569488525
+        },
+        {
+          "url": "/chunk-NMR2Q3MT.js",
+          "encoded": 44621,
+          "decoded": 44621,
+          "transfer": 44921,
+          "duration": 2.5999999046325684
+        },
+        {
+          "url": "/chunk-23GVWXM4.js",
+          "encoded": 621,
+          "decoded": 621,
+          "transfer": 921,
+          "duration": 2.0999999046325684
+        },
+        {
+          "url": "/chunk-63FQBISP.js",
+          "encoded": 1130,
+          "decoded": 1130,
+          "transfer": 1430,
+          "duration": 2.700000047683716
+        },
+        {
+          "url": "/api/pixels",
+          "encoded": 9923,
+          "decoded": 9923,
+          "transfer": 10223,
+          "duration": 9.399999856948853
+        },
+        {
+          "url": "/travel/api/home",
+          "encoded": 25184,
+          "decoded": 25184,
+          "transfer": 25484,
+          "duration": 15.700000047683716
+        }
+      ],
+      "jsBytes": 641420,
+      "jsGzip": 199816,
+      "artBytes": 0,
+      "art": [],
+      "pan": null,
+      "errors": []
+    }
+  ]
+}
