@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#264](https://github.com/Vivekpsps3/vivek-monorepo/issues/264) DISC-01; parent [#194](https://github.com/Vivekpsps3/vivek-monorepo/issues/194). Parent stays open.
 - Agent/context, branch/worktree: Cursor session, sole author; `agent/disc-01`; `/tmp/vivek-disc-01`.
-- Base main SHA, current tested SHA: base `0022c5ef8065e08892b6eecdfa6450158ee69ef6`. The passing `make test-fast` ran on this worktree before the design commit. The commit SHA is recorded in the handoff after `git rev-parse HEAD`.
+- Base main SHA, current tested SHA: base `0022c5ef8065e08892b6eecdfa6450158ee69ef6`. Design commit `b578fb947084300ac017edc2cce2baaf00174429` is the tree that passed `make test-fast` before the pull request. This handoff update was rechecked with the same command before its follow-up commit.
 - Fresh-main/prerequisite/active-PR checks: `git fetch origin main` matched `0022c5ef8065e08892b6eecdfa6450158ee69ef6`. Packet dependencies: none. #194 is open. #264 had no claim comments before the claim on this branch. Open PR [#362](https://github.com/Vivekpsps3/vivek-monorepo/pull/362) (SEC-05, `agent/sec-05-recovery-20261114`) changes vault recovery and Finance `public-api.ts`. It does not edit these planning files. Its recovery behavior is unmerged and is not treated as current. Merged PR #193 is history on this base and has no Sidequests surface. Shared checkout and other worktrees were not edited. No `apps/sidequests` path, route, or vault collection exists on the base.
 
 ## Acceptance
@@ -45,10 +45,11 @@ The fresh worktree has no install of its own. The passing run linked `.venv` and
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet.
-- Roadmap #134 append-only status-note URL: not posted yet.
-- Merged/activation status (actual evidence, not assumption): unmerged, not deployed, not activated. No app exists.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/363 (`Closes #264` only).
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6882943873
+- Leaf note: https://github.com/Vivekpsps3/vivek-monorepo/issues/264#issuecomment-6882943669
+- Merged/activation status (actual evidence, not assumption): pull request open. Not merged, not deployed, not activated. No app exists.
 - Remaining external prerequisites or approved scope decisions: owner has not selected implementation. Open choices are the center of gravity, stamp metaphor, lead ritual, band vocabulary, and whether the suggested field notebook is the identity. Writable records wait on open #121 and the merged export/restore contract. #362 is open and unmerged. #125 still owns operational backup.
-- Next actor: open the PR that closes #264 only, then append a scoped #134 note. Record the PR URL and commit SHA here after they exist.
+- Next actor: review the pull request. Do not close #194 from this leaf.
 
 No unstated decision from this context is necessary to continue.
