@@ -85,7 +85,8 @@ def create(c, records, mode="merge", batches=1):
 
 def upload(c, stage, index, records):
     return c.put(
-        f"/api/vault/restore/stages/{stage['id']}/batches/{index}", json={"records": records}
+        f"/api/vault/restore/stages/{stage['id']}/batches",
+        json={"batch_index": index, "records": records},
     )
 
 
@@ -441,3 +442,36 @@ def test_competing_activation_commits_once_on_sqlite_file(tmp_path):
         rows = store.list_records(db, owner)
         assert len(rows) == 1 and rows[0].revision == 1
     database.engine.dispose()
+
+
+def test_late_update_cannot_resurrect_a_record_removed_by_replace():
+    c = client()
+    old = wire("assets", "old_asset_1")
+    c.post("/api/vault/records/upsert", json={"records": [old]})
+    stage, _ = create(c, [wire("health_stats")], "replace")
+    upload(c, stage, 0, [wire("health_stats")])
+    assert activate(c, stage, "REPLACE").status_code == 200
+    before = snapshot(c)
+    response = c.post(
+        "/api/vault/records/upsert", json={"records": [{**old, "expected_revision": 1}]}
+    )
+    assert response.status_code == 409
+    assert snapshot(c) == before
+    # An explicit new create still uses the original null-revision contract.
+    assert c.post("/api/vault/records/upsert", json={"records": [old]}).status_code == 200
+
+
+def test_new_registered_collection_restores_without_another_membership_list(monkeypatch):
+    policy = store.CollectionPolicy(
+        finance=store.COLLECTION_POLICY.finance,
+        health=store.COLLECTION_POLICY.health | {"future_review"},
+    )
+    monkeypatch.setattr(store, "COLLECTION_POLICY", policy)
+    monkeypatch.setattr(store, "ALLOWED_COLLECTIONS", policy.recovery)
+    store.assert_collection_contract(store.ALLOWED_COLLECTIONS, policy)
+    c = client()
+    records = [wire("future_review")]
+    stage, _ = create(c, records)
+    assert upload(c, stage, 0, records).status_code == 200
+    assert activate(c, stage).status_code == 200
+    assert snapshot(c)["records"][0]["collection"] == "future_review"

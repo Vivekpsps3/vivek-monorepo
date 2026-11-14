@@ -252,7 +252,7 @@ export async function syntheticVault(
       if (request.method() === 'DELETE') { restoreStages.delete(stage.id); return respond({ discarded: true }); }
       const body = request.postDataJSON(); mutations.push({ path, body });
       if (parts[6] === 'batches') {
-        const index = Number(parts[7]);
+        const index = Number(body.batch_index);
         if (heldRestoreGate) { restoreArrived?.(); await heldRestoreGate; }
         if (failedRestoreBatch === index) { failedRestoreBatch = -1; return respond({ detail: 'Synthetic interrupted batch' }, 503); }
         if (!stage.batches.has(index)) {

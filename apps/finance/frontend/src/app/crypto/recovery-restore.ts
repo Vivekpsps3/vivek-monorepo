@@ -77,11 +77,6 @@ export class RecoveryRestorePlan {
     private readonly close: () => void,
     private readonly activated: () => Promise<void>,
   ) {
-    const allowed = new Map(snapshot.collections.map(row => [row.collection, row]));
-    for (const descriptor of body.collections) {
-      const current = allowed.get(descriptor.collection);
-      if (!current || descriptor.schema_versions.some(version => !current.schema_versions.includes(version))) throw new RecoveryError('Backup contains an unsupported collection or schema. Update the app before restoring.');
-    }
     const existing = new Set(snapshot.records.map(identity));
     const chosen = body.records.filter(row => mode === 'replace' || !existing.has(identity(row)));
     this.expectedCounts = Object.fromEntries(snapshot.collections.map(row => [row.collection, chosen.filter(record => record.collection === row.collection).length]));
@@ -195,6 +190,11 @@ export async function prepareRecoveryRestore(
       file = ''; check();
       const snapshot = await observe(port.snapshot(), work.signal); check();
       if (!snapshot.fingerprint || !/^[a-f0-9]{64}$/.test(snapshot.fingerprint)) throw new RecoveryError('Update the app before restoring this backup.');
+      const allowed = new Map(snapshot.collections.map(row => [row.collection, row]));
+      for (const descriptor of body.collections) {
+        const current = allowed.get(descriptor.collection);
+        if (!current || descriptor.schema_versions.some(version => !current.schema_versions.includes(version))) throw new RecoveryError('Backup contains an unsupported collection or schema. Update the app before restoring.');
+      }
       const keyVersion = await observe(port.keyVersion(), work.signal); check();
       const stages = await observe(port.stages(), work.signal); check();
       return new RecoveryRestorePlan(port, body, mode, sourceHash, snapshot.fingerprint, keyVersion, snapshot, stages, signal, checkOwner, close, activated);
@@ -230,7 +230,7 @@ export async function openFinanceRestore(injector: Injector, file: string | Blob
     stages: () => http.get<RestoreStage[]>(path(), options),
     create: body => http.post<RestoreStage>(path(), body, options),
     get: id => http.get<RestoreStage>(path(id), options),
-    put: (id, index, records) => http.put<RestoreStage>(`${path(id)}/batches/${index}`, { records }, options),
+    put: (id, index, records) => http.put<RestoreStage>(`${path(id)}/batches`, { batch_index: index, records }, options),
     activate: (id, confirmation) => http.post<RestoreResult>(`${path(id)}/activate`, { confirmation }, options),
     discard: id => http.delete(path(id), options),
   }, file, password, mode, scope.signal, scope.check, scope.dispose, () => lockFinance(injector));

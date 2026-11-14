@@ -97,6 +97,7 @@ class RestoreCreateRequest(BaseModel):
 
 class RestoreBatchRequest(BaseModel):
     model_config = {"extra": "forbid"}
+    batch_index: int = Field(ge=0, lt=128)
     records: list[EncryptedRecordInput] = Field(min_length=1, max_length=200)
 
 

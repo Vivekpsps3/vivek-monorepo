@@ -282,10 +282,9 @@ def get_restore_stage(
     return vault_restore.describe(db, vault_restore.get_stage(db, _user_id(current_user), stage_id))
 
 
-@router.put("/restore/stages/{stage_id}/batches/{batch_index}")
+@router.put("/restore/stages/{stage_id}/batches")
 def put_restore_batch(
     stage_id: str,
-    batch_index: int,
     body: RestoreBatchRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db, scope="function"),
@@ -297,7 +296,7 @@ def put_restore_batch(
             db,
             _user_id(current_user),
             stage_id,
-            batch_index,
+            body.batch_index,
             [record.model_dump() for record in body.records],
         )
         db.commit()

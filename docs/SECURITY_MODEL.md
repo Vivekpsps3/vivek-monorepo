@@ -193,7 +193,9 @@ check the preview fingerprint and complete counts, apply through existing
 revision/index/upsert/delete primitives, then commit the complete result once.
 Any conflict, interrupted batch, validation/write/commit failure leaves the old
 active vault intact. Replaying the same committed activation returns its receipt
-without rewriting records. A completed receipt is visible when the same file is
+without rewriting records. Ordinary writes with a non-null expected revision
+refuse a missing row, so an old update cannot recreate data removed by replace;
+explicit new creates retain the null-revision contract. A completed receipt is visible when the same file is
 previewed again. Plaintext previews and held operations obey the same owner,
 lock/logout, cancel and route-disposal eligibility. Fresh status reads are silent,
 cancellable and never publish into the shared vault-status cache.

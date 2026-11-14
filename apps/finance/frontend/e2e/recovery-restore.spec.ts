@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { expect, test } from './frozen-clock';
+import { expect, test, frozenNow } from './frozen-clock';
 import { SYNTHETIC_VAULT_PASSPHRASE, syntheticRecoveryCollections, syntheticVault } from './synthetic-vault';
 
 const password = 'Synthetic separate portable backup password';
@@ -56,7 +56,8 @@ test('export -> merge restores every collection under a different DEK and keeps 
       expect(rows.find(row => row.id === 1)?.marker).toBe(`DESTINATION_KEEP_${name}`);
       expect(rows.find(row => row.id === 2)).toEqual(source.data(name).find(row => row.id === 2));
     }
-    const restoredTransactions = target.mutations.filter(row => /\/batches\/\d+$/.test(row.path)).flatMap(row => row.body.records).filter((row: { collection: string }) => row.collection === 'transactions');
+    const restoredTransactions = target.mutations.filter(row => row.path.endsWith('/batches')).flatMap(row => row.body.records).filter((row: { collection: string }) => row.collection === 'transactions');
+    expect(restoredTransactions).toHaveLength(1);
     for (const row of restoredTransactions) {
       const value = target.data('transactions').find(record => record.dedupe_key === `PRIVATE_DEDUPE_${row.client_id}`)!;
       expect(row.indexes).toEqual([{ index_name: 'dedupe_key', index_value_b64: target.expectedDedupeIndex(value.dedupe_key) }]);
@@ -117,26 +118,30 @@ test('interrupted upload survives refresh and resumes completed batches without 
     await expect(targetPage.getByText(/An unfinished merge restore is available/)).toBeVisible();
     await stageAndActivate(targetPage);
     for (const row of syntheticRecoveryCollections()) expect(target.data(row.collection)).toEqual(vault.data(row.collection));
-    const uploads = target.mutations.filter(row => /\/batches\/0$/.test(row.path));
+    const uploads = target.mutations.filter(row => row.path.endsWith('/batches') && row.body.batch_index === 0);
     expect(uploads).toHaveLength(1);
   } finally { await context.close(); }
 });
 
-for (const interruption of ['lock', 'route disposal', 'cancel']) {
+for (const interruption of ['lock', 'another tab lock', 'route disposal', 'cancel']) {
   test(`held stage upload after ${interruption} cannot activate or replace existing data`, async ({ page }) => {
     const vault = await settings(page); vault.seedRecoveryMarkers(); const file = await exportFile(page);
     vault.seedRecoveryMarkers(2, 'DESTINATION_KEEP_'); vault.holdRestoreBatch();
     const before = new Map(syntheticRecoveryCollections().map(row => [row.collection, vault.data(row.collection)]));
+    const other = interruption === 'another tab lock' ? await page.context().newPage() : null;
+    if (other) { vault.attach(other); await other.clock.install({ time: frozenNow() }); await other.goto('/settings/finance'); await expect(other.getByRole('heading', { name: 'Restore encrypted backup' })).toBeVisible(); }
     await preview(page, file, 'replace');
     await page.getByRole('button', { name: 'Stage encrypted restore', exact: true }).click(); await vault.waitForRestoreBatch();
-    if (interruption === 'lock') await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+    if (other) await other.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+    else if (interruption === 'lock') await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
     else if (interruption === 'route disposal') await page.getByRole('link', { name: 'Appearance', exact: true }).click();
     else await page.getByRole('button', { name: 'Cancel restore', exact: true }).click();
     vault.releaseRestoreBatch();
-    if (interruption === 'lock') await expect(page.getByText('Finance is locked. Unlock to see settings.', { exact: true })).toBeVisible();
+    if (interruption === 'lock' || other) await expect(page.getByText('Finance is locked. Unlock to see settings.', { exact: true })).toBeVisible();
     else if (interruption === 'route disposal') await expect(page.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();
     else await expect(page.getByRole('button', { name: 'Preview encrypted backup', exact: true })).toBeVisible();
     for (const [name, rows] of before) expect(vault.data(name)).toEqual(rows);
     expect(vault.mutations.filter(row => row.path.endsWith('/activate'))).toHaveLength(0);
+    await other?.close();
   });
 }

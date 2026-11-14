@@ -303,6 +303,8 @@ def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> li
             row.revision = row.revision + 1
             row.updated_at = utc_now()
         else:
+            if item.get("expected_revision") is not None:
+                raise HTTPException(409, "Record was deleted. Reload before saving.")
             row = EncryptedRecord(
                 user_id=user_id,
                 collection=collection,

@@ -62,6 +62,18 @@ describe('validated disposable vault restore', () => {
     expect(source.records.length).toBeGreaterThan(0);
   });
 
+  it('restores a newly registered descriptor without editing another collection list', async () => {
+    const body = bundle();
+    body.collections.push({ collection: 'future_review', schema_versions: [2], count: 1 });
+    body.records.push({ collection: 'future_review', client_id: 'future_review_1234', schema_version: 2, key_version: 1, value: { marker: 'PRIVATE_FUTURE_REVIEW' } });
+    snapshot.collections.push({ collection: 'future_review', schema_versions: [2], count: 0 });
+    const plan = await prepare(body);
+    await plan.stage();
+    const row = uploaded.find(record => record.collection === 'future_review')!;
+    expect(await decryptJson(destination.dek, row.ciphertext_b64, recordAad(row.collection, row.client_id, 2, 1))).toEqual({ marker: 'PRIVATE_FUTURE_REVIEW' });
+    plan.dispose();
+  });
+
   it('defaults merge to skip existing IDs and previews replace removals with typed confirmation', async () => {
     const first = bundle().records[0];
     snapshot.records = [{ collection: first.collection, client_id: first.client_id, schema_version: 2, key_version: 1, ciphertext_b64: 'existing', revision: 4, updated_at: '' }];
