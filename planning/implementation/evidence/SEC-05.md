@@ -88,8 +88,8 @@ and no PR is opened until required final gates pass.
 
 ## Handoff
 
-- PR: ready to open after all required local gates passed; closure keyword only `Closes #270`, reference #121 without closing it.
-- Roadmap #134: append scoped note after PR creation; never overwrite the body/queue/parent ledger.
-- Actual status: SEC-05 implementation committed and all required local verification passed; not merged, deployed, or an activated restore. SEC-06 dependency is still unmet because SEC-05 is not merged.
+- PR: [#362](https://github.com/Vivekpsps3/vivek-monorepo/pull/362), opened only after all required local gates passed; closure keyword only `Closes #270`, reference #121 without closing it.
+- Roadmap #134: [append-only scoped note](https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6882105454); [leaf delivery note](https://github.com/Vivekpsps3/vivek-monorepo/issues/270#issuecomment-6882105270). Body/queue/parent ledgers unchanged.
+- Actual status: SEC-05 PR open and all required local verification passed; not merged, deployed, or an activated restore. SEC-06 dependency is still unmet because SEC-05 is not merged.
 - Prepared SEC-06 design: `/tmp/vivek-sec-06-implementation-design.md` for the coordinating parent; no dependent application edits. Reuse codec/descriptors, local validation before writes, count/conflict preview, destination DEK encryption, default skip-ID merge, typed replace/pre-export offer, bounded idempotent ciphertext staging and one atomic activation. Preserve CSV receipts/Undo. An already accepted remote commit cannot be retracted by a later local abort; explicit activation semantics and late-publication guards must be stated and tested honestly.
-- Next actor: open SEC-05 PR and append leaf/roadmap notes. Parent/user handles review/merge authorization. Only after verified merged SEC-05 (or an explicit approved workflow amendment) create a separate SEC-06 worktree and proceed.
+- Next actor: parent/user handles review and merge authorization. Only after verified merged SEC-05 (or an explicit approved workflow amendment) create a separate SEC-06 worktree and proceed.
