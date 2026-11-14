@@ -140,6 +140,7 @@
 }
 .media-page .hero-art {
   width: clamp(96px, 22vw, 168px);
+  aspect-ratio: 2 / 3;
 }
 .media-page .art-fallback {
   display: flex;

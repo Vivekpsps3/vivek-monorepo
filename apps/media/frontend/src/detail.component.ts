@@ -58,7 +58,7 @@ import {
 import { MediaCardComponent } from "./media-card.component";
 import { nextEpisodeError } from "./next-episode.mjs";
 import { NextEpisodeUndoService } from "./next-episode-undo.service";
-import type { MarkedEpisode } from "./next-episode.service";
+import { NextEpisodeService } from "./next-episode.service";
 import { halfNote, ratingOptions, segmentValue } from "./rating-model.mjs";
 import {
   RELATED_ATTEMPT_LIMIT,
@@ -115,6 +115,7 @@ export class DetailComponent {
   private readonly confirm = inject(ConfirmService);
   private readonly drafts = inject(MediaDrafts);
   private readonly undo = inject(NextEpisodeUndoService);
+  private readonly nextEpisodes = inject(NextEpisodeService);
   private loadingRequest?: Subscription;
   private photoRequest?: Subscription;
   private linkRequest?: Subscription;
@@ -706,22 +707,15 @@ export class DetailComponent {
     this.error.set("");
     this.message.set("");
     this.mutation?.unsubscribe();
-    this.mutation = this.http
-      .post<Detail & { marked?: MarkedEpisode }>(
-        this.endpoint() + "/episodes/next",
-        { expected_episode_id: episode.id },
-      )
+    this.mutation = this.nextEpisodes
+      .markNext(entryId, episode.id)
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
-        next: (detail) => {
+        next: (result) => {
           if (generation !== this.generation) return;
-          this.keepDrafts(detail);
+          this.keepDrafts(result.entry);
           this.busy.set(false);
-          if (detail.marked)
-            this.undo.offer(entryId, {
-              marked: detail.marked,
-              next: detail.show?.next_episode ?? null,
-            });
+          this.undo.offer(entryId, result);
         },
         error: (error: { status?: number; error?: { detail?: unknown } }) => {
           if (generation !== this.generation) return;

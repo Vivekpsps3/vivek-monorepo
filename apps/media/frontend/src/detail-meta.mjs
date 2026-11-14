@@ -1,3 +1,5 @@
+import { statusOptions } from "./format.mjs";
+
 const KIND_ICONS = {
   movie: "film",
   tv: "tv",
@@ -37,76 +39,17 @@ export function kindLabel(kind) {
   return KIND_LABELS[kind] ?? "";
 }
 
-const STATUS_BY_KIND = {
-  movie: {
-    want: "Want to watch",
-    anticipating: "Anticipating",
-    in_progress: "Watching",
-    completed: "Watched",
-    paused: "Paused",
-    dropped: "Dropped",
-  },
-  tv: {
-    want: "Want to watch",
-    anticipating: "Anticipating",
-    in_progress: "Watching",
-    completed: "Watched",
-    paused: "Paused",
-    dropped: "Dropped",
-  },
-  book: {
-    want: "Want to read",
-    anticipating: "Anticipating",
-    in_progress: "Reading",
-    completed: "Read",
-    paused: "Paused",
-    dropped: "Dropped",
-  },
-  album: {
-    want: "Want to listen",
-    anticipating: "Anticipating",
-    in_progress: "Listening",
-    completed: "Listened",
-    paused: "Paused",
-    dropped: "Dropped",
-  },
-  track: {
-    want: "Want to listen",
-    anticipating: "Anticipating",
-    in_progress: "Listening",
-    completed: "Listened",
-    paused: "Paused",
-    dropped: "Dropped",
-  },
-  game: {
-    want: "Want to play",
-    anticipating: "Anticipating",
-    in_progress: "Playing",
-    completed: "Played",
-    paused: "Paused",
-    dropped: "Dropped",
-  },
-  artist: {
-    following: "Following",
-    unfollowed: "Unfollowed",
-  },
-};
-
 export function stateLabel(status, kind) {
-  const specific = kind ? STATUS_BY_KIND[kind]?.[status] : "";
-  return specific || STATE_LABELS[status] || "";
+  if (kind && kindLabel(kind)) {
+    const match = statusOptions(kind).find((choice) => choice.value === status);
+    if (match) return match.label;
+  }
+  return STATE_LABELS[status] || "";
 }
 
+/** Status choices stay on the vocabulary in format.mjs. */
 export function statusChoices(kind) {
-  const map = STATUS_BY_KIND[kind] || {
-    want: "Want to",
-    anticipating: "Anticipating",
-    in_progress: "In progress",
-    completed: "Completed",
-    paused: "Paused",
-    dropped: "Dropped",
-  };
-  return Object.entries(map).map(([value, label]) => ({ value, label }));
+  return statusOptions(kind);
 }
 
 export function statusFieldLabel(kind) {
