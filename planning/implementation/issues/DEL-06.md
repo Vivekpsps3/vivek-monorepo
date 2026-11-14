@@ -6,7 +6,7 @@
 - Kind: `implementation`
 - Dependencies: none
 - Conflict groups: `shared-styles`, `finance-presentation`, `private-shell`, `planning-guidance`
-- Verification profiles: `shared_front`, `docs`
+- Verification profiles: `shared_front`, `server_back`, `docs`
 
 Owner-selected broad deletion on 2026-11-14. Base `5bc07c2aab4345446f408d6e331cd1bef193f4d6`.
 Read root/app AGENTS and the [deletion contract](../deletion-strategy.md).
@@ -39,6 +39,7 @@ are gone, and completed planning archives no longer compete with current guidanc
 - `apps/travel/frontend/src/travel.css`
 - `apps/web/src/app/hub/hub.component.css`
 - `apps/web/src/styles.css`
+- `apps/server/tests/test_town_passive.py`
 - `planning/`
 - `docs/`
 
@@ -79,6 +80,7 @@ are gone, and completed planning archives no longer compete with current guidanc
 Menu keyboard/focus and icon-only triggers; demo disabled/encrypt/decrypt/error states;
 Finance controls, imports, Planning and scoped child presentation; responsive shell,
 Travel/Media/Town consumers; dynamic chart/result/button/badge classes; doc navigation.
+Retained backend date fixtures must freeze reminder writes and Town reads to the same day.
 
 ## Risks
 

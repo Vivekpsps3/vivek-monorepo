@@ -3,7 +3,7 @@
 - Leaf: [#358](https://github.com/Vivekpsps3/vivek-monorepo/issues/358); parent #200 remains open.
 - Branch/worktree: `agent/deletion-sweep`, `/tmp/vivek-deletion-sweep`.
 - Base main: `5bc07c2aab4345446f408d6e331cd1bef193f4d6`.
-- Tested implementation: `4b6a2b6c7588913f5b40dac7c11ea050ef1d00aa`; offline Media fixture fix `ea5bad58c3998784dcbebb919e301d5387a1bd21`. Subsequent changes record scope/evidence only.
+- Tested implementation: `4b6a2b6c7588913f5b40dac7c11ea050ef1d00aa`; offline Media fixture fix `ea5bad58c3998784dcbebb919e301d5387a1bd21`. Town clock fixture fix: `e13d4cdf0190f9f6ad20012ca6658cee1e54a90c`. Subsequent changes record scope/evidence only.
 - Selection: explicit owner request for a broad deletion PR; no open PRs at claim or final main check.
 - Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/358#issuecomment-6873610059
 - Scope and acceptance: [packet](../issues/DEL-06.md). Existing queue order is unchanged; only this owner-selected leaf is appended.
@@ -15,7 +15,7 @@
 | STYLE | Production captures at 390/1280 in light/dark across Home, holdings, Imports, recurring, Planning, Hub, new trip, PTO and public demo. Shared-menu tests compare both variants with the button under equivalent containing layout and check 44px targets. Four new public browser cases encrypt/decrypt through the actual controls and run axe. | PASS |
 | DELETE | Consumer ledger below; all remaining dynamic variants and deep/projection scopes reviewed. No production file moved or minified; complete apps/packages closure is net −1,063 physical lines. | PASS |
 | HISTORY | Completed remediation and superseded brief/reviews link to the immutable base snapshot. Active packets/evidence, technical-debt requirements and Living World scope remain. Doc links and 95-packet validation pass. | PASS |
-| GATES | Fast, web lint/types, all three Karma coverage suites, Node utilities and production build pass. All canonical browser domains also exit 0; the aggregate is 630 passed and 8 existing Finance conditional skips. | PASS |
+| GATES | Fast, web lint/types, all three Karma coverage suites, Node utilities, production build and server Python coverage/performance pass. All canonical browser domains also exit 0; the aggregate is 630 passed and 8 existing Finance conditional skips. | PASS |
 
 ## Deletion and compatibility
 
@@ -40,8 +40,8 @@ Physical full-PR accounting against the base (including this evidence):
 | Category | Added | Deleted | Net |
 | --- | ---: | ---: | ---: |
 | Production | 21 | 1,084 | −1,063 |
-| Tests | 50 | 3 | +47 |
-| Planning/documentation | 216 | 10,362 | −10,146 |
+| Tests | 58 | 3 | +55 |
+| Planning/documentation | 221 | 10,362 | −10,141 |
 
 Four historical screenshot binaries are removed separately and are not counted as text lines.
 
@@ -54,6 +54,8 @@ Toolchain: Node v24.22.2 (`PATH=/tmp/node-v24/bin:$PATH`); Karma `CHROME_BIN=/ho
 | Command | Result |
 | --- | --- |
 | `make test-fast` | PASS: doc links, 95 packets/17 parents/40 TD owners, negative planner fixtures, boundaries, discovery, 98 Python script tests and 21 Node gate tests. Final complete-diff rerun also PASS, exit 0. |
+| `make lint-python` / `make typecheck-python` | PASS: 226 formatted files, Ruff 101 / suppressions 6 / mypy 87 unchanged. |
+| `./scripts/coverage-gate.sh server` | PASS, exit 0: 887 tests, 79.10% coverage against unchanged 61.53% floor; separate uninstrumented performance case passes, Town p50 157.41ms. |
 | `make lint-web` | PASS: unchanged ratchets, Finance 469 / site 9 / packages 1 / World engine 0; engine purity test passes. |
 | `make typecheck-web` | PASS: all seven canonical TypeScript projects. |
 | `make test-frontend` | PASS: Finance 838, site 15, web/shared 716; all existing coverage floors pass unchanged. |
@@ -69,7 +71,7 @@ Toolchain: Node v24.22.2 (`PATH=/tmp/node-v24/bin:$PATH`); Karma `CHROME_BIN=/ho
 
 Parity artifacts: `/tmp/deletion-baseline*`, `/tmp/deletion-final*`; runner `.local/deletion/playwright.config.ts` and `control-parity.spec.ts` are local verification artifacts, not production scaffolding. Decode comparisons use Playwright's existing PNG utility. Baseline is unchanged base source; final is the implementation tree. No real/private records or providers are involved.
 
-Resolved attempts: first doc gate found one incoming historical review link, now pinned correctly; Node 20 could not import the existing TS utility tests, rerun under documented Node 24 passes; Karma initially lacked CHROME_BIN, configured installed Chromium passes. The full Media confirmation exposed a real TMDB poster response blocked by ORB; `clearArt` correctly removed it. The Popular fixture now serves the same local PNG as neighboring Media tests, preserving all URL-policy/request-count/Back assertions. The complete 93-case suite then passed with zero retries. The new menu test initially compared different flex containing contexts; its fixture now uses equivalent inline-block hosts and keeps all style/target assertions. An earlier broad browser run was intentionally interrupted to rebuild restored dynamic rules; it is not used as final evidence.
+Resolved attempts: CI exposed `test_source_writes_retract_instead_of_stacking` using fixed Town/Media dates but real Travel reminder timestamps. The same failure reproduced locally. A test-only ReminderClock now aligns the actual write with the fixed November 11 read; all existing XP/reversal assertions stay intact. Focused reproduction then passes, followed by the complete 887-test coverage gate and performance case. No production clock or timestamp behavior changes. First doc gate found one incoming historical review link, now pinned correctly; Node 20 could not import the existing TS utility tests, rerun under documented Node 24 passes; Karma initially lacked CHROME_BIN, configured installed Chromium passes. The full Media confirmation exposed a real TMDB poster response blocked by ORB; `clearArt` correctly removed it. The Popular fixture now serves the same local PNG as neighboring Media tests, preserving all URL-policy/request-count/Back assertions. The complete 93-case suite then passed with zero retries. The new menu test initially compared different flex containing contexts; its fixture now uses equivalent inline-block hosts and keeps all style/target assertions. An earlier broad browser run was intentionally interrupted to rebuild restored dynamic rules; it is not used as final evidence.
 
 ## Handoff
 
