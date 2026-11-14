@@ -56,7 +56,12 @@ test('export -> merge restores every collection under a different DEK and keeps 
       expect(rows.find(row => row.id === 1)?.marker).toBe(`DESTINATION_KEEP_${name}`);
       expect(rows.find(row => row.id === 2)).toEqual(source.data(name).find(row => row.id === 2));
     }
-    expect(privateRequests.join('\n')).not.toMatch(/PRIVATE_RECOVERY_|DESTINATION_KEEP_|Synthetic separate portable backup password/);
+    const restoredTransactions = target.mutations.filter(row => /\/batches\/\d+$/.test(row.path)).flatMap(row => row.body.records).filter((row: { collection: string }) => row.collection === 'transactions');
+    for (const row of restoredTransactions) {
+      const value = target.data('transactions').find(record => record.dedupe_key === `PRIVATE_DEDUPE_${row.client_id}`)!;
+      expect(row.indexes).toEqual([{ index_name: 'dedupe_key', index_value_b64: target.expectedDedupeIndex(value.dedupe_key) }]);
+    }
+    expect(privateRequests.join('\n')).not.toMatch(/PRIVATE_RECOVERY_|PRIVATE_DEDUPE_|DESTINATION_KEEP_|Synthetic separate portable backup password/);
     expect(logged.join('\n')).not.toMatch(/PRIVATE_RECOVERY_|DESTINATION_KEEP_/);
     expect(await destination.evaluate(() => JSON.stringify({ local: localStorage, session: sessionStorage }))).not.toMatch(/PRIVATE_RECOVERY_|DESTINATION_KEEP_/);
   } finally { await context.close(); }

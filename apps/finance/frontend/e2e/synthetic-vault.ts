@@ -1,7 +1,7 @@
 import type { RestoreStage, RestoreWireRecord } from '../src/app/crypto/recovery-restore';
 import { readFileSync } from 'node:fs';
 import { repositoryRoot } from '../../../../tests/e2e/config';
-import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { errors, expect, Locator, Page } from '@playwright/test';
 import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
 import { frozenNow } from './frozen-clock';
@@ -421,11 +421,13 @@ export async function syntheticVault(
         for (let index = 0; index < copies; index++) {
           const clientId = `recovery_${collection}${index ? `_${index + 1}` : ''}`;
           const row: RecordRow = { collection, client_id: clientId, ciphertext_b64: '', schema_version: index && collection === 'transactions' ? 1 : 2, key_version: 1, revision: 1, updated_at: new Date().toISOString() };
-          row.ciphertext_b64 = encrypt({ marker: `${prefix}${collection}`, id: index + 1, nested: { synthetic: true, value: index + 0.25 } }, row);
+          const dedupe = collection === 'transactions' ? { dedupe_key: `PRIVATE_DEDUPE_${clientId}` } : {};
+          row.ciphertext_b64 = encrypt({ marker: `${prefix}${collection}`, id: index + 1, nested: { synthetic: true, value: index + 0.25 }, ...dedupe }, row);
           records.set(identity(collection, row.client_id), row);
         }
       }
     },
+    expectedDedupeIndex(value: string) { return createHmac('sha256', Buffer.from(hkdfSync('sha256', key, Buffer.alloc(0), Buffer.from('finance-blind-index-v1'), 32))).update(value).digest('base64'); },
     failRestoreBatch(index: number) { failedRestoreBatch = index; },
     holdRestoreBatch() {
       heldRestoreGate = new Promise<void>(resolve => { releaseRestore = resolve; });

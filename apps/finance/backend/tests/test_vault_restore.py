@@ -197,8 +197,19 @@ def test_failure_at_each_activation_boundary_rolls_back_records_indexes_and_job(
     monkeypatch, boundary
 ):
     c = client()
-    c.post("/api/vault/records/upsert", json={"records": [wire("assets", "old_asset_1")]})
+    old = wire("transactions", "old_transaction")
+    old["indexes"] = [{"index_name": "dedupe_key", "index_value_b64": b64(b"old index" * 4)}]
+    c.post("/api/vault/records/upsert", json={"records": [old]})
     records = [wire("transactions", f"incoming_{index:04d}") for index in range(201)]
+    for index, record in enumerate(records):
+        record["indexes"] = [
+            {
+                "index_name": "dedupe_key",
+                "index_value_b64": b64(
+                    hashlib.sha256(f"synthetic index {index}".encode()).digest()
+                ),
+            }
+        ]
     stage, _ = create(c, records, "replace", batches=2)
     assert upload(c, stage, 0, records[:200]).status_code == 200
     assert upload(c, stage, 1, records[200:]).status_code == 200
@@ -240,11 +251,16 @@ def test_failure_at_each_activation_boundary_rolls_back_records_indexes_and_job(
         saved = db.get(VaultRestoreStage, stage["id"])
         assert saved is not None
         assert saved.status == "pending"
-        assert db.query(EncryptedRecordIndex).count() == 0
+        indexes = db.query(EncryptedRecordIndex).all()
+        assert [(row.client_id, row.index_value_b64) for row in indexes] == [
+            ("old_transaction", b64(b"old index" * 4))
+        ]
     monkeypatch.setattr(store, "upsert_records", original_upsert)
     monkeypatch.setattr(store, "delete_records", original_delete)
     assert activate(c, stage, "REPLACE").status_code == 200
     assert len(snapshot(c)["records"]) == 201
+    with SessionLocal() as db:
+        assert db.query(EncryptedRecordIndex).count() == 201
 
 
 def test_discard_expiry_and_owner_reset_clear_only_inert_stages():
