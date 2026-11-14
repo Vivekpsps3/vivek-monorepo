@@ -62,16 +62,15 @@ for (const viewport of VIEWPORTS) {
           await vault.open(route.path);
           const hub = page.locator(route.hub);
           await expect(hub).toBeVisible();
-          const text = await hub.innerText();
           for (const expected of route.present) {
-            expect(text, `${route.path} should show "${expected}"`).toContain(expected);
+            await expect(hub, `${route.path} should show "${expected}"`).toContainText(expected);
           }
           for (const missing of route.absent ?? []) {
-            expect(text, `${route.path} should not show "${missing}"`).not.toContain(missing);
+            await expect(hub, `${route.path} should not show "${missing}"`).not.toContainText(missing);
           }
-          expect(text).not.toContain('No data yet.');
-          expect(text).not.toContain('Date unknown');
-          expect(text).not.toContain('0 matching');
+          await expect(hub).not.toContainText('No data yet.');
+          await expect(hub).not.toContainText('Date unknown');
+          await expect(hub).not.toContainText('0 matching');
           const emptyStateText = await page.locator('ui-empty-state').allInnerTexts().then(parts => parts.join(' '));
           expect(emptyStateText).not.toContain('$0.00');
           const scan = await new AxeBuilder({ page }).analyze();

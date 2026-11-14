@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { repositoryRoot } from '../../../../tests/e2e/config';
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { errors, expect, Locator, Page } from '@playwright/test';
 import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
@@ -98,6 +100,16 @@ async function pageClockNow(request: { frame: () => { page: () => Page } }): Pro
     /* the requesting page closed mid-flight */
   }
   return frozenNow();
+}
+
+/** Read the authoritative server owner subsets; recovery has no separate test name list. */
+export function syntheticRecoveryCollections(): Array<{ collection: string; schema_versions: number[] }> {
+  const source = readFileSync(`${repositoryRoot()}/apps/finance/backend/services/encrypted_storage.py`, 'utf8');
+  return ['FINANCE', 'HEALTH'].flatMap(owner => {
+    const block = source.match(new RegExp(`${owner}_OWNER_COLLECTIONS = frozenset\\(\\s*\\{([\\s\\S]*?)\\}\\s*\\)`));
+    if (!block) throw new Error(`Missing ${owner} collection policy`);
+    return [...block[1].matchAll(/"([a-z_]+)"/g)].map(match => ({ collection: match[1], schema_versions: owner === 'HEALTH' ? [2] : [1, 2] }));
+  }).sort((a, b) => a.collection.localeCompare(b.collection));
 }
 
 export const SYNTHETIC_VAULT_PASSPHRASE = 'Synthetic finance test passphrase';
@@ -202,6 +214,12 @@ export async function syntheticVault(
     if (path === '/api/vault/records') {
       const collection = new URL(request.url()).searchParams.get('collection');
       return respond([...records.values()].filter(row => !collection || row.collection === collection));
+    }
+    if (path === '/api/vault/recovery-snapshot') {
+      return respond({
+        collections: syntheticRecoveryCollections().map(row => ({ ...row, count: [...records.values()].filter(record => record.collection === row.collection).length })),
+        records: [...records.values()],
+      });
     }
     if (path === '/api/vault/counts') {
       const counts: Record<string, number> = {};
@@ -339,6 +357,14 @@ export async function syntheticVault(
   }
   return {
     quoteRequests, quoteRequestDetails, mutations,
+    /** Add encrypted synthetic markers after opening Settings, avoiding unrelated domain hydration. */
+    seedRecoveryMarkers() {
+      for (const { collection } of syntheticRecoveryCollections()) {
+        const row: RecordRow = { collection, client_id: `recovery_${collection}`, ciphertext_b64: '', schema_version: 2, key_version: 1, revision: 1, updated_at: new Date().toISOString() };
+        row.ciphertext_b64 = encrypt({ marker: `PRIVATE_RECOVERY_${collection}`, id: 1 }, row);
+        records.set(identity(collection, row.client_id), row);
+      }
+    },
     async open(path: string, target: Page = page, expected?: string | RegExp) {
       attach(target);
       if (!enteredPages.has(target)) { await target.goto('vault/unlock'); await unlock(target); }
