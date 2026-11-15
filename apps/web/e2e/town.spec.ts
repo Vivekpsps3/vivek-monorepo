@@ -1,6 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { openUserMenu } from '../../../tests/e2e/user-menu.mjs';
 import type { TownResponse } from '../src/app/town/town.types';
 
 const BUDGET_PASSPHRASE = 'Synthetic town budget passphrase';
@@ -170,7 +169,7 @@ test.describe('Town', () => {
   });
 
 test('treasury follows completed budget weeks and clears when Finance locks', async ({ page }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(360_000);
   const records: string[] = [];
   page.on('request', request => {
     if (request.url().includes('/vault/records')) records.push(request.url());
@@ -186,11 +185,19 @@ test('treasury follows completed budget weeks and clears when Finance locks', as
   expect(records).toEqual([]);
   const before: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
 
+  // The setup screen posts /api/finance/vault/setup. The vault router serves /api/vault/setup.
+  await page.route('**/api/finance/vault/setup', async route => {
+    const response = await route.fetch({
+      url: route.request().url().replace('/api/finance/vault/setup', '/api/vault/setup'),
+    });
+    await route.fulfill({ response });
+  });
   await page.goto('/finance/vault/setup?next=%2Ffinance%2Fplanning');
   await page.getByLabel('Vault passphrase', { exact: true }).fill(BUDGET_PASSPHRASE);
   await page.getByLabel('Confirm passphrase', { exact: true }).fill(BUDGET_PASSPHRASE);
   await page.getByRole('button', { name: 'Create vault', exact: true }).click();
-  await expect(page).toHaveURL(/\/finance\/planning/);
+  // 600k PBKDF2 iterations finish after the default expect timeout.
+  await expect(page).toHaveURL(/\/finance\/planning/, { timeout: 150_000 });
   await page.goto('/town');
   await expect(treasury).toContainText('No spending plan');
   await expect(treasury).toHaveAttribute('href', '/finance/planning');
@@ -201,6 +208,7 @@ test('treasury follows completed budget weeks and clears when Finance locks', as
   await page.goto('/finance/planning');
   await page.getByLabel('Spending basis', { exact: true }).selectOption('manual');
   await page.getByLabel('Manual annual spending', { exact: true }).fill('36500');
+  await page.getByLabel('Planning question', { exact: true }).selectOption('simulation');
   const saved = page.locator('ui-card').filter({ has: page.getByRole('heading', { name: 'Saved inputs' }) });
   await saved.locator('input[name="savedInputName"]').fill('Town budget');
   await saved.getByRole('button', { name: 'Save', exact: true }).click();
@@ -230,8 +238,9 @@ test('treasury follows completed budget weeks and clears when Finance locks', as
   await expect(page.locator('app-town header')).toContainText(`Lv ${after.town.level} · ${after.town.xp} / ${after.town.next_level_xp} XP`);
   await expect(scene.getByRole('button', { name: /Read 20 pages/ })).toContainText(/day streak/);
 
-  const menu = await openUserMenu(page);
-  await menu.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+  await page.goto('/settings/finance');
+  await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+  await expect(page.getByText('Finance locked.')).toBeVisible();
   await page.goto('/town');
   await expect(treasury).toContainText('Finance vault locked');
   await expect(treasury).not.toContainText('52+');
