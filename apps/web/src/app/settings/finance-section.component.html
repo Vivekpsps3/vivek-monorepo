@@ -21,4 +21,24 @@
       <p class="settings-help" id="finance-auto-lock-help">Finance locks after this long without activity in any tab. You'll need your passphrase to unlock it.</p>
     </fieldset>
   </ui-card>
+  <ui-card>
+    <h2>Encrypted recovery backup</h2>
+    <p class="settings-help" id="backup-help">Save every vault collection, including Finance and Health, in one encrypted file. Keep the file and its separate backup password: both are needed to restore. Your current passphrase verifies this action locally. CSV downloads remain separate conveniences.</p>
+    <form class="backup-form" (submit)="$event.preventDefault(); createBackup()" aria-describedby="backup-help" [attr.aria-busy]="backupBusy">
+      <ui-input label="Current vault passphrase" type="password" autocomplete="current-password" [disabled]="backupBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="currentPassphrase" />
+      <ui-input label="Backup password" type="password" autocomplete="new-password" [disabled]="backupBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="backupPassword" />
+      <ui-input label="Confirm backup password" type="password" autocomplete="new-password" [disabled]="backupBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="backupConfirm" />
+      <p class="settings-help">Choose at least 12 characters. This password protects the file independently of your vault passphrase; reusing it is your choice. Maximum: 10,000 records and 16 MiB of recovery data. No partial backup is downloaded.</p>
+      @if (backupError) {
+        <p id="backup-error" class="form-error" role="alert" tabindex="-1" #backupAlert>{{ backupError }}</p>
+      }
+      <div class="backup-actions">
+        <ui-button type="submit" [disabled]="backupBusy" [busy]="backupBusy">Download encrypted backup</ui-button>
+        @if (backupBusy) {
+          <ui-button type="button" variant="secondary" (clicked)="cancelBackup()">Cancel backup</ui-button>
+        }
+      </div>
+      <p class="settings-help" role="status">{{ backupStatus }}</p>
+    </form>
+  </ui-card>
 }

@@ -923,3 +923,58 @@ describe('VaultService blind-index upgrade', () => {
     expect(financeVaultPresent()).toBeTrue();
   });
 });
+
+describe('VaultService recovery verification', () => {
+  let service: VaultService;
+  let http: HttpTestingController;
+  const passphrase = 'Synthetic recovery verification passphrase';
+  let material: Awaited<ReturnType<typeof createVaultMaterial>>;
+
+  beforeEach(async () => {
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
+    service = TestBed.inject(VaultService);
+    http = TestBed.inject(HttpTestingController);
+    await service.whenReady();
+    material = await createVaultMaterial(passphrase);
+    holdDek(material.dek);
+    service['unlockedSubject'].next(true);
+  });
+  afterEach(async () => { http.verify(); await service.lock(); });
+
+  it('verifies fresh wraps locally without replacing the held key or persisting credentials', async () => {
+    const before = JSON.stringify(localStorage);
+    const pending = service.verifyRecoveryPassphrase(passphrase);
+    const request = http.expectOne(apiUrl('/vault/status'));
+    expect(request.request.method).toBe('GET');
+    expect(request.request.body).toBeNull();
+    request.flush({ exists: true, ...material.setupPayload });
+    await pending;
+    expect(service.requireDek()).toBe(material.dek);
+    expect(JSON.stringify(localStorage)).toBe(before);
+    expect(service.currentStatus).toBeNull();
+  });
+
+  it('rejects wrong current passphrase and leaves the active key unchanged', async () => {
+    const pending = service.verifyRecoveryPassphrase('Wrong synthetic passphrase');
+    http.expectOne(apiUrl('/vault/status')).flush({ exists: true, ...material.setupPayload });
+    await expectAsync(pending).toBeRejected();
+    expect(service.requireDek()).toBe(material.dek);
+  });
+
+  it('refuses a valid wrap for a different DEK instead of silently switching the active vault', async () => {
+    const foreign = await createVaultMaterial(passphrase);
+    const pending = service.verifyRecoveryPassphrase(passphrase);
+    http.expectOne(apiUrl('/vault/status')).flush({ exists: true, ...foreign.setupPayload });
+    await expectAsync(pending).toBeRejected();
+    expect(service.requireDek()).toBe(material.dek);
+  });
+
+  it('rejects a fresh-wrap response held beyond lock', async () => {
+    const pending = service.verifyRecoveryPassphrase(passphrase);
+    const request = http.expectOne(apiUrl('/vault/status'));
+    await service.lock();
+    request.flush({ exists: true, ...material.setupPayload });
+    await expectAsync(pending).toBeRejected();
+    expect(service.isUnlocked).toBeFalse();
+  });
+});
