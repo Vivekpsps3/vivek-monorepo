@@ -185,7 +185,7 @@ export async function prepareRecoveryRestore(
       let input = typeof file === 'string' ? file : await file.text(); check();
       body = await decodeRecoveryBundle(input, password, check); password = ''; check();
       const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input)));
-      input = ''; 
+      input = '';
       const sourceHash = Array.from(digest, value => value.toString(16).padStart(2, '0')).join('');
       file = ''; check();
       const snapshot = await observe(port.snapshot(), work.signal); check();
