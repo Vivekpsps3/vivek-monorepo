@@ -1,0 +1,61 @@
+<section class="up-next" aria-labelledby="up-next-heading" [attr.aria-busy]="loading()">
+  <div class="heading">
+    <div><p class="eyebrow">Across the suite</p><h2 id="up-next-heading">Up next</h2></div>
+    <div class="filters" role="group" aria-label="Upcoming sources">
+      @for (source of sources(); track source.id) {
+        <ui-button variant="secondary" [pressed]="filters().includes(source.id)" (clicked)="toggleSource(source.id)">{{ source.label }}</ui-button>
+      }
+    </div>
+  </div>
+  @if (expired()) {
+    <ui-state state="expired" thing="what's up next" />
+  } @else {
+    @for (group of groups(); track group.title) {
+      <h3>{{ group.title }}</h3>
+      <ul>
+        @for (row of group.rows; track row.key) {
+          <li [class.done]="row.reminder?.done">
+            @if (row.reminder; as reminder) {
+              <button class="done-check" type="button" [attr.aria-label]="'Mark ' + row.title + ' done'"
+                [disabled]="reminder.done || pending.has(reminder.id) || travelState() !== 'ready' || travelPending()"
+                (click)="markDone(reminder)"><ui-icon name="check" /></button>
+            } @else { <ui-icon [name]="row.source === 'media' ? 'film' : 'calendar'" /> }
+            <span class="date-chip" [class.overdue]="row.overdue" [attr.title]="row.date">{{ dateLabel(row) }}</span>
+            <a class="event-link" [routerLink]="row.href">{{ row.title }}</a>
+            <span class="source">{{ row.source === 'travel' ? 'Travel' : 'Media' }}</span>
+          </li>
+        }
+      </ul>
+    }
+    @if (moreSources().size) {
+      <div class="more">
+        @if (moreSources().has('travel')) { <a routerLink="/travel/calendar">See all in Travel</a> }
+        @if (moreSources().has('media')) { <a routerLink="/media/calendar">See all in Media</a> }
+      </div>
+    }
+    @for (source of sources(); track source.id) {
+      @if (source.state === 'loading') {
+        @if (skeleton()) { <div class="loading-source" [attr.aria-label]="source.label + ' loading'"><ui-skeleton variant="lines" [lines]="1" /></div> }
+      } @else if (source.state === 'unavailable' || source.state === 'stale') {
+        <div class="source-state"><span>{{ source.label }} dates</span>
+          <ui-state [state]="source.state" [thing]="source.label + ' dates'" [pending]="source.pending" [updatedAt]="source.updatedAt" (retry)="retry(source.id)" />
+        </div>
+      }
+    }
+    @if (financeState() === 'loading' && skeleton()) { <ui-skeleton variant="lines" [lines]="1" /> }
+    @if (financeState() === 'locked') {
+      <div class="finance-row"><ui-icon name="lock" /><span>Bills hidden: Finance is locked</span>
+        <ui-button variant="secondary" size="sm" href="/finance/vault/unlock" [queryParams]="{ next: '/hub' }" label="Unlock" /></div>
+    } @else if ((financeState() === 'ready' || financeState() === 'stale' || financeState() === 'empty') && billsDue() !== null) {
+      @if (billsDue()! > 0) {
+        <div class="finance-row"><ui-icon name="credit-card" /><span>{{ billsDue() }} {{ billsDue() === 1 ? 'bill' : 'bills' }} due this week</span>
+          <a routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }">Open Finance</a></div>
+      }
+      @if (financeState() === 'stale') { <ui-state state="stale" thing="bill count" [pending]="financePending()" [updatedAt]="financeUpdatedAt()" (retry)="retryFinance.emit()" /> }
+    } @else if (financeState() === 'unavailable') {
+      <ui-state state="unavailable" thing="bill count" [pending]="financePending()" (retry)="retryFinance.emit()" />
+    }
+    @if (empty()) { <p class="empty">Nothing due in the next two weeks.</p><ui-button size="sm" href="/travel/trips/new" label="Plan a trip" /> }
+    @if (rows().length === 0 && filters().length < 2 && !loading()) { <p class="empty">No upcoming activity in the selected sources.</p> }
+  }
+</section>

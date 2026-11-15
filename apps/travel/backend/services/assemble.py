@@ -1,6 +1,6 @@
 """Read models for the home page, a trip, and the calendar."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from fractions import Fraction
 
@@ -647,31 +647,106 @@ def build_home(db, today: date | None = None, *, user_id: int) -> dict:
 
 
 def build_summary(db, today: date | None = None, *, user_id: int) -> dict:
-    """Small next-trip card for the Hub. No budgets, notes, or PTO."""
+    """One owner-scoped response for the next-trip card and the Hub's dated rows."""
     today = today or date.today()
-    home = build_home(db, today, user_id=user_id)
-    card = home["metrics"]["next_trip"]
-    if card is None:
-        return {"today": today, "next_trip": None}
-    detail = next(
-        item for item in (*home["in_progress"], *home["upcoming"]) if item["id"] == card["id"]
+    end = today + timedelta(days=13)
+    trips = (
+        db.query(Trip)
+        .filter(Trip.user_id == user_id)
+        .options(
+            selectinload(Trip.stays),
+            selectinload(Trip.transports),
+            selectinload(Trip.reminders),
+        )
+        .order_by(Trip.start_date, Trip.id)
+        .all()
     )
-    cities = detail["cities"]
-    return {
-        "today": today,
-        "next_trip": {
-            "id": card["id"],
-            "title": card["title"],
-            "destination": cities[0] if cities else None,
-            "origin_label": detail.get("origin_label") or None,
-            "start_date": card["start_date"],
-            "end_date": card["end_date"],
-            "phase": card["phase"],
-            "days_until": card["days_until"],
-            "next_action": _next_action(card["phase"], card["days_until"]),
-            "href": f"/travel/trips/{card['id']}",
-        },
-    }
+    active = [trip for trip in trips if trip.end_date >= today]
+    chosen = next((trip for trip in active if trip.start_date <= today), None)
+    chosen = chosen or next(iter(active), None)
+    card = None
+    if chosen is not None:
+        stays = sorted(chosen.stays, key=lambda row: (row.sort_order, row.arrive_on, row.id))
+        phase = phase_for(chosen.start_date, chosen.end_date, today)
+        days = _days_until(chosen.start_date, today)
+        card = {
+            "id": chosen.id,
+            "title": chosen.title,
+            "destination": stays[0].city if stays else None,
+            "origin_label": chosen.origin_label or None,
+            "start_date": chosen.start_date,
+            "end_date": chosen.end_date,
+            "phase": phase,
+            "days_until": days,
+            "next_action": _next_action(phase, days),
+            "href": f"/travel/trips/{chosen.id}",
+        }
+    rows = []
+    for trip in trips:
+        common = {
+            "trip_id": trip.id,
+            "trip_title": trip.title,
+            "href": f"/travel/trips/{trip.id}",
+            "time": None,
+            "tz": None,
+            "overdue": False,
+            "reminder": None,
+        }
+        for kind, point in (("trip_start", trip.start_date), ("trip_end", trip.end_date)):
+            if today <= point <= end and (kind != "trip_end" or point != trip.start_date):
+                rows.append(
+                    {
+                        **common,
+                        "id": trip.id,
+                        "kind": kind,
+                        "date": point,
+                        "title": f"{trip.title} {'starts' if kind == 'trip_start' else 'ends'}",
+                    }
+                )
+        for row in trip.transports:
+            if row.depart_at is not None and today <= row.depart_at.date() <= end:
+                rows.append(
+                    {
+                        **common,
+                        "id": row.id,
+                        "kind": "transport",
+                        "date": row.depart_at.date(),
+                        "time": row.depart_at.strftime("%H:%M"),
+                        "tz": row.depart_tz,
+                        "title": _budget_label(row),
+                    }
+                )
+        for row in trip.reminders:
+            if row.done or row.due_at is None:
+                continue
+            point = row.due_at.date()
+            overdue = point < today and trip.end_date >= today
+            if overdue or today <= point <= end:
+                time = row.due_at.strftime("%H:%M")
+                rows.append(
+                    {
+                        **common,
+                        "id": row.id,
+                        "kind": "reminder",
+                        "date": point,
+                        "time": None if time == "00:00" else time,
+                        "title": row.title,
+                        "overdue": overdue,
+                        "reminder": reminder_out(row),
+                    }
+                )
+    order = {"trip_start": 0, "transport": 1, "reminder": 2, "trip_end": 3}
+    rows.sort(
+        key=lambda row: (
+            not row["overdue"],
+            row["date"],
+            row["time"] or "",
+            order[row["kind"]],
+            row["trip_id"],
+            row["id"],
+        )
+    )
+    return {"today": today, "next_trip": card, "up_next": rows[:50]}
 
 
 def build_calendar(db, start: date, end: date, today: date | None = None, *, user_id: int) -> dict:

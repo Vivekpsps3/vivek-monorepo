@@ -1,6 +1,13 @@
 <div class="hub">
   <main id="hub-main">
-    <ui-page-header [title]="name" />
+    <ui-page-header [title]="name" [eyebrow]="today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })" />
+
+    <app-up-next
+      [ownerId]="userId ?? null" [today]="today"
+      [travel]="travel" [travelState]="travelState" [travelPending]="travelPending" [travelUpdatedAt]="travelUpdatedAt"
+      [media]="media" [mediaState]="mediaState" [mediaPending]="mediaPending" [mediaUpdatedAt]="mediaUpdatedAt"
+      [financeState]="financeState" [financePending]="financePending" [billsDue]="billsDueThisWeek" [financeUpdatedAt]="financeUpdatedAt"
+      (retryTravel)="retryTravel()" (retryMedia)="retryMedia()" (retryFinance)="retryFinance()" />
 
     <div class="pair">
       <section class="side-panel" aria-labelledby="travel-heading" [attr.aria-busy]="travelState === 'loading' || travelPending">
@@ -9,16 +16,16 @@
           <a class="open-link" routerLink="/travel/">Open Travel</a>
         </div>
         <ui-state
-          [state]="travelState"
+          [state]="travelState === 'empty' ? 'ready' : travelState"
           thing="trips"
-          emptyTitle="No trips yet"
-          emptyMessage="Planning a trip puts it on this card."
-          emptyAction="Plan a trip"
-          emptyLink="/travel/trips/new"
-          emptyIcon="calendar"
           [pending]="travelPending"
           [updatedAt]="travelUpdatedAt"
           (retry)="retryTravel()">
+          @if (travelState === 'empty') {
+            <p class="figure-note">No trips yet. Planning a trip puts it on this card.</p>
+            <ui-button href="/travel/trips/new" label="Plan a trip" />
+          }
+          @if (!trip && travelState === 'ready') { <p class="figure-note">Upcoming travel actions are in Up next.</p> }
           @if (trip) {
             <p class="when">{{ tripWhen(trip) }}</p>
             <p class="quiet-title">{{ tripPlace(trip) }}</p>
@@ -37,17 +44,19 @@
           <a class="open-link" routerLink="/media/">Open Media</a>
         </div>
         <ui-state
-          [state]="mediaState"
+          [state]="mediaState === 'empty' ? 'ready' : mediaState"
           thing="in-progress items"
-          emptyTitle="Nothing in progress"
-          emptyMessage="Add something to keep track of it here."
-          emptyAction="Add something"
-          emptyLink="/media/search"
-          emptyIcon="document"
           [pending]="mediaPending"
           [updatedAt]="mediaUpdatedAt"
           (retry)="retryMedia()">
+          @if (mediaState === 'empty') {
+            <p class="figure-note">Nothing in progress. Add something to keep track of it here.</p>
+            <ui-button href="/media/search" label="Add something" />
+          }
           @if (media && mediaState !== 'empty') {
+          @if (!media.currently.length && !media.upcoming.length && !media.recent_reviews.length && !media.next_episodes.length) {
+            <p class="figure-note">Upcoming dates are in Up next.</p>
+          }
           @if (media.currently.length) {
             <ul class="rows">
               @for (item of media.currently.slice(0, 3); track item.id) {
@@ -64,12 +73,13 @@
             </ul>
           }
           @if (media.upcoming.length) {
-            <h3>Coming up</h3>
-            <ul class="rows">
-              @for (item of media.upcoming.slice(0, 3); track item.id) {
-                <li><a [routerLink]="'/media/item/' + item.id">{{ item.title }}</a><strong>{{ mediaWhen(item) }}</strong></li>
-              }
-            </ul>
+            <details class="media-more"><summary>More releases</summary>
+              <ul class="rows">
+                @for (item of media.upcoming.slice(0, 3); track item.id) {
+                  <li><a [routerLink]="'/media/item/' + item.id">{{ item.title }}</a><strong>{{ mediaWhen(item) }}</strong></li>
+                }
+              </ul>
+            </details>
           }
           @if (!media.currently.length && media.recent_reviews.length) {
             <h3>Recent notes</h3>
@@ -89,17 +99,22 @@
           <a class="open-link" routerLink="/finance/">Open Finance</a>
         </div>
         <ui-state
-          [state]="financeState"
+          [state]="financeState === 'empty' || financeState === 'locked' ? 'ready' : financeState"
           thing="net worth"
           detail="net worth"
-          emptyTitle="No accounts yet"
-          emptyMessage="Add an account to see net worth here."
-          emptyAction="Add an account"
-          emptyLink="/finance/"
-          emptyIcon="wallet"
           [pending]="financePending"
           [updatedAt]="financeUpdatedAt"
           (retry)="retryFinance()">
+          @if (financeState === 'locked') {
+            <div class="compact-locked" role="status">
+              <p class="figure-note">Finance is locked. Unlock to see net worth.</p>
+              <ui-button variant="secondary" href="/finance/vault/unlock" [queryParams]="{ next: '/hub' }" label="Unlock" />
+            </div>
+          }
+          @if (financeState === 'empty') {
+            <p class="figure-note">No accounts yet. Add an account to see net worth here.</p>
+            <ui-button href="/finance/" label="Add an account" />
+          }
           @if (netWorth) {
           <p class="quiet-title">{{ netWorth.total | money }}</p>
           @if (freshness) {
@@ -156,16 +171,15 @@
           <a class="open-link town-open" routerLink="/town/">Open Town</a>
         </div>
         <ui-state
-          [state]="townState"
+          [state]="townState === 'empty' ? 'ready' : townState"
           thing="your town"
-          emptyTitle="Start your town"
-          emptyMessage="Pick a first habit and watch your town grow."
-          emptyAction="Choose a first habit"
-          emptyLink="/town/"
-          emptyIcon="building"
           [pending]="townPending"
           [updatedAt]="townUpdatedAt"
           (retry)="retryTown()">
+          @if (townState === 'empty') {
+            <p class="figure-note">Start your town. Pick a first habit and watch your town grow.</p>
+            <ui-button href="/town/" label="Choose a first habit" />
+          }
           @if (town && townState !== 'empty') {
             @if (town.next_level_xp !== null) {
               <p class="quiet-title">Lv {{ town.level }} · {{ town.xp }} / {{ town.next_level_xp }} XP</p>

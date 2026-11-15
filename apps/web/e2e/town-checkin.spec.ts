@@ -55,27 +55,22 @@ test.describe('Town check-in', () => {
     // Keep HTTP timer advancement stable across this synthetic wall-clock change.
     await page.clock.pauseAt(new Date('2026-10-29T19:00:00Z'));
     expect((await request.post('/e2e/town/clock', { data: { iso: '2026-10-30T07:10:00Z' } })).ok()).toBeTruthy();
-    let body: TownResponse | undefined;
-    // Arm the waiter before the explicit visibility event starts the refresh.
-    const refresh = page.waitForResponse(async response => {
-      if (new URL(response.url()).pathname !== '/api/town' || response.request().method() !== 'GET') return false;
-      try {
-        const payload = await response.json() as TownResponse;
-        if (payload.town?.today === '2026-10-30' && payload.town?.tz === 'America/Los_Angeles') {
-          body = payload;
-          return true;
-        }
-      } catch {
-        return false;
-      }
-      return false;
+    let receive!: (body: TownResponse) => void;
+    const refresh = new Promise<TownResponse>(resolve => { receive = resolve; });
+    // Capture the real response before Chromium can evict its body from the
+    // DevTools network buffer. This still exercises the page's visibility GET.
+    await page.route(/\/api\/town\?/, async route => {
+      const response = await route.fetch();
+      const payload = await response.json() as TownResponse;
+      await route.fulfill({ response });
+      if (payload.town?.today === '2026-10-30' && payload.town?.tz === 'America/Los_Angeles') receive(payload);
     });
     await page.clock.setFixedTime(new Date('2026-10-30T07:10:00Z'));
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-    await refresh;
+    const body = await refresh;
     await page.clock.resume();
-    expect(body?.town.tz).toBe('America/Los_Angeles');
-    expect(body?.town.today).toBe('2026-10-30');
+    expect(body.town.tz).toBe('America/Los_Angeles');
+    expect(body.town.today).toBe('2026-10-30');
     await expect(page.getByRole('button', { name: 'Mark Read 20 pages done for today' })).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByRole('button', { name: 'Mark Walk 30 minutes done for today' })).toHaveAttribute('aria-pressed', 'false');
   });

@@ -1,6 +1,7 @@
 """Home and calendar reads."""
 
 from datetime import date
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -24,10 +25,18 @@ def home(
 
 @router.get("/summary")
 def summary(
+    tz: str | None = None,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
-    return build_summary(db, user_id=principal.id)
+    try:
+        zone = (tz or "").strip()
+        if zone:
+            ZoneInfo(zone)
+        today = today_in_zone(zone) if zone else None
+    except (ZoneInfoNotFoundError, ValueError, OSError) as exc:
+        raise HTTPException(status_code=422, detail="Use a valid IANA timezone.") from exc
+    return build_summary(db, today=today, user_id=principal.id)
 
 
 @router.get("/calendar")
