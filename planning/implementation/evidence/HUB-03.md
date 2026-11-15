@@ -57,10 +57,10 @@ Node 24 from `/tmp/node24/bin`; repository venv Python 3.12; Chromium 156 from `
 | `./scripts/coverage-gate.sh travel` | PASS: 190, 86.05%, floor 80.41% |
 | `./scripts/coverage-gate.sh media` | PASS: 91, 69.70%, floor 68.70% |
 | `./scripts/coverage-gate.sh server` | PASS: 356, 74.05%, floor 61.53%; separate perf case passes |
-| Domain/shared `node --test` commands required by root gates | PASS: 103, no skips |
-| Finance Karma | PASS: 493; statements 62.55%, branches 49.30%, functions 57.80%, lines 65.78% |
-| Site Karma | PASS: 9; statements 85.21%, branches 52.94%, functions 79.16%, lines 87.37% |
-| Web Karma | PASS: 370; statements 72.31%, branches 56.73%, functions 71.90%, lines 76.83% |
+| `node --test apps/travel/backend/static/tests/*.test.mjs apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs packages/browser/runtime/*.test.mjs packages/ui/*.test.mjs` | PASS: 103, no skips |
+| `npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` | PASS: 493; statements 62.55%, branches 49.30%, functions 57.80%, lines 65.78% |
+| `npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI` | PASS: 9; statements 85.21%, branches 52.94%, functions 79.16%, lines 87.37% |
+| `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS: 370; statements 72.31%, branches 56.73%, functions 71.90%, lines 76.83% |
 | `make build-frontends` | PASS; stable committed production bundle built by `make e2e` before any other browser run |
 | `make e2e` | PASS: 198, 5 existing conditional skips, zero retries |
 | `npx playwright test --config apps/media/e2e/playwright.config.ts` | PASS: 95, zero retries |
@@ -76,8 +76,9 @@ Logs and synthetic browser artifacts remain local under `/tmp/hub03-*`, `test-re
 
 ## Handoff
 
-- PR: pending; closes only #245 and references #93.
-- Roadmap #134 scoped append-only note: pending.
-- State: implementation complete; all required local gates passed on the committed implementation tree. No merge or deployment authorization is inferred.
+- PR: https://github.com/Vivekpsps3/vivek-monorepo/pull/371, closes only #245 and references #93.
+- Leaf status note: https://github.com/Vivekpsps3/vivek-monorepo/issues/245#issuecomment-6891691618.
+- Roadmap #134 scoped append-only note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6891691842.
+- State: implementation complete, PR open; all required local gates passed on the committed implementation tree. CI was running at handoff. No merge or deployment authorization is inferred.
 - External prerequisites: none for this leaf.
-- Next action: open the PR and append its scoped roadmap status, then hand off to CI/review. Merge/deployment remains separate.
+- Next actor: CI and reviewer. No implementation work remains for this leaf; merge/deployment requires owner authorization.
