@@ -658,6 +658,25 @@ describe('HubComponent', () => {
     expect(fixture.componentInstance['financeGeneration']).toBeGreaterThan(0);
   });
 
+  it('refreshes both Media views after an episode action and drops a read started before the mutation', async () => {
+    await render();
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
+    takeCall('/media/').resolve(json(200, mediaBody()));
+    resolveTown(); await paint();
+    const component = fixture.componentInstance;
+    const episode = component.media!.next_episodes[0];
+    component.onMediaNextReload();
+    const oldRead = takeCall('/media/');
+    component.onMediaNextDone({ marked: { episode_id: 1, season_number: 1, episode_number: 3, title: 'Pilot', label: 'S1E3' }, next: null }, episode);
+    const freshRead = takeCall('/media/');
+    oldRead.resolve(json(200, { ...mediaBody(), currently: [{ id: 3, kind: 'tv', title: 'Stale before mutation' }] }));
+    freshRead.resolve(json(200, { ...mediaBody(), next_episodes: [] }));
+    await paint();
+    expect(component.media!.next_episodes).toEqual([]);
+    expect(component.media!.calendars).toBeDefined();
+    expect(fixture.nativeElement.textContent).not.toContain('Stale before mutation');
+  });
+
   it('keeps account settings off the hub', async () => {
     await render();
     takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));

@@ -90,6 +90,34 @@ test('a failed source retries alone while Travel actions remain usable', async (
   expect(calls.filter(call => call === '2027-01')).toHaveLength(2);
 });
 
+test('the existing episode action refreshes the shared Media snapshot and removes watched dates', async ({ page }) => {
+  const calls = await sources(page);
+  let watched = false;
+  await page.route('**/media/api/summary', route => {
+    calls.push('media');
+    return route.fulfill({ json: { ...summary, next_episodes: watched ? [] : [{ entry_id: 4, episode_id: 1,
+      show_title: 'Example series', season: 1, episode: 1, state: 'next', air_date: '2026-12-25' }] } });
+  });
+  await page.route('**/media/api/calendar?*', route => {
+    const month = new URL(route.request().url()).searchParams.get('month')!;
+    calls.push(month);
+    return route.fulfill({ json: { days: month === '2026-12' ? [{ date: '2026-12-25', events: [{ ...mediaEvent('Premiere'), watched }] }] : [] } });
+  });
+  await page.route('**/media/api/entries/4/episodes/next', route => {
+    watched = true;
+    return route.fulfill({ json: { marked: { episode_id: 1, season_number: 1, episode_number: 1, title: 'Premiere', label: 'S1E1' }, show: { next_episode: null } } });
+  });
+  await page.goto('/hub');
+  const next = page.getByRole('region', { name: 'Up next' });
+  await expect(next.getByRole('link', { name: 'Premiere' })).toBeVisible();
+  await page.getByRole('region', { name: 'In progress' }).getByRole('button', { name: 'Watched S1E1' }).click();
+  await expect(page.locator('.toast').filter({ hasText: 'Marked S1E1 watched' })).toBeVisible();
+  await expect(next.getByRole('link', { name: 'Premiere' })).toHaveCount(0);
+  await expect(next.getByRole('link', { name: 'Check in' })).toBeVisible();
+  expect(calls.filter(call => call === 'travel')).toHaveLength(1);
+  for (const source of ['media', '2026-12', '2027-01']) expect(calls.filter(call => call === source)).toHaveLength(2);
+});
+
 for (const width of [390, 1280]) {
   for (const theme of ['light', 'dark'] as const) {
     test(`compact Hub actions and states at ${width} ${theme}`, async ({ page, request }, info) => {

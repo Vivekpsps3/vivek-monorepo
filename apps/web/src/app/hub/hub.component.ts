@@ -248,6 +248,7 @@ export class HubComponent implements OnInit {
         )
       : media.next_episodes.filter(row => row.entry_id !== item.entry_id);
     this.media = { ...media, next_episodes };
+    this.onMediaNextReload();
     this.cdr.markForCheck();
     requestAnimationFrame(() => {
       const rowLink = document.querySelector<HTMLElement>(
@@ -259,7 +260,8 @@ export class HubComponent implements OnInit {
   }
 
   onMediaNextReload(): void {
-    this.retryMedia();
+    this.mediaPending = true;
+    void this.loadMedia();
   }
 
   retryTown(): void {
