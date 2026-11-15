@@ -126,7 +126,7 @@ reported as a pass and no suite/floor/assertion was weakened.
 ## Handoff
 
 - SEC-05: #362 merged, #270 closed, verified on current main before SEC-06; no deployment.
-- SEC-06 PR: ready to open after every required local check passed. Use `Closes #271` only, reference #121 without closing it.
-- Roadmap #134: append scoped SEC-06 PR/tested-revision/evidence status after PR creation; do not overwrite its body or the global queue/parent ledgers.
-- Actual status: complete restore implementation with local verification; not merged/deployed, not an operational server-backup drill. SEC-06 merge is not authorized by the user's earlier authorization for SEC-05.
+- SEC-06 PR: [#365](https://github.com/Vivekpsps3/vivek-monorepo/pull/365), open for review after every required local check passed. Uses `Closes #271` only and references #121 without closing it. Initial delivery `3a7e1ac` adds this evidence and removes one trailing space from tested source `911bd38`; final web lint and fast checks passed again. This final handoff update is documentation only.
+- Scoped workflow notes appended after fresh reads: [leaf #271 delivery](https://github.com/Vivekpsps3/vivek-monorepo/issues/271#issuecomment-6887657606), [roadmap #134 delivery](https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6887657834). No body/global queue/parent ledger overwrite.
+- Actual status at PR delivery: complete restore implementation with local verification; PR open, CI pending; not merged/deployed, not an operational server-backup drill. SEC-06 merge is not authorized by the user's earlier authorization for SEC-05.
 - Next actor: reviewer/owner assesses the concrete PR, CI and explicit activation boundary; any future merge/deployment needs its own authorization. Current worktree has clean tracked source and only untracked installed-dependency symlinks.
