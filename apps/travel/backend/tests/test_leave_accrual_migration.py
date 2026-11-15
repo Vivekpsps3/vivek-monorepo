@@ -18,6 +18,7 @@ from apps.travel.backend.services.leave_math import Bucket, walk_bucket
 
 PARENT = "site_leave_carry_v1"
 REVISION = "site_leave_accrual_v1"
+HEAD = "site_vault_restore_v1"
 COMPATIBLE = {
     "site_schema_v1",
     "site_auth_challenge_purpose_v2",
@@ -90,8 +91,15 @@ def test_upgrade_preserves_rows_and_keeps_one_daily_head(tmp_path):
     command.upgrade(_cfg(database), REVISION)
     assert current_revision(database) == REVISION
     assert ScriptDirectory.from_config(_cfg(database)).get_heads() == [head_revision()]
-    assert head_revision() == REVISION
-    assert model_diff(database) == []
+    assert head_revision() == HEAD
+    # At this historical revision only the later restore expansion is absent.
+    drift = model_diff(database)
+    assert len(drift) == 3
+    assert {(item[0], item[1].name) for item in drift} == {
+        ("add_table", "vault_restore_stages"),
+        ("add_index", "ix_vault_restore_stages_user_id"),
+        ("add_table", "vault_restore_batches"),
+    }
     with sqlite3.connect(database) as db:
         assert (
             _rows(db, f"SELECT {POLICIES} FROM leave_policies ORDER BY bucket") == before_policies
@@ -150,6 +158,29 @@ def test_upgrade_preserves_rows_and_keeps_one_daily_head(tmp_path):
     assert bucket.accrual_mode == "daily"
     on = date(2026, 11, 11)
     assert walk_bucket(bucket, {}, on)[0] == Fraction(kept["start"])
+
+    # The current-head integration is separate from the historical assertions.
+    command.upgrade(_cfg(database), HEAD)
+    assert current_revision(database) == HEAD
+    assert model_diff(database) == []
+    with sqlite3.connect(database) as db:
+        assert (
+            _rows(db, f"SELECT {POLICIES} FROM leave_policies ORDER BY bucket") == before_policies
+        )
+        assert (
+            _rows(db, f"SELECT {ALLOCATIONS} FROM trip_pto_days ORDER BY on_date")
+            == before_allocations
+        )
+        assert _rows(db, f"SELECT {ENTRIES} FROM pto_entries ORDER BY id") == before_entries
+        assert (
+            _rows(
+                db,
+                "SELECT accrual_mode, accrual_anchor, accrual_version FROM leave_policies "
+                "ORDER BY bucket",
+            )
+            == added
+        )
+        assert db.execute("PRAGMA foreign_key_check").fetchall() == []
 
     command.downgrade(_cfg(database), PARENT)
     assert current_revision(database) == PARENT

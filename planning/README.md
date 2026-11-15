@@ -17,6 +17,14 @@ meaningful interaction and informative dated memories. Read its scope reconcilia
 for retained Town/UX/Health/Hub commitments. PLACE-01–14 packets are in the same
 execution queue; they add future scope without reopening completed #100/#102.
 
+## Discovery designs
+
+[Sidequests](sidequests.md) / [#194](https://github.com/Vivekpsps3/vivek-monorepo/issues/194)
+is the DISC-01 design for a private experience cabinet. It disposes the
+proposal and leaves the open product choices labeled. It does not add queue
+entries, routes, or an app. Implementation stays unselected until the owner
+says otherwise. Cards remain [DISC-02](implementation/issues/DISC-02.md).
+
 ## Supporting guidance and history
 
 - [Development practices](technical-debt/feature-addition-playbook.md) explains feature recipes.

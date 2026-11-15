@@ -59,7 +59,11 @@ export function withVaultStore<T>(mode: IDBTransactionMode, run: (store: IDBObje
       const close = () => db.close();
       tx.oncomplete = () => { if (!settled) { settled = true; close(); resolve(request.result); } };
       tx.onerror = () => { close(); fail(tx.error); };
-      tx.onabort = () => { close(); fail(tx.error ?? request.error); };
+      tx.onabort = () => {
+        close();
+        const error = tx.error ?? (request.readyState === 'done' ? request.error : null);
+        fail(error ?? new DOMException('IndexedDB transaction aborted', 'AbortError'));
+      };
     };
   });
 }

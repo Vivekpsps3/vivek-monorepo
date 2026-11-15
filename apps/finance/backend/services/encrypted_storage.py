@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -10,7 +12,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.finance.backend.kdf_policy import MAX_PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS
-from apps.finance.backend.models import EncryptedRecord, EncryptedRecordIndex, UserVault, utc_now
+from apps.finance.backend.models import (
+    EncryptedRecord,
+    EncryptedRecordIndex,
+    UserVault,
+    VaultRestoreBatch,
+    VaultRestoreStage,
+    utc_now,
+)
 
 
 class CollectionContractError(ValueError):
@@ -217,6 +226,80 @@ def list_records(
     return q.order_by(EncryptedRecord.revision.asc(), EncryptedRecord.id.asc()).all()
 
 
+def validate_record(item: dict[str, Any]) -> dict[str, Any]:
+    """One wire validator for ordinary writes and inert restore staging."""
+    collection = validate_collection(str(item.get("collection", "")))
+    client_id = validate_client_id(str(item.get("client_id", "")))
+    ciphertext_b64 = str(item.get("ciphertext_b64", ""))
+    if not ciphertext_b64 or _b64_len(ciphertext_b64) > MAX_CIPHERTEXT_BYTES:
+        raise HTTPException(status_code=400, detail="Invalid ciphertext")
+    schema_version = int(item.get("schema_version", 1))
+    key_version = int(item.get("key_version", 1))
+    # Security (2026-10-30): Health-owned collections are v2-only; the Health
+    # client refuses v1 rows, so never let one be written. Membership is the
+    # Health subset, not a name prefix.
+    if collection in COLLECTION_POLICY.health and schema_version != CURRENT_RECORD_SCHEMA_VERSION:
+        raise HTTPException(status_code=422, detail="Health records require schema_version 2")
+    if schema_version not in {1, CURRENT_RECORD_SCHEMA_VERSION} or key_version < 1:
+        raise HTTPException(status_code=400, detail="Invalid version fields")
+    indexes = item.get("indexes") or []
+    if not isinstance(indexes, list):
+        raise HTTPException(400, "Invalid blind indexes")
+    normalized_indexes = []
+    for idx in indexes:
+        name = str(idx.get("index_name", ""))
+        value = str(idx.get("index_value_b64", ""))
+        if not name or not value or _b64_len(value) > 128:
+            raise HTTPException(400, "Invalid blind index")
+        normalized_indexes.append({"index_name": name[:64], "index_value_b64": value})
+    return {
+        "collection": collection,
+        "client_id": client_id,
+        "ciphertext_b64": ciphertext_b64,
+        "schema_version": schema_version,
+        "key_version": key_version,
+        "expected_revision": item.get("expected_revision"),
+        "indexes": normalized_indexes,
+    }
+
+
+def _update_existing_record(
+    db: Session,
+    user_id: int,
+    row: EncryptedRecord,
+    expected: int,
+    ciphertext_b64: str,
+    schema_version: int,
+    key_version: int,
+) -> None:
+    # The revision is checked by the write itself, including a stale read held
+    # while another transaction activates a restore. Refresh the ORM identity
+    # only after winning; never flush old attributes over a newer record.
+    changed = (
+        db.query(EncryptedRecord)
+        .filter(
+            EncryptedRecord.id == row.id,
+            EncryptedRecord.user_id == user_id,
+            EncryptedRecord.collection == row.collection,
+            EncryptedRecord.client_id == row.client_id,
+            EncryptedRecord.revision == expected,
+        )
+        .update(
+            {
+                "ciphertext_b64": ciphertext_b64,
+                "schema_version": schema_version,
+                "key_version": key_version,
+                "revision": expected + 1,
+                "updated_at": utc_now(),
+            },
+            synchronize_session=False,
+        )
+    )
+    if changed != 1:
+        raise HTTPException(409, "Record changed while saving. Reload before retrying.")
+    db.refresh(row)
+
+
 def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> list[EncryptedRecord]:
     if not items:
         raise HTTPException(status_code=400, detail="No records provided")
@@ -224,23 +307,12 @@ def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> li
         raise HTTPException(status_code=400, detail=f"Batch too large (max {MAX_BATCH})")
     out: list[EncryptedRecord] = []
     for item in items:
-        collection = validate_collection(str(item.get("collection", "")))
-        client_id = validate_client_id(str(item.get("client_id", "")))
-        ciphertext_b64 = str(item.get("ciphertext_b64", ""))
-        if not ciphertext_b64 or _b64_len(ciphertext_b64) > MAX_CIPHERTEXT_BYTES:
-            raise HTTPException(status_code=400, detail="Invalid ciphertext")
-        schema_version = int(item.get("schema_version", 1))
-        key_version = int(item.get("key_version", 1))
-        # Security (2026-10-30): Health-owned collections are v2-only; the Health
-        # client refuses v1 rows, so never let one be written. Membership is the
-        # Health subset, not a name prefix.
-        if (
-            collection in COLLECTION_POLICY.health
-            and schema_version != CURRENT_RECORD_SCHEMA_VERSION
-        ):
-            raise HTTPException(status_code=422, detail="Health records require schema_version 2")
-        if schema_version not in {1, CURRENT_RECORD_SCHEMA_VERSION} or key_version < 1:
-            raise HTTPException(status_code=400, detail="Invalid version fields")
+        item = validate_record(item)
+        collection = item["collection"]
+        client_id = item["client_id"]
+        ciphertext_b64 = item["ciphertext_b64"]
+        schema_version = item["schema_version"]
+        key_version = item["key_version"]
         row = (
             db.query(EncryptedRecord)
             .filter(
@@ -262,12 +334,12 @@ def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> li
                     status_code=409,
                     detail=f"Revision conflict for {collection}/{client_id}",
                 )
-            row.ciphertext_b64 = ciphertext_b64
-            row.schema_version = schema_version
-            row.key_version = key_version
-            row.revision = row.revision + 1
-            row.updated_at = utc_now()
+            _update_existing_record(
+                db, user_id, row, expected, ciphertext_b64, schema_version, key_version
+            )
         else:
+            if item.get("expected_revision") is not None:
+                raise HTTPException(409, "Record was deleted. Reload before saving.")
             row = EncryptedRecord(
                 user_id=user_id,
                 collection=collection,
@@ -278,28 +350,19 @@ def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> li
                 revision=1,
             )
             db.add(row)
-        indexes = item.get("indexes") or []
-        if not isinstance(indexes, list):
-            raise HTTPException(status_code=400, detail="indexes must be a list")
         db.query(EncryptedRecordIndex).filter(
             EncryptedRecordIndex.user_id == user_id,
             EncryptedRecordIndex.collection == collection,
             EncryptedRecordIndex.client_id == client_id,
         ).delete(synchronize_session=False)
-        for idx in indexes:
-            name = str(idx.get("index_name", ""))
-            value = str(idx.get("index_value_b64", ""))
-            if not name or not value:
-                raise HTTPException(status_code=400, detail="Invalid blind index")
-            if _b64_len(value) > 128:
-                raise HTTPException(status_code=400, detail="Blind index too long")
+        for idx in item["indexes"]:
             db.add(
                 EncryptedRecordIndex(
                     user_id=user_id,
                     collection=collection,
                     client_id=client_id,
-                    index_name=name[:64],
-                    index_value_b64=value,
+                    index_name=idx["index_name"],
+                    index_value_b64=idx["index_value_b64"],
                 )
             )
         out.append(row)
@@ -364,11 +427,9 @@ def reindex_records(
         # the second row. Skip it so re-index can finish instead of retrying forever.
         savepoint = db.begin_nested()
         try:
-            row.ciphertext_b64 = ciphertext_b64
-            row.schema_version = schema_version
-            row.key_version = key_version
-            row.revision = row.revision + 1
-            row.updated_at = utc_now()
+            _update_existing_record(
+                db, user_id, row, expected, ciphertext_b64, schema_version, key_version
+            )
             db.query(EncryptedRecordIndex).filter(
                 EncryptedRecordIndex.user_id == user_id,
                 EncryptedRecordIndex.collection == collection,
@@ -473,6 +534,13 @@ def collection_counts(db: Session, user_id: int) -> dict[str, int]:
 
 
 def wipe_encrypted_user_data(db: Session, user_id: int) -> None:
+    stage_ids = db.query(VaultRestoreStage.id).filter(VaultRestoreStage.user_id == user_id)
+    db.query(VaultRestoreBatch).filter(VaultRestoreBatch.stage_id.in_(stage_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(VaultRestoreStage).filter(VaultRestoreStage.user_id == user_id).delete(
+        synchronize_session=False
+    )
     db.query(EncryptedRecordIndex).filter(EncryptedRecordIndex.user_id == user_id).delete(
         synchronize_session=False
     )
@@ -530,6 +598,7 @@ def recovery_snapshot(db: Session, user_id: int) -> dict[str, Any]:
             }
         )
     return {
+        "fingerprint": snapshot_fingerprint(records),
         "collections": [
             {
                 "collection": name,
@@ -542,3 +611,22 @@ def recovery_snapshot(db: Session, user_id: int) -> dict[str, Any]:
         ],
         "records": records,
     }
+
+
+def snapshot_fingerprint(records: list[dict[str, Any]]) -> str:
+    digest = hashlib.sha256()
+    for row in sorted(records, key=lambda r: (r["collection"], r["client_id"])):
+        digest.update(
+            json.dumps(
+                [
+                    row["collection"],
+                    row["client_id"],
+                    row["revision"],
+                    row["schema_version"],
+                    row["key_version"],
+                    row["ciphertext_b64"],
+                ],
+                separators=(",", ":"),
+            ).encode()
+        )
+    return digest.hexdigest()

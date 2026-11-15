@@ -1,3 +1,4 @@
+import { recordIndexes } from './record-indexes';
 import { firstValueFrom, Subject } from 'rxjs';
 import { randomClientId } from './vault-crypto';
 import { VaultService, type VaultWriteOptions } from './vault.service';
@@ -368,15 +369,7 @@ export class EncryptedRecordPersistence {
     const keyVersion = existing?.key_version ?? 1;
     const ciphertext = await this.vault.encryptPayload(data, collection, cid, schemaVersion, keyVersion);
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
-    const indexes =
-      collection === 'transactions' && (data as any).dedupe_key
-        ? [
-            {
-              index_name: 'dedupe_key',
-              index_value_b64: await this.vault.blindIndex(String((data as any).dedupe_key)),
-            },
-          ]
-        : [];
+    const indexes = await recordIndexes(this.vault, collection, data);
     const saved = await firstValueFrom(
       this.vault.upsertRecords([
         {

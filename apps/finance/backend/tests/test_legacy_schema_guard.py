@@ -177,6 +177,8 @@ def test_fresh_file_startup_creates_only_current_schema(tmp_path, monkeypatch):
         "user_vaults",
         "encrypted_records",
         "encrypted_record_indexes",
+        "vault_restore_stages",
+        "vault_restore_batches",
         "ticker_quotes",
         "market_research_cache",
     }

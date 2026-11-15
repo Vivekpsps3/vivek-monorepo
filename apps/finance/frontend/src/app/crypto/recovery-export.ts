@@ -1,13 +1,11 @@
 import type { Injector } from '@angular/core';
 import { firstValueFrom, fromEvent, takeUntil, type Observable } from 'rxjs';
 import { openBoundedWork } from '@vivek/browser';
-import { SESSION_CONTEXT } from '@vivek/ui';
-import { readLockEpoch } from './dek-holder';
-import { createVaultRecordCapability, type VaultRecordEnvelope, type VaultRecordEligibility } from './vault-record-capability';
-import { VaultService } from './vault.service';
+import { type VaultRecordEnvelope, type VaultRecordEligibility } from './vault-record-capability';
+import { openRecoveryScope } from './recovery-scope';
 import { encodeRecoveryBundle, RECOVERY_LIMITS, RecoveryError, validateRecoveryBundle, validateRecoveryCollections, type RecoveryBundle, type RecoveryCollection } from './recovery-bundle';
 
-export interface RecoverySnapshot { collections: RecoveryCollection[]; records: VaultRecordEnvelope[] }
+export interface RecoverySnapshot { collections: RecoveryCollection[]; records: VaultRecordEnvelope[]; fingerprint?: string }
 interface ExportVault {
   verifyRecoveryPassphrase(passphrase: string): Promise<void>;
   recoverySnapshot(): Observable<RecoverySnapshot>;
@@ -97,25 +95,12 @@ export async function runRecoveryExport(
 }
 
 export async function exportFinanceRecovery(injector: Injector, current: string, password: string, signal: AbortSignal, publish: (file: string, count: number) => void): Promise<void> {
-  const vault = injector.get(VaultService);
-  const session = injector.get(SESSION_CONTEXT);
-  const read = (): VaultRecordEligibility => ({ ownerId: session.currentUser?.id ?? null, generation: readLockEpoch(), unlocked: vault.isUnlocked });
-  const records = createVaultRecordCapability(vault, read);
-  const lifecycle = new AbortController();
-  const owner = session.currentUser?.id;
-  const ownerSubscription = session.user$.subscribe(user => { if (user?.id !== owner) lifecycle.abort(); });
-  const lockSubscription = vault.unlocked$.subscribe(unlocked => { if (!unlocked) lifecycle.abort(); });
-  const abort = (): void => lifecycle.abort();
-  signal.addEventListener('abort', abort, { once: true });
-  if (signal.aborted) lifecycle.abort();
+  const scope = openRecoveryScope(injector, signal);
   try {
     await runRecoveryExport({
-      verifyRecoveryPassphrase: passphrase => vault.verifyRecoveryPassphrase(passphrase),
-      recoverySnapshot: () => vault.recoverySnapshot(),
-      decryptPayload: (...args) => records.decryptPayload(...args),
-    }, read, current, password, lifecycle.signal, publish);
-  } finally {
-    ownerSubscription.unsubscribe(); lockSubscription.unsubscribe();
-    signal.removeEventListener('abort', abort);
-  }
+      verifyRecoveryPassphrase: passphrase => scope.vault.verifyRecoveryPassphrase(passphrase),
+      recoverySnapshot: () => scope.vault.recoverySnapshot(),
+      decryptPayload: (...args) => scope.records.decryptPayload(...args),
+    }, scope.read, current, password, scope.signal, publish);
+  } finally { scope.dispose(); }
 }
