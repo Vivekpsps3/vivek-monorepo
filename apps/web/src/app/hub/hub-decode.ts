@@ -51,8 +51,42 @@ export interface MediaSummary {
   next_episodes: MediaNextEpisode[];
 }
 
+export interface TravelReminder {
+  id: number;
+  title: string;
+  due_at: string | null;
+  done: boolean;
+  kind: 'general' | 'parking' | 'flight' | 'packing';
+  notes: string | null;
+}
+
+export interface TravelEvent {
+  id: number;
+  kind: 'trip_start' | 'trip_end' | 'transport' | 'reminder';
+  date: string;
+  time: string | null;
+  tz: string | null;
+  title: string;
+  overdue: boolean;
+  trip_id: number;
+  trip_title: string;
+  href: string;
+  reminder: TravelReminder | null;
+}
+
 export interface TravelSummary {
   next_trip: TravelTrip | null;
+  up_next: TravelEvent[];
+}
+
+export interface MediaCalendar {
+  days: { date: string; events: {
+    type: string; title: string; entry_id: number | null; watched: boolean; release_status: string | null;
+  }[] }[];
+}
+
+export interface MediaHubSummary extends MediaSummary {
+  calendars: MediaCalendar[];
 }
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -60,9 +94,66 @@ const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 export function decodeTravelSummary(value: unknown): TravelSummary | null {
   const body = record(value);
   if (!body || !Object.hasOwn(body, 'next_trip')) return null;
-  if (body['next_trip'] === null) return { next_trip: null };
-  const trip = travelTrip(body['next_trip']);
-  return trip ? { next_trip: trip } : null;
+  if (!Array.isArray(body['up_next'])) return null;
+  const events = body['up_next'].map(travelEvent);
+  if (events.some(row => row === null)) return null;
+  const trip = body['next_trip'] === null ? null : travelTrip(body['next_trip']);
+  if (body['next_trip'] !== null && trip === null) return null;
+  return { next_trip: trip, up_next: events as TravelEvent[] };
+}
+
+function travelEvent(value: unknown): TravelEvent | null {
+  const row = record(value);
+  if (!row) return null;
+  const id = requiredId(row, 'id');
+  const tripId = requiredId(row, 'trip_id');
+  const title = requiredString(row, 'title');
+  const tripTitle = requiredString(row, 'trip_title');
+  const date = requiredDate(row, 'date');
+  const kind = row['kind'];
+  const time = row['time'];
+  const tz = row['tz'];
+  if (id === undefined || tripId === undefined || title === undefined || tripTitle === undefined || !date
+    || !['trip_start', 'trip_end', 'transport', 'reminder'].includes(String(kind))
+    || (time !== null && (typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)))
+    || (tz !== null && typeof tz !== 'string') || typeof row['overdue'] !== 'boolean') return null;
+  let reminder: TravelReminder | null = null;
+  if (kind === 'reminder') {
+    const item = record(row['reminder']);
+    if (!item || requiredId(item, 'id') !== id || typeof item['title'] !== 'string'
+      || typeof item['done'] !== 'boolean' || (item['notes'] !== null && typeof item['notes'] !== 'string')
+      || !['general', 'parking', 'flight', 'packing'].includes(String(item['kind']))
+      || (item['due_at'] !== null && (typeof item['due_at'] !== 'string'
+        || !isoDate(item['due_at'].slice(0, 10)) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(item['due_at'])))) return null;
+    reminder = { id, title: item['title'], due_at: item['due_at'] as string | null, done: item['done'],
+      kind: item['kind'] as TravelReminder['kind'], notes: item['notes'] as string | null };
+  } else if (row['reminder'] !== null) return null;
+  return { id, trip_id: tripId, title, trip_title: tripTitle, date, kind: kind as TravelEvent['kind'],
+    time: time as string | null, tz: tz as string | null, overdue: row['overdue'],
+    href: `/travel/trips/${tripId}`, reminder };
+}
+
+/** Only exact dated saved events enter Up next; month/year/unknown bands stay in Media. */
+export function decodeMediaCalendar(value: unknown): MediaCalendar | null {
+  const body = record(value);
+  if (!body || !Array.isArray(body['days'])) return null;
+  const days: MediaCalendar['days'] = [];
+  for (const value of body['days']) {
+    const day = record(value);
+    if (!day || !isoDate(day['date']) || !Array.isArray(day['events'])) return null;
+    const events: MediaCalendar['days'][number]['events'] = [];
+    for (const value of day['events']) {
+      const event = record(value);
+      if (!event || typeof event['type'] !== 'string' || typeof event['title'] !== 'string'
+        || typeof event['watched'] !== 'boolean'
+        || (event['entry_id'] !== null && requiredId(event, 'entry_id') === undefined)
+        || (event['release_status'] !== null && typeof event['release_status'] !== 'string')) return null;
+      events.push({ type: event['type'], title: event['title'], entry_id: event['entry_id'] as number | null,
+        watched: event['watched'], release_status: event['release_status'] as string | null });
+    }
+    days.push({ date: day['date'] as string, events });
+  }
+  return { days };
 }
 
 export function decodeMediaSummary(value: unknown): MediaSummary | null {

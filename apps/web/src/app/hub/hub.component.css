@@ -31,7 +31,9 @@
 }
 
 .open-link {
-  min-height: 36px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   border: 0;
   background: transparent;
   color: var(--accent);
@@ -60,11 +62,6 @@
   padding: var(--space-6);
 }
 
-.finance-bar {
-  grid-column: 1 / -1;
-}
-
-.town-bar,
 .pixels-bar {
   grid-column: 1 / -1;
 }
@@ -239,6 +236,7 @@ dd {
 
 .pair {
   display: grid;
+  align-items: start;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
   margin-top: var(--space-4);
@@ -321,3 +319,7 @@ dd {
     width: 100%;
   }
 }
+
+.media-more summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--text-secondary); }
+
+.compact-locked { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }

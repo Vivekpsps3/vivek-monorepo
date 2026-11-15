@@ -173,6 +173,7 @@ describe('HubComponent', () => {
     liabilities$ = new BehaviorSubject<Liability[]>([]);
     holdings$ = new BehaviorSubject<Holding[]>([]);
     spyOn(window, 'fetch').and.callFake((input: RequestInfo | URL) => new Promise<Response>(resolve => {
+      if (String(input).includes('/media/api/calendar')) { resolve(json(200, { days: [] })); return; }
       pending.push({ url: String(input), resolve });
     }));
     const MarketRefreshCoordinatorService = await loadMarketRefreshCoordinatorService();
@@ -223,6 +224,8 @@ describe('HubComponent', () => {
             assets$,
             liabilities$,
             holdings$,
+            fixedExpenses$: of([]),
+            subscriptions$: of([]),
           },
         },
         {
@@ -276,7 +279,7 @@ describe('HubComponent', () => {
     fixture.nativeElement.querySelector('section[aria-labelledby="travel-heading"] button').click();
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('section[aria-labelledby="travel-heading"]')?.getAttribute('aria-busy')).toBe('true');
-    takeCall('/travel/').resolve(json(200, { next_trip: trip('Lisbon') }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: trip('Lisbon') }));
     await paint();
     expect(fixture.nativeElement.textContent).toContain('Lisbon');
     expect(fixture.nativeElement.textContent).toContain('The Wire');
@@ -298,7 +301,7 @@ describe('HubComponent', () => {
 
   it('keeps a stale snapshot when a retry fails and clears it on sign-out', async () => {
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: trip('Lisbon') }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: trip('Lisbon') }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown();
     await paint();
@@ -325,7 +328,7 @@ describe('HubComponent', () => {
     users.next(person(2, 'Bea'));
     flushPixels();
     await Promise.resolve();
-    firstTravel.resolve(json(200, { next_trip: trip('Secret') }));
+    firstTravel.resolve(json(200, { up_next: [], next_trip: trip('Secret') }));
     firstMedia.resolve(json(200, mediaBody()));
     firstTown.resolve(json(200, { ...townBody(), level: 99, xp: 9999 }));
     resolveTown();
@@ -333,7 +336,7 @@ describe('HubComponent', () => {
     expect(fixture.nativeElement.textContent).not.toContain('Secret');
     expect(fixture.nativeElement.textContent).not.toContain('Lv 99');
 
-    takeCall('/travel/').resolve(json(200, { next_trip: trip('Kyoto') }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: trip('Kyoto') }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     await paint();
     const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
@@ -348,7 +351,7 @@ describe('HubComponent', () => {
     vaultUnlocked = true;
     financeError = new Error('finance down');
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: trip('Lisbon') }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: trip('Lisbon') }));
     takeCall('/media/').resolve(json(503, {}));
     resolveTown();
     await paint();
@@ -368,7 +371,7 @@ describe('HubComponent', () => {
     assets$.next([{ id: 1, name: 'House', category: 'property', current_value: 500, as_of_date: '2026-10-15' } as Asset]);
     liabilities$.next([{ id: 1, name: 'Card', category: 'credit', balance_owed: 25, as_of_date: '2026-10-15' } as Liability]);
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, mediaBody()));
     resolveTown();
     await paint();
@@ -383,7 +386,7 @@ describe('HubComponent', () => {
     localStorage.setItem(DEK_STORE, 'present');
     vaultUnlocked = true;
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown();
     await paint();
@@ -399,7 +402,7 @@ describe('HubComponent', () => {
     vaultUnlocked = true;
     assets$.next([{ id: 1, name: 'Cash', category: 'cash', current_value: 0, as_of_date: '2026-10-15' } as Asset]);
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown();
     await paint();
@@ -425,7 +428,7 @@ describe('HubComponent', () => {
     expect(component.kindLabel('album')).toBe('Album');
     users.next(null);
     expect(component.financeState).toBe('locked');
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown();
     await paint();
@@ -456,7 +459,7 @@ describe('HubComponent', () => {
       lifecycle_status: 'active',
     } as Holding]);
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown();
     await paint();
@@ -633,7 +636,7 @@ describe('HubComponent', () => {
       id: 10, symbol: 'HBRX', shares: 2, current_price: 25, account_display: 'Harbor Brokerage', lifecycle_status: 'active',
     } as Holding]);
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown();
     for (let i = 0; i < 20 && financeCalls === 0; i++) await new Promise(resolve => setTimeout(resolve, 0));
@@ -657,7 +660,7 @@ describe('HubComponent', () => {
 
   it('keeps account settings off the hub', async () => {
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown();
     await paint();
@@ -668,7 +671,7 @@ describe('HubComponent', () => {
 
   it('keeps the other cards when the travel summary has the wrong shape', async () => {
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: { id: '7', title: 'Lisbon', days_until: '0' } }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: { id: '7', title: 'Lisbon', days_until: '0' } }));
     takeCall('/media/').resolve(json(200, mediaBody()));
     resolveTown();
     await paint();
@@ -683,6 +686,7 @@ describe('HubComponent', () => {
   it('shows a null trip date count, an unknown release, and a maxed town without inventing numbers', async () => {
     await render();
     takeCall('/travel/').resolve(json(200, {
+      up_next: [],
       next_trip: {
         id: 7,
         title: 'Lisbon',
@@ -714,7 +718,7 @@ describe('HubComponent', () => {
 
   it('shows the town card with level, today, and streak while finance stays locked', async () => {
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown();
     await paint();
@@ -735,7 +739,7 @@ describe('HubComponent', () => {
 
   it('shows the town empty state for a town with no habits', async () => {
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown({ ...townBody(), founded_on: null, level: 1, xp: 0, level_xp_start: 0, next_level_xp: 100, today_done: 0, today_total: 0, longest_streak: 0, longest_streak_unit: null });
     await paint();
@@ -746,7 +750,7 @@ describe('HubComponent', () => {
 
   it('omits the streak line when every streak is 0 but habits exist', async () => {
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown({ ...townBody(), longest_streak: 0, longest_streak_unit: null });
     await paint();
@@ -757,7 +761,7 @@ describe('HubComponent', () => {
 
   it('recovers the town card when a failed summary is retried', async () => {
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     takeCall('/api/town').resolve(json(503, {}));
     await paint();
@@ -773,7 +777,7 @@ describe('HubComponent', () => {
 
   it('shows the session-ended copy when the town summary is rejected', async () => {
     await render();
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     takeCall('/api/town').resolve(json(401, { detail: 'expired' }));
     await paint();
@@ -788,7 +792,7 @@ describe('HubComponent', () => {
       [{ date: day, town: 1 }],
       { birthday: '1990-05-04', show_age: true },
     ));
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown();
     await paint();
@@ -875,7 +879,7 @@ describe('HubComponent', () => {
       days: [{ date: day, spend: 0, pace: 1, kept: true }],
     };
     await render(pixelsBody());
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown();
     await paint();
@@ -894,7 +898,7 @@ describe('HubComponent', () => {
   it('keeps a scored strip when a refresh fails and shows session copy when pixels expires', async () => {
     const day = hubStripWindow(todayIsoDate()).start;
     await render(pixelsBody([{ date: day, town: 2 }]));
-    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/travel/').resolve(json(200, { up_next: [], next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     resolveTown();
     await paint();

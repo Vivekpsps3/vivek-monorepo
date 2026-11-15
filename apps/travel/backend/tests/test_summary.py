@@ -1,4 +1,4 @@
-"""Hub summary: the next trip only, with no budget or PTO."""
+"""Shared next-trip and upcoming activity read, with no budget or PTO."""
 
 from datetime import date, timedelta
 
@@ -19,7 +19,7 @@ def test_summary_next_trip(client):
     today = date.today()
     empty = client.get("/api/summary")
     assert empty.status_code == 200, empty.text
-    assert empty.json() == {"today": today.isoformat(), "next_trip": None}
+    assert empty.json() == {"today": today.isoformat(), "next_trip": None, "up_next": []}
     assert {"budget", "pto"}.isdisjoint(_keys(empty.json()))
 
     past_start = today - timedelta(days=10)

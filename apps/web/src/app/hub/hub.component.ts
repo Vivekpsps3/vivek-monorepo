@@ -7,18 +7,19 @@ import { formatDateRange, todayIsoDate } from '@vivek/browser';
 import { SessionService as AuthService } from '../platform/session.service';
 import { bindLockNotices, financeVaultPresent, lockFinance } from '../../../../finance/frontend/src/public-api';
 import { NetWorth } from '../../../../finance/frontend/src/public-api';
-import { MoneyPipe, UiPageHeaderComponent } from '@vivek/ui';
+import { MoneyPipe, UiPageHeaderComponent, UiButtonComponent } from '@vivek/ui';
 import {
-  decodeMediaSummary,
   decodeTownSummary,
   decodeTravelSummary,
   type MediaItem,
   type MediaSummary,
+  type MediaHubSummary,
+  type TravelSummary,
   type TravelTrip,
 } from './hub-decode';
 import {
-  MEDIA_SUMMARY_URL,
-  TRAVEL_SUMMARY_URL,
+  fetchHubMedia,
+  travelSummaryUrl,
   fetchHubSummary,
   settleHubCard,
   townSummaryUrl,
@@ -41,10 +42,13 @@ import {
   journalKindLabel,
   mediaReleaseLabel,
 } from './hub-summary';
+import { UpNextComponent } from './up-next/up-next.component';
+import { hubGreeting, upNextRows } from './up-next/up-next';
 import { NextEpisodeButtonComponent, NextEpisodeUndoService, type NextResult } from '../../../../media/frontend/src/public-api';
 
 interface FinanceView {
   status: 'locked' | 'ready' | 'unavailable' | 'expired' | 'cancelled';
+  billsDueThisWeek?: number;
   snapshot?: {
     netWorth: NetWorth;
     accounts: PortfolioAccount[];
@@ -60,6 +64,8 @@ interface FinanceView {
   standalone: true,
   imports: [
     MoneyPipe,
+    UiButtonComponent,
+    UpNextComponent,
     NextEpisodeButtonComponent,
     RouterLink,
     UiPageHeaderComponent,
@@ -78,7 +84,8 @@ export class HubComponent implements OnInit {
   private readonly episodeUndo = inject(NextEpisodeUndoService);
   private readonly pixelsData = inject(PixelsDataService);
 
-  name = 'Your library of days';
+  name = '';
+  billsDueThisWeek: number | null = null;
   readonly today = new Date();
 
   financeState: HubCardState = 'locked';
@@ -91,11 +98,12 @@ export class HubComponent implements OnInit {
   financePending = false;
 
   travelState: HubCardState = 'loading';
-  trip: TravelTrip | null = null;
+  travel: TravelSummary | null = null;
+  get trip(): TravelTrip | null { return this.travel?.next_trip ?? null; }
   travelPending = false;
   travelUpdatedAt: number | null = null;
   mediaState: HubCardState = 'loading';
-  media: MediaSummary | null = null;
+  media: MediaHubSummary | null = null;
   mediaPending = false;
   mediaUpdatedAt: number | null = null;
   townState: HubCardState = 'loading';
@@ -113,7 +121,7 @@ export class HubComponent implements OnInit {
   private pixelsLoad = 0;
   private pixelsClearGeneration = 0;
   private financeGeneration = 0;
-  private userId: number | null | undefined = undefined;
+  userId: number | null | undefined = undefined;
   private travelCtrl: AbortController | null = null;
   private mediaCtrl: AbortController | null = null;
   private townCtrl: AbortController | null = null;
@@ -136,11 +144,12 @@ export class HubComponent implements OnInit {
     });
     this.destroyRef.onDestroy(() => this.cancelSummaries());
     this.auth.user$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(user => {
-      this.name = user?.display_name || user?.username || 'Your library of days';
+      this.name = hubGreeting(user?.display_name?.trim() || user?.username || '', this.today.getHours());
       const nextId = user?.id ?? null;
       if (this.userId !== undefined && this.userId !== nextId) {
         this.cancelSummaries();
         this.clearCards();
+        this.userId = nextId;
         if (user) {
           void this.loadTravel();
           void this.loadMedia();
@@ -339,7 +348,7 @@ export class HubComponent implements OnInit {
   }
 
   private clearCards(): void {
-    this.trip = null;
+    this.travel = null;
     this.media = null;
     this.town = null;
     this.pixels = null;
@@ -357,6 +366,7 @@ export class HubComponent implements OnInit {
   }
 
   private clearFinanceNumbers(): void {
+    this.billsDueThisWeek = null;
     this.netWorth = null;
     this.accounts = [];
     this.positions = [];
@@ -369,20 +379,20 @@ export class HubComponent implements OnInit {
     this.travelCtrl?.abort();
     const ctrl = new AbortController();
     this.travelCtrl = ctrl;
-    if (!this.trip) this.travelState = 'loading';
+    if (!this.travel) this.travelState = 'loading';
     this.cdr.markForCheck();
     try {
-      const result = await fetchHubSummary(TRAVEL_SUMMARY_URL, ctrl.signal, decodeTravelSummary);
+      const result = await fetchHubSummary(travelSummaryUrl(), ctrl.signal, decodeTravelSummary);
       if (generation !== this.generation || ctrl.signal.aborted) return;
       const settled = settleHubCard(
-        this.trip,
-        result.status === 'ok' ? { status: 'ok', body: result.body.next_trip } : result,
-        trip => trip == null,
+        this.travel,
+        result,
+        travel => travel.next_trip == null && travel.up_next.length === 0,
       );
       if (!settled) return;
       if (settled.state === 'ready' || settled.state === 'empty') this.travelUpdatedAt = Date.now();
       this.travelState = settled.state;
-      this.trip = settled.data;
+      this.travel = settled.data;
     } finally {
       if (this.travelCtrl === ctrl) this.travelPending = false;
       this.cdr.markForCheck();
@@ -397,7 +407,7 @@ export class HubComponent implements OnInit {
     if (!this.media) this.mediaState = 'loading';
     this.cdr.markForCheck();
     try {
-      const result = await fetchHubSummary(MEDIA_SUMMARY_URL, ctrl.signal, decodeMediaSummary);
+      const result = await fetchHubMedia(todayIsoDate(), ctrl.signal);
       if (generation !== this.generation || ctrl.signal.aborted) return;
       const settled = settleHubCard(this.media, result, mediaIsEmpty);
       if (!settled) return;
@@ -526,9 +536,13 @@ export class HubComponent implements OnInit {
   private applyFinance(result: FinanceView): void {
     if (result.status === 'cancelled') return;
     if (result.status === 'ready' && result.snapshot) {
+      const billCount = result.billsDueThisWeek;
+      this.billsDueThisWeek = typeof billCount === 'number' && Number.isSafeInteger(billCount) && billCount >= 0 ? billCount : null;
       const counts = result.snapshot.counts;
       if (counts != null && counts.accounts + counts.holdings + counts.debts === 0) {
+        const count = this.billsDueThisWeek;
         this.clearFinanceNumbers();
+        this.billsDueThisWeek = count;
         this.financeUpdatedAt = Date.now();
         this.financeState = 'empty';
         return;
@@ -552,7 +566,7 @@ export class HubComponent implements OnInit {
       this.financeState = 'expired';
       return;
     }
-    if (this.netWorth) {
+    if (this.netWorth || this.billsDueThisWeek !== null) {
       this.financeState = 'stale';
       return;
     }
@@ -561,6 +575,7 @@ export class HubComponent implements OnInit {
   }
 }
 
-function mediaIsEmpty(media: MediaSummary): boolean {
-  return !media.currently.length && !media.upcoming.length && !media.recent_reviews.length && !media.next_episodes.length;
+function mediaIsEmpty(media: MediaHubSummary): boolean {
+  return !media.currently.length && !media.upcoming.length && !media.recent_reviews.length
+    && !media.next_episodes.length && upNextRows([], media.calendars, todayIsoDate()).length === 0;
 }

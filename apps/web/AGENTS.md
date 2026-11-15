@@ -16,6 +16,11 @@ Invalidate old owner/route work before publication, clear private snapshots on l
 and dispose subscriptions/listeners with the actual consumer lifetime. Cancellation
 must not leave a promise that can still mutate shared state.
 
+Hub Up next and app cards share Travel summary, Media summary plus saved calendar
+months, and one browser-only Finance load. Keep the 14-day window and overdue
+rules in those existing projections; reminder PATCH uses every ReminderIn field.
+`hub-up-next.spec.ts` executes with the web browser suite.
+
 Use existing Hub load/state mechanics and shared controls before adding another
 loader, dialog or event bus. Keep summary responses reusable between views and test
 request counts. Reuse a bounded mechanism only where its result semantics match.

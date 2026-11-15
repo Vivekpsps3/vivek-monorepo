@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Injector } from '@angular/core';
 import { NEVER, of, Subject, throwError } from 'rxjs';
 import { VaultService } from '../crypto/vault.service';
-import { Asset, Liability } from '../models/transaction.model';
+import { Asset, Liability, FixedExpense, Subscription } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
 import { loadFinanceHubSnapshot } from './finance-hub-facade';
 
@@ -38,6 +38,8 @@ describe('finance hub facade', () => {
         assets$: of([asset]),
         liabilities$: of([liability]),
         holdings$: of([]),
+        fixedExpenses$: of([]),
+        subscriptions$: of([]),
       },
     ), new AbortController().signal, 1000);
     expect(result.status).toBe('ready');
@@ -59,6 +61,8 @@ describe('finance hub facade', () => {
         assets$: of([asset]),
         liabilities$: of([liability]),
         holdings$: of([]),
+        fixedExpenses$: of([]),
+        subscriptions$: of([]),
       },
     ), new AbortController().signal, 5000);
     for (let i = 0; i < 20 && !gate.observed; i += 1) await new Promise(resolve => setTimeout(resolve, 0));
@@ -103,4 +107,26 @@ describe('finance hub facade', () => {
     ctrl.abort();
     await expectAsync(pending).toBeResolvedTo({ status: 'cancelled' });
   });
+  it('returns only a bill count for the local inclusive week, excluding inactive, invalid and outside dates', async () => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date(2026, 11, 28, 12));
+    try {
+      const bill = (next_due_date: string | null, is_active = true) => ({ name: 'Private bill', amount: 100,
+        next_due_date, is_active } as FixedExpense);
+      const result = await loadFinanceHubSnapshot(injectorFor(
+        { whenReady: () => Promise.resolve(), isUnlocked: true },
+        { loadDashboard: () => of(null), assets$: of([]), liabilities$: of([]), holdings$: of([]),
+          fixedExpenses$: of([bill('2026-12-28'), bill('2027-01-03'), bill('2026-12-27'), bill('2027-01-04'),
+            bill('2026-12-30', false), bill(null), bill('2026-12-32'), bill('2027-01-01T00:00')]),
+          subscriptions$: of([{ ...bill('2027-01-01'), name: 'Private subscription', next_bill_date: '2027-01-01' } as Subscription]),
+        },
+      ), new AbortController().signal);
+      expect(result.status).toBe('ready');
+      if (result.status !== 'ready') return;
+      expect(result.billsDueThisWeek).toBe(3);
+      expect(Object.keys(result).sort()).toEqual(['billsDueThisWeek', 'snapshot', 'status']);
+      expect(JSON.stringify(result)).not.toContain('Private');
+    } finally { jasmine.clock().uninstall(); }
+  });
+
 });

@@ -1,3 +1,4 @@
+import { todayIsoDate, parseDateOnly, isoDateInZone, browserTimeZone } from '@vivek/browser';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Injector } from '@angular/core';
 import { Observable, combineLatest, firstValueFrom, take, takeUntil, timeout } from 'rxjs';
@@ -7,7 +8,7 @@ import { buildFinanceHubSnapshot, FinanceHubSnapshot } from './finance-hub-snaps
 
 export type FinanceHubResult =
   | { status: 'locked' }
-  | { status: 'ready'; snapshot: FinanceHubSnapshot }
+  | { status: 'ready'; snapshot: FinanceHubSnapshot; billsDueThisWeek: number }
   | { status: 'unavailable' }
   | { status: 'expired' }
   | { status: 'cancelled' };
@@ -55,9 +56,17 @@ export async function loadFinanceHubSnapshot(
   }
   if (signal.aborted) return { status: 'cancelled' };
   if (!vault.isUnlocked) return { status: 'locked' };
-  const [assets, liabilities, holdings] = await firstValueFrom(
-    combineLatest([finance.assets$, finance.liabilities$, finance.holdings$]).pipe(take(1)),
+  const [assets, liabilities, holdings, bills, subscriptions] = await firstValueFrom(
+    combineLatest([finance.assets$, finance.liabilities$, finance.holdings$, finance.fixedExpenses$, finance.subscriptions$]).pipe(take(1)),
   );
   if (signal.aborted || !vault.isUnlocked) return signal.aborted ? { status: 'cancelled' } : { status: 'locked' };
-  return { status: 'ready', snapshot: buildFinanceHubSnapshot(assets, liabilities, holdings) };
+  const today = todayIsoDate();
+  const last = parseDateOnly(today)!;
+  last.setDate(last.getDate() + 6);
+  const end = isoDateInZone(last, browserTimeZone());
+  const billsDueThisWeek = [...bills, ...subscriptions].filter(row =>
+    row.is_active === true && row.next_due_date != null && /^\d{4}-\d{2}-\d{2}$/.test(row.next_due_date) && parseDateOnly(row.next_due_date) != null
+    && row.next_due_date >= today && row.next_due_date <= end,
+  ).length;
+  return { status: 'ready', snapshot: buildFinanceHubSnapshot(assets, liabilities, holdings), billsDueThisWeek };
 }
