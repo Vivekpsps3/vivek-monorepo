@@ -11,7 +11,7 @@
 | Row | Current proof/test | Result | Artifact or command |
 | --- | --- | --- | --- |
 | LOCAL1 | Three measured changes use existing owners. The category filter stays in the Activity query, component, and template. The TMDB fixture stays in `providers.py` `search` plus `test_bundle_m.py`. A collection name is three declarations, and recovery is their union. | PASS | Section 9 of `planning/technical-debt/feature-addition-playbook.md` |
-| LOCAL2 | `ref01_probe` is registered only inside the Finance test and then removed. Upsert and delete return 400, the snapshot returns 422, and the ciphertext row remains. No production route, collection, or source file uses the probe name. | PASS | `apps/finance/backend/tests/test_ref01_extension_contract.py` and `apps/server/tests/test_ref01_extension_contract.py` |
+| LOCAL2 | `ref01_probe` is registered only inside the Finance test and then removed. Upsert and delete return 400, the snapshot returns 422, and the ciphertext row remains. The route test rejects `settings/ref01-probe`. The inventory test names `apps/ref01-probe.mjs` and scans a clean tree. No production file uses the probe name. | PASS | Finance vault test, server route test, and `scripts/test_source_inventory.py` |
 | LOCAL3 | Timings below are wall clock on this machine for the named command. Python 3.12 is the repo `.venv`. Node is v24.22.2. Chrome is Playwright Chromium `CHROME_BIN`. | PASS | Scorecard in the same guide section |
 | LOCAL4 | The guide points Cards at open DISC-02 (#265) and Sidequests at closed DISC-01 (#264). Neither recipe authorizes an app, a bank connection, or a provider credential. Parents stay open. | PASS | Guide sections 5, 6, and 9 |
 
@@ -38,7 +38,9 @@
 
 `PATH` put `/tmp/vivek-ref-01/.venv/bin` and `/tmp/node-v24/bin` first. `CHROME_BIN` was `/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`. An earlier `make test-fast` used system `python3` and failed in `scripts/test_restore_drill.py` with `ModuleNotFoundError: alembic` before any assertion. That run is not a result. The passing `make test-fast` below uses the project virtualenv.
 
-A Finance test that imported `apps.server.tests.test_route_parity` failed `check-shared-boundaries`. The route and discovery assertions moved to the server test. The vault round trip stayed in the Finance test. The passing boundary check is the rerun below.
+A Finance test that imported `apps.server.tests.test_route_parity` failed `check-shared-boundaries`. The route assertion moved to the server test. The vault round trip stayed in the Finance test. The passing boundary check is the rerun below.
+
+The first CI backend job failed `./scripts/coverage-gate.sh server` because that step runs before Node is installed, and the server test called `source_inventory.load_owners()`. Discovery moved to `scripts/test_source_inventory.py`, which `make test-fast` runs after Node setup. The server test now checks route parity only.
 
 The one-file Karma include with coverage enforcement exited 1 after 3 SUCCESS because the global coverage floor applies to a partial include. That command is not a gate. The targeted filter check below turns coverage off. The full Finance Karma run is the gate.
 
@@ -48,11 +50,11 @@ The one-file Karma include with coverage enforcement exited 1 after 3 SUCCESS be
 | Provider fixture: `pytest apps/media/backend/tests/test_bundle_m.py::test_public_tmdb_search_page_reads_cards_and_skips_adult_titles` | PASS. 1 passed in 0.18s. Wall 0.79s. |
 | Collection registration experiment, then revert | PASS. Policy script 0.32s while the name was registered and again after revert. |
 | Vault proof, focused | PASS. 1 passed in 0.81s before the route half was split. Both proof tests then passed together in 0.85s. |
-| `make test-fast` | PASS. Doc paths, 95 packets, boundaries, finance UX gate, 110 unittest cases, e2e discovery guard, 21 Node tests. |
+| `make test-fast` | PASS. Doc paths, 95 packets, boundaries, finance UX gate, 111 unittest cases (including the probe inventory test), e2e discovery guard, 21 Node tests. |
 | `make lint-python` | PASS. 236 files formatted. Ruff 101. Suppressions 6. Baselines not raised. |
 | `make typecheck-python` | PASS. mypy 87. Baseline not raised. |
 | `./scripts/coverage-gate.sh finance` | PASS. 171 passed. Total 87.10% against floor 83.28%. Floor not changed. |
-| `./scripts/coverage-gate.sh server` | PASS. 919 passed. Total 79.14% against floor 61.53%. Uninstrumented `GET /api/town` p50 133.31ms. Floor not changed. |
+| `./scripts/coverage-gate.sh server` | PASS after discovery moved out of this gate. 919 passed. Total 79.14% against floor 61.53%. Uninstrumented `GET /api/town` p50 134.42ms. Floor not changed. |
 | `make lint-web` | PASS. eslint-finance 467, eslint-site 9, eslint-packages 1, eslint-world-engine 0. Engine purity 1 pass. |
 | `make typecheck-web` | PASS. All seven `tsc -p` projects. |
 | `npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` | PASS, exit 0. 874 SUCCESS. Statements 75.51%, branches 65.33%, functions 71.83%, lines 78.75%. |
