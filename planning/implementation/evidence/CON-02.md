@@ -61,3 +61,11 @@ Edit site for a new settings section: add one `SETTINGS_SECTIONS` entry and the 
 - Next actor: review, then CI. Do not merge from this worker.
 
 No unstated decision from the previous context is necessary to continue.
+
+## Authorized integration closeout — 2026-11-15
+
+- The user authorized merging this batch. Integrated current main `008cf3c48c4d3c3ece8776062cec34996e8c8c63`, retaining SEC-06, MED-06, OPS-04 and DISC-01, before final verification. Functional tested revision: `21a77bc`.
+- Original PR CI run `43668346198` failed the newly selected birthday-removal browser test: its immediate API read still saw the seeded birthday because clicking confirmation did not await the asynchronous PATCH. The fix registers the PATCH response wait before clicking, requires a successful response and the existing `Birthday removed.` toast, then keeps the original persisted-null assertion. No retry, assertion, coverage floor or product behavior changed.
+- Final local checks on the integrated revision all passed: `make test-fast`; Python lint/types; web lint/types; server coverage (918 tests, 79.14%) plus separate performance gate; web Karma (720); production frontend build; complete Town Playwright (85); and suite Playwright (30). Logs: `/tmp/con02-final-check-0.log` through `-9.log`.
+- One initial integration command could not import Alembic because its shell used system Python. That run failed; adding the repository virtualenv to PATH fixed the environment, and the full commands above were rerun successfully. It is not counted as a pass.
+- This evidence-only update follows passing implementation checks. Exact-head CI must pass before merge. No deployment is authorized by this closeout.
