@@ -22,6 +22,11 @@ function keptBudgetWeeks(count: number): { weekStart: string; kept: true }[] {
   }
   return weeks;
 }
+async function flushBudget(fixture: { detectChanges(): void }): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  fixture.detectChanges();
+}
 function snapshot(): TownResponse {
   const building = { xp: 0, level: 1, stage: 1 as const, level_xp_start: 0, next_level_xp: 50, today_xp: 0, today_cap: 10, source: 'ok' as const };
   return {
@@ -311,8 +316,7 @@ describe('Town page', () => {
         { weekStart: '2026-10-12', kept: true },
       ],
     });
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await flushBudget(fixture);
     expect(tile().querySelector('img')?.getAttribute('src')).toBe('/town/treasury-1.svg');
     expect(tile().textContent).toContain('Lv 1 · 0 weeks');
     expect(tile().textContent).not.toContain('Lv 4');
@@ -335,8 +339,7 @@ describe('Town page', () => {
         { weekStart: '2026-10-12', kept: true },
       ],
     });
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await flushBudget(fixture);
     expect(tile().querySelector('img')?.getAttribute('src')).toBe('/town/treasury-2.svg');
     expect(tile().textContent).toContain('Lv 3 · 2 weeks');
     expect(el.querySelector('.treasury')?.textContent).toContain('Lv 3 · 2 weeks');
@@ -352,8 +355,7 @@ describe('Town page', () => {
     const xp = 'Lv 3 · 340 / 500 XP';
     expect(el.textContent).toContain(xp);
     release({ status: 'ready', weeks: [{ weekStart: '2026-10-19', kept: true }] });
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await flushBudget(fixture);
     expect(tile().textContent).toContain('Lv 2 · 1 week');
 
     response.next(snapshot());
@@ -366,8 +368,7 @@ describe('Town page', () => {
     expect(tile().textContent).toContain('Finance vault locked');
     expect(tile().textContent).not.toContain('Lv 2');
     late({ status: 'ready', weeks: keptBudgetWeeks(8) });
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await flushBudget(fixture);
     expect(tile().textContent).toContain('Finance vault locked');
     expect(tile().textContent).not.toContain('Lv 5');
     expect(el.textContent).toContain(xp);
@@ -387,8 +388,7 @@ describe('Town page', () => {
     expect(tile().textContent).toContain('Loading');
     expect(tile().textContent).not.toContain('Lv 2');
     release({ status: 'no_plan' });
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await flushBudget(fixture);
     expect(tile().textContent).toContain('No spending plan');
     expect(tile().querySelector('a')?.getAttribute('href')).toBe('/finance/planning');
     expect(el.textContent).toContain(xp);
