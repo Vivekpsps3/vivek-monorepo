@@ -25,7 +25,7 @@
     <h2>Encrypted recovery backup</h2>
     <p class="settings-help" id="backup-help">Save every vault collection, including Finance and Health, in one encrypted file. Keep the file and its separate backup password: both are needed to restore. Your current passphrase verifies this action locally. CSV downloads remain separate conveniences.</p>
     <form class="backup-form" (submit)="$event.preventDefault(); createBackup()" aria-describedby="backup-help" [attr.aria-busy]="backupBusy">
-      <ui-input label="Current vault passphrase" type="password" autocomplete="current-password" [disabled]="backupBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="currentPassphrase" />
+      <ui-input #backupCurrent label="Current vault passphrase" type="password" autocomplete="current-password" [disabled]="backupBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="currentPassphrase" />
       <ui-input label="Backup password" type="password" autocomplete="new-password" [disabled]="backupBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="backupPassword" />
       <ui-input label="Confirm backup password" type="password" autocomplete="new-password" [disabled]="backupBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="backupConfirm" />
       <p class="settings-help">Choose at least 12 characters. This password protects the file independently of your vault passphrase; reusing it is your choice. Maximum: 10,000 records and 16 MiB of recovery data. No partial backup is downloaded.</p>
@@ -41,4 +41,57 @@
       <p class="settings-help" role="status">{{ backupStatus }}</p>
     </form>
   </ui-card>
+  <ui-card>
+    <h2>Restore encrypted backup</h2>
+    <p class="settings-help" id="restore-help">Open a recovery file with its backup password. Validation happens in this browser before any writes. Merge keeps existing record IDs; replace applies the complete backup to this signed-in vault.</p>
+    @if (!restorePlan) {
+      <form class="backup-form" (submit)="$event.preventDefault(); previewRestore()" aria-describedby="restore-help">
+        <label class="settings-help">Encrypted backup file <input #restoreFileControl type="file" accept=".vvr,application/json" [disabled]="restoreBusy" (change)="selectRestoreFile($event)" /></label>
+        <ui-input label="Restore backup password" type="password" autocomplete="off" [disabled]="restoreBusy" [(value)]="restorePassword" />
+        <fieldset class="settings-row">
+          <legend>Restore mode</legend>
+          <label class="settings-radio"><input type="radio" name="restore-mode" value="merge" [checked]="restoreMode === 'merge'" [disabled]="restoreBusy" (change)="restoreMode = 'merge'" /> Merge: skip existing IDs</label>
+          <label class="settings-radio"><input type="radio" name="restore-mode" value="replace" [checked]="restoreMode === 'replace'" [disabled]="restoreBusy" (change)="restoreMode = 'replace'" /> Replace the active vault</label>
+        </fieldset>
+        <ui-button type="submit" [disabled]="restoreBusy" [busy]="restoreBusy">Preview encrypted backup</ui-button>
+      </form>
+    } @else {
+      @if (restorePlan.previousCompletion; as previous) {
+        <p class="settings-help" role="status">This backup previously completed a {{ previous.mode }} restore: {{ previous.restored }} records restored, {{ previous.removed }} removed. Preview any new action carefully.</p>
+      }
+      <p>{{ restorePlan.mode === 'merge' ? 'Merge' : 'Replace' }}: {{ restorePlan.total }} records to restore; {{ restorePlan.conflicts }} existing IDs.</p>
+      <div class="restore-table-wrap" tabindex="0" role="region" aria-label="Restore collection preview">
+        <table class="restore-table">
+          <thead><tr><th>Collection</th><th>Schemas</th><th>Incoming</th><th>Existing</th><th>Conflicts</th><th>Restore</th><th>Remove</th></tr></thead>
+          <tbody>@for (row of restorePlan.rows; track row.collection) {
+            <tr><th scope="row">{{ row.collection }}</th><td>{{ row.schemas }}</td><td>{{ row.incoming }}</td><td>{{ row.existing }}</td><td>{{ row.conflicts }}</td><td>{{ row.restore }}</td><td>{{ row.remove }}</td></tr>
+          }</tbody>
+        </table>
+      </div>
+      @for (stage of restorePlan.unfinished; track stage.id) {
+        <p class="settings-help">An unfinished {{ stage.mode }} restore is available. Choosing the same file and mode resumes completed batches; discarding affects only staged records.</p>
+        <ui-button type="button" variant="secondary" [disabled]="restoreBusy" (clicked)="discardRestore(stage.id)">Discard staged restore</ui-button>
+      }
+      @if (restorePlan.mode === 'replace') {
+        <p class="settings-help">Replacement removes current records absent from this backup. Save a recovery backup of the current vault first.</p>
+        <ui-button type="button" variant="secondary" [disabled]="restoreBusy" (clicked)="offerBackup()">Create pre-restore backup</ui-button>
+        <label class="settings-radio"><input type="checkbox" [checked]="restoreAcknowledged" [disabled]="restoreBusy" (change)="restoreAcknowledged = !restoreAcknowledged" /> I saved a backup or choose to continue without one.</label>
+        <ui-input label="Type REPLACE to confirm" [disabled]="restoreBusy" [(value)]="restoreConfirmation" />
+      }
+      <p class="settings-help">Staging leaves active data unchanged. Activation applies all confirmed changes together and cannot be cancelled once accepted. Finance then locks in every participating tab; unlock to load restored records.</p>
+      <div class="backup-actions">
+        @if (!restorePlan.staged) {
+          <ui-button type="button" [disabled]="restoreBusy || backupBusy" [busy]="restoreBusy" (clicked)="stageRestore()">Stage encrypted restore</ui-button>
+        } @else {
+          <ui-button type="button" [disabled]="restoreBusy || backupBusy" [busy]="restoreBusy" (clicked)="activateRestore()">Activate restore</ui-button>
+        }
+      </div>
+    }
+    @if (restoreError) { <p class="form-error" role="alert" tabindex="-1" #restoreAlert>{{ restoreError }}</p> }
+    @if (restoreBusy || restorePlan) {
+      <ui-button type="button" variant="secondary" (clicked)="cancelRestore()">Cancel restore</ui-button>
+    }
+    <p class="settings-help" role="status">{{ restoreStatus }}</p>
+  </ui-card>
+
 }
