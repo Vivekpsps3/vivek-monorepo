@@ -30,7 +30,13 @@
   </div>
   <div class="row treasury">
     <span>Treasury</span>
-    @if (!vaultPresent()) { <ui-badge>Finance vault locked</ui-badge> } @else { <span>{{ treasuryNote() }}</span> }
+    @if (treasuryFace(); as face) {
+      @if (face.external) {
+        <a [href]="face.href">{{ face.label }}</a>
+      } @else {
+        <a [routerLink]="face.href">{{ face.label }}</a>
+      }
+    }
   </div>
 </div>
 @if (restNote()) { <p class="rest">{{ restNote() }}</p> }

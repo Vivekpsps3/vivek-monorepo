@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, input, output, si
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { buildingSprite, townSpriteUrl, type TownSpriteId } from './town-sprites';
-import { treasuryUnlocked } from './town-levels';
+import { treasuryFace, type TreasuryView } from './weeks-kept';
 import type { Building, Habit, TownResponse } from './town.types';
 
 @Component({
@@ -18,8 +18,8 @@ export class TownLotComponent {
   lot = input<TownResponse['lots'][number]>();
   habit = input<Habit>();
   vaultPresent = input(false);
-  /** Habit weeks already counted by Town. Null means they could not be read. */
-  weeksKept = input<number | null>(null);
+  /** Completed Finance budget weeks. Habit streaks do not fill this in. */
+  treasury = input<TreasuryView | null>(null);
   /** Previous stage while the 240ms swap plays. Null skips the old sprite, including reduced motion. */
   swapFrom = input<1 | 2 | 3 | null>(null);
   openHabit = output<void>();
@@ -46,25 +46,16 @@ export class TownLotComponent {
   }
   readonly view = computed(() => {
     const kind = this.kind(), habit = this.habit(), lot = this.lot(), building = this.building();
-    let name: string, label: string, sprite: TownSpriteId, link = '';
+    let name: string, label: string, sprite: TownSpriteId, link = '', external = false;
     if (kind === 'treasury') {
       name = 'Treasury';
-      const present = this.vaultPresent();
-      link = present ? '/finance' : '/finance/vault/unlock?next=%2Ftown';
-      if (!present) {
-        label = 'Finance vault locked';
-        sprite = 'treasury-locked';
-      } else {
-        const weeks = this.weeksKept();
-        if (weeks == null || !Number.isFinite(weeks)) {
-          label = 'Unavailable';
-          sprite = buildingSprite('treasury', 1);
-        } else {
-          const unlocked = treasuryUnlocked(weeks);
-          label = `Lv ${unlocked.level}`;
-          sprite = buildingSprite('treasury', unlocked.stage);
-        }
-      }
+      const face = treasuryFace(!this.vaultPresent()
+        ? { status: 'locked' }
+        : (this.treasury() ?? { status: 'loading' }));
+      label = face.label;
+      link = face.href;
+      external = face.external;
+      sprite = face.stage == null ? 'treasury-locked' : buildingSprite('treasury', face.stage);
     } else if (kind === 'library' || kind === 'inn') {
       name = kind === 'library' ? 'Library' : 'Inn';
       const source = kind === 'library' ? 'Media' : 'Travel';
@@ -80,7 +71,7 @@ export class TownLotComponent {
       label = locked ? `Unlocks at Lv ${lot?.unlock_level}` : 'Build here';
       sprite = locked ? 'lot-locked' : 'lot-empty';
     }
-    return { name, label, src: townSpriteUrl(sprite), link };
+    return { name, label, src: townSpriteUrl(sprite), link, external };
   });
 }
 
