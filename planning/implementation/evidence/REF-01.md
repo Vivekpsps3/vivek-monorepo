@@ -61,8 +61,8 @@ No page, route, or template changed, so this was not exercised in a browser sess
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled after the pull request is opened. `Closes #219` only.
-- Roadmap #134 append-only status-note URL: filled with that comment.
-- Merged/activation status: not merged and not deployed at the time this file was written.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/370 (`Closes #219` only).
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6889821475
+- Merged/activation status: not merged and not deployed. Required checks on the pull request are the next evidence.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. DEL-02 still needs an explicit support decision before password-migration routes can be removed. Cards and Sidequests stay discovery, not implementation.
 - Next actor: review and required checks, then squash-merge because this task was authorized to merge when checks are green.
