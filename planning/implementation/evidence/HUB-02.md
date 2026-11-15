@@ -64,8 +64,8 @@ Logs are `/tmp/hub-{quality-final,travel-coverage,media-coverage,node,finance-ka
 
 ## Handoff
 
-- PR: pending final local gate, closes only #244 and references #93.
-- Roadmap #134: scoped append-only note pending PR creation.
+- PR: https://github.com/Vivekpsps3/vivek-monorepo/pull/369, closes only #244 and references #93.
+- Roadmap #134 scoped append-only note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6889340162.
 - Actual status: implemented and all required local gates passed; not merged/deployed/activated.
 - External prerequisites/decisions: none for this feature. Expanded agenda/Quick add/calendar subscriptions retain their own leaves.
-- Next action: open the PR and append the scoped roadmap note. Merge/deploy requires owner authorization.
+- Next actor: CI and reviewer. Local implementation is complete; CI was running when the PR opened. Merge/deploy requires owner authorization.
