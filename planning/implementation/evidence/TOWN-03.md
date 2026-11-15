@@ -57,3 +57,10 @@ Local gates on `/tmp/vivek-town-03` at `d9c952168c0248859bcd66a13726e478125f8dc4
 - Merged/activation status (actual evidence, not assumption): PR #368 is open. Local gates passed. CI is not recorded here. Not merged. Not deployed. Not activated.
 - Remaining external prerequisites or approved scope decisions: none for this packet. The vault setup URL split stays in the client; this leaf only rewrites it inside the Town browser test.
 - Next actor: review and squash-merge. Do not start HUB-02 or TOWN-04 from this branch.
+
+## Authorized integration closeout — 2026-11-15
+
+- The user authorized merging this batch. Integrated main `008cf3c48c4d3c3ece8776062cec34996e8c8c63` without changing Treasury implementation, retaining merged SEC-06, MED-06, OPS-04 and DISC-01. Functional tested revision: `6b1a3ff2c7a4a7f845c0860bb5c5cfb57726543b`.
+- Earlier release check `43672007338` failed its immutable-migration guard because the PR predated main's newly merged `site_vault_restore_v1` revision. Updating the branch from main retains the exact applied migration. No migration, guard or assertion was edited to obtain a pass.
+- Every packet gate passed again on the integrated revision: fast; Python/web lint and types; server coverage (888 tests, 79.10%) and separate performance gate; web Karma (724) and Finance Karma (871); `make e2e` including production build (264 passed, eight unchanged conditional skips); complete Town Playwright (81); and cross-app suite (30). Logs: `/tmp/town03-final-check-0.log` through `-10.log`.
+- This evidence-only update follows passing implementation checks. Exact-head CI must also pass before merge. No deployment, new Treasury semantics or additional feature scope is claimed by this integration.
