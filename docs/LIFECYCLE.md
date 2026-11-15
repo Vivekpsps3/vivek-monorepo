@@ -19,12 +19,22 @@ guard confirms they contain no rows and no password-only users remain.
 |---------|--------|-----------|-------|
 | Health | `apps/finance/backend/routers/health.py` | active | ops |
 | Auth / admin users | `apps/server/identity/routes.py` | active | auth |
-| Historical password enrollment | Previous release only | retired here; startup preflight blocks password-only users | auth |
+| Password-only account migration | — | retired; both former endpoints return 404 | auth |
 | Vault ciphertext API | `apps/finance/backend/routers/vault.py` | active | vault |
 | Market quotes / research | `apps/finance/backend/routers/market.py` | active | market |
 | Plaintext Finance migration API | — | retired | — |
 
 Plaintext finance HTTP (transactions, assets, holdings, imports, planning, cashflow) is unmounted.
+
+Password-only account migration is retired by explicit owner support decision.
+`/auth/login/migrate` and `/auth/passwordless/enroll` return 404, and the login
+page offers only current authentication and configured signup. Existing
+password-only accounts lose that enrollment route; no account or data is purged.
+Already-enrolled accounts, invitation/bootstrap enrollment and signing-key wraps
+remain supported. Stored migration-only sessions remain denied normal app access.
+The unified startup readiness check validates schema revisions, not account
+enrollment; the historical Finance preflight is not the basis for retirement.
+See [DEL-02 evidence](../planning/implementation/evidence/DEL-02.md).
 
 ## Schema modules
 

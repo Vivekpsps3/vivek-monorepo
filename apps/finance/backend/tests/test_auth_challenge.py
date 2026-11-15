@@ -277,66 +277,55 @@ def test_passwordless_lookup_is_not_limited_per_account(monkeypatch):
     )
 
 
-def test_migration_session_cannot_access_normal_authenticated_routes():
-    client = TestClient(app)
+def test_existing_migration_session_cannot_access_normal_authenticated_routes():
     from apps.finance.backend.database import SessionLocal
-    from apps.server.identity.session import create_user
+    from apps.server.identity.models import UserSession
 
-    db = SessionLocal()
-    try:
-        create_user(
-            db, email="legacy@example.com", display_name="Legacy", password="legacy-password"
-        )
+    client = authenticated_client(app)
+    with SessionLocal() as db:
+        db.query(UserSession).update({UserSession.migration_only: True})
         db.commit()
-    finally:
-        db.close()
-
-    login = client.post(
-        "/api/auth/login/migrate",
-        json={"email": "legacy@example.com", "password": "legacy-password"},
+    for path in ("/api/auth/me", "/api/vault/status", "/travel/api/home", "/media/api/summary"):
+        assert client.get(path).status_code == 403
+    assert (
+        client.post(
+            "/api/auth/passwordless/enroll",
+            json={"username": "enrolled.user", **passwordless_material()},
+        ).status_code
+        == 404
     )
-    assert login.status_code == 200
-    assert client.get("/api/auth/me").status_code == 403
+    with SessionLocal() as db:
+        assert db.query(UserSession).one().migration_only is True
 
 
-def test_passwordless_enroll_rejects_email_as_username_and_creates_vault():
-    client = TestClient(app)
+def test_password_only_migration_routes_are_retired_without_mutating_accounts():
+    from argon2 import PasswordHasher
+
     from apps.finance.backend.database import SessionLocal
-    from apps.server.identity.session import create_user
+    from apps.server.identity.models import User, UserSession
 
-    db = SessionLocal()
-    try:
-        create_user(
-            db, email="legacy@example.com", display_name="Legacy", password="legacy-password"
-        )
+    password_hash = PasswordHasher().hash("legacy-password")
+    with SessionLocal() as db:
+        user = User(email="legacy@example.com", display_name="Legacy", password_hash=password_hash)
+        db.add(user)
         db.commit()
-    finally:
-        db.close()
-
-    login = client.post(
-        "/api/auth/login/migrate",
-        json={"email": "legacy@example.com", "password": "legacy-password"},
-    )
-    assert login.status_code == 200
-    client.headers["X-CSRF-Token"] = login.json()["csrf_token"]
-    material = passwordless_material()
-
-    bad = client.post(
-        "/api/auth/passwordless/enroll",
-        json={"username": "legacy@example.com", **material},
-    )
-    assert bad.status_code == 422
-
-    good = client.post(
-        "/api/auth/passwordless/enroll",
-        json={"username": "legacy.user", **material},
-    )
-    assert good.status_code == 200
-    assert good.json()["ok"] is True
-    assert client.get("/api/auth/me").status_code == 200
-    vault = client.get("/api/vault/status")
-    assert vault.status_code == 200
-    assert vault.json()["exists"] is True
+        owner = user.id
+    client = TestClient(app)
+    for path, body in (
+        ("/api/auth/login/migrate", {"email": "legacy@example.com", "password": "legacy-password"}),
+        ("/api/auth/passwordless/enroll", {"username": "legacy.user", **passwordless_material()}),
+    ):
+        response = client.post(path, json=body)
+        assert response.status_code == 404
+        assert not response.headers.get_list("set-cookie")
+    assert client.get("/api/auth/me").status_code == 401
+    with SessionLocal() as db:
+        stored = db.get(User, owner)
+        assert stored is not None
+        assert stored.password_hash == password_hash
+        assert stored.auth_public_key_b64 is None
+        assert stored.username is None
+        assert db.query(UserSession).count() == 0
 
 
 def test_authenticated_user_can_update_signing_key_wrap():

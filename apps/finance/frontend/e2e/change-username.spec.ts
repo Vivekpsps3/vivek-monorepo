@@ -71,6 +71,8 @@ async function signOut(page: Page): Promise<void> {
 
 async function signIn(page: Page, username: string): Promise<void> {
   await page.goto('/auth/login');
+  await expect(page.getByRole('button', { name: 'Migrate old account', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Old account password', { exact: true })).toHaveCount(0);
   await page.getByLabel('Username', { exact: true }).fill(username);
   await page.getByLabel('Vault passphrase', { exact: true }).fill(PASSPHRASE);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();

@@ -40,10 +40,6 @@ class UserPublic(EmailMixin):
     last_login_at: datetime | None = None
 
 
-class LoginRequest(EmailMixin):
-    password: str = Field(..., min_length=1)
-
-
 class LoginResponse(BaseModel):
     user: UserPublic
     csrf_token: str
@@ -57,16 +53,6 @@ class AuthPrivateKeyWrap(BaseModel):
     wrapped_private_key_b64: str = Field(..., min_length=16, max_length=8192)
     # Legacy field; recovery-key path removed. Empty string means unused.
     recovery_wrapped_private_key_b64: str = Field("", max_length=8192)
-
-
-class PasswordlessEnrollRequest(BaseModel):
-    username: str = Field(
-        ..., min_length=USERNAME_MIN, max_length=USERNAME_MAX, pattern=USERNAME_PATTERN
-    )
-    public_key_b64: str = Field(..., min_length=16, max_length=4096)
-    auth: AuthPrivateKeyWrap
-    # Same vault payload as bootstrap/invitation so migration is one step to a usable vault.
-    vault: VaultCreateRequest
 
 
 class InvitationEnrollRequest(BaseModel):

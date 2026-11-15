@@ -8,8 +8,6 @@ from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 
-from argon2 import PasswordHasher
-from argon2.exceptions import VerificationError, VerifyMismatchError
 from fastapi import Depends, HTTPException, Request, Response, status
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
@@ -24,7 +22,6 @@ CSRF_HEADER_NAME = "X-CSRF-Token"
 SESSION_DAYS = int(os.getenv("SESSION_DAYS", "7"))
 COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "0").lower() in ("1", "true", "yes")
 COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE") or ("none" if COOKIE_SECURE else "lax")
-_ph = PasswordHasher()
 
 
 def utc_now_naive() -> datetime:
@@ -37,19 +34,6 @@ def normalize_email(email: str) -> str:
 
 def role_str(role) -> str:
     return role.value if hasattr(role, "value") else str(role)
-
-
-def hash_password(password: str) -> str:
-    return _ph.hash(password)
-
-
-def verify_password(password: str, password_hash: str) -> bool:
-    if not password_hash:
-        return False
-    try:
-        return _ph.verify(password_hash, password)
-    except (VerifyMismatchError, VerificationError):
-        return False
 
 
 def _hash_secret(secret: str) -> str:
@@ -250,9 +234,7 @@ def refresh_session_cookies(
     emit_committed_csrf(db, response, int(session.id), request.cookies.get(CSRF_COOKIE_NAME) or "")
 
 
-def create_session(
-    db: Session, user: User, request: Request, response: Response, *, migration_only: bool = False
-) -> str:
+def create_session(db: Session, user: User, request: Request, response: Response) -> str:
     token = secrets.token_urlsafe(48)
     csrf = secrets.token_urlsafe(32)
     now = utc_now_naive()
@@ -265,7 +247,6 @@ def create_session(
         last_seen_at=now,
         user_agent=request.headers.get("user-agent", "")[:500] or None,
         ip_address=request.client.host if request.client else None,
-        migration_only=migration_only,
     )
     db.add(session)
     user.last_login_at = now
@@ -276,9 +257,7 @@ def create_session(
     return csrf
 
 
-def _session_from_request(
-    db: Session, request: Request, *, allow_migration: bool = False
-) -> tuple[UserSession, User]:
+def _session_from_request(db: Session, request: Request) -> tuple[UserSession, User]:
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login required")
@@ -289,10 +268,10 @@ def _session_from_request(
     user = db.query(User).filter(User.id == session.user_id).first()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive")
-    if session.migration_only and not allow_migration:
+    if session.migration_only:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Complete passwordless enrollment before accessing the application",
+            detail="Account migration is no longer supported",
         )
     session.last_seen_at = now
     return session, user
@@ -324,32 +303,6 @@ def get_current_user(
     return user
 
 
-def get_current_migration_user(
-    request: Request, response: Response, db: Session = Depends(get_db, scope="function")
-) -> User:
-    session, user = _session_from_request(db, request, allow_migration=True)
-    if not session.migration_only:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Passwordless enrollment is only available during migration",
-        )
-    require_csrf(request, session)
-    refresh_session_cookies(db, request, response, session)
-    return user
-
-
-def complete_migration_session(db: Session, request: Request) -> None:
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login required")
-    session = db.query(UserSession).filter(UserSession.token_hash == _hash_secret(token)).first()
-    if not session or not session.migration_only:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Migration session required"
-        )
-    session.migration_only = False
-
-
 def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
     if role_str(current_user.role) != UserRole.admin.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
@@ -361,7 +314,6 @@ def create_user(
     *,
     email: str,
     display_name: str,
-    password: str | None = None,
     role: UserRole = UserRole.user,
     must_change_password: bool = True,
     actor_user_id: Optional[int] = None,
@@ -373,7 +325,6 @@ def create_user(
         email=clean_email,
         display_name=display_name.strip() or clean_email,
         role=role,
-        password_hash=hash_password(password) if password else None,
         is_active=True,
         must_change_password=must_change_password,
     )

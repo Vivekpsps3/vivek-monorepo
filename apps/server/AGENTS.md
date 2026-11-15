@@ -18,6 +18,8 @@ database transaction ownership before waiting.
 historical behavior, not dead code. Schema changes extend the actual single head;
 read [MIGRATIONS](../../docs/MIGRATIONS.md) and prove upgrade/data preservation.
 A domain reset must not delete another domain or unknown supported ciphertext.
+Password-only migration endpoints are retired (404); stored migration-only
+sessions must remain denied normal app access.
 
 Use root Python lint/type/coverage gates plus affected domain suites. Use
 [SECURITY_MODEL](../../docs/SECURITY_MODEL.md) for auth/vault protocol changes and

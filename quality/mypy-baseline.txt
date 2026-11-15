@@ -19,7 +19,6 @@ apps/media/backend/services/summary.py	call-overload	1
 apps/server/alembic/env.py	assignment	1
 apps/server/identity/admin.py	arg-type	3
 apps/server/identity/admin.py	var-annotated	1
-apps/server/identity/routes.py	arg-type	1
 apps/server/identity/session.py	arg-type	4
 apps/server/migrate.py	index	2
 apps/server/migrations.py	arg-type	2

@@ -20,14 +20,10 @@ export class LoginComponent implements OnInit {
   private cdr = inject(ChangeDetectorRef);
   private toast = inject(ToastService);
 
-  email = '';
   username = '';
   displayName = '';
   password = '';
-  /** New vault passphrase during one-time password→passwordless migration. */
-  vaultPassphrase = '';
   setupMode = false;
-  legacyMode = false;
   showSignup = false;
   loading = false;
   error = '';
@@ -86,47 +82,18 @@ export class LoginComponent implements OnInit {
       );
       return;
     }
-    if (!this.legacyMode) {
-      this.auth.loginWithVault(this.username, this.password).then(
-        () => {
-          this.loading = false;
-          this.cdr.markForCheck();
-          return continueAfterAuth(this.router);
-        },
-        err => {
-          this.error = this.errorMessage(err);
-          this.loading = false;
-          this.cdr.markForCheck();
-        }
-      );
-      return;
-    }
-    this.auth.login(this.email, this.password).subscribe({
-      next: () => {
-        this.auth
-          .enrollPasswordless(this.username, this.vaultPassphrase)
-          .then(() => {
-            this.loading = false;
-            this.cdr.markForCheck();
-            return continueAfterAuth(this.router);
-          })
-          .catch(err => {
-            this.error = this.errorMessage(err);
-            this.loading = false;
-            this.cdr.markForCheck();
-          });
+    this.auth.loginWithVault(this.username, this.password).then(
+      () => {
+        this.loading = false;
+        this.cdr.markForCheck();
+        return continueAfterAuth(this.router);
       },
-      error: err => {
+      err => {
         this.error = this.errorMessage(err);
         this.loading = false;
         this.cdr.markForCheck();
-      },
-    });
-  }
-
-  toggleLegacyMode(): void {
-    this.legacyMode = !this.legacyMode;
-    this.error = '';
+      }
+    );
   }
 
   get needsDisplayName(): boolean {
@@ -134,13 +101,10 @@ export class LoginComponent implements OnInit {
   }
 
   get canSubmit(): boolean {
-    if (this.loading || !(this.legacyMode ? this.email.trim() : this.username.trim()) || !this.password) {
+    if (this.loading || !this.username.trim() || !this.password) {
       return false;
     }
     if (this.needsDisplayName && !this.displayName.trim()) return false;
-    if (this.legacyMode) {
-      if (!this.username.trim() || this.vaultPassphrase.length < 12) return false;
-    }
     if (this.needsDisplayName && this.password.length < 12) return false;
     return true;
   }
@@ -148,9 +112,6 @@ export class LoginComponent implements OnInit {
   get passwordHint(): string {
     if (this.needsDisplayName) {
       return 'Use at least 12 characters. Your passphrase signs in and unlocks your vault.';
-    }
-    if (this.legacyMode) {
-      return 'Enter your old credentials, then choose a username and a new passphrase (12+ characters).';
     }
     return 'Use your enrolled username.';
   }
@@ -168,6 +129,6 @@ export class LoginComponent implements OnInit {
         })
         .join('; ');
     }
-    return this.setupMode ? 'Setup failed' : this.legacyMode ? 'Login failed' : 'Vault authentication failed';
+    return this.setupMode ? 'Setup failed' : 'Vault authentication failed';
   }
 }

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from apps.finance.backend.main import Base, app, engine, market_data
-from apps.finance.backend.tests.conftest import authenticated_client
+from apps.finance.backend.tests.conftest import authenticated_client, sign_in
 from apps.server.identity.models import UserRole
 
 
@@ -262,25 +262,10 @@ def test_public_password_signup_is_unmounted():
 
 
 def test_admin_can_sign_out_other_devices_without_wiping_the_current_one():
-    from apps.finance.backend.database import SessionLocal
-    from apps.server.identity.models import UserSession
-
     admin = authenticated_client(app, email="session-admin@example.com", role=UserRole.admin)
     me = admin.get("/api/auth/me").json()["user"]
     other = TestClient(app)
-    logged = other.post(
-        "/api/auth/login/migrate",
-        json={"email": "session-admin@example.com", "password": "correct-horse-battery-staple"},
-    )
-    assert logged.status_code == 200
-    db = SessionLocal()
-    try:
-        db.query(UserSession).filter(UserSession.user_id == me["id"]).update(
-            {UserSession.migration_only: False}, synchronize_session=False
-        )
-        db.commit()
-    finally:
-        db.close()
+    sign_in(other, "session-admin@example.com")
 
     revoked = admin.post(f"/api/admin/users/{me['id']}/revoke-sessions")
     assert revoked.status_code == 200

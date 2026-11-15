@@ -275,8 +275,9 @@ def test_health_auth_gate_and_validation(tmp_path, monkeypatch):
         )
         # No session: the principal check answers before the form error.
         assert invalid.status_code == 401
+        clear_limits()  # Validate the next request outside the exhausted login window.
         finance = client.post(
-            "/api/auth/login/migrate",
+            "/api/auth/passwordless/verify",
             headers={"X-API-Key": "secret"},
             json={},
         )
