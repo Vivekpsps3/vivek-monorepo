@@ -2,7 +2,7 @@
 // Habit, check-in, and dialog files run with Pixels and World.
 // In-file phone, desktop, and platform skips stay inside a selected spec.
 // A whole spec the allowlist omits needs an owner, issue, and reason below.
-export const townTestMatch = /(?:pixels-(?:year|detail|life)|hub-pixels|world|town-checkin|town-dialogs|town)\.spec\.ts/;
+export const townTestMatch = /(?:pixels-(?:year|detail|life|settings)|hub-pixels|world|town-checkin|town-dialogs|town)\.spec\.ts/;
 
 export const intendedProjects = [
   { name: 'finance', testDir: 'apps/finance/frontend/e2e', domain: 'finance' },
@@ -12,15 +12,7 @@ export const intendedProjects = [
   { name: 'suite', testDir: 'tests/e2e', useDomain: 'media' },
 ];
 
-export const ownedExclusions = [
-  {
-    project: 'town',
-    file: 'apps/web/e2e/pixels-settings.spec.ts',
-    owner: 'UX-01',
-    issue: '#259',
-    reason: 'Profile birthday settings stay unselected until UX-01 repairs Profile loads.',
-  },
-];
+export const ownedExclusions = [];
 
 export function projectByName(name) {
   const project = intendedProjects.find((item) => item.name === name);

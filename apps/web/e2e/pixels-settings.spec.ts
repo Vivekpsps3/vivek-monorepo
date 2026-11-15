@@ -100,7 +100,7 @@ test.describe('PF6 profile birthday settings', () => {
     return policy.replace(/'nonce-[^']+'/g, "'nonce'");
   }
 
-  // PROFILE1. Town project selection of this file stays with VER-02.
+  // PROFILE1. The town Playwright project selects this file.
   test('navigate, refresh, fresh load, back-forward, and Birthday stay on Profile', async ({ page }) => {
     const unknown = await page.request.get('/no-such-page');
     expect(unknown.status()).toBe(404);

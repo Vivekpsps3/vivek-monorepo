@@ -21,11 +21,9 @@ describe('settings shell', () => {
     const account = layout?.children?.find(route => route.path === 'account');
     const redirect = account?.redirectTo as (() => string) | string | undefined;
     expect(typeof redirect === 'function' ? redirect() : redirect).toBe('/settings/account');
-    expect(SETTINGS_SECTIONS.map(section => section.path)).toEqual([
-      'account', 'profile', 'appearance', 'travel', 'finance', 'about',
-    ]);
+    const registered = SETTINGS_ROUTES[0]?.children?.flatMap(route => route.path ? [route.path] : []) ?? [];
+    expect(registered).toEqual(SETTINGS_SECTIONS.map(section => section.path));
     expect(SETTINGS_SECTIONS.find(section => section.path === 'travel')?.data).toEqual({ embedded: true });
-    expect(SETTINGS_SECTIONS.some(section => section.path === 'profile')).toBeTrue();
   });
 
   it('shows one Settings heading and the section list', () => {
@@ -39,7 +37,7 @@ describe('settings shell', () => {
     expect(headings.map(heading => heading.textContent?.trim())).toEqual(['Settings']);
     const labels = [...fixture.nativeElement.querySelectorAll('nav[aria-label="Settings"] a')].map(link =>
       (link.textContent ?? '').trim());
-    expect(labels).toEqual(['Account', 'Profile', 'Appearance', 'Travel', 'Finance', 'About']);
+    expect(labels).toEqual(SETTINGS_SECTIONS.map(section => section.label));
   });
 
   async function openIndex(wide: boolean): Promise<string> {

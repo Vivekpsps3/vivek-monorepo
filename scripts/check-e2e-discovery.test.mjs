@@ -98,15 +98,15 @@ test('an owned omission is not-run and a selected file stays listed', () => {
   assert.doesNotMatch(formatReport(report), /\bpassed\b/i);
 });
 
-test('the town allowlist selects habit journeys and leaves the settings gap', () => {
+test('the town allowlist selects habit journeys and profile settings', () => {
   const town = intendedProjects.find((project) => project.name === 'town');
   for (const name of [
-    'pixels-year.spec.ts', 'pixels-detail.spec.ts', 'pixels-life.spec.ts', 'hub-pixels.spec.ts', 'world.spec.ts',
+    'pixels-year.spec.ts', 'pixels-detail.spec.ts', 'pixels-life.spec.ts', 'pixels-settings.spec.ts',
+    'hub-pixels.spec.ts', 'world.spec.ts',
     'town.spec.ts', 'town-checkin.spec.ts', 'town-dialogs.spec.ts',
   ]) {
     assert.equal(selects(town, name), true, name);
   }
-  assert.equal(selects(town, 'pixels-settings.spec.ts'), false);
 });
 
 test('viewport and platform specs stay selected inside their projects', () => {
@@ -128,8 +128,6 @@ test('the current tree lists every intended project and records exclusion owners
   const townPresent = fs.readdirSync(townDir).filter((name) => name.endsWith('.spec.ts')).length;
   const town = report.counts.find((count) => count.name === 'town');
   assert.equal(town.listed, townPresent - ownedExclusions.length);
-  assert.deepEqual(report.notes, [
-    'not-run project=town path=apps/web/e2e/pixels-settings.spec.ts owner=UX-01 issue=#259',
-  ]);
+  assert.deepEqual(report.notes, []);
   assert.doesNotMatch(formatReport(report), /\bpassed\b/i);
 });
