@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#219](https://github.com/Vivekpsps3/vivek-monorepo/issues/219). Parents [#197](https://github.com/Vivekpsps3/vivek-monorepo/issues/197), [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199), and [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200) stay open.
 - Agent/context, branch/worktree: REF-01 in `/tmp/vivek-ref-01`, branch `agent/ref-01`.
-- Base main SHA: `3d02609e82fe487b108066cfaba622ee39a07a40`. Gates below ran on that base plus this working tree, immediately before the commit that adds this file.
+- Base main SHA: `3d02609e82fe487b108066cfaba622ee39a07a40`. Implementation commit: `f4b124f`. Gates below ran on that tree before this evidence SHA line was added.
 - Fresh-main/prerequisite/active-PR checks: no open pull requests. CON-01 (#206), CON-02 (#207), CON-03 (#208), SAFE-03 (#203), SAFE-04 (#204), VER-01 (#209), and VER-02 (#210) are closed. Current main still has route parity (`apps/server/tests/test_route_parity.py`), collection policy (`scripts/check_collection_policy.py`), source inventory (`scripts/source_inventory.py`), and `bindLockNotices`.
 - Selection: DEL-02 (#214) is first in `plan.py list --live` but is not eligible to delete. Login still offers “Migrate old account”, which calls `/auth/login/migrate` and `/auth/passwordless/enroll`, and Finance fixtures still sign in through that route. `assert_ready` checks revision compatibility only. The packet forbids ending that support without an explicit policy decision. REF-01 is the next open leaf. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/219#issuecomment-6889682461
 
