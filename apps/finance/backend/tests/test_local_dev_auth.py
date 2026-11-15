@@ -10,10 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
-from apps.finance.backend.database import SessionLocal
 from apps.finance.backend.main import Base, app, engine, market_data
-from apps.finance.backend.tests.conftest import TEST_PASSWORD, seed_user
-from apps.server.identity.models import UserSession
+from apps.finance.backend.tests.conftest import seed_user, sign_in
 
 
 @pytest.fixture(autouse=True)
@@ -83,20 +81,8 @@ def test_dev_env_file_without_the_flag_does_not_activate(tmp_path, monkeypatch):
 
 
 def _sign_in(client: TestClient, email: str) -> None:
-    user = seed_user(email=email)
-    response = client.post(
-        "/api/auth/login/migrate", json={"email": email, "password": TEST_PASSWORD}
-    )
-    assert response.status_code == 200, response.text
-    db = SessionLocal()
-    try:
-        db.query(UserSession).filter(UserSession.user_id == user.id).update(
-            {UserSession.migration_only: False}, synchronize_session=False
-        )
-        db.commit()
-    finally:
-        db.close()
-    client.headers["X-CSRF-Token"] = response.json()["csrf_token"]
+    seed_user(email=email)
+    sign_in(client, email)
 
 
 def test_local_dev_does_not_replace_a_real_session(monkeypatch):

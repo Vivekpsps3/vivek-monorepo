@@ -42,10 +42,10 @@ describe('LoginComponent', () => {
     expect(cdr.markForCheck).toHaveBeenCalled();
   });
 
-  it('submits an email-shaped username to vault sign-in', async () => {
+  for (const mode of ['open', 'closed']) it(`uses vault sign-in without old-account migration when signup is ${mode}`, async () => {
     const auth = jasmine.createSpyObj('AuthService', ['bootstrapStatus', 'signupPolicy', 'loginWithVault']);
     auth.bootstrapStatus.and.returnValue(of({ needs_setup: false }));
-    auth.signupPolicy.and.resolveTo({ mode: 'closed', signup_open: false, invite_code_required: false });
+    auth.signupPolicy.and.resolveTo({ mode, signup_open: mode === 'open', invite_code_required: false });
     auth.loginWithVault.and.returnValue(new Promise(() => undefined));
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
@@ -62,6 +62,9 @@ describe('LoginComponent', () => {
 
     expect(fixture.nativeElement.textContent).toContain('Use your enrolled username');
     expect(fixture.nativeElement.textContent).not.toContain('email linked');
+    expect(fixture.nativeElement.textContent).not.toContain('Migrate old account');
+    expect(fixture.nativeElement.querySelector('input[autocomplete="new-password"]')).toBeNull();
+    expect(fixture.nativeElement.textContent.includes('Create an account')).toBe(mode === 'open');
     fixture.componentInstance.username = 'legacy.user@example.com';
     fixture.componentInstance.password = 'correct horse battery staple';
     fixture.componentInstance.submit();

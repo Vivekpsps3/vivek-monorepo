@@ -394,7 +394,6 @@ def test_competing_activation_commits_once_on_sqlite_file(tmp_path):
             db,
             email="race@example.invalid",
             display_name="Race",
-            password="synthetic race passphrase",
         )
         db.flush()
         owner = int(user.id)

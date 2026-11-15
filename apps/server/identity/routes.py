@@ -37,13 +37,11 @@ from apps.server.identity.schemas import (
     BootstrapStatusResponse,
     InvitationEnrollRequest,
     InvitationPreview,
-    LoginRequest,
     LoginResponse,
     MeResponse,
     PasswordlessBootstrapRequest,
     PasswordlessChallengeRequest,
     PasswordlessChallengeResponse,
-    PasswordlessEnrollRequest,
     PasswordlessSignupRequest,
     PasswordlessVerifyRequest,
     SelfDataResetRequest,
@@ -53,19 +51,16 @@ from apps.server.identity.schemas import (
 from apps.server.identity.session import (
     audit_event,
     clear_session_cookie,
-    complete_migration_session,
     create_session,
     create_user,
     current_session_id,
     get_current_admin,
-    get_current_migration_user,
     get_current_user,
     normalize_email,
     public_user,
     repair_csrf_cookie,
     revoke_user_sessions,
     utc_now_naive,
-    verify_password,
 )
 from apps.server.identity.signup_gate import (
     SIGNUP_UNAVAILABLE,
@@ -277,56 +272,6 @@ def passwordless_signup(
     csrf = create_session(db, user, request, response)
     db.refresh(user)
     return {"user": _user_response(user), "csrf_token": csrf}
-
-
-@router.post("/auth/login/migrate", response_model=LoginResponse)
-def login_migrate(
-    body: LoginRequest,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db, scope="function"),
-):
-    user = db.query(User).filter(User.email == normalize_email(body.email)).first()
-    if (
-        not user
-        or user.auth_public_key_b64
-        or not user.is_active
-        or not verify_password(body.password, user.password_hash)
-    ):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    csrf = create_session(db, user, request, response, migration_only=True)
-    db.refresh(user)
-    return {"user": _user_response(user), "csrf_token": csrf}
-
-
-@router.post("/auth/passwordless/enroll")
-def enroll_passwordless(
-    body: PasswordlessEnrollRequest,
-    request: Request,
-    db: Session = Depends(get_db, scope="function"),
-    current_user: User = Depends(get_current_migration_user),
-):
-    username = stored_username(body.username)
-    if db.query(User).filter(User.username == username, User.id != current_user.id).first():
-        raise HTTPException(status_code=409, detail="Username already exists")
-    if vault_store.get_vault(db, current_user.id):
-        raise HTTPException(status_code=409, detail="Vault already exists for this account")
-    _require_p256_public_key(body.public_key_b64)
-    current_user.username = username
-    current_user.auth_public_key_b64 = body.public_key_b64
-    current_user.auth_algorithm = "ECDSA_P256_SHA256"
-    current_user.auth_key_version = 1
-    _store_auth_wrap(current_user, body.auth)
-    current_user.passwordless_enrolled_at = utc_now_naive()
-    current_user.password_hash = None
-    current_user.must_change_password = False
-    vault_store.create_vault(db, current_user.id, **body.vault.model_dump())
-    complete_migration_session(db, request)
-    audit_event(
-        db, "passwordless_enrolled", actor_user_id=current_user.id, target_user_id=current_user.id
-    )
-    db.commit()
-    return {"ok": True}
 
 
 @router.post("/auth/passwordless/lookup")

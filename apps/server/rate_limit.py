@@ -52,7 +52,6 @@ _AUTH_POSTS = {
     "/api/auth/passwordless/lookup",
     "/api/auth/passwordless/challenge",
     "/api/auth/passwordless/verify",
-    "/api/auth/passwordless/enroll",
     "/api/auth/signup/passwordless",
     "/api/auth/bootstrap/passwordless",
 }

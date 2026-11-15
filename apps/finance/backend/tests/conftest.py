@@ -1,3 +1,4 @@
+import base64
 import os
 import sys
 from pathlib import Path
@@ -26,12 +27,15 @@ os.environ["CORS_ORIGINS"] = (
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from fastapi.testclient import TestClient
 
 import apps.finance.backend.main as finance_main
 from apps.finance.backend import database as finance_db
 from apps.server.database import open_database
-from apps.server.identity.models import UserRole, UserSession
+from apps.server.identity.models import UserRole
 from apps.server.identity.session import create_user
 from apps.server.main import Dependencies, Settings, create_app
 
@@ -57,7 +61,13 @@ SessionLocal = finance_db.SessionLocal
 if ":memory:" not in SQLALCHEMY_DATABASE_URL:
     raise RuntimeError(f"Tests must not run against a file database: {SQLALCHEMY_DATABASE_URL}")
 
-TEST_PASSWORD = "correct-horse-battery-staple"
+# Synthetic signing key shared by fixture users; no vault is created implicitly.
+_signing_key = ec.generate_private_key(ec.SECP256R1())
+_public_key_b64 = base64.b64encode(
+    _signing_key.public_key().public_bytes(
+        serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+).decode()
 
 
 @pytest.fixture(autouse=True)
@@ -93,10 +103,13 @@ def seed_user(email: str = "user@example.com", role: UserRole = UserRole.user):
             db,
             email=email,
             display_name=email.split("@")[0].title(),
-            password=TEST_PASSWORD,
             role=role,
             must_change_password=False,
         )
+        user.username = email
+        user.auth_public_key_b64 = _public_key_b64
+        user.auth_algorithm = "ECDSA_P256_SHA256"
+        user.auth_key_version = 1
         db.commit()
         db.refresh(user)
         return user
@@ -104,21 +117,37 @@ def seed_user(email: str = "user@example.com", role: UserRole = UserRole.user):
         db.close()
 
 
+def sign_in(client: TestClient, email: str) -> None:
+    # Bind both steps to the configured test origin, including local-dev clients.
+    headers = {"Origin": "http://testserver"}
+    challenge = client.post(
+        "/api/auth/passwordless/challenge", json={"username": email}, headers=headers
+    )
+    assert challenge.status_code == 200, challenge.text
+    body = challenge.json()
+    der = _signing_key.sign(body["message"].encode(), ec.ECDSA(hashes.SHA256()))
+    r, s = decode_dss_signature(der)
+    response = client.post(
+        "/api/auth/passwordless/verify",
+        headers=headers,
+        json={
+            "username": email,
+            "challenge_id": body["challenge_id"],
+            "challenge": body["challenge"],
+            "message": body["message"],
+            "signature_b64": base64.b64encode(
+                r.to_bytes(32, "big") + s.to_bytes(32, "big")
+            ).decode(),
+        },
+    )
+    assert response.status_code == 200, response.text
+    client.headers["X-CSRF-Token"] = response.json()["csrf_token"]
+
+
 def authenticated_client(
     app, email: str = "user@example.com", role: UserRole = UserRole.user
 ) -> TestClient:
-    user = seed_user(email=email, role=role)
+    seed_user(email=email, role=role)
     client = TestClient(app)
-    res = client.post("/api/auth/login/migrate", json={"email": email, "password": TEST_PASSWORD})
-    assert res.status_code == 200, res.text
-    # This helper represents a fully authenticated test user, not a legacy migration session.
-    db = SessionLocal()
-    try:
-        db.query(UserSession).filter(UserSession.user_id == user.id).update(
-            {UserSession.migration_only: False}, synchronize_session=False
-        )
-        db.commit()
-    finally:
-        db.close()
-    client.headers.update({"X-CSRF-Token": res.json()["csrf_token"]})
+    sign_in(client, email)
     return client

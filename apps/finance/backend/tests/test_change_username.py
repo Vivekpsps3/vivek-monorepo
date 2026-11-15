@@ -274,33 +274,9 @@ def test_missing_csrf_is_rejected(monkeypatch):
 
 def test_legacy_email_stays_and_a_taken_mailbox_conflicts(monkeypatch):
     _open_signup(monkeypatch)
-    from apps.server.identity.session import create_user
-
-    db = SessionLocal()
-    try:
-        create_user(
-            db, email="legacy@example.com", display_name="Legacy", password="legacy-password"
-        )
-        db.commit()
-    finally:
-        db.close()
-    client = TestClient(app)
-    login = client.post(
-        "/api/auth/login/migrate",
-        json={"email": "legacy@example.com", "password": "legacy-password"},
-    )
-    client.headers["X-CSRF-Token"] = login.json()["csrf_token"]
-    private_key, public_key_b64, auth, vault, _dek = _signing_material(None)
-    enrolled = client.post(
-        "/api/auth/passwordless/enroll",
-        json={
-            "username": "legacy.user",
-            "public_key_b64": public_key_b64,
-            "auth": auth,
-            "vault": vault,
-        },
-    )
-    assert enrolled.status_code == 200, enrolled.text
+    # Already-enrolled historical accounts keep their real mailbox after renaming.
+    client, private_key, _auth, _vault, _dek = _signup("legacy.user")
+    _retarget_username("legacy.user", "legacy.user", "legacy@example.com")
     renamed = _rename(client, private_key, "legacy.user", "renamed.legacy")
     assert renamed.status_code == 200, renamed.text
     assert renamed.json()["email"] == "legacy@example.com"

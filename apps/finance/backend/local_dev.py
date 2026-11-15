@@ -155,7 +155,6 @@ def ensure_local_dev_user(db: Session) -> User:
         db,
         email=LOCAL_DEV_EMAIL,
         display_name=LOCAL_DEV_DISPLAY_NAME,
-        password=None,
         role=UserRole.admin,
         must_change_password=False,
     )

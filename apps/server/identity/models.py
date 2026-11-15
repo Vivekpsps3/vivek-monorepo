@@ -102,6 +102,7 @@ class UserSession(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    # Retained for stored sessions from before retirement; these must stay restricted.
     migration_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     user_agent: Mapped[str | None] = mapped_column(String, nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String, nullable=True)

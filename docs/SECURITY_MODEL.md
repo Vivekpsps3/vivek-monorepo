@@ -265,20 +265,21 @@ authentication and rewritten as schema-v2 records with authenticated-record
 AAD. This browser-side format upgrade remains supported.
 
 The former server-side plaintext Finance schema and its browser-to-server
-row-copy migration have been retired. Before creating or upgrading any schema,
-startup checks that every legacy finance table is empty and that no user still
-has only password authentication. If data remains, startup stops before
-changing the database. Open the previous app version, migrate the account into
-its browser vault, verify the encrypted records, then retry the deployment.
-Alembic revision `e0f6a2b3c4d5` drops the empty legacy tables and migration
-bookkeeping; it preserves users, vault wraps, encrypted records, blind indexes,
-and public market caches. The backend never decrypts finance records. Back up
-the SQLite file before deploying this cleanup (see [DEPLOY.md](./DEPLOY.md)).
+row-copy migration have been retired. Historical Finance revision
+`e0f6a2b3c4d5` checks for populated legacy tables and password-only accounts before
+removing empty legacy tables and migration bookkeeping. That historical chain
+preserves users, vault wraps, encrypted records, blind indexes and market caches;
+it is not the unified site's startup path. Unified startup validates the current
+or explicitly compatible schema revision without upgrading or checking account
+enrollment. See [LIFECYCLE.md](./LIFECYCLE.md) and [MIGRATIONS.md](./MIGRATIONS.md).
 
-Password-only auth migration is an account-enrollment path in the previous
-release. The current release's preflight blocks startup while a password-only
-account remains, so restore the previous release to complete enrollment; it
-clears the password hash without uploading vault secrets.
+Password-only account migration is retired by explicit owner support decision:
+`/auth/login/migrate` and `/auth/passwordless/enroll` return 404. Password-only
+accounts can no longer enroll through old credentials. The release does not delete
+accounts, stored password hashes or encrypted data, and existing migration-only
+sessions cannot access normal authenticated routes. Already-enrolled users,
+invitation/bootstrap enrollment, signing-key wraps and supported ciphertext
+formats remain supported. No alternate password login or reset is introduced.
 
 ## Admin tooling
 
