@@ -52,8 +52,8 @@ Local gates on `/tmp/vivek-town-03` at `d9c952168c0248859bcd66a13726e478125f8dc4
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled after `gh pr create`. `Closes #251` only. #81 is referenced and not closed.
-- Roadmap #134 append-only status-note URL: filled after the comment. The roadmap body and `queue.json` are not edited.
-- Merged/activation status (actual evidence, not assumption): not merged. Not deployed. Not activated.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/368 (`Closes #251` only). #81 is referenced and not closed. Leaf note: https://github.com/Vivekpsps3/vivek-monorepo/issues/251#issuecomment-6888485265
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6888485058. The roadmap body and `queue.json` are not edited.
+- Merged/activation status (actual evidence, not assumption): PR #368 is open. Local gates passed. CI is not recorded here. Not merged. Not deployed. Not activated.
 - Remaining external prerequisites or approved scope decisions: none for this packet. The vault setup URL split stays in the client; this leaf only rewrites it inside the Town browser test.
 - Next actor: review and squash-merge. Do not start HUB-02 or TOWN-04 from this branch.
