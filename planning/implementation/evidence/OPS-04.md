@@ -50,8 +50,8 @@ The command-line report and refusal also omit the synthetic ciphertext, vault, i
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled in after the PR is opened. `Closes #275` only. Parent #125 is referenced and stays open.
-- Roadmap #134 append-only status-note URL: filled in after the comment is posted. The issue body was not edited.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/366 (`Closes #275`). Parent #125 is referenced and stays open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6887981570. The issue body was not edited. Leaf note: https://github.com/Vivekpsps3/vivek-monorepo/issues/275#issuecomment-6887981807.
 - Merged/activation status: not merged when this note was written. Not deployed. No production restore, real alert, or off-host activation was performed. The drill's `production_restore`, `production_rpo_established`, and `production_rto_established` fields stay false.
 - Remaining external prerequisites or approved scope decisions: OPS-06 still owns a real off-host transfer and a restore of that copy. No host timer was installed for the monthly drill. No alert recipient is configured.
 - Next actor: CI on the PR, then squash-merge of this leaf only.
