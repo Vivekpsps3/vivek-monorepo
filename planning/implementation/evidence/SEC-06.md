@@ -2,7 +2,7 @@
 
 - Leaf [#271](https://github.com/Vivekpsps3/vivek-monorepo/issues/271); parent [#121](https://github.com/Vivekpsps3/vivek-monorepo/issues/121) remains open.
 - Agent/context: explicitly assigned recovery implementation agent, branch `agent/sec-06-restore-20261114`, isolated worktree `/tmp/vivek-sec-06-restore-20261114`.
-- Base/current main: `c461fe791251b13e02a05911531246f01f0e8290`. Final implementation tested: `911bd38cc56eb567c0d6b772428a6053e4862161`; subsequent delivery commits change documentation and remove one trailing space only; behavior is unchanged.
+- Base/current main: `c461fe791251b13e02a05911531246f01f0e8290`. Final implementation tested: `911bd38cc56eb567c0d6b772428a6053e4862161`; delivery commits remove one trailing space and update documentation; post-PR integration fix `5858161` additionally strengthens the Travel historical/current-head migration test. Application behavior is unchanged after `911bd38`.
 - Dependency/authorization proof: user authorized merging SEC-05 #362, then proceeding. All four CI checks succeeded on exact head `89a73dbda651b2d6cd24e36e8228a37da3e9711d`; squash merge was pinned to that head. GitHub returned merge `c461fe7`, #270 auto-closed completed at 2026-11-14 20:24 UTC, and fresh `origin/main` ancestry/source were verified before this worktree was created. [SEC-05 merged note](https://github.com/Vivekpsps3/vivek-monorepo/issues/270#issuecomment-6883696161), [scoped roadmap note](https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6883696326). SEC-05 was genuinely merged, not a stacked/unmerged prerequisite.
 - SAFE-04 outcome rechecked: `bindLockNotices` validates owner/version/self-echo and disposes one shared transport; `bindLockSnapshots` clears same-tab private work. Existing lock capability and owner/epoch tests remain. SEC-06 uses these owners directly.
 - Fresh claims/PRs: [SEC-06 claim](https://github.com/Vivekpsps3/vivek-monorepo/issues/271#issuecomment-6883703200); no competing claim. Final fresh-main read remained `c461fe7`. Open #363 (DISC-01 planning) and #364 (Media detail) had no overlapping files. Recovery, Finance Settings/lifecycle, schema head, synthetic vault helper and the strict ESLint counter shrink were reserved with the coordinating parent. No global queue/parent body was regenerated.
@@ -72,7 +72,7 @@ CSV receipt/Undo and Fidelity domain staging semantics remain unchanged.
 | Unsafe cleanup/error workaround | `withVaultStore` abort read accessed a pending request's error. | Existing IndexedDB owner with a ready-state guard. | Fixes the real root-Karma cleanup failure; deterministic pending/done abort tests preserve error details and existing logout/isolation assertions stay unchanged. |
 
 - Classification: recovery feature with necessary lifecycle/concurrency/schema safety additions. It is not a net-LOC simplification claim. No code moves, minification, removed feature, skipped meaningful assertion, credential rotation or wire/AAD/key migration.
-- Base/full closure: `c461fe791251b13e02a05911531246f01f0e8290` → `911bd38cc56eb567c0d6b772428a6053e4862161`, all 33 changed files. Application production **+1046/−84 (net +962)**; required new migration **+69/−0**, giving total production **net +1031**. Tests/fixtures **+970/−9 (net +961)**. Guidance/docs before this evidence **+98/−10 (net +88)**. Verification configuration **+1/−1 (net 0)** is the stricter ESLint counter only. Evidence documentation is additional; generated build/image/coverage output is excluded.
+- Base/full closure: `c461fe791251b13e02a05911531246f01f0e8290` → `911bd38cc56eb567c0d6b772428a6053e4862161`, the original 33 changed files (the post-PR Travel fixture adds one further test file). Application production **+1046/−84 (net +962)**; required new migration **+69/−0**, giving total production **net +1031**. Tests/fixtures **+970/−9 (net +961)**. Guidance/docs before this evidence **+98/−10 (net +88)**. Verification configuration **+1/−1 (net 0)** is the stricter ESLint counter only. Evidence documentation is additional; generated build/image/coverage output is excluded.
 - New backend staging owner: 276 physical lines (25 blank, 3 comment lines); restore adapter: 237 (10 blank, 3 comment); recovery scope: 38 (1 blank, 1 comment); index helper: 11 (0 blank, 1 comment). Necessary feature/guard code is reported honestly; moved validation is not claimed as savings.
 - Equivalent policy owners after change: one bundle codec, one owner/recovery policy, one normal/staging wire validator, one conditional existing-record updater, one transaction-index rule and one recovery lifecycle adapter. Existing domain import engines remain distinct. Active persistent record/DEK/view owners do not change; two bounded temporary ciphertext tables support resumable activation.
 - New public entries: lazy `prepareFinanceRestore` returning a disposable count/action plan, real Settings controls and authenticated stage/list/get/upload/activate/discard endpoints. Plan values/keys are not a shell store. Normal record lists/counts never include stages. Each listener/timer is disposed by its actual scope; Core lock delivery uses the existing validated shared transport.
@@ -123,10 +123,46 @@ complete final build/rehearsal then passed. Initial new browser lock expectation
 were corrected to the actual full locked sentence. No failure or unrun gate is
 reported as a pass and no suite/floor/assertion was weakened.
 
+## Post-PR migration integration correction
+
+CI [run 43665860374](https://github.com/Vivekpsps3/vivek-monorepo/actions/runs/43665860374)
+failed Backend on head `ed91e5597c5a377b082f2c883a4441771a154047`:
+Travel's accrual migration test asserted its historical revision was still global
+head. Frontend, Unified Site Release and Playwright passed on that head. The
+initial local verification omitted the Travel/Media migration suites; their
+schema integration coverage was necessary for this shared-head change. That CI
+failure and omission are not represented as successful prior checks.
+
+The exact test reproduced locally (1 failed). Fix `5858161` retains the historical
+`site_leave_accrual_v1` current-revision, exact defaults, compatibility, original
+rows, behavior and downgrade checks. At that historical revision it requires
+exactly the two later restore tables and one index as model drift. It then
+upgrades to explicit single head `site_vault_restore_v1`, requires empty model
+drift, checks all original policy/allocation/entry rows and daily defaults again,
+and verifies foreign keys before exercising the original downgrade. No applied
+migration or production code changed. Inspection of all app migration tests found
+no other obsolete global-head equality; neighboring Travel/Media tests already
+upgrade to current head before requiring empty drift. The correction adds test
+**+33/−2 (net +31)**; total test/fixture delta becomes **+1003/−11 (net +992)**.
+Production LOC figures above remain unchanged.
+
+| Exact additional command (isolated coverage files) | Result on correction `5858161` |
+| --- | --- |
+| `.venv/bin/python -m pytest apps/travel/backend/tests/test_leave_accrual_migration.py -q` | PASS; 1 test after reproducing the original failure. |
+| `COVERAGE_FILE=/tmp/sec06-travel-ci-fix.coverage ./scripts/coverage-gate.sh travel` | PASS; **217 tests, 89.03%**, unchanged floor 80.41%. |
+| `COVERAGE_FILE=/tmp/sec06-media-ci-fix.coverage ./scripts/coverage-gate.sh media` | PASS; **208 tests, 84.37%**, unchanged floor 70.60%. |
+| `node --test apps/travel/backend/static/tests/*.test.mjs apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs` | PASS; **121/121**, no skips. |
+| `make lint-python` / `make typecheck-python` | PASS; 230 formatted; Ruff 101 / suppressions 6 / mypy 87 unchanged. Initial formatting finding was fixed with Ruff, without altering assertions. |
+| `make test-fast` | PASS; 21 Node checks plus docs/boundaries/scripts; rerun after this evidence update. |
+
+Existing full Finance/server/Karma/browser/build/rehearsal results above still
+cover the unchanged application/migration tree. New CI must run on the final
+pushed correction head; pending is not green and no merge/deployment is authorized.
+
 ## Handoff
 
 - SEC-05: #362 merged, #270 closed, verified on current main before SEC-06; no deployment.
-- SEC-06 PR: [#365](https://github.com/Vivekpsps3/vivek-monorepo/pull/365), open for review after every required local check passed. Uses `Closes #271` only and references #121 without closing it. Initial delivery `3a7e1ac` adds this evidence and removes one trailing space from tested source `911bd38`; final web lint and fast checks passed again. This final handoff update is documentation only.
+- SEC-06 PR: [#365](https://github.com/Vivekpsps3/vivek-monorepo/pull/365), open for review; the initial local checks and post-PR migration integration correction are recorded above. Uses `Closes #271` only and references #121 without closing it. Initial delivery `3a7e1ac` adds this evidence and removes one trailing space from tested source `911bd38`; final web lint and fast checks passed again. This final handoff update is documentation only.
 - Scoped workflow notes appended after fresh reads: [leaf #271 delivery](https://github.com/Vivekpsps3/vivek-monorepo/issues/271#issuecomment-6887657606), [roadmap #134 delivery](https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6887657834). No body/global queue/parent ledger overwrite.
-- Actual status at PR delivery: complete restore implementation with local verification; PR open, CI pending; not merged/deployed, not an operational server-backup drill. SEC-06 merge is not authorized by the user's earlier authorization for SEC-05.
+- Actual status after migration integration correction: complete restore implementation with local verification; PR open, replacement CI pending; not merged/deployed, not an operational server-backup drill. SEC-06 merge is not authorized by the user's earlier authorization for SEC-05.
 - Next actor: reviewer/owner assesses the concrete PR, CI and explicit activation boundary; any future merge/deployment needs its own authorization. Current worktree has clean tracked source and only untracked installed-dependency symlinks.
