@@ -54,8 +54,8 @@ Edit site for a new settings section: add one `SETTINGS_SECTIONS` entry and the 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled after `gh pr create`. `Closes #207` only. Parents #197 and #196 are named and stay open.
-- Roadmap #134 append-only status-note URL: filled after the comment.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/367 (`Closes #207` only). Parents #197 and #196 are named and stay open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6887994689
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed. SEC-05 recovery files from `c461fe79` stay in this branch.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Reserved `/town/clinic` and `/town/gym` are still not Angular pages.
 - Next actor: review, then CI. Do not merge from this worker.
