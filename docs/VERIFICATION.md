@@ -23,6 +23,10 @@ Domain wrapper configs remain for CI and existing commands; every one uses `test
 
 [Quality](QUALITY.md) owns floors/ratchets and coverage limitations. Do not omit moved identity source files from Finance's original logical coverage set. Replace obsolete source-string/widget assertions only after recording their behavior replacement; fewer discovered tests do not prove parity.
 
+## Disposable SQLite restore drill
+
+`scripts/restore-drill.py` restores a synthetic verified snapshot into a new empty directory. It checks SQLite integrity, foreign keys, schema head, owner counts, and finance ciphertext preservation. The report records restore duration and the data-loss window against a 1-hour local objective, a 24-hour off-host objective, and a 4-hour restore objective. Those figures are drill measurements. They are not a production recovery time. Run `python3 -m unittest scripts/test_restore_drill.py` against temporary files only.
+
 [Lifecycle](LIFECYCLE.md) records historical Finance database generations. [Migrations](MIGRATIONS.md) and [Operations](OPERATIONS.md) own production upgrades, premigration backups and restore. The seeded rehearsal covers pinned unadopted history, forward upgrades, unchanged original values, explicit backfill provenance, schema drift, foreign keys and authenticated smoke. `BATCH_PROOF=1` also verifies batch-recreation child preservation and old-image compatibility behavior. Run it only with its disposable data/volumes.
 
 Finance invariants remain part of unit and browser acceptance: browser-owned encryption, ciphertext-only server storage, wrong-user isolation, lossless/resumable imports, edited-row-safe undo, net worth from balance-sheet facts, and speculative planning that never mutates actual records. See [Security](SECURITY_MODEL.md), [Data model](DATA_MODEL.md), and [Frontend](FRONTEND.md).

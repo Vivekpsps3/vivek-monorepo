@@ -218,7 +218,7 @@ Activation prerequisites, all still unmet in this tree:
 - A 32-byte recovery key file, mode `0600`, stored outside the repository and outside the destination.
 - `SITE_BACKUP_OFFHOST=file`, `SITE_BACKUP_OFFHOST_DIR`, and `SITE_BACKUP_OFFHOST_KEY_FILE` in the private environment of the existing backup and maintenance services.
 - A mount of that directory into those services. The checked-in Compose file does not add one.
-- A real transfer and a disposable restore recorded by [OPS-06](https://github.com/Vivekpsps3/vivek-monorepo/issues/277). Until that evidence exists, leave the mode `off`.
+- A real transfer and a restore of that off-host copy recorded by [OPS-06](https://github.com/Vivekpsps3/vivek-monorepo/issues/277). Until that evidence exists, leave the mode `off`. The monthly synthetic drill below is not that transfer.
 
 This is not a configured destination and not production activation. No alert recipient is configured. A measured replacement-host recovery time is not established by this policy.
 
@@ -228,6 +228,22 @@ correct ownership, then start its compatible image. Verify authenticated reads
 and writes across every domain before discarding any old state. Never replace a
 live SQLite file or pair an old database with unrelated WAL files. Restore all
 domains together so identity and ownership remain consistent.
+
+## Disposable restore drill
+
+Once a month, restore one verified snapshot into a new empty directory and read the report. This is a synthetic measurement. It does not replace the production database, open the live data or backup volume, send a snapshot off-host, or establish a production recovery time. No host timer is installed. The owner runs it on the same monthly cadence as the dependency pin review.
+
+Copy the chosen `site-*.db` snapshot and its `.json` manifest into a temporary directory that is not the live volume. Point the drill at that copy:
+
+```sh
+work=$(mktemp -d)
+python3 scripts/restore-drill.py --backup /path/to/copied-site-YYYYMMDDTHHMMSS-xxxxxxxx.db --parent "$work"
+python3 scripts/restore-drill.py --cleanup /path/printed/by/the/report
+```
+
+The command refuses a live `site.db`, a production or Docker volume, a directory that already holds snapshots, and any destination that already exists. It checks the snapshot checksum, SQLite integrity, foreign keys, this tree's schema head, owner counts, and finance ciphertext preservation. The report records the restore duration and the data-loss window against three objectives: local 1 hour, off-host 24 hours, and restore 4 hours. Those comparisons are drill measurements. `production_restore` stays false.
+
+`--sealed` with a mode-0600 key file decrypts a local envelope the operator already has. It does not contact a destination. Leave `SITE_BACKUP_OFFHOST` at `off`. The production restore steps above remain the procedure for a live recovery. This drill does not perform them.
 
 ## Dependency and image review
 
