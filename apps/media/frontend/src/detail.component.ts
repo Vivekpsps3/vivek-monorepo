@@ -1,5 +1,6 @@
 import { Subscription } from "rxjs";
 import { MediaDrafts, ItemDraft, ItemFields } from "./drafts.service";
+import { NgTemplateOutlet } from "@angular/common";
 import {
   Component,
   DestroyRef,
@@ -22,8 +23,10 @@ import {
   UiDialogComponent,
   UiFieldComponent,
   UiFieldControlDirective,
+  UiIconComponent,
   UiPageHeaderComponent,
   UiSegmentedComponent,
+  type UiIconName,
 } from "@vivek/ui";
 import {
   Detail,
@@ -34,8 +37,28 @@ import {
   statusLabel,
 } from "./media.models";
 import { showDay } from "./display";
+import {
+  aboutSummary,
+  artRatio,
+  dateOnly,
+  episodeCode,
+  episodeDateLine,
+  experienceTitle,
+  kindIcon,
+  metaChips,
+  moreSummary,
+  needsMoreOpen,
+  placeholderLetter,
+  progressPrimary,
+  showsAnticipated,
+  showsGenericProgress,
+  statusChoices,
+  statusFieldLabel,
+} from "./detail-meta.mjs";
 import { MediaCardComponent } from "./media-card.component";
+import { nextEpisodeError } from "./next-episode.mjs";
 import { NextEpisodeUndoService } from "./next-episode-undo.service";
+import { NextEpisodeService } from "./next-episode.service";
 import { halfNote, ratingOptions, segmentValue } from "./rating-model.mjs";
 import {
   RELATED_ATTEMPT_LIMIT,
@@ -50,6 +73,7 @@ import { addTag, normaliseTags, removeTag } from "./tag-model.mjs";
   standalone: true,
   imports: [
     FormsModule,
+    NgTemplateOutlet,
     RouterLink,
     UiBadgeComponent,
     UiButtonComponent,
@@ -57,6 +81,7 @@ import { addTag, normaliseTags, removeTag } from "./tag-model.mjs";
     UiDialogComponent,
     UiFieldComponent,
     UiFieldControlDirective,
+    UiIconComponent,
     UiPageHeaderComponent,
     UiSegmentedComponent,
     MediaCardComponent,
@@ -65,6 +90,19 @@ import { addTag, normaliseTags, removeTag } from "./tag-model.mjs";
 })
 export class DetailComponent {
   readonly showDay = showDay;
+  readonly ratio = artRatio;
+  readonly chips = metaChips;
+  readonly letter = placeholderLetter;
+  readonly dayOnly = dateOnly;
+  readonly code = episodeCode;
+  readonly choices = statusChoices;
+  readonly stateField = statusFieldLabel;
+  readonly heading = experienceTitle;
+  readonly about = aboutSummary;
+  readonly primaryProgress = progressPrimary;
+  readonly showMore = showsGenericProgress;
+  readonly anticipatedFor = showsAnticipated;
+  readonly moreLabel = moreSummary;
   private readonly session = inject(SESSION_CONTEXT);
   private readonly ownerId = this.session.currentUser?.id;
   private get ownsSession(): boolean {
@@ -76,6 +114,8 @@ export class DetailComponent {
   private readonly destroy = inject(DestroyRef);
   private readonly confirm = inject(ConfirmService);
   private readonly drafts = inject(MediaDrafts);
+  private readonly undo = inject(NextEpisodeUndoService);
+  private readonly nextEpisodes = inject(NextEpisodeService);
   private loadingRequest?: Subscription;
   private photoRequest?: Subscription;
   private linkRequest?: Subscription;
@@ -121,6 +161,7 @@ export class DetailComponent {
   tagText = "";
   tagError = "";
   episode = { season_number: 1, episode_number: 1, title: "", air_date: "" };
+  moreOpen = false;
   @ViewChild("tagInput") private tagInput?: ElementRef<HTMLInputElement>;
   @ViewChild("relatedSentinel")
   private relatedSentinel?: ElementRef<HTMLElement>;
@@ -146,7 +187,7 @@ export class DetailComponent {
       clearTimeout(this.tagFocusTimer);
       this.releaseRelated();
     });
-    inject(NextEpisodeUndoService).restored$
+    this.undo.restored$
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe((entryId) => this.refreshEpisodeProgress(entryId));
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((p) => {
@@ -161,7 +202,7 @@ export class DetailComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (detail) => {
-          if (generation === this.generation) this.item.set(detail);
+          if (generation === this.generation) this.keepDrafts(detail);
         },
         error: (error) => {
           if (generation === this.generation) this.error.set(errorCopy(error));
@@ -219,6 +260,7 @@ export class DetailComponent {
           if (draft) {
             if (draft.base === d.updated_at) {
               Object.assign(this, draft.fields);
+              this.moreOpen = needsMoreOpen(d.kind, this.fields());
             } else this.recovery.set(draft);
           }
         },
@@ -356,7 +398,45 @@ export class DetailComponent {
     this.baseFields = this.fields();
     this.baseVersion = d.updated_at;
     this.reviewBase = d.review_updated_at || "";
+    this.moreOpen = needsMoreOpen(d.kind, this.fields());
     this.armRelated(d);
+  }
+  /** Progress responses change the item clock. Rebase the draft onto that clock and keep the form. */
+  private keepDrafts(detail: Detail): void {
+    const fields = this.fields();
+    this.item.set(detail);
+    this.applyFields(fields);
+    this.baseVersion = detail.updated_at;
+    this.rememberDraft();
+  }
+  private applyFields(fields: ItemFields): void {
+    this.review = fields.review;
+    this.rating = fields.rating;
+    this.status = fields.status;
+    this.progress = fields.progress;
+    this.unit = fields.unit;
+    this.favorite = fields.favorite;
+    this.anticipated = fields.anticipated;
+    if (fields.tags) this.tags = [...fields.tags];
+    if (fields.tagText !== undefined) this.tagText = fields.tagText;
+  }
+  artIcon(kind: string): UiIconName {
+    return kindIcon(kind) as UiIconName;
+  }
+  episodeWhen(episode: Episode): string {
+    return episodeDateLine(
+      this.showDay(episode.air_date),
+      episode.watched_on ? this.showDay(episode.watched_on) : "",
+    );
+  }
+  syncMore(event: Event): void {
+    const details = event.target;
+    if (
+      details instanceof HTMLDetailsElement &&
+      details.classList.contains("detail-more")
+    ) {
+      this.moreOpen = details.open;
+    }
   }
   private releaseRelated(): void {
     clearTimeout(this.relatedTimer);
@@ -583,7 +663,7 @@ export class DetailComponent {
       .subscribe({
         next: (d) => {
           if (generation !== this.generation) return;
-          this.item.set(d);
+          this.keepDrafts(d);
           if (this.childOpen) this.childOpen = false;
           if (d.operation) {
             if (d.operation.operation_token)
@@ -614,6 +694,36 @@ export class DetailComponent {
           if (generation !== this.generation) return;
           this.error.set(errorCopy(e));
           this.busy.set(false);
+          this.rememberDraft();
+        },
+      });
+  }
+  markNext(episode: Episode): void {
+    const current = this.item();
+    if (!current || this.busy()) return;
+    const generation = this.generation;
+    const entryId = current.id;
+    this.busy.set(true);
+    this.error.set("");
+    this.message.set("");
+    this.mutation?.unsubscribe();
+    this.mutation = this.nextEpisodes
+      .markNext(entryId, episode.id)
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (result) => {
+          if (generation !== this.generation) return;
+          this.keepDrafts(result.entry);
+          this.busy.set(false);
+          this.undo.offer(entryId, result);
+        },
+        error: (error: { status?: number; error?: { detail?: unknown } }) => {
+          if (generation !== this.generation) return;
+          const mapped = nextEpisodeError(error?.status ?? 0, error?.error?.detail);
+          this.error.set(mapped.message);
+          this.busy.set(false);
+          this.rememberDraft();
+          if (mapped.reload) this.refreshEpisodeProgress(entryId);
         },
       });
   }

@@ -207,3 +207,14 @@ the auth and vault routes, and the vault column is `NOT NULL`.
 
 A removal revision has to change those writers in the same release and follow
 the expand/contract note above.
+
+## Portable restore staging
+
+`site_vault_restore_v1` extends `site_leave_accrual_v1` with two temporary
+ciphertext-only staging tables; existing active records and credentials are
+unchanged. The expansion declares earlier heads compatible. Owner and job foreign
+keys cascade temporary rows so an earlier image can still delete an account
+without knowing these tables. Normal owner reset explicitly removes temporary
+stages. A downgrade drops only the temporary tables; active vault records remain.
+The synthetic migration regression and seeded adoption/upgrade rehearsal verify
+ciphertext/revision preservation and foreign-key integrity.

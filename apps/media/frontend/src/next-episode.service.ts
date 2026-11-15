@@ -26,7 +26,10 @@ interface NextResponse extends Detail {
 export class NextEpisodeService {
   private readonly http = inject(HttpClient);
 
-  markNext(entryId: number, expectedEpisodeId: number): Observable<NextResult> {
+  markNext(
+    entryId: number,
+    expectedEpisodeId: number,
+  ): Observable<NextResult & { entry: Detail }> {
     return this.http
       .post<NextResponse>(`/media/api/entries/${entryId}/episodes/next`, {
         expected_episode_id: expectedEpisodeId,
@@ -35,6 +38,7 @@ export class NextEpisodeService {
         map((response) => ({
           marked: response.marked,
           next: response.show?.next_episode ?? null,
+          entry: response,
         })),
       );
   }

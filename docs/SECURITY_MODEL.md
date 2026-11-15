@@ -115,7 +115,7 @@ Challenge issue, verify, and username change bind the signed message to one conf
 ## Recovery rules
 
 - There is no password reset. Admins cannot reset a vault passphrase, generate a signing key, or alter encrypted vault material.
-- There is no alternate account recovery-key path. Losing the vault passphrase still prevents sign-in/unlock; admins can only delete encrypted data and let the user start over. A portable backup and its separate password are independent recovery material, with restore delivered by SEC-06 below.
+- There is no alternate account recovery-key path. Losing the vault passphrase still prevents sign-in/unlock; admins can only delete encrypted data and let the user start over. A portable backup and its separate password are independent recovery material, with owner-authenticated restore described below.
 
 ## Portable encrypted recovery export
 
@@ -167,10 +167,52 @@ file, network upload, browser storage or log is used.
 
 Keep both the downloaded file and backup password. Neither contains account
 credentials, the source DEK, cookies, tokens, signing keys or server secrets.
-SEC-05 supplies export and the local decoder/compatibility contract; restore UI,
-conflict preview and atomic destination activation belong to SEC-06. An exported
-file alone does not establish a successful recovery drill or close the full
-recovery requirement. Admins still cannot reset vault credentials.
+Settings restore uses this same decoder before any write. It previews incoming,
+existing, conflicting, restored and removed counts for each current collection.
+Merge skips existing IDs. Replace offers a destination backup, requires explicit
+acknowledgment and typed `REPLACE`, and includes deletions in the preview. Imported
+owner metadata is rejected; destination ownership comes solely from the current
+authenticated session. Source schema-1 values remain supported and are encrypted
+under the current destination DEK with current schema-2 AAD/key version. Existing
+transaction blind-index policy is shared with normal persistence.
+
+Temporary `vault_restore_stages` / `vault_restore_batches` hold only bounded
+destination ciphertext, index metadata and manifest checkpoints, outside active
+record queries/counts. Uploads contain at most 100 records and approximately
+1 MiB; server limits are 200 records / 2 MiB ciphertext per batch, 10,000 records /
+24 MiB ciphertext per stage, 128 batches, two jobs per owner and a 24-hour lifetime.
+Select the same file and mode after interruption or refresh to resume completed
+checkpoints; password/plaintext are never persisted for resume. The encrypted file
+hash identifies the source, and stages bind the destination wrap/key version and
+active ciphertext/revision fingerprint. Changed credentials or active records
+require a fresh preview. Pending stages can be explicitly discarded; expiry and
+account reset/delete clear only their owning temporary data.
+
+Activation is one owner-scoped SQLite write transaction: acquire the write lock,
+check the preview fingerprint and complete counts, apply through existing
+revision/index/upsert/delete primitives, then commit the complete result once.
+Any conflict, interrupted batch, validation/write/commit failure leaves the old
+active vault intact. Replaying the same committed activation returns its receipt
+without rewriting records. Ordinary writes with a non-null expected revision
+refuse a missing row, so an old update cannot recreate data removed by replace;
+explicit new creates retain the null-revision contract. Ordinary and reindex
+updates compare revisions in the SQL write itself, so a read held across activation
+cannot overwrite the restored revision. A completed receipt is visible when the same file is
+previewed again. Plaintext previews and held operations obey the same owner,
+lock/logout, cancel and route-disposal eligibility. Fresh status reads are silent,
+cancellable and never publish into the shared vault-status cache. Recovery previews
+and form drafts clear through the immediate lock-snapshot hook. The existing lock
+service subscribes to validated remote notices even in a Settings-only tab.
+
+The explicit activation request is the commit boundary: a remote server that has
+accepted it cannot be rolled back by a later local abort. Its outcome is wholly
+old or wholly restored, and a late result cannot publish into a different owner or
+locked/disposed view. On eligible success the existing lock mechanism clears all
+participating tabs and cached projections; unlock reloads restored data through
+the normal owners. CSV receipts, staged Fidelity workflows and edited-row-safe
+Undo retain their existing semantics. These synthetic portable-recovery tests do
+not establish an operational server-backup drill. Admins still cannot reset vault
+credentials.
 
 ## Holdings price privacy
 

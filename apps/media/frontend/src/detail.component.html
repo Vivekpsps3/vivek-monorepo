@@ -23,16 +23,18 @@
     <ui-page-header
       backLabel="← Library"
       backLink="/media/library"
-      [eyebrow]="
-        (entry.kind === 'tv' ? 'Series' : entry.kind) +
-        (entry.year ? ' · ' + entry.year : '')
-      "
       [title]="entry.title"
     >
-      @if (entry.creator) {
-        <p>{{ entry.creator }}</p>
-      }
-      <div uiPageArt class="media-art hero-art">
+      <ul class="meta-chips" aria-label="Item details">
+        @for (chip of chips(entry); track $index) {
+          <li>{{ chip }}</li>
+        }
+      </ul>
+      <div
+        uiPageArt
+        class="media-art hero-art"
+        [style.aspect-ratio]="ratio()"
+      >
         @if (entry.artwork_url && !broken()) {
           <img
             [src]="entry.artwork_url"
@@ -48,7 +50,14 @@
             "
           />
         } @else {
-          <span>{{ entry.title.slice(0, 2).toUpperCase() }}</span>
+          <span
+            class="art-fallback"
+            data-art-fallback
+            [attr.data-kind-icon]="artIcon(entry.kind)"
+          >
+            <ui-icon [name]="artIcon(entry.kind)" size="lg" />
+            <span class="art-letter">{{ letter(entry.title) }}</span>
+          </span>
         }
       </div>
       @if (entry.lifecycle; as lifecycle) {
@@ -58,7 +67,7 @@
           }}
           · {{ lifecycle.freshness }}
           @if (lifecycle.fetched_at) {
-            · Updated {{ showDay(lifecycle.fetched_at.slice(0, 10)) }}
+            · Updated {{ showDay(dayOnly(lifecycle.fetched_at)) }}
           }
         </ui-badge>
       }
@@ -104,9 +113,7 @@
     }
     @if (entry.catalog.overview) {
       <details class="overview">
-        <summary>
-          About this {{ entry.kind === "tv" ? "series" : entry.kind }}
-        </summary>
+        <summary>{{ about(entry.kind) }}</summary>
         <p>{{ entry.catalog.overview }}</p>
       </details>
     }
@@ -125,20 +132,12 @@
     }
     <ui-card
       ><form class="media-editor" (ngSubmit)="save()">
-        <h2>Your {{ entry.kind === "artist" ? "artist" : "experience" }}</h2>
+        <h2>{{ heading(entry.kind) }}</h2>
         <div class="form-row">
-          <ui-field [label]="entry.kind === 'artist' ? 'Relationship' : 'State'"
+          <ui-field [label]="stateField(entry.kind)"
             ><select uiFieldControl name="status" [(ngModel)]="status">
-              @if (entry.kind === "artist") {
-                <option value="following">Following</option>
-                <option value="unfollowed">Unfollowed</option>
-              } @else {
-                <option value="want">Want to</option>
-                <option value="anticipating">Anticipating</option>
-                <option value="in_progress">In progress</option>
-                <option value="completed">Completed</option>
-                <option value="paused">Paused</option>
-                <option value="dropped">Dropped</option>
+              @for (choice of choices(entry.kind); track choice.value) {
+                <option [value]="choice.value">{{ choice.label }}</option>
               }
             </select></ui-field
           >
@@ -159,7 +158,7 @@
             >
           </div>
         </div>
-        @if (entry.kind !== "artist") {
+        <ng-template #progressFields>
           <div class="form-row">
             <ui-field label="Progress"
               ><input
@@ -178,13 +177,16 @@
               </select></ui-field
             >
           </div>
+        </ng-template>
+        @if (primaryProgress(entry.kind)) {
+          <ng-container [ngTemplateOutlet]="progressFields" />
         }
         <ui-field label="Note (optional)">
           <textarea
             uiFieldControl
             name="review"
             [(ngModel)]="review"
-            rows="5"
+            rows="3"
             maxlength="20000"
             placeholder="What stayed with you?"
           ></textarea>
@@ -226,21 +228,33 @@
             />
           </ui-field>
         </div>
+        @if (showMore(entry.kind)) {
+          <details
+            class="detail-more"
+            [open]="moreOpen"
+            (toggle)="syncMore($event)"
+          >
+            <summary>{{ moreLabel(entry.kind) }}</summary>
+            @if (!primaryProgress(entry.kind)) {
+              <ng-container [ngTemplateOutlet]="progressFields" />
+            }
+            @if (anticipatedFor(entry.kind)) {
+              <label class="check-label"
+                ><input
+                  type="checkbox"
+                  name="anticipated"
+                  [(ngModel)]="anticipated"
+                />
+                Anticipated</label
+              >
+            }
+          </details>
+        }
         <div class="button-row">
           <label class="check-label"
             ><input type="checkbox" name="favorite" [(ngModel)]="favorite" />
             Favorite</label
           >
-          @if (entry.kind !== "artist") {
-            <label class="check-label"
-              ><input
-                type="checkbox"
-                name="anticipated"
-                [(ngModel)]="anticipated"
-              />
-              Anticipated</label
-            >
-          }
         </div>
         <div class="button-row">
           <ui-button variant="primary" type="submit" [disabled]="busy()">
@@ -278,10 +292,17 @@
         }
         @if (show.next_episode; as next) {
           <p>
-            Next: S{{ next.season_number }} E{{ next.episode_number }} ·
-            {{ next.title }}
+            Next: {{ code(next.season_number, next.episode_number) }} ·
+            {{ next.title || "Untitled episode" }}
+            · {{ episodeWhen(next) }}
           </p>
-          <ui-button variant="ghost" [disabled]="busy()" (click)="action('/episodes/next', { expected_episode_id: next.id })">Mark next watched</ui-button>
+          <ui-button
+            class="next-mark"
+            variant="ghost"
+            [disabled]="busy()"
+            (click)="markNext(next)"
+            >Mark next watched</ui-button
+          >
         }
         <label class="check-label"
           ><input type="checkbox" [(ngModel)]="includeSpecials" /> Include aired
@@ -344,15 +365,11 @@
                       >E{{ episode.episode_number }} ·
                       {{ episode.title || "Untitled episode" }}</strong
                     >
-                    <p class="muted">
-                      {{ showDay(episode.air_date) || "Air date unknown" }}
-                      @if (episode.watched_on) {
-                        · Watched {{ showDay(episode.watched_on) }}
-                      }
-                    </p>
+                    <p class="muted">{{ episodeWhen(episode) }}</p>
                   </div>
                   <ui-button
                     variant="ghost"
+                    [pressed]="episode.watched"
                     [disabled]="
                       busy() ||
                       (!episode.released &&
