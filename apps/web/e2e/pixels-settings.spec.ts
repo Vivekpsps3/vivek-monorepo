@@ -81,7 +81,11 @@ test.describe('PF6 profile birthday settings', () => {
     let view = await (await page.request.get('/api/account/birthday')).json();
     expect(view.birthday).toBe('1990-05-04');
     await section.getByRole('button', { name: 'Remove', exact: true }).click();
+    const removed = page.waitForResponse(response =>
+      response.url().endsWith('/api/account/birthday') && response.request().method() === 'PATCH');
     await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
+    expect((await removed).ok()).toBeTruthy();
+    await expect(page.locator('.toast.success')).toContainText('Birthday removed.');
     view = await (await page.request.get('/api/account/birthday')).json();
     expect(view.birthday).toBeNull();
   });
