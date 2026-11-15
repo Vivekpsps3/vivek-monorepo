@@ -6,7 +6,7 @@
 - Tested implementation: `4b6a2b6c7588913f5b40dac7c11ea050ef1d00aa`; offline Media fixture fix `ea5bad58c3998784dcbebb919e301d5387a1bd21`. Town clock fixture fix: `e13d4cdf0190f9f6ad20012ca6658cee1e54a90c`. Subsequent changes record scope/evidence only.
 - Selection: explicit owner request for a broad deletion PR; no open PRs at claim or final main check.
 - Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/358#issuecomment-6873610059
-- Scope and acceptance: [packet](../issues/DEL-06.md). Existing queue order is unchanged; only this owner-selected leaf is appended.
+- Scope and acceptance: [packet](../completed/issues/DEL-06.md). Existing queue order is unchanged; only this owner-selected leaf is appended.
 
 ## Acceptance
 

@@ -10,7 +10,7 @@ started 2026-11-08 UTC and the synthesis was completed 2026-11-09. The live queu
 is [the execution queue](../implementation/README.md), with live status on
 [roadmap #134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134).
 
-**Assessment:** useful domain and security foundations exist, but inconsistent
+**Original assessment (2026-11-09, historical):** useful domain and security foundations exist, but inconsistent
 contracts, repeated lifecycle code, incomplete quality discovery and concentrated
 responsibilities make additions unnecessarily expensive. Three correctness findings
 come before broad cleanup: colliding lock callbacks, late Health publication after
@@ -30,7 +30,11 @@ When the selected packet needs this report's evidence, read the relevant entries
 5. [Evidence and disposition](evidence/README.md): inventory, discovery output,
    validation performed and a record of what this review actually changed.
 
-| Engineering workstream | First outcome |
+The following engineering lanes are completed reference scope; current remaining
+work is exclusively in the execution queue. See the [completion registry](../implementation/completed/registry.json)
+for exact leaf merges.
+
+| Historical engineering workstream | Delivered outcome |
 | --- | --- |
 | [#198 Lifecycle safety](https://github.com/Vivekpsps3/vivek-monorepo/issues/198) | Multiple consumers invalidate safely; late async work cannot republish private state |
 | [#199 Trustworthy verification](https://github.com/Vivekpsps3/vivek-monorepo/issues/199) | Shipped code and intended journeys have explicit owners in checks; obsolete assertions are corrected with behavior |

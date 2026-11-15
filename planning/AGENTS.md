@@ -3,7 +3,7 @@
 For a roadmap implementation, follow the [execution queue](implementation/README.md),
 the exact issue packet, and the [workflow](implementation/workflow.md). These rules
 apply by root reference to roadmap changes outside this directory. Read only the
-relevant parent scope, prerequisite evidence and source; dated reviews are evidence,
+relevant parent scope, prerequisite evidence and source; [completed packets](implementation/completed/README.md) and dated reviews are evidence,
 not another backlog. For PLACE work, also read [Living World](living-world/README.md) and its scope reconciliation. General instruction maintenance lives in
 [AGENT_GUIDANCE.md](../docs/AGENT_GUIDANCE.md).
 

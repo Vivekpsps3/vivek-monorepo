@@ -40,13 +40,18 @@ def section(text, name):
     return match.group(1).strip() if match else ""
 
 
-def errors(data, packets=None):
+def errors(data, packets=None, completed=None):
     found = []
+    if completed is None:
+        completed = json.loads((BASE / "completed/registry.json").read_text())
     tasks = data.get("tasks", [])
     by_id = {task["id"]: task for task in tasks}
+    archived = {task["id"]: task for task in completed["tasks"]}
+    if len(archived) != len(completed["tasks"]) or set(by_id) & set(archived):
+        found.append("Duplicate or active completed task key")
     if len(by_id) != len(tasks):
         found.append("Duplicate task key")
-    numbers = [task["issue"] for task in tasks if task.get("issue")]
+    numbers = [task["issue"] for task in [*tasks, *completed["tasks"]] if task.get("issue")]
     if len(numbers) != len(set(numbers)):
         found.append("Duplicate leaf issue number")
     if data.get("format_version") != 2:
@@ -56,6 +61,16 @@ def errors(data, packets=None):
         packets = {path.stem: path.read_text() for path in (BASE / "issues").glob("*.md")}
     if set(packets) != set(by_id):
         found.append("Local packets and queue keys differ")
+    archived_packets = {path.stem for path in (BASE / "completed/issues").glob("*.md")}
+    if archived_packets != set(archived):
+        found.append("Completed packets and registry keys differ")
+    for key, task in archived.items():
+        if not task.get("merged_pr") or not re.fullmatch(
+            r"[0-9a-f]{40}", task.get("merge_sha", "")
+        ):
+            found.append(f"{key}: missing merged completion proof")
+        if not (BASE / "evidence" / f"{key}.md").exists():
+            found.append(f"{key}: missing completion evidence")
     for task in tasks:
         key = task["id"]
         if set(task) - META_FIELDS:
@@ -64,7 +79,7 @@ def errors(data, packets=None):
             if not task.get(field):
                 found.append(f"{key}: missing {field}")
         for dep in task.get("dependencies", []):
-            if dep not in by_id:
+            if dep not in by_id and dep not in archived:
                 found.append(f"{key}: unknown dependency {dep}")
         if any(profile not in profiles for profile in task.get("verification_profiles", [])):
             found.append(f"{key}: unknown verification profile")
@@ -126,16 +141,16 @@ def errors(data, packets=None):
     for parent in data.get("parents", []):
         if not any(parent["number"] in task["parent_issues"] for task in tasks):
             found.append(f"Parent {parent['number']}: no executable owner")
-    coverage = data.get("td_coverage", {})
+    coverage = completed.get("td_coverage", {})
     if set(coverage) != {f"TD-{i:02d}" for i in range(40)}:
         found.append("TD coverage must contain all forty work items")
     for key, owner in coverage.items():
-        if owner not in by_id:
+        if owner not in by_id and owner not in archived:
             found.append(f"{key}: unknown primary owner {owner}")
     return found
 
 
-def self_test(data):
+def self_test(data, completed):
     packets = {path.stem: path.read_text() for path in (BASE / "issues").glob("*.md")}
     key = data["tasks"][0]["id"]
     for mutation in (
@@ -150,8 +165,10 @@ def self_test(data):
         "profile",
         "packet",
         "duplicate-detail",
+        "completed-overlap",
+        "completion-proof",
     ):
-        bad, texts = copy.deepcopy(data), dict(packets)
+        bad, texts, history = copy.deepcopy(data), dict(packets), copy.deepcopy(completed)
         if mutation == "duplicate":
             bad["tasks"].append(copy.deepcopy(bad["tasks"][0]))
         elif mutation == "dependency":
@@ -159,7 +176,7 @@ def self_test(data):
         elif mutation == "cycle":
             bad["tasks"][0]["dependencies"].append(key)
         elif mutation == "coverage":
-            bad["td_coverage"].pop("TD-00")
+            history["td_coverage"].pop("TD-00")
         elif mutation == "acceptance":
             row = section(texts[key], "Acceptance").splitlines()[2]
             texts[key] = texts[key].replace(row, "| A | given | when | then | |", 1)
@@ -174,54 +191,82 @@ def self_test(data):
             bad["tasks"][0]["verification_profiles"] = ["DOES-NOT-EXIST"]
         elif mutation == "duplicate-detail":
             bad["tasks"][0]["steps"] = ["A second copy of the work packet"]
+        elif mutation == "completed-overlap":
+            bad["tasks"].append(copy.deepcopy(history["tasks"][0]))
+        elif mutation == "completion-proof":
+            history["tasks"][0].pop("merge_sha")
         else:
             texts.pop(key)
-        if not errors(bad, texts):
+        if not errors(bad, texts, history):
             raise SystemExit("Negative fixture escaped: " + mutation)
-    print("Eleven negative planning fixtures: PASS")
-    states = {task["issue"]: "OPEN" for task in data["tasks"]}
+    print("Thirteen negative planning fixtures: PASS")
+    states = {task["issue"]: "CLOSED" for task in completed["tasks"]}
+    states.update({task["issue"]: "OPEN" for task in data["tasks"]})
     states[data["tasks"][0]["issue"]] = "CLOSED"
-    rows = list(task_rows(data, states))
+    rows = list(task_rows(data, states, completed=completed))
     assert len(rows) == len(data["tasks"]) - 1
     assert not any(row.startswith(key + " ") for row in rows)
     assert [row.split()[0] for row in rows] == [task["id"] for task in data["tasks"][1:]]
-    dependent = next(task for task in data["tasks"] if task["dependencies"])
-    prerequisite = next(
-        task for task in data["tasks"] if task["id"] == dependent["dependencies"][0]
+    active_keys = {task["id"] for task in data["tasks"]}
+    dependent = next(
+        task for task in data["tasks"] if any(dep in active_keys for dep in task["dependencies"])
     )
-    states = {task["issue"]: "CLOSED" for task in data["tasks"]}
+    dependency = next(dep for dep in dependent["dependencies"] if dep in active_keys)
+    prerequisite = next(task for task in data["tasks"] if task["id"] == dependency)
+    states = {task["issue"]: "CLOSED" for task in [*data["tasks"], *completed["tasks"]]}
     states[dependent["issue"]] = "OPEN"
-    rows = list(task_rows(data, states))
+    rows = list(task_rows(data, states, completed=completed))
     assert "wait=" not in next(row for row in rows if row.startswith(dependent["id"] + " "))
     states[prerequisite["issue"]] = "OPEN"
     assert "wait=" in next(
-        row for row in task_rows(data, states) if row.startswith(dependent["id"] + " ")
+        row
+        for row in task_rows(data, states, completed=completed)
+        if row.startswith(dependent["id"] + " ")
     )
     assert all(
-        row.split()[0] in {task["id"] for task in data["tasks"] if 200 in task["parent_issues"]}
-        for row in task_rows(data, parent=200)
+        row.split()[0] in {task["id"] for task in data["tasks"] if 304 in task["parent_issues"]}
+        for row in task_rows(data, parent=304, completed=completed)
     )
+    assert len(list(task_rows(data, completed=completed))) == len(data["tasks"])
+    archived_issue = completed["tasks"][0]["issue"]
+    states[archived_issue] = "OPEN"
+    try:
+        list(task_rows(data, states, completed=completed))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Reopened completed issue silently omitted")
+    states[archived_issue] = "CLOSED"
     del states[data["tasks"][0]["issue"]]
     try:
-        list(task_rows(data, states))
+        list(task_rows(data, states, completed=completed))
     except ValueError:
         pass
     else:
         raise AssertionError("Incomplete live issue state accepted")
-    print("Live listing fixtures: PASS (closed leaf, dependency, parent, missing state)")
+    print(
+        "Listing fixtures: PASS (closed leaf, dependency, parent, missing state, archive, reopened issue)"
+    )
 
 
-def task_rows(data, states=None, parent=None):
+def task_rows(data, states=None, parent=None, completed=None):
     tasks = data["tasks"]
+    if completed is None:
+        completed = json.loads((BASE / "completed/registry.json").read_text())
     by_id = {task["id"]: task for task in tasks}
-    if states is not None and any(task["issue"] not in states for task in tasks):
+    all_tasks = [*tasks, *completed["tasks"]]
+    if states is not None and any(task["issue"] not in states for task in all_tasks):
         raise ValueError("Incomplete GitHub issue state; cannot identify open leaves")
+    if states is not None and any(states[task["issue"]] != "CLOSED" for task in completed["tasks"]):
+        raise ValueError(
+            "Completed issue reopened; reconcile the active queue before selecting work"
+        )
     for task in tasks:
         if parent is not None and parent not in task["parent_issues"]:
             continue
         if states is not None and states[task["issue"]] != "OPEN":
             continue
-        deps = task["dependencies"]
+        deps = [key for key in task["dependencies"] if key in by_id]
         if states is not None:
             deps = [key for key in deps if states[by_id[key]["issue"]] != "CLOSED"]
         status = ("wait=" + ",".join(deps)) if deps else "check-merged-outcomes"
@@ -243,14 +288,16 @@ def main():
     if args.command != "list" and (args.live or args.parent is not None):
         parser.error("--live and --parent apply only to list")
     data = json.loads((BASE / "queue.json").read_text())
-    found = errors(data)
+    completed = json.loads((BASE / "completed/registry.json").read_text())
+    found = errors(data, completed=completed)
     if found:
         raise SystemExit("\n".join(found))
     if args.self_test:
-        self_test(data)
+        self_test(data, completed)
     if args.command == "validate":
         print(
-            f"Planning validation: PASS ({len(data['tasks'])} packets, {len(data['parents'])} parents, forty TD owners)"
+            f"Planning validation: PASS ({len(data['tasks'])} active packets, {len(data['parents'])} parents, "
+            f"{len(completed['tasks'])} completed packets, forty TD owners)"
         )
     elif args.command == "list":
         states = None
@@ -278,12 +325,16 @@ def main():
                 "Open leaves; verify merged prerequisite outcomes and live PRs/claims before starting."
             )
         try:
-            print("\n".join(task_rows(data, states, args.parent)))
+            print("\n".join(task_rows(data, states, args.parent, completed)))
         except ValueError as error:
             raise SystemExit(str(error)) from error
     else:
         task = next((task for task in data["tasks"] if task["id"] == args.key), None)
         if task is None:
+            if any(task["id"] == args.key for task in completed["tasks"]):
+                raise SystemExit(
+                    f"{args.key} is completed; see completed/issues/{args.key}.md and its evidence"
+                )
             raise SystemExit("Unknown key; use list")
         print(
             f"Implement {task['id']} / #{task.get('issue') or 'DRAFT'} in one complete PR.\n"

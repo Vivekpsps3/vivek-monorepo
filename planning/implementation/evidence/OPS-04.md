@@ -1,6 +1,6 @@
 # OPS-04 — implementation evidence
 
-- Leaf issue and parent(s): [OPS-04](../issues/OPS-04.md) / [#275](https://github.com/Vivekpsps3/vivek-monorepo/issues/275). Parent [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stays open.
+- Leaf issue and parent(s): [OPS-04](../completed/issues/OPS-04.md) / [#275](https://github.com/Vivekpsps3/vivek-monorepo/issues/275). Parent [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stays open.
 - Agent/context, branch/worktree: Cursor Grok implementer, branch `agent/ops-04`, worktree `/tmp/vivek-ops-04`.
 - Base main SHA, current tested SHA: rebased onto `c461fe791251b13e02a05911531246f01f0e8290`. Drill implementation `11864ff98eb83b2fff893711543169517859116a`. The gates below ran on that revision. This evidence file is a later docs-only commit.
 - Fresh-main/prerequisite/active-PR checks: OPS-03 (#274) is merged. SEC-05 (#362) is on this base and was not edited. No competing claim was on #275 at claim time. The drill was not pointed at a live `site.db`, a backup volume, or an off-host destination.

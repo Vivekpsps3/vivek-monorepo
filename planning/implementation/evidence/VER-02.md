@@ -1,6 +1,6 @@
 # VER-02 — implementation evidence
 
-- Leaf issue and parent(s): [VER-02](../issues/VER-02.md) / [#210](https://github.com/Vivekpsps3/vivek-monorepo/issues/210). Parents [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199) and [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stay open.
+- Leaf issue and parent(s): [VER-02](../completed/issues/VER-02.md) / [#210](https://github.com/Vivekpsps3/vivek-monorepo/issues/210). Parents [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199) and [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stay open.
 - Agent/context, branch/worktree: Cursor Grok, `agent/ver-02`, `/home/vivek/Deployments/worktrees/vivek-ver-02`
 - Base main SHA, current tested SHA: base `63bc975ede08967e61c50f78b25176b07dc07d18`. Tested code SHA `b3325eb29c409b49ed8f7fe28cec1b74b79e7771`. Branch HEAD after the evidence and URL record is the commit that last touches this file. That docs change does not alter the tested code.
 - Fresh-main/prerequisite/active-PR checks: `origin/main` is `63bc975ede08967e61c50f78b25176b07dc07d18`. VER-02 has no queue dependency. PR #193 is merged at `495d698aedac5c544119c30c9405c810f8038cba` and is an ancestor of this base. No open pull requests. [#210](https://github.com/Vivekpsps3/vivek-monorepo/issues/210) already had the claim comment for this branch. [#249](https://github.com/Vivekpsps3/vivek-monorepo/issues/249) (TOWN-01) and [#259](https://github.com/Vivekpsps3/vivek-monorepo/issues/259) (UX-01) are open.

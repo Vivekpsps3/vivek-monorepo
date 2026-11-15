@@ -1,7 +1,7 @@
 # Sidequests — discovery design
 
 Parent [#194](https://github.com/Vivekpsps3/vivek-monorepo/issues/194).
-Discovery leaf [DISC-01](implementation/issues/DISC-01.md) / [#264](https://github.com/Vivekpsps3/vivek-monorepo/issues/264).
+Discovery leaf [DISC-01](implementation/completed/issues/DISC-01.md) / [#264](https://github.com/Vivekpsps3/vivek-monorepo/issues/264).
 Evidence: [DISC-01](implementation/evidence/DISC-01.md).
 
 Status: design only, read from `origin/main` `0022c5ef8065e08892b6eecdfa6450158ee69ef6`.

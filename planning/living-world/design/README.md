@@ -5,7 +5,7 @@ you perspective and a precise way back into that history. Hall explains the rule
 and opens the one private review editor. These are connected views of existing
 facts, not four new apps.
 
-Prepared for [PLACE-01](../../implementation/issues/PLACE-01.md), 2026-11-14.
+Prepared for [PLACE-01](../../implementation/completed/issues/PLACE-01.md), 2026-11-14.
 These are editable, rendered vector studies and an implementation handoff.
 Owner visual approval and application implementation are pending. The existing
 [product specification](../README.md) and exact packets still own scope.

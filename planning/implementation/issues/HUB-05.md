@@ -19,7 +19,8 @@ Common workflows can start quickly by keyboard or touch without duplicating thei
 
 ## Requirements
 
-- #93 scope3 greeting,touchtargets,Quick add,N/? shortcuts/help/search,admin-only health chip; acceptance manual transaction date; weekly review link is owned by TOWN-06.
+- Remaining #93 scope3: Quick add, N/? shortcuts and help including search, admin-only service health chip, and manual transaction date acceptance. Weekly review link is owned by TOWN-06.
+- Greeting, compact card hierarchy and 44px Hub actions are merged in HUB-02 / PR #369. Preserve its responsive/theme evidence; do not rebuild those outcomes.
 
 ## Source paths
 
@@ -42,7 +43,7 @@ Common workflows can start quickly by keyboard or touch without duplicating thei
 1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Route Quick add to existing app-owned creation workflows; preserve selected/default manual transaction date and session/locked behavior.
 3. Implement N/? shortcuts and help including existing search, with editable-field/modal guards, explicit focus return and touch actions.
-4. Provide greeting and admin-only service health chip using current authorized data; do not build a second diagnostic endpoint or duplicate app forms.
+4. Preserve the existing greeting and provide the admin-only service health chip using current authorized data; do not build a second diagnostic endpoint or duplicate app forms.
 5. Delete duplicated shortcut/global listener or quick-add draft state after routing to existing owners.
 6. Remove the superseded live path in this PR after migrating its consumers. Record actual production/test LOC and independent implementations before/after; added layers need a named safety reason and a real consumer.
 7. Run all applicable verification profiles expanded by the planning guide, add the specific behavior regressions below, and record exact commands/results and acceptance IDs in issue-specific evidence. Open a PR only after applicable local gates pass.

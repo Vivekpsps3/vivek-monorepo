@@ -1,6 +1,6 @@
 # OPS-02 — implementation evidence
 
-- Leaf issue and parent(s): [OPS-02](../issues/OPS-02.md) / [#273](https://github.com/Vivekpsps3/vivek-monorepo/issues/273). Parent [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stays open.
+- Leaf issue and parent(s): [OPS-02](../completed/issues/OPS-02.md) / [#273](https://github.com/Vivekpsps3/vivek-monorepo/issues/273). Parent [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stays open.
 - Agent/context, branch/worktree: OPS-02 in `/tmp/vivek-ops-02`, branch `agent/ops-02`.
 - Base main SHA, current tested SHA: work started at `3954d1f27aa8ad0766eac9a7e9667f68d3c76571`. `origin/main` then fast-forwarded to `1b4f35a80784a3181da809784fa80b33c13c6e60` (#322, Finance price preference only) before the product commit. OPS-01 `8b9f0998` is an ancestor. Product revision under test: `316b500b050ac30d9993240bc625324be710cabd`.
 - Fresh-main/prerequisite/active-PR checks: OPS-01 is merged on this base. No other open PR owned `scripts/backup-site.py`, `compose.yml`, or the backup sections of the operations docs at implementation time. FIN-01 does not touch those files.

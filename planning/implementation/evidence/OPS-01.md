@@ -1,6 +1,6 @@
 # OPS-01 — implementation evidence
 
-- Leaf issue and parent(s): [OPS-01](../issues/OPS-01.md) / [#272](https://github.com/Vivekpsps3/vivek-monorepo/issues/272). Parent [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stays open.
+- Leaf issue and parent(s): [OPS-01](../completed/issues/OPS-01.md) / [#272](https://github.com/Vivekpsps3/vivek-monorepo/issues/272). Parent [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stays open.
 - Agent/context, branch/worktree: OPS-01 in `/tmp/vivek-ops-01`, branch `agent/ops-01`.
 - Base main SHA, current tested SHA: worktree started at `0ed83e95a3727acc4f512dd2ac77211d8a622407`. `origin/main` had moved to `c252b4db5c799d9b26c6be38f01e07c4e78eff87` (#319) before edits; this branch fast-forwarded to that commit. Product revision under test: `c660e3c254df04496ebf2ed76223b68db0e6367a`.
 - Fresh-main/prerequisite/active-PR checks: no packet dependencies. Open PR #319 touched `.github/workflows/ci.yml` and merged before editing, so this branch contains that Node install change and does not edit `ci.yml`. No other open PR claimed `deploy.yml`, `ops/actions-runner/`, or the operations docs at implementation time.

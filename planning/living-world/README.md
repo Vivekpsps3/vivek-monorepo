@@ -2,8 +2,9 @@
 
 Tracking parent: [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304); roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134).
 
-Status: owner-requested implementation plan, 2026-11-11. Planned, not implemented,
-visually approved, merged or deployed. The owner priorities are **beautiful,
+Status reconciled 2026-11-15: PLACE-02–14 remain. The plan and PLACE-01 design
+are merged; application implementation, independent owner visual approval and
+release/activation proof remain pending. The owner priorities are **beautiful,
 interactive and informative**; all three are release requirements. This plan
 extends shipped Town/Pixels/World rather than replacing their domain engines.
 
@@ -42,10 +43,11 @@ execution in `planning/implementation/evidence/PLACE-xx.md`.
 
 ## Delivery milestones
 
-**First playable loop:** PLACE-01–05 plus PLACE-06's dated inspector. One garden,
+**First playable loop:** PLACE-02–05 plus PLACE-06's dated inspector, using the
+merged PLACE-01 design. One garden,
 one habit, one immediate response, one selected day reached through Pixels and
 World and returned to intact. This slice must be beautiful enough to evaluate
-before expanding the asset catalog. Existing TOWN-02/03/04 outcomes remain real
+before expanding the asset catalog. Preserve merged TOWN-02/03 source and Treasury outcomes; TOWN-04/05 remain
 prerequisites where packets specify them; a fixture demonstration is not live
 activity integration.
 

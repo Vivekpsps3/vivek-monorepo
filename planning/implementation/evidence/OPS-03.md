@@ -1,6 +1,6 @@
 # OPS-03 — implementation evidence
 
-- Leaf issue and parent(s): [OPS-03](../issues/OPS-03.md) / [#274](https://github.com/Vivekpsps3/vivek-monorepo/issues/274). Parent [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stays open.
+- Leaf issue and parent(s): [OPS-03](../completed/issues/OPS-03.md) / [#274](https://github.com/Vivekpsps3/vivek-monorepo/issues/274). Parent [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stays open.
 - Agent/context, branch/worktree: Cursor Grok implementer, branch `agent/ops-03`, worktree `/tmp/vivek-ops-03`.
 - Base main SHA, current tested SHA: base `a7e16c6fa5bd5543514081e0834022fe38dcd1d1`. Local gates below ran on that base plus this worktree's uncommitted adapter change, before the product commit. No real off-host destination was configured.
 - Fresh-main/prerequisite/active-PR checks: OPS-02 #273 is closed (merged as PR #330, `fb76cf46ac55a57bf53a2e7092143224b09a62c2`). No other open PR was touching the backup, monitor, or compose files at claim time. #274 was open.
