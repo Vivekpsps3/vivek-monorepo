@@ -2,7 +2,7 @@
 
 - Leaf: [#214](https://github.com/Vivekpsps3/vivek-monorepo/issues/214); parents [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200) and [#121](https://github.com/Vivekpsps3/vivek-monorepo/issues/121).
 - Branch/worktree: `agent/del-02-eligibility`, `/tmp/vivek-del-02`.
-- Base main: `41f701fb25a92e71f98b88300bb0c5c6f751cdaf` (2026-11-15). Tested implementation revision will be recorded before delivery.
+- Base main: `41f701fb25a92e71f98b88300bb0c5c6f751cdaf` (2026-11-15). Tested implementation: `219e414` (all production and test files). Later commits update evidence only.
 - Fresh main matches that base. No overlapping open PRs or previous #214 claims were present. [Claim](https://github.com/Vivekpsps3/vivek-monorepo/issues/214#issuecomment-6899110297).
 - Explicit support disposition, 2026-11-15: the owner selected **“Retire old-account migration; password-only accounts lose that enrollment route”** after reviewing the live browser/fixture callers and the alternative to retain them. Retirement is authorized; it is not inferred from the obsolete historical startup claim.
 
@@ -55,13 +55,15 @@ Toolchain: project `.venv` Python 3.12, Node v24.22.2 via `/tmp/node-v24/bin`, a
 | `make build-frontends` | PASS: production bundle, public prerenders and release manifest |
 | `make e2e` | PASS, exit 0: rebuilt production bundle, 198 passed and 5 existing conditional skips, zero failures |
 | `npx playwright test --config apps/web/e2e/playwright.config.ts` | PASS, exit 0: 97 passed, zero retries |
-| Media/Travel/suite browser journeys | Pending |
+| `npx playwright test --config apps/media/e2e/playwright.config.ts` | PASS, exit 0: 95 passed |
+| `npx playwright test --config apps/travel/e2e/playwright.config.js` | PASS, exit 0: 143 passed |
+| `npx playwright test --project=suite` | PASS, exit 0: 31 passed |
 
 Resolved attempts: the first fast gate used system Python and failed importing Alembic; using project `.venv/bin` on PATH passes. The first post-retirement focused run exposed two local-dev fixture origin failures and an exhausted login bucket in the server composition validation case. The sign-in helper now binds both challenge steps to the configured test origin; the composition test validates its next independent malformed-body request after clearing the bucket whose 429 it already asserted. The same assertions then pass. The first type gate found a nullable ORM lookup in the new test and the obsolete route allowance; the fixture now asserts the stored account exists, and only the stale allowance was removed. ESLint similarly required shrinking the two deleted `any` allowances. None of these attempts is relabelled as a pass.
 
 ## Handoff
 
-- PR / scoped roadmap note: pending required local gates; leaf closure keyword only, parents referenced.
+- PR / scoped roadmap note: local gates complete; publication links will be recorded after opening. Leaf closure keyword only, parents referenced.
 - Actual merge/deployment: neither performed.
 - External support prerequisite: resolved by the explicit retirement decision above.
-- Next actor/action: finish browser verification, record tested revision, open one complete PR closing #214, then append a scoped note to #134. #200 remains open until merged acceptance is reconciled; no deployment or global closure is inferred.
+- Next actor/action: publish the complete PR closing #214 and append the scoped #134 note. Merge requires owner authorization. #200 remains open until merged acceptance is reconciled; no deployment is inferred.
