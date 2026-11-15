@@ -1,5 +1,7 @@
 # Adding a bank CSV import
 
+This file is the bank-import owner. The [feature-addition guide](../planning/technical-debt/feature-addition-playbook.md) links here instead of copying parser, refund, or receipt rules.
+
 Bank CSV import creates encrypted transactions (`source=import`). It does not update Balance sheet liabilities; record balances there separately. Spending follows `transactionEffects` in `apps/finance/frontend/src/app/crypto/client-finance.ts`: a purchase adds spending, a refund subtracts it, and a payment, transfer, or unclassified credit adds neither income nor spending. Amounts are positive; the `kind` carries the direction.
 
 Parsers live in `apps/finance/frontend/src/app/utils/bank-import.parsers.ts`. Preview, staged receipts, and commit live in `apps/finance/frontend/src/app/utils/bank-import.util.ts`. Tests: `apps/finance/frontend/src/app/utils/bank-import.util.spec.ts`.

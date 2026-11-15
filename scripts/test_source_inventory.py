@@ -111,6 +111,18 @@ class InventoryTests(unittest.TestCase):
             )
         )
 
+    def test_ref01_unregistered_probe_is_named_and_absent_from_the_tree(self):
+        owners = self.inventory.load_owners()
+        self.assertEqual(
+            self.inventory.gap_message(
+                "apps/ref01-probe.mjs",
+                owners,
+                self.ratchet.excluded_dir,
+            ),
+            "apps/ref01-probe.mjs: missing eslint, typecheck",
+        )
+        self.assertEqual(self.inventory.scan(owners=owners), [])
+
     def test_local2_unowned_production_module_names_the_path_and_missing_owner(self):
         message = self.inventory.gap_message(
             "apps/media/frontend/src/orphan-helper.mjs",
