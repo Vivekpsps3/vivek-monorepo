@@ -2,6 +2,8 @@
 
 One Angular 21 web application, one explicit FastAPI application factory, one identity/session implementation and one SQLite database compose the public site, Hub, Finance, Travel and Media. App-owned domain code stays in its own folder. Finance plaintext remains in the browser.
 
+A new field, provider fixture, or private record starts from the existing owner in [Feature addition](../planning/technical-debt/feature-addition-playbook.md). Cards remains discovery issue [#265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265). The Sidequests design is issue [#264](https://github.com/Vivekpsps3/vivek-monorepo/issues/264) and does not authorize that app.
+
 ## Active API surface
 
 - Active browser finance storage uses `/api/vault/*`: the backend stores encrypted key wraps, ciphertext, sync revisions, and optional blind indexes.

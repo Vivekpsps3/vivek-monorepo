@@ -31,20 +31,9 @@ Only `apps/web` composes frontend features through their public entrypoints. Fea
 
 ## Verification
 
-```sh
-make test-fast
-make lint typecheck
-make test
-make e2e
-npx playwright test --config apps/travel/e2e/playwright.config.js
-npx playwright test --config apps/media/e2e/playwright.config.ts
-make docker-build test-suite-routes
-bash scripts/validate-seeded-adoption.sh
-```
+The command table lives in [Verification](VERIFICATION.md). Floors live in [Quality](QUALITY.md). A new field, provider fixture, or private record follows [Feature addition](../planning/technical-debt/feature-addition-playbook.md) and then the verification commands that the diff actually requires.
 
-`make test` runs all four Python coverage gates, Finance/public/root Karma, pure domain/shared Node tests and fast checks. Backend gates use four workers (whole files stay together); set `PYTEST_WORKERS=0` to debug in process. Browser suites import `test` from `tests/e2e/fixtures.ts`, or Finance's `frozen-clock.ts`, and use four workers with a separate production server process, temporary database and OS-assigned port per worker. `npx playwright test` runs all five projects; domain wrapper configs remain available. Screenshots run at 390/768/1280 in both themes. Outputs are isolated under `test-results/`. Set `CHROME_BIN` for Karma and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` for Playwright when using an existing Chromium installation. Existing `npm test --prefix apps/finance/frontend` and `--prefix apps/site` commands forward to the root suites; they need no separate installation. See [test ownership](./QUALITY.md#keeping-tests-small-and-stable) before adding another browser matrix.
-
-Coverage floors and the command-equivalence contract are in [Quality](QUALITY.md). Run every applicable local gate before opening a PR. CI repeats those checks.
+Backend gates use four workers (whole files stay together); set `PYTEST_WORKERS=0` to debug in process. Browser suites import `test` from `tests/e2e/fixtures.ts`, or Finance's `frozen-clock.ts`. Existing `npm test --prefix apps/finance/frontend` and `--prefix apps/site` commands forward to the root suites; they need no separate installation. Set `CHROME_BIN` for Karma and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` for Playwright when using an existing Chromium installation.
 
 ## Schema and configuration
 

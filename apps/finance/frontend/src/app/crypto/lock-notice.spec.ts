@@ -97,6 +97,16 @@ describe('lock session notices', () => {
     expect(hits).toEqual([{ version: 1, userId: 7, kind: 'signout', tabId: local }]);
   });
 
+  it('clears a disposable subscriber once and ignores it after unregister', () => {
+    const cleared: string[] = [];
+    const release = bind(() => cleared.push('ref01_probe'));
+    storage(LOCK_SIGNAL, '1');
+    expect(cleared).toEqual(['ref01_probe']);
+    release();
+    storage(LOCK_SIGNAL, '2');
+    expect(cleared).toEqual(['ref01_probe']);
+  });
+
   it('stops a disposed subscriber and keeps the one that remains (LOCAL3)', () => {
     const hits: string[] = [];
     const releaseHub = bind(() => hits.push('hub'));
