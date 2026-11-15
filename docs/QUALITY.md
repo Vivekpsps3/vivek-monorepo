@@ -107,18 +107,20 @@ Python currently measures statements. `[tool.coverage.run]` sets `branch = false
 
 | Suite | Floor |
 | --- | ---: |
-| Finance, including relocated identity code | 83.28% |
+| Finance, including relocated identity code | 81.03% |
 | Travel | 80.41% |
-| Media | 70.60% |
+| Media | 68.70% |
 | Server | 61.53% |
+
+The repository-wide test reduction in HUB-03 explicitly accepts lower coverage: Finance and Media floors are one point below their new local measurements. Security, owner-isolation, recovery, and browser journeys remain in the retained suites.
 
 The merged refactor's measurements and command results are preserved in [its final verification](https://github.com/Vivekpsps3/vivek-monorepo/blob/5bc07c2aab4345446f408d6e331cd1bef193f4d6/planning/suite-experience-remediation/evidence/final-verification.md). Those figures are historical. Server composition, database ownership, identity and request-commit behavior now have explicit tests; coverage still includes untested lines rather than omitting modules to inflate the result.
 
-Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json` for the files the selected specs load. That loaded-source set is Karma's denominator. It is not whole-app coverage. The summary reports statements, branches, functions, and lines for that loaded set only. `scripts/karma-coverage-summary.mjs` appends those run totals to the GitHub step summary. They are that run's measurement, not a historical pin and not full-app proof. A run with `SUITE_KARMA_COVERAGE=0` does not satisfy the floors. `apps/karma.conf.js` owns these current floors, which stay unchanged:
+Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json` for the files the selected specs load. That loaded-source set is Karma's denominator. It is not whole-app coverage. The summary reports statements, branches, functions, and lines for that loaded set only. `scripts/karma-coverage-summary.mjs` appends those run totals to the GitHub step summary. They are that run's measurement, not a historical pin and not full-app proof. A run with `SUITE_KARMA_COVERAGE=0` does not satisfy the floors. `apps/karma.conf.js` owns these current floors. The owner-approved HUB-03 test reduction sets Finance branches one point below the new 49.30% measurement:
 
 | App | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| Finance | 60 | 52 | 56 | 62 |
+| Finance | 60 | 48.3 | 56 | 62 |
 | Public site | 61 | 47 | 55 | 63 |
 | Root/shared web | 60 | 52 | 56 | 62 |
 

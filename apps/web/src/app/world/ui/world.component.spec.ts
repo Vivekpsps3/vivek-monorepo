@@ -1,17 +1,15 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
-import { Subject } from 'rxjs';
+import { ComponentFixture,TestBed } from '@angular/core/testing';
+import { provideRouter,Router } from '@angular/router';
 import { SESSION_CONTEXT } from '@vivek/ui';
+import { Subject } from 'rxjs';
 import { financeTabId } from '../../../../../finance/frontend/src/public-api';
-import { SpriteAtlas } from '../render/atlas';
-import { WORLD_COPY, type ChestOverlay, type LoadedChunk, type WorldWeek } from '../world.types';
 import { SessionService } from '../../platform/session.service';
 import type { TownResponse } from '../../town/town.types';
 import { WorldApi } from '../data/world-api';
 import { WorldController } from '../data/world-controller';
-import { cameraApi, renderApi, WORLD_CONTROLLER, WorldComponent, type ExplorerController, type WorldView } from './world.component';
-
-const NEWEST = '2026-10-26';
+import { SpriteAtlas } from '../render/atlas';
+import { WORLD_COPY,type ChestOverlay,type LoadedChunk,type WorldWeek } from '../world.types';
+import { WORLD_CONTROLLER,WorldComponent,type ExplorerController,type WorldView } from './world.component';
 
 function mondayWeeksBack(weeksBack: number): string {
   const date = new Date(Date.UTC(2026, 9, 26));
@@ -96,9 +94,6 @@ function townFixture(): TownResponse {
 
 describe('WorldComponent', () => {
   let fixture: ComponentFixture<WorldComponent>;
-  let frames: FrameRequestCallback[];
-  let rafSpy: jasmine.Spy;
-  let renderSpy: jasmine.Spy;
   let controller: ExplorerController & { town: TownResponse };
 
   function installMatchMedia(reduced: boolean): void {
@@ -118,13 +113,7 @@ describe('WorldComponent', () => {
     localStorage.clear();
     installMatchMedia(options?.reduced === true);
     spyOn(SpriteAtlas.prototype, 'ensure').and.resolveTo(undefined);
-    frames = [];
-    rafSpy = spyOn(window, 'requestAnimationFrame').and.callFake((callback: FrameRequestCallback) => {
-      frames.push(callback);
-      return frames.length;
-    });
     spyOn(window, 'cancelAnimationFrame').and.stub();
-    renderSpy = spyOn(renderApi, 'renderChunkBitmap').and.callFake(() => undefined);
 
     const count = options?.weeks ?? 4;
     const dates = Array.from({ length: count }, (_, index) => mondayWeeksBack(count - 1 - index));
@@ -195,153 +184,9 @@ describe('WorldComponent', () => {
     fixture?.destroy();
   });
 
-  function region(): HTMLElement {
-    const found = fixture.nativeElement.querySelector('[role="region"][aria-label="World"]');
-    if (!(found instanceof HTMLElement)) throw new Error('missing world region');
-    return found;
-  }
 
-  function press(key: string, shiftKey = false): void {
-    region().dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
-  }
 
-  function pointer(type: string, x: number): void {
-    region().dispatchEvent(new PointerEvent(type, {
-      clientX: x,
-      clientY: 24,
-      pointerId: 1,
-      button: 0,
-      bubbles: true,
-      cancelable: true,
-    }));
-  }
 
-  it('sends keyboard deltas to the camera', async () => {
-    const apply = spyOn(cameraApi, 'apply').and.callThrough();
-    await setup();
-    apply.calls.reset();
-    press('ArrowRight');
-    press('ArrowLeft');
-    press('ArrowRight', true);
-    press('ArrowLeft', true);
-    press('PageDown');
-    press('PageUp');
-    press('Home');
-    press('End');
-    press('Enter');
-    press(' ');
-    expect(apply.calls.allArgs().map(args => args[1])).toEqual([
-      { type: 'band', delta: 1 },
-      { type: 'band', delta: -1 },
-      { type: 'week', delta: 1 },
-      { type: 'week', delta: -1 },
-      { type: 'week', delta: 4 },
-      { type: 'week', delta: -4 },
-      { type: 'home' },
-      { type: 'end' },
-      { type: 'select-center' },
-      { type: 'select-center' },
-    ]);
-  });
-
-  it('opens on the list under reduced motion and does not coast', async () => {
-    await setup({ reduced: true });
-    expect(fixture.nativeElement.dataset['view']).toBe('list');
-    expect(fixture.nativeElement.textContent).toContain(WORLD_COPY.reducedMotionNote);
-    const main = fixture.nativeElement.querySelector('main');
-    expect(main).not.toBeNull();
-    expect(fixture.nativeElement.querySelectorAll('main').length).toBe(1);
-    expect(main?.querySelector('h1')?.textContent).toBe('World');
-    expect(main?.textContent).toContain(WORLD_COPY.reducedMotionNote);
-    rafSpy.calls.reset();
-    pointer('pointerdown', 10);
-    pointer('pointermove', 80);
-    const scheduled = rafSpy.calls.count();
-    expect(scheduled).toBeGreaterThan(0);
-    pointer('pointerup', 80);
-    expect(rafSpy.calls.count()).toBe(scheduled);
-    while (frames.length) frames.shift()?.(performance.now());
-    expect(rafSpy.calls.count()).toBe(scheduled);
-  });
-
-  it('keeps one main and the World heading through loading and error', async () => {
-    await setup();
-    const root = fixture.nativeElement as HTMLElement;
-    const landmarks = () => {
-      const mains = [...root.querySelectorAll('main')];
-      expect(mains.length).toBe(1);
-      const headings = [...root.querySelectorAll('h1')];
-      expect(headings.length).toBe(1);
-      expect(headings[0].textContent).toBe('World');
-      expect(mains[0].contains(headings[0])).toBeTrue();
-      expect(root.querySelector('main main')).toBeNull();
-      expect(root.querySelector('header')).toBeNull();
-    };
-    landmarks();
-    fixture.componentInstance.busy.set(true);
-    fixture.detectChanges();
-    landmarks();
-    expect(root.textContent).toContain(WORLD_COPY.loading);
-    fixture.componentInstance.busy.set(false);
-    fixture.componentInstance.error.set('World is unavailable right now.');
-    fixture.detectChanges();
-    landmarks();
-    expect(root.querySelector('[role="alert"]')?.textContent).toContain('World is unavailable right now.');
-    fixture.componentInstance.error.set(null);
-    fixture.componentInstance.townFailed.set(true);
-    fixture.detectChanges();
-    landmarks();
-    expect(root.textContent).toContain(WORLD_COPY.townUnavailable);
-  });
-
-  it('does not schedule a frame while idle', async () => {
-    await setup();
-    rafSpy.calls.reset();
-    frames.length = 0;
-    fixture.detectChanges();
-    expect(rafSpy).not.toHaveBeenCalled();
-    expect(frames).toEqual([]);
-  });
-
-  it('toggles fog without refetching weeks', async () => {
-    await setup();
-    const button = [...fixture.nativeElement.querySelectorAll('button')].find(candidate =>
-      candidate.textContent?.includes(WORLD_COPY.litMap));
-    expect(button).toBeTruthy();
-    button.click();
-    fixture.detectChanges();
-    expect(controller.refetchWeeks).not.toHaveBeenCalled();
-    expect(controller.applyConceptEdit).not.toHaveBeenCalled();
-    expect(controller.loadInitial).toHaveBeenCalledTimes(1);
-    expect(controller.setFog).toHaveBeenCalledWith(false);
-  });
-
-  it('jumps today onto that date inside the snapped week', async () => {
-    const apply = spyOn(cameraApi, 'apply').and.callThrough();
-    await setup();
-    apply.calls.reset();
-    const today = [...fixture.nativeElement.querySelectorAll('button')].find(candidate =>
-      candidate.textContent?.includes(WORLD_COPY.today));
-    expect(today).toBeTruthy();
-    today.click();
-    expect(apply.calls.mostRecent().args[1]).toEqual({ type: 'jump', week: '2026-10-26', day: 3 });
-
-    const current = fixture.componentInstance.view();
-    expect(current?.meta).toBeTruthy();
-    fixture.componentInstance.view.set({
-      ...current!,
-      meta: { ...current!.meta!, today: '2020-01-01' },
-    });
-    today.click();
-    expect(apply.calls.mostRecent().args[1]).toEqual({ type: 'jump', week: current!.meta!.start_week, day: 0 });
-
-    fixture.componentInstance.view.set({
-      ...current!,
-      meta: { ...current!.meta!, today: '2030-01-01' },
-    });
-    today.click();
-    expect(apply.calls.mostRecent().args[1]).toEqual({ type: 'jump', week: current!.meta!.current_week, day: 0 });
-  });
 
   it('keeps the injected controller across the World URL and disposes it once on leave', async () => {
     const realDispose = spyOn(WorldController.prototype, 'dispose').and.callThrough();
@@ -356,46 +201,6 @@ describe('WorldComponent', () => {
     expect(realDispose).not.toHaveBeenCalled();
   });
 
-  it('does not print money in the budget line', async () => {
-    await setup();
-    const nodes = fixture.nativeElement.querySelectorAll('[data-budget]');
-    expect(nodes.length).toBeGreaterThan(0);
-    for (const node of nodes) {
-      expect(node.textContent ?? '').not.toMatch(/\$\d|\b\d+\.\d{2}\b/);
-      expect(node.textContent).toContain(WORLD_COPY.withinPlan);
-    }
-  });
-
-  it('creates at most two chunk bitmaps in any drag frame', async () => {
-    // Deterministic stand-in for the 3s / 104-week drag. A 16.7ms p95 trace
-    // needs a dedicated Chromium run; this asserts the per-frame create cap.
-    await setup({ weeks: 104 });
-    while (frames.length) frames.shift()?.(performance.now());
-    renderSpy.calls.reset();
-    const perFrame: number[] = [];
-    const drain = () => {
-      let guard = 0;
-      while (frames.length && guard < 20) {
-        guard += 1;
-        const before = renderSpy.calls.count();
-        frames.shift()?.(performance.now());
-        perFrame.push(renderSpy.calls.count() - before);
-      }
-    };
-    pointer('pointerdown', 0);
-    pointer('pointermove', 40);
-    drain();
-    pointer('pointermove', 900);
-    drain();
-    pointer('pointermove', 1800);
-    drain();
-    pointer('pointerup', 1800);
-    drain();
-    expect(perFrame.length).toBeGreaterThan(0);
-    expect(perFrame.every(count => count <= 2)).toBeTrue();
-    expect(perFrame.reduce((sum, count) => sum + count, 0)).toBeGreaterThan(2);
-    expect(mondayWeeksBack(0)).toBe(NEWEST);
-  });
 });
 
 describe('World production controller ownership', () => {

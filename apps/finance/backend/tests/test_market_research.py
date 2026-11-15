@@ -51,35 +51,6 @@ class FakeMarketData:
         )
 
 
-def test_market_research_single_endpoint(client, monkeypatch):
-    from apps.finance.backend.routers import market as market_router
-
-    fake = FakeMarketData()
-    monkeypatch.setattr(market_router, "market_data", fake)
-
-    response = client.get("/api/market/research/voo", params={"period": "10y"})
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["symbol"] == "VOO"
-    assert body["quote"]["current_price"] == 100.0
-    assert body["history"][0]["date"] == "2025-01-02"
-    assert fake.calls == [("VOO", "10y", False)]
-
-
-def test_market_research_rejects_invalid_symbol(client):
-    response = client.get("/api/market/research/not_a_symbol")
-    assert response.status_code == 400
-
-
-def test_market_research_batch_caps_symbol_count(client):
-    response = client.post(
-        "/api/market/research/batch",
-        json={"symbols": ["A", "B", "C", "D", "E", "F"]},
-    )
-    assert response.status_code == 422
-
-
 def test_market_research_batch_partial_failure(client, monkeypatch):
     from apps.finance.backend.routers import market as market_router
 

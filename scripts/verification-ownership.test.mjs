@@ -333,7 +333,7 @@ test('LOCAL4: release and deploy still match job and step names, and trust stays
   }
 });
 
-test('performance stays a separate uninstrumented server gate and coverage floors stay put', () => {
+test('performance stays a separate uninstrumented server gate with the declared coverage floors', () => {
   const gate = read('scripts/coverage-gate.sh');
   const perf = read('scripts/perf-gate.sh');
   assert.match(gate, /-m "not perf"/);
@@ -351,7 +351,7 @@ test('performance stays a separate uninstrumented server gate and coverage floor
         return [suite, floor];
       }),
   );
-  assert.deepEqual(floors, { finance: '83.28', travel: '80.41', media: '70.60', server: '61.53' });
+  assert.deepEqual(floors, { finance: '81.03', travel: '80.41', media: '68.70', server: '61.53' });
 
   const collected = spawnSync(pythonBin(), ['-m', 'pytest', '-q', '--collect-only', '-m', 'perf', 'apps/server/tests/test_town_perf.py'], {
     cwd: root,

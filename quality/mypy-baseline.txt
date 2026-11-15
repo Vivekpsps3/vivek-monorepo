@@ -5,7 +5,7 @@
 apps/finance/backend/alembic/env.py	arg-type	1
 apps/finance/backend/routers/health.py	assignment	1
 apps/finance/backend/services/market_data.py	assignment	4
-apps/finance/backend/tests/test_market_data.py	arg-type	6
+apps/finance/backend/tests/test_market_data.py	arg-type	2
 apps/finance/backend/tests/test_market_data.py	var-annotated	1
 apps/finance/backend/tests/test_market_research.py	arg-type	2
 apps/finance/backend/tests/test_market_research.py	list-item	3

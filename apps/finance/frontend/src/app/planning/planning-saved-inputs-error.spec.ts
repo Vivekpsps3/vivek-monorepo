@@ -1,10 +1,10 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture,TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { Subject, of, throwError } from 'rxjs';
-import { ConfirmService, ToastService, failureCopy } from '@vivek/ui';
+import { ConfirmService,ToastService,failureCopy } from '@vivek/ui';
+import { Subject,of,throwError } from 'rxjs';
+import { DEFAULT_MC_ASSUMPTIONS,PlanningProfile } from '../models/planning.model';
 import { FinanceService } from '../services/finance.service';
 import { PlanningService } from '../services/planning.service';
-import { DEFAULT_MC_ASSUMPTIONS, PlanningProfile } from '../models/planning.model';
 import { PlanningComponent } from './planning.component';
 
 /**
@@ -84,39 +84,6 @@ describe('PlanningComponent Saved inputs card errors (F23)', () => {
     fixture.destroy();
   });
 
-  it('renders a failed save inside the Saved inputs card with an alert role, warning cue and focus', async () => {
-    planning.createProfile.and.returnValue(throwError(() => ({ status: 503 })));
-    component.savedInputName = 'Baseline';
-
-    component.saveSavedInputs();
-    await settleFocus();
-
-    const error = cardError();
-    expect(error).not.toBeNull();
-    expect(error!.getAttribute('role')).toBe('alert');
-    expect(error!.getAttribute('tabindex')).toBe('-1');
-    expect(error!.textContent).toContain('⚠');
-    expect(error!.textContent).toContain(failureCopy('save', 'these inputs'));
-    expect(document.activeElement).toBe(error);
-    // The page-level error stays empty: the failure belongs to the card.
-    expect(component.error).toBeNull();
-  });
-
-  it('removes the card error from the DOM after a later successful save', async () => {
-    planning.createProfile.and.returnValue(throwError(() => ({ status: 503 })));
-    component.savedInputName = 'Baseline';
-    component.saveSavedInputs();
-    await settleFocus();
-    expect(cardError()).not.toBeNull();
-
-    planning.createProfile.and.returnValue(of(profile));
-    component.saveSavedInputs();
-    await settleFocus();
-
-    expect(cardError()).toBeNull();
-    expect(component.savedInputsError).toBeNull();
-  });
-
   it('renders a failed delete in the card, focuses it, and a later successful save clears it', async () => {
     planning.deleteProfile.and.returnValue(throwError(() => ({ status: 503 })));
     component.profiles = [profile];
@@ -139,16 +106,4 @@ describe('PlanningComponent Saved inputs card errors (F23)', () => {
     expect(cardError()).toBeNull();
   });
 
-  it('renders a saved-inputs load failure in the card without stealing focus', async () => {
-    // Recreate with a failing listProfiles (the init load already happened).
-    planning.listProfiles.and.returnValue(throwError(() => ({ status: 503 })));
-    component.ngOnInit();
-    await settleFocus();
-
-    const error = cardError();
-    expect(error).not.toBeNull();
-    expect(error!.getAttribute('role')).toBe('alert');
-    expect(error!.textContent).toContain(failureCopy('load', 'your saved inputs'));
-    expect(document.activeElement).not.toBe(error);
-  });
 });

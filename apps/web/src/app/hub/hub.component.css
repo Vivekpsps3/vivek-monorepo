@@ -323,3 +323,8 @@ dd {
 .media-more summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--text-secondary); }
 
 .compact-locked { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+
+/* Titles and personal notes can contain long unbroken text. */
+.rows li > a { min-width: 0; overflow-wrap: anywhere; }
+.media-notes li { display: block; }
+.media-notes li > strong { display: block; margin-top: var(--space-2); text-align: left; font-weight: 400; overflow-wrap: anywhere; }

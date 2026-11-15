@@ -1,7 +1,7 @@
 import type { PortfolioAccount, PositionHighlight } from '../../../../finance/frontend/src/public-api';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, Injector, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/router';
 import { UiStateComponent } from '@vivek/ui';
 import { formatDateRange, todayIsoDate } from '@vivek/browser';
 import { SessionService as AuthService } from '../platform/session.service';
@@ -43,7 +43,7 @@ import {
   mediaReleaseLabel,
 } from './hub-summary';
 import { UpNextComponent } from './up-next/up-next.component';
-import { hubGreeting, upNextRows } from './up-next/up-next';
+import { hubGreeting, shiftDay, upNextRows, type AgendaSource } from './up-next/up-next';
 import { NextEpisodeButtonComponent, NextEpisodeUndoService, type NextResult } from '../../../../media/frontend/src/public-api';
 
 interface FinanceView {
@@ -87,6 +87,45 @@ export class HubComponent implements OnInit {
   name = '';
   billsDueThisWeek: number | null = null;
   readonly today = new Date();
+  expanded = false;
+  windowStart = todayIsoDate();
+  windowEnd = shiftDay(this.windowStart, 13);
+  agendaSources: readonly AgendaSource[] = ['travel', 'media'];
+  private viewInitialized = false;
+
+  changeAgendaWindow(start: string): void {
+    void this.router.navigate(['/hub/agenda'], { queryParams: { date: start, sources: this.agendaSources.join(',') } });
+  }
+
+  changeAgendaSources(sources: readonly AgendaSource[]): void {
+    this.agendaSources = sources;
+    if (this.expanded) void this.router.navigate(['/hub/agenda'], { queryParams: { sources: sources.join(',') }, queryParamsHandling: 'merge' });
+  }
+
+  private syncAgenda(): void {
+    const expanded = this.router.url.split('?')[0] === '/hub/agenda';
+    const params = this.route.snapshot?.queryParamMap;
+    const date = params?.get('date');
+    const valid = date && Number(date.slice(0, 4)) >= 1000 && Number(date.slice(0, 4)) <= 3000 && /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date))
+      && new Date(date + 'T12:00:00Z').toISOString().slice(0, 10) === date;
+    const start = expanded ? `${(valid ? date : todayIsoDate()).slice(0, 7)}-01` : todayIsoDate();
+    const nextMonth = new Date(start + 'T12:00:00');
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const end = expanded ? shiftDay(`${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`, -1) : shiftDay(start, 13);
+    const changed = start !== this.windowStart || end !== this.windowEnd;
+    this.expanded = expanded;
+    this.windowStart = start;
+    this.windowEnd = end;
+    const selected = params?.get('sources');
+    this.agendaSources = selected == null ? ['travel', 'media'] : (['travel', 'media'] as const).filter(source => selected.split(',').includes(source));
+    if (changed && this.viewInitialized) {
+      this.travelCtrl?.abort();
+      this.travel = null;
+      void this.loadTravel();
+      void this.loadMedia(true);
+    }
+    this.cdr.markForCheck();
+  }
 
   financeState: HubCardState = 'locked';
   netWorth: NetWorth | null = null;
@@ -135,6 +174,10 @@ export class HubComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.syncAgenda();
+    this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
+      if (event instanceof NavigationEnd) this.syncAgenda();
+    });
     this.episodeUndo.restored$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.onMediaNextReload());
     this.pixelsData.financeCleared$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.onPixelsFinanceCleared());
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
@@ -172,6 +215,7 @@ export class HubComponent implements OnInit {
     void this.loadTown();
     void this.loadFinance();
     void this.loadPixels();
+    this.viewInitialized = true;
   }
 
   fidelityAccounts(): PortfolioAccount[] {
@@ -384,7 +428,7 @@ export class HubComponent implements OnInit {
     if (!this.travel) this.travelState = 'loading';
     this.cdr.markForCheck();
     try {
-      const result = await fetchHubSummary(travelSummaryUrl(), ctrl.signal, decodeTravelSummary);
+      const result = await fetchHubSummary(travelSummaryUrl(this.expanded ? this.windowStart : undefined, this.expanded ? this.windowEnd : undefined), ctrl.signal, decodeTravelSummary);
       if (generation !== this.generation || ctrl.signal.aborted) return;
       const settled = settleHubCard(
         this.travel,
@@ -401,7 +445,7 @@ export class HubComponent implements OnInit {
     }
   }
 
-  private async loadMedia(): Promise<void> {
+  private async loadMedia(navigation = false): Promise<void> {
     const generation = this.generation;
     this.mediaCtrl?.abort();
     const ctrl = new AbortController();
@@ -409,7 +453,9 @@ export class HubComponent implements OnInit {
     if (!this.media) this.mediaState = 'loading';
     this.cdr.markForCheck();
     try {
-      const result = await fetchHubMedia(todayIsoDate(), ctrl.signal);
+      const previous = navigation && (this.mediaState === 'ready' || this.mediaState === 'empty') ? this.media ?? undefined : undefined;
+      if (navigation) { this.media = null; this.mediaState = 'loading'; }
+      const result = await fetchHubMedia(this.windowStart, ctrl.signal, undefined, this.windowEnd, previous);
       if (generation !== this.generation || ctrl.signal.aborted) return;
       const settled = settleHubCard(this.media, result, mediaIsEmpty);
       if (!settled) return;

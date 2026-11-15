@@ -25,15 +25,14 @@ export function calendarUrls(today: string, tz: string): string[] {
   return [...months].map(month => `/media/api/calendar?month=${month}&tz=${encodeURIComponent(tz)}`);
 }
 
-export function upNextRows(travel: TravelEvent[], calendars: MediaCalendar[], today: string): UpNextRow[] {
-  const end = shiftDay(today, 13);
-  const rows: UpNextRow[] = travel.filter(row => row.overdue || (row.date >= today && row.date <= end))
+export function upNextRows(travel: TravelEvent[], calendars: MediaCalendar[], today: string, start = today, end = shiftDay(today, 13), expanded = false): UpNextRow[] {
+  const rows: UpNextRow[] = travel.filter(row => (!expanded && row.overdue) || (row.date >= start && row.date <= end))
     .map(row => ({ ...row, key: `travel:${row.kind}:${row.id}`, source: 'travel' }));
   for (const calendar of calendars) {
     for (const day of calendar.days) {
-      if (day.date < today || day.date > end) continue;
+      if (day.date < start || day.date > end) continue;
       day.events.forEach((event, index) => {
-        if (!['episode', 'anticipated'].includes(event.type) || event.watched || event.release_status === 'postponed') return;
+        if (!['episode', 'anticipated'].includes(event.type) || (!expanded && event.watched) || event.release_status === 'postponed') return;
         rows.push({ key: `media:${day.date}:${event.entry_id}:${index}`, source: 'media', date: day.date,
           time: null, tz: null, title: event.title, overdue: false, reminder: null,
           href: event.entry_id === null ? '/media/calendar' : `/media/item/${event.entry_id}` });

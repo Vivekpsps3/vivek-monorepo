@@ -80,6 +80,7 @@ export interface TravelSummary {
 }
 
 export interface MediaCalendar {
+  month?: string;
   days: { date: string; events: {
     type: string; title: string; entry_id: number | null; watched: boolean; release_status: string | null;
   }[] }[];

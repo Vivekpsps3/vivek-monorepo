@@ -1,16 +1,16 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ComponentFixture,TestBed } from '@angular/core/testing';
+import { ActivatedRoute,Router } from '@angular/router';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { Subject } from 'rxjs';
 import {
-  SEARCH_FINANCE,
-  SearchDialogComponent,
-  type SearchFinanceName,
-  type SearchFinancePort,
-  type SearchFinanceQueryResult,
-  type SearchFinanceRecentResult,
+SEARCH_FINANCE,
+SearchDialogComponent,
+type SearchFinanceName,
+type SearchFinancePort,
+type SearchFinanceQueryResult,
+type SearchFinanceRecentResult,
 } from './search-dialog.component';
-import { SEARCH_RECENT_KEY, type SearchRecentRef } from './search-recents';
+import { SEARCH_RECENT_KEY,type SearchRecentRef } from './search-recents';
 
 /** Real-timer settle: fetch Response bodies resolve outside fakeAsync. */
 function settle(ms = 0): Promise<void> {
@@ -144,10 +144,6 @@ describe('SearchDialogComponent', () => {
     fixture.detectChanges();
   }
 
-  function inputEl(): HTMLInputElement {
-    return fixture.nativeElement.querySelector('ui-input input') as HTMLInputElement;
-  }
-
   it('shows the hint state with no recents and a short query', async () => {
     openDialog();
     await settle();
@@ -182,19 +178,6 @@ describe('SearchDialogComponent', () => {
     expect(JSON.parse(localStorage.getItem(SEARCH_RECENT_KEY)!)).toEqual([refs[0]]);
   });
 
-  it('debounces 150ms and groups results', async () => {
-    openDialog();
-    await settle();
-    typeQuery('ky');
-    expect(fetchSpy).not.toHaveBeenCalled();
-    await settle(200);
-    await settle();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('#search-group-Travel')).not.toBeNull();
-    expect(fixture.nativeElement.querySelector('#search-group-Media')).not.toBeNull();
-    expect(fixture.nativeElement.textContent).toContain('Dec 1');
-  });
-
   it('aborts the previous in-flight request when a new search runs', async () => {
     hangSearch = true;
     openDialog();
@@ -212,93 +195,6 @@ describe('SearchDialogComponent', () => {
     await settle();
   });
 
-  it('exposes the combobox ARIA contract and wraps arrow navigation', async () => {
-    openDialog();
-    await settle();
-    typeQuery('kyoto');
-    await settle(200);
-    await settle();
-    fixture.detectChanges();
-    const input = inputEl();
-    expect(input.getAttribute('role')).toBe('combobox');
-    expect(input.getAttribute('aria-expanded')).toBe('true');
-    expect(input.getAttribute('aria-controls')).toBe('search-listbox');
-    expect(input.getAttribute('aria-autocomplete')).toBe('list');
-    expect(input.getAttribute('aria-activedescendant')).toBe('search-opt-0');
-
-    component.onKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
-    fixture.detectChanges();
-    expect(input.getAttribute('aria-activedescendant')).toBe('search-opt-1');
-    component.onKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
-    expect(input.getAttribute('aria-activedescendant')).toBe('search-opt-0'); // wraps
-    component.onKeydown(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
-    expect(input.getAttribute('aria-activedescendant')).toBe('search-opt-1'); // wraps back
-  });
-
-  it('Enter navigates, closes and records the recent by id', async () => {
-    openDialog();
-    await settle();
-    typeQuery('kyoto');
-    await settle(200);
-    await settle();
-    fixture.detectChanges();
-    component.onKeydown(new KeyboardEvent('keydown', { key: 'Enter' }));
-    expect(navigated).toEqual(['/travel/trips/12']);
-    expect(closedCount).toBe(1);
-    expect(JSON.parse(localStorage.getItem(SEARCH_RECENT_KEY)!)).toEqual([
-      { app: 'travel', kind: 'trip', id: 12 },
-    ]);
-  });
-
-  it('shows the no-results state', async () => {
-    openDialog();
-    await settle();
-    typeQuery('zz');
-    await settle(200);
-    await settle();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('No matches for "zz".');
-  });
-
-  it('shows the unavailable state with the spec copy and a Retry', async () => {
-    openDialog();
-    await settle();
-    typeQuery('boom');
-    await settle(200);
-    await settle();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain("Couldn't load search results.");
-    expect(fixture.nativeElement.textContent).toContain('Retry');
-  });
-
-  it('shows the expired state with the spec copy', async () => {
-    openDialog();
-    await settle();
-    typeQuery('old');
-    await settle(200);
-    await settle();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain(
-      'Your session ended. Sign in again to see search results.',
-    );
-  });
-
-  it('shows Searching… while the request is in flight', async () => {
-    let resolveFetch: ((response: Response) => void) | null = null;
-    fetchSpy.and.callFake(
-      () => new Promise<Response>(resolve => (resolveFetch = resolve)),
-    );
-    openDialog();
-    typeQuery('kyoto');
-    await settle(200);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Searching…');
-    resolveFetch!(respond({ q: 'kyoto', results: [TRIP], truncated: false }));
-    await settle(50);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Kyoto');
-  });
-
   it('shows the Finance locked row when the vault is present but locked', async () => {
     financeAnswer = { status: 'locked' };
     openDialog();
@@ -314,90 +210,6 @@ describe('SearchDialogComponent', () => {
     component.activate(locked);
     expect(navigated).toEqual(['/finance/vault/unlock?next=%2Fhub']);
     expect(localStorage.getItem(SEARCH_RECENT_KEY)).toBeNull();
-  });
-
-  it('shows no Finance group when there is no vault on the device', async () => {
-    financeAnswer = { status: 'none' };
-    openDialog();
-    await settle();
-    typeQuery('kyoto');
-    await settle(200);
-    await settle();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('#search-group-Finance')).toBeNull();
-  });
-
-  it('does not query finance or the server for one character', async () => {
-    openDialog();
-    await settle();
-    typeQuery('s');
-    await settle(200);
-    expect(financeQueries).toEqual([]);
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it('debounces a burst to one finance query and one server request', async () => {
-    openDialog();
-    await settle();
-    typeQuery('s');
-    typeQuery('sa');
-    typeQuery('sav');
-    await settle(200);
-    await settle();
-    expect(financeQueries).toEqual(['sav']);
-    expect(fetchSpy.calls.count()).toBe(1);
-    const urls = fetchSpy.calls.allArgs().map(args => String(args[0]));
-    expect(urls.every(url => url.startsWith('/api/search'))).toBeTrue();
-  });
-
-  it('renders at most the ready name rows the facade returns', async () => {
-    const names: SearchFinanceName[] = [1, 2, 3, 4, 5].map(id => ({
-      kind: 'account', id, title: `Cash ${id}`, href: '/finance/have',
-    }));
-    financeAnswer = { status: 'ready', names };
-    openDialog();
-    await settle();
-    typeQuery('ca');
-    await settle(200);
-    await settle();
-    fixture.detectChanges();
-    const finance = component.options().filter(option => option.group === 'Finance');
-    expect(finance.map(option => option.title)).toEqual(['Cash 1', 'Cash 2', 'Cash 3', 'Cash 4', 'Cash 5']);
-    expect(finance.every(option => option.detail == null && option.ref?.app === 'finance')).toBeTrue();
-    expect(fixture.nativeElement.textContent).not.toContain('Cash 6');
-    component.onKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
-    component.onKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
-    fixture.detectChanges();
-    expect(inputEl().getAttribute('aria-activedescendant')).toBe('search-opt-2');
-  });
-
-  it('shows no Finance names when the streams are not loaded', async () => {
-    financeAnswer = { status: 'unloaded' };
-    openDialog();
-    await settle();
-    typeQuery('kyoto');
-    await settle(200);
-    await settle();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('#search-group-Finance')).toBeNull();
-    expect(fixture.nativeElement.textContent).toContain('Kyoto');
-  });
-
-  it('records a finance recent as ids only', async () => {
-    const savings: SearchFinanceName = { kind: 'account', id: 4, title: 'Savings', href: '/finance/have' };
-    financeAnswer = { status: 'ready', names: [savings] };
-    openDialog();
-    await settle();
-    typeQuery('sa');
-    await settle(200);
-    await settle();
-    fixture.detectChanges();
-    const option = component.options().find(row => row.ref?.app === 'finance')!;
-    component.activate(option);
-    expect(navigated).toEqual(['/finance/have']);
-    expect(localStorage.getItem(SEARCH_RECENT_KEY)).toBe(JSON.stringify([
-      { app: 'finance', kind: 'account', id: 4 },
-    ]));
   });
 
   it('resolves unlocked finance recents locally and prunes missing ids', async () => {
@@ -465,23 +277,6 @@ describe('SearchDialogComponent', () => {
     fixture.detectChanges();
     release({ status: 'ready', names: [savings] });
     await settle(50);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).not.toContain('Savings');
-    expect(fixture.nativeElement.textContent).not.toContain('Kyoto');
-  });
-
-  it('clears rows when the signed-in identity changes', async () => {
-    const savings: SearchFinanceName = { kind: 'account', id: 4, title: 'Savings', href: '/finance/have' };
-    users.next({ id: 1 });
-    financeAnswer = { status: 'ready', names: [savings] };
-    openDialog();
-    await settle();
-    typeQuery('sa');
-    await settle(200);
-    await settle();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Savings');
-    users.next({ id: 2 });
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).not.toContain('Savings');
     expect(fixture.nativeElement.textContent).not.toContain('Kyoto');

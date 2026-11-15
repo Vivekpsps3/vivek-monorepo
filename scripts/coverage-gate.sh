@@ -26,7 +26,7 @@ case "$suite" in
 esac
 
 # Identity moved out of Finance without changing the tests or the measured
-# behavior. Keep those same source files in its original 83.28% gate.
+# behavior. Keep those same source files in Finance's coverage denominator.
 coverage_args=(--cov="$cov")
 if [[ "$suite" == finance ]]; then
   coverage_args+=(--cov=apps/server/identity --cov=apps.server.api_key --cov=apps.server.rate_limit)

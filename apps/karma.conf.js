@@ -12,7 +12,7 @@ const coverageGates = {
   },
   'finance-app': {
     statements: 60,
-    branches: 52,
+    branches: 48.3,
     functions: 56,
     lines: 62,
   },

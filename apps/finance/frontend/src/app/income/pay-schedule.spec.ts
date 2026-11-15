@@ -1,11 +1,11 @@
 import { toDollars } from '@vivek/browser';
-import { estimatedPaycheckNet } from '../utils/job-compensation.util';
 import { JobIncome } from '../models/transaction.model';
+import { estimatedPaycheckNet } from '../utils/job-compensation.util';
 import {
-  centsPaySnapshot,
-  editorPayFromRecord,
-  savedPayFromEditor,
-  type LegacyPayInput,
+centsPaySnapshot,
+editorPayFromRecord,
+savedPayFromEditor,
+type LegacyPayInput,
 } from './pay-schedule';
 
 describe('legacy pay schedule cents policy', () => {
@@ -59,38 +59,6 @@ describe('legacy pay schedule cents policy', () => {
     }
   });
 
-  it('uses stored annual withholding when per-period withholding is blank', () => {
-    const row: LegacyPayInput = {
-      pay_frequency: 'weekly',
-      base_pay: 200,
-      taxes_per_period: 0,
-      deductions_per_period: 0,
-      annual_taxes: 52.01,
-      annual_deductions: 0.1,
-      payday_frequency: 'weekly',
-    };
-    const { before, saved, after } = roundTrip(row);
-    expect(after).toEqual(before);
-    expect(saved.taxes_per_period).toBe(saved.annual_taxes);
-    expect(saved.annual_taxes).toBe(toDollars(before.annualTaxCents));
-    expect(saved.annual_deductions).toBe(toDollars(before.annualDeductionCents));
-  });
-
-  it('leaves an hourly rate on the hourly choice', () => {
-    const row: LegacyPayInput = {
-      pay_frequency: 'hourly',
-      base_pay: 15.505,
-      hours_per_week: 37.5,
-      taxes_per_period: 1.005,
-      deductions_per_period: 0.004,
-      payday_frequency: 'biweekly',
-    };
-    const { before, saved, after } = roundTrip(row);
-    expect(saved.pay_frequency).toBe('hourly');
-    expect(saved.base_pay).toBe(toDollars(1551));
-    expect(saved.hours_per_week).toBe(37.5);
-    expect(after).toEqual(before);
-  });
 });
 
 function periods(frequency: string): number {

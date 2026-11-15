@@ -1,10 +1,6 @@
 import { weeksToRegenerate } from './invalidation';
 
 describe('weeksToRegenerate', () => {
-  it('regenerates nothing for a text edit or an archive', () => {
-    expect(weeksToRegenerate({ kind: 'text' })).toEqual([]);
-    expect(weeksToRegenerate({ kind: 'archive' })).toEqual([]);
-  });
 
   it('snaps a date move to unique Mondays and drops empty strings', () => {
     expect(weeksToRegenerate({

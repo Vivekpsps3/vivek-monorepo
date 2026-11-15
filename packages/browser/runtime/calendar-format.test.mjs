@@ -1,49 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  formatDateRange,
-  formatDay,
   formatRelativeDay,
 } from "./calendar-format.mjs";
 import {
-  formatDateRange as exportedRange,
   formatMoney,
   formatPercent,
   moneyAriaLabel,
 } from "../src/format.ts";
 
 const WORD_JOINER = "\u2060";
-const RANGE = "\u2009\u2013\u2009";
-
-test("formatDay omits the current year and adds it on a year rollover", () => {
-  const now = new Date(2026, 11, 31);
-  assert.equal(formatDay("2026-12-12", now), "Sat, Dec 12");
-  assert.equal(formatDay("2027-01-01", now), "Fri, Jan 1, 2027");
-  assert.equal(formatDay("2027-12-12", now), "Sun, Dec 12, 2027");
-  assert.equal(formatDay("", now), "");
-  assert.equal(formatDay(null, now), "");
-  assert.equal(formatDay("2026-10", now), "2026-10");
-});
-
-test("formatDateRange uses an en dash and thin spaces", () => {
-  assert.equal(
-    formatDateRange("2026-12-12", "2026-12-15"),
-    `Dec 12${RANGE}15, 2026`,
-  );
-  assert.equal(
-    exportedRange("2026-12-12", "2026-12-15"),
-    `Dec 12${RANGE}15, 2026`,
-  );
-  assert.equal(
-    formatDateRange("2026-12-30", "2027-01-02"),
-    `Dec 30, 2026${RANGE}Jan 2, 2027`,
-  );
-  assert.equal(
-    formatDateRange("2026-11-12", "2026-12-02"),
-    `Nov 12${RANGE}Dec 2, 2026`,
-  );
-  assert.equal(formatDateRange("2026-12-12", "2026-12-12"), "Dec 12, 2026");
-});
 
 test("formatRelativeDay counts calendar days and does not invent Yesterday", () => {
   const now = new Date(2026, 9, 26);

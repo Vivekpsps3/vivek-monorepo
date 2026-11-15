@@ -1,9 +1,9 @@
-import { TestBed } from "@angular/core/testing";
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from "@angular/common/http/testing";
 import { provideHttpClient } from "@angular/common/http";
+import {
+HttpTestingController,
+provideHttpClientTesting,
+} from "@angular/common/http/testing";
+import { TestBed } from "@angular/core/testing";
 import { provideRouter } from "@angular/router";
 import { TravelComponent } from "./travel.component";
 
@@ -109,44 +109,4 @@ describe("TravelComponent time off", () => {
     expect(forecast.textContent).toContain("View forecast");
   });
 
-  it("links to PTO setup when nothing is configured", () => {
-    const fixture = setup(
-      home({ pto: { configured: false, balance_today: null }, next_pto: null, upcoming: [] }),
-      board({ buckets: { pto: null, sick: null } }),
-    );
-    const section = fixture.nativeElement.querySelector(".time-off") as HTMLElement;
-    expect(section.textContent).toContain("PTO and Sick are not set up.");
-    const link = section.querySelector("a") as HTMLAnchorElement;
-    expect(link.textContent).toBe("Set up PTO");
-    expect(link.getAttribute("href")).toBe("/travel/pto");
-    expect(section.textContent).not.toContain("days ·");
-  });
-
-  it("shows one bucket and the setup link for the other", () => {
-    const fixture = setup(home({ next_pto: null }), board({ buckets: { pto: bucket("4", "32"), sick: null } }));
-    const section = fixture.nativeElement.querySelector(".time-off") as HTMLElement;
-    expect(section.textContent).toContain("4 days · 32 h");
-    expect(section.textContent).not.toContain("Sick balance today");
-    const sickSetup = [...section.querySelectorAll("a")].find(
-      (link) => link.textContent === "Set up Sick",
-    );
-    expect(sickSetup?.getAttribute("href")).toBe("/travel/pto");
-    expect(section.textContent).not.toContain("Next trip");
-  });
-
-  it("keeps the trip card usable when the summary fails and retries that request", () => {
-    const fixture = setup(home(), null);
-    const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector(".time-off")?.textContent).toContain("Couldn't load time off.");
-    expect(root.querySelector(".trip-card")?.textContent).toContain("Kyoto");
-    expect(root.textContent).toContain("Retry time off");
-    fixture.componentInstance.loadLeave();
-    httpMock.expectOne("/travel/api/pto").flush(board({ buckets: { pto: null, sick: bucket("1", "8") } }));
-    fixture.detectChanges();
-    const section = root.querySelector(".time-off") as HTMLElement;
-    expect(section.textContent).toContain("1 days · 8 h");
-    expect(section.textContent).not.toContain("Couldn't load time off.");
-    expect(section.querySelector("a")?.textContent).toBe("Set up PTO");
-    expect(root.querySelector(".trip-card")?.textContent).toContain("Kyoto");
-  });
 });

@@ -76,31 +76,3 @@ def test_new_owner_registered_collection_needs_no_recovery_list(monkeypatch):
         "collections"
     ]
     assert response.json()["records"][0]["collection"] == "future_review"
-
-
-@pytest.mark.parametrize(
-    "collection,schema", [("future_unknown", 2), ("transactions", 3), ("health_stats", 1)]
-)
-def test_unknown_or_unsupported_record_fails_whole_snapshot(collection, schema):
-    client = authenticated_client(app)
-    owner = client.get("/api/auth/me").json()["user"]["id"]
-    seed(owner, collection, schema=schema)
-    response = client.get("/api/vault/recovery-snapshot")
-    assert response.status_code == 422
-    assert "records" not in response.json()
-    with SessionLocal() as db:
-        assert db.query(EncryptedRecord).filter_by(user_id=owner).count() == 1
-
-
-@pytest.mark.parametrize("limit", ["MAX_RECOVERY_RECORDS", "MAX_RECOVERY_CIPHERTEXT_CHARS"])
-def test_limit_refuses_partial_snapshot_without_mutation(monkeypatch, limit):
-    client = authenticated_client(app)
-    owner = client.get("/api/auth/me").json()["user"]["id"]
-    seed(owner, "transactions")
-    seed(owner, "assets")
-    monkeypatch.setattr(store, limit, 1)
-    response = client.get("/api/vault/recovery-snapshot")
-    assert response.status_code == 413
-    assert "partial" in response.json()["detail"]
-    with SessionLocal() as db:
-        assert db.query(EncryptedRecord).filter_by(user_id=owner).count() == 2

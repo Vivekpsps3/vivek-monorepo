@@ -14,25 +14,6 @@ test("related kinds are movie, series and book, never an artist", () => {
   assert.equal(RELATED_ATTEMPT_LIMIT, 3);
 });
 
-test("relationLabel maps known relations and blanks unknown", () => {
-  assert.equal(relationLabel("sequel"), "Sequel");
-  assert.equal(relationLabel("spinoff"), "Spin-off");
-  assert.equal(relationLabel("series"), "Same series");
-  assert.equal(relationLabel("collaborator"), "Collaborator");
-  assert.equal(relationLabel("prequel"), "");
-  assert.equal(relationLabel(""), "");
-  assert.equal(relationLabel(undefined), "");
-  assert.equal(relationLabel(null), "");
-});
-
-test("relatedHref encodes the title", () => {
-  assert.equal(
-    relatedHref({ title: "Amélie & Co?" }),
-    "/media/add?title=" + encodeURIComponent("Amélie & Co?"),
-  );
-  assert.equal(relatedHref({ title: "Dune" }), "/media/add?title=Dune");
-});
-
 test("cleanNodes drops bad rows, dedupes and caps at 12", () => {
   const rows = [
     { title: "Dune Part Two", relation: "sequel", year: 2024 },

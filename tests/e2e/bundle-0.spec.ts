@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type TestInfo } from './fixtures';
+import { event, travel, summary, sources } from '../../apps/web/e2e/hub-fixtures';
 import { syntheticVault } from '../../apps/finance/frontend/e2e/synthetic-vault';
 import { chooseColorTheme, openUserMenu } from './user-menu.mjs';
 
@@ -531,4 +532,52 @@ test('old account urls open settings and the theme radio persists suite-theme', 
   await page.locator('input[name="color-theme"][value="dark"]').click();
   await expect.poll(async () => page.evaluate(() => localStorage.getItem('suite-theme'))).toBe('dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+});
+
+test('agenda keeps a usable source and only a local Finance count through retry, navigation and lock', async ({ page }) => {
+  const view = await page.context().newPage();
+  await view.clock.install({ time: new Date('2026-12-25T20:00:00Z') });
+  const marker = 'PRIVATE_AGENDA_SUBSCRIPTION';
+  const vault = await syntheticVault(view, { subscriptions: [{ id: 8899004, name: marker, amount: 491.21,
+    category: 'Software', frequency: 'monthly', next_bill_date: '2026-12-25', is_active: true }] });
+  const calls = await sources(view);
+  const sourceRequests: string[] = [];
+  view.on('request', request => { if (/\/(travel|media)\/api\//.test(request.url())) sourceRequests.push(request.url() + (request.postData() ?? '')); });
+  let mediaReads = 0;
+  await view.route('**/media/api/summary', route => { mediaReads++; return route.fulfill({ status: mediaReads === 1 ? 503 : 200, json: summary }); });
+  await vault.open('/hub/agenda');
+  const agenda = view.getByRole('region', { name: 'Agenda', exact: true });
+  await expect(agenda.getByRole('link', { name: 'Check in' })).toBeVisible();
+  await expect(agenda).toContainText('1 bill due this week');
+  await expect(agenda).toContainText("Couldn't load Media dates.");
+  await agenda.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(agenda.getByRole('link', { name: 'Premiere' })).toBeVisible();
+  expect(calls.filter(call => call === 'travel')).toHaveLength(1);
+  let release = () => {};
+  let arrived = () => {};
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const held = new Promise<void>(resolve => { arrived = resolve; });
+  await view.route('**/travel/api/summary?*', async route => {
+    if (new URL(route.request().url()).searchParams.get('start') !== '2027-01-01') return route.fulfill({ json: travel });
+    arrived(); await gate;
+    await route.fulfill({ json: { ...travel, up_next: [{ ...event, title: 'Late January row' }] } });
+  });
+  try {
+    await agenda.getByRole('button', { name: 'Next month' }).click();
+    await held;
+    await agenda.getByRole('button', { name: 'Previous month' }).click();
+    await expect(agenda.getByRole('link', { name: 'Check in' })).toBeVisible();
+  } finally { release(); }
+  await expect(agenda.getByRole('link', { name: 'Late January row' })).toHaveCount(0);
+  await view.evaluate(() => {
+    const channel = new BroadcastChannel('finance-vault-sync-v1');
+    channel.postMessage({ version: 1, kind: 'lock', userId: 987, tabId: 'agenda-other-tab' });
+    channel.close();
+  });
+  await expect(agenda).toContainText('Bills hidden: Finance is locked');
+  await expect(agenda).not.toContainText('1 bill due this week');
+  expect(sourceRequests.join(' ')).not.toMatch(/PRIVATE_AGENDA_SUBSCRIPTION|491\.21|8899004/);
+  expect(view.url()).not.toMatch(/PRIVATE_AGENDA_SUBSCRIPTION|491\.21|8899004/);
+  await expect(agenda).not.toContainText(marker);
+  await view.close();
 });

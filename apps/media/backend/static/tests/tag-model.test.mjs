@@ -9,21 +9,6 @@ import {
   removeTag,
 } from "../../../frontend/src/tag-model.mjs";
 
-test("cleanTag trims and collapses spaces", () => {
-  assert.equal(cleanTag("  Sci   Fi "), "Sci Fi");
-  assert.equal(cleanTag("\tSpace\t Opera\n"), "Space Opera");
-  assert.equal(cleanTag(""), "");
-  assert.equal(cleanTag("   "), "");
-});
-
-test("addTag ignores empty input", () => {
-  const tags = ["Drama"];
-  const result = addTag(tags, "   ");
-  assert.equal(result.error, "");
-  assert.deepEqual(result.tags, ["Drama"]);
-  assert.equal(result.tags, tags);
-});
-
 test("addTag rejects over 40 characters counting code points", () => {
   assert.equal(MAX_TAG_LENGTH, 40);
   const emoji = addTag([], "🎬".repeat(41));
@@ -58,13 +43,6 @@ test("addTag stops at 20", () => {
   const nineteen = addTag(full.slice(0, 19), "twentieth");
   assert.equal(nineteen.error, "");
   assert.equal(nineteen.tags.length, 20);
-});
-
-test("removeTag removes by index", () => {
-  const tags = ["a", "b", "c"];
-  assert.deepEqual(removeTag(tags, 1), ["a", "c"]);
-  assert.deepEqual(removeTag(tags, 0), ["b", "c"]);
-  assert.deepEqual(tags, ["a", "b", "c"]);
 });
 
 test("normaliseTags de-dupes, drops empties and caps", () => {

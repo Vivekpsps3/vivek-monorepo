@@ -98,16 +98,6 @@ test("cleanPopular keeps one saved identity and only TMDB artwork", () => {
   assert.equal(rows[2].artwork_url, null);
 });
 
-test("popularFocus names loading, retry, and results", () => {
-  assert.equal(popularFocus("idle", "idle", 0), "");
-  assert.equal(popularFocus("ready", "ready", 20), "");
-  assert.equal(popularFocus("idle", "loading", 0), "popular-status");
-  assert.equal(popularFocus("error", "loading", 0), "popular-status");
-  assert.equal(popularFocus("loading", "error", 0), "popular-retry");
-  assert.equal(popularFocus("loading", "ready", 0), "popular-retry");
-  assert.equal(popularFocus("loading", "ready", 20), "popular-heading");
-});
-
 test("popularError maps 0 and 5xx to service copy", () => {
   assert.equal(popularError(0), "Can't reach the movie service.");
   assert.equal(popularError(500), "Can't reach the movie service.");

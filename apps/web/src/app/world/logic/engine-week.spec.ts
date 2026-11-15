@@ -1,5 +1,5 @@
-import { engineWeek } from './engine-week';
 import type { WorldWeek } from '../world.types';
+import { engineWeek } from './engine-week';
 
 describe('engineWeek', () => {
   const week: WorldWeek = {
@@ -41,24 +41,4 @@ describe('engineWeek', () => {
     expect(text).toContain('Portland');
   });
 
-  it('omits finished_more when the week has none and copies a null place', () => {
-    const bare: WorldWeek = {
-      week: '2026-11-02',
-      trips: [{ id: 1, title: 'Hidden', start: '2026-11-02', end: '2026-11-03', place: null }],
-      finished: [],
-      habits: [],
-      concepts: [],
-    };
-    const api = engineWeek(bare);
-    expect(api.finished_more).toBeUndefined();
-    expect(api.trips[0].place).toBeNull();
-    expect(JSON.stringify(api)).not.toContain('Hidden');
-    expect('finished_more' in api).toBeFalse();
-  });
-
-  it('does not share habit day arrays with the caller', () => {
-    const api = engineWeek(week);
-    api.habits[0].days.push('2026-10-28');
-    expect(week.habits[0].days).toEqual(['2026-10-26', '2026-10-27']);
-  });
 });

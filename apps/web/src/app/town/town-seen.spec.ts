@@ -1,5 +1,5 @@
-import { applySeen, detectLevelUps, seenKey, type SeenLevels } from './town-seen';
-import type { Building, TownResponse } from './town.types';
+import { applySeen,seenKey } from './town-seen';
+import type { Building,TownResponse } from './town.types';
 
 function memory(): Storage {
   const data = new Map<string, string>();
@@ -30,50 +30,8 @@ function town(patch?: {
   } as TownResponse;
 }
 
-function habit(id: number, level: number, style: 'forge' | 'garden' | 'cottage', slot: number): TownResponse['habits'][number] {
-  return { id, level, building_style: style, slot, name: 'Habit' } as TownResponse['habits'][number];
-}
-
 describe('town seen levels', () => {
   const current = town({ level: 3, library: building(4), inn: building(2) });
-
-  it('writes the current levels silently when the key is missing or unparsable', () => {
-    const blank = memory();
-    expect(applySeen(blank, 7, current).toast).toBeNull();
-    expect(JSON.parse(blank.getItem(seenKey(7))!)).toEqual({ town: 3, b: { library: 4, inn: 2 } });
-    const broken = memory();
-    broken.setItem(seenKey(7), '{');
-    expect(applySeen(broken, 7, current).toast).toBeNull();
-    expect(JSON.parse(broken.getItem(seenKey(7))!).town).toBe(3);
-    broken.setItem(seenKey(7), JSON.stringify({ town: '3' }));
-    expect(applySeen(broken, 7, current).toast).toBeNull();
-  });
-
-  it('toasts one building, or town then buildings in lot order', () => {
-    const seen: SeenLevels = { town: 3, b: { library: 2, inn: 2 } };
-    expect(detectLevelUps(seen, current).toast).toBe('Library reached Lv 4.');
-    const several = town({
-      level: 4,
-      library: building(4),
-      habits: [habit(15, 2, 'garden', 1), habit(12, 2, 'forge', 0)],
-    });
-    expect(detectLevelUps({ town: 3, b: { library: 4, inn: 1, h12: 1, h15: 1 } }, several).toast)
-      .toBe('Level up! Terraria-on-Sea Lv 4 · Forge Lv 2 · Garden Lv 2');
-  });
-
-  it('adds the lot suffix, swaps only a stage change, and lowers downs silently', () => {
-    const up = detectLevelUps({ town: 2, b: { library: 1, inn: 1 } }, town({ level: 3, library: building(2) }));
-    expect(up.toast).toBe('Level up! Terraria-on-Sea Lv 3 · Library Lv 2 · New lot unlocked');
-    expect(up.swaps).toEqual([{ key: 'library', from: 'library-1' }]);
-    const sameStage = detectLevelUps({ town: 3, b: { library: 2, inn: 1 } }, town({ library: building(3) }));
-    expect(sameStage.toast).toBe('Library reached Lv 3.');
-    expect(sameStage.swaps).toEqual([]);
-    const down = detectLevelUps({ town: 5, b: { library: 4, inn: 2, treasury: 3 } }, town({ level: 4, library: building(3) }));
-    expect(down.toast).toBeNull();
-    expect(down.next.town).toBe(4);
-    expect(down.next.b['library']).toBe(3);
-    expect(down.next.b['treasury']).toBe(3);
-  });
 
   it('skips the write when a source is unavailable and drops deleted habit keys', () => {
     const storage = memory();

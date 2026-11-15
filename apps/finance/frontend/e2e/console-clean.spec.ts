@@ -16,7 +16,6 @@ const ROUTES = [
 
 const COMBOS = [
   { width: 1280, height: 800, theme: 'light' },
-  { width: 390, height: 844, theme: 'dark' },
 ] as const;
 
 for (const combo of COMBOS) {

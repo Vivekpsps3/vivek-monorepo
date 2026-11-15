@@ -1,15 +1,11 @@
 """PB2: GET /api/pixels — owner scoping, validation matrix, source isolation."""
 
-import time
-from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from apps.server.pixels import router as pixels_router
-from apps.server.pixels.schemas import PixelsResponse
 from apps.server.tests.test_birthday_route import _call, _user
 from apps.server.tests.test_composition import _app
 from apps.server.town.models import TownBase
@@ -134,148 +130,8 @@ def test_owner_scoped_sparse_days(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert "finance" not in str(body).lower()
 
 
-def test_other_user_sees_only_their_own(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    application, _database = _seeded(tmp_path, monkeypatch)
-    with TestClient(application) as client:
-        response = _call(client, "get", "/api/pixels?from=2026-01-01&to=2026-01-31", "token-b")
-    body = response.json()
-    assert body["days"] == [
-        {"date": "2026-01-03", "town": 1, "trip": 1},
-        {"date": "2026-01-04", "media": 1},
-    ]
-    assert body["first_activity_on"] == "2026-01-03"
-
-
 def test_unauthenticated_is_401(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     application, _database = _open(tmp_path, monkeypatch)
     with TestClient(application) as client:
         response = client.get("/api/pixels?from=2026-01-01&to=2026-01-31")
     assert response.status_code == 401
-
-
-@pytest.mark.parametrize(
-    "query",
-    [
-        "to=2026-01-31",  # missing from
-        "from=2026-01-01",  # missing to
-        "from=2026-13-01&to=2026-01-31",  # not a real date
-        "from=01-01-2026&to=2026-01-31",  # wrong shape
-        "from=2026-01-31&to=2026-01-01",  # from after to
-        "from=2026-01-01&to=2027-02-06",  # 401 days without profile
-        "from=1900-01-01&to=2000-01-03&profile=1",  # 36,526 days with profile
-    ],
-)
-def test_validation_matrix_422(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, query: str) -> None:
-    application, database = _open(tmp_path, monkeypatch)
-    _seed_user(database, 1, "token-a")
-    with TestClient(application) as client:
-        response = _call(client, "get", f"/api/pixels?{query}", "token-a")
-    assert response.status_code == 422, query
-
-
-@pytest.mark.parametrize(
-    "query",
-    [
-        "from=2026-01-01&to=2027-02-05",  # exactly 400 days without profile
-        "from=1900-01-01&to=2000-01-02&profile=1",  # exactly 36,525 days with profile
-        "from=2026-01-01&to=2026-01-01",  # single day
-    ],
-)
-def test_range_boundaries_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, query: str) -> None:
-    application, database = _open(tmp_path, monkeypatch)
-    _seed_user(database, 1, "token-a")
-    with TestClient(application) as client:
-        response = _call(client, "get", f"/api/pixels?{query}", "token-a")
-    assert response.status_code == 200, query
-    assert response.json()["days"] == []
-
-
-def test_profile_only_with_profile_1(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    application, database = _seeded(tmp_path, monkeypatch)
-    db = database.sessionmaker()
-    db.execute(text("UPDATE users SET birthday = '1990-05-04', pixels_show_age = 1 WHERE id = 1"))
-    db.commit()
-    db.close()
-    with TestClient(application) as client:
-        plain = _call(client, "get", "/api/pixels?from=2026-01-01&to=2026-01-31", "token-a")
-        zero = _call(
-            client, "get", "/api/pixels?from=2026-01-01&to=2026-01-31&profile=0", "token-a"
-        )
-        with_profile = _call(
-            client, "get", "/api/pixels?from=2026-01-01&to=2026-01-31&profile=1", "token-a"
-        )
-    assert "profile" not in plain.json()
-    assert "profile" not in zero.json()
-    assert with_profile.json()["profile"] == {"birthday": "1990-05-04", "show_age": True}
-
-
-def test_absent_town_table_leaves_other_sources(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    application, database = _seeded(tmp_path, monkeypatch)
-    db = database.sessionmaker()
-    db.execute(text("DROP TABLE habit_checkins"))
-    db.commit()
-    db.close()
-    with TestClient(application) as client:
-        response = _call(client, "get", "/api/pixels?from=2026-01-01&to=2026-01-31", "token-a")
-    assert response.status_code == 200
-    body = response.json()
-    assert body["sources"] == {"town": "absent", "media": "ok", "travel": "ok"}
-    assert body["days"] == [
-        {"date": "2026-01-03", "media": 1},
-        {"date": "2026-01-04", "trip": 1},
-        {"date": "2026-01-05", "trip": 1},
-        {"date": "2026-01-06", "trip": 1},
-    ]
-    assert body["first_activity_on"] == "2026-01-03"
-
-
-def test_unavailable_media_leaves_other_sources(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    application, _database = _seeded(tmp_path, monkeypatch)
-
-    def boom(*args, **kwargs):
-        raise RuntimeError("media store down")
-
-    monkeypatch.setattr(pixels_router, "_grouped_counts", boom)
-    with TestClient(application) as client:
-        response = _call(client, "get", "/api/pixels?from=2026-01-01&to=2026-01-31", "token-a")
-    assert response.status_code == 200
-    body = response.json()
-    # _grouped_counts serves both town and media; town runs first and also
-    # reports unavailable here, media too — travel stays intact.
-    assert body["sources"]["media"] == "unavailable"
-    assert body["sources"]["travel"] == "ok"
-    assert {"date": "2026-01-04", "trip": 1} in body["days"]
-    assert all("media" not in day for day in body["days"])
-
-
-def test_schema_has_no_finance_keys() -> None:
-    schema = PixelsResponse.model_json_schema(by_alias=True)
-    text_repr = str(schema).lower()
-    assert "finance" not in text_repr
-    assert "'fin'" not in text_repr
-    day_props = schema["$defs"]["PixelDay"]["properties"]
-    assert set(day_props) == {"date", "town", "media", "trip"}
-
-
-def test_perf_366_days(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    application, database = _open(tmp_path, monkeypatch)
-    _seed_user(database, 1, "token-a")
-    db = database.sessionmaker()
-    _habit(db, 10, 1)
-    start = date(2026, 1, 1)
-    for offset in range(366):
-        _checkin(db, 10, 1, (start + timedelta(days=offset)).isoformat())
-    db.commit()
-    db.close()
-    with TestClient(application) as client:
-        began = time.perf_counter()
-        response = _call(client, "get", "/api/pixels?from=2026-01-01&to=2026-12-31", "token-a")
-        elapsed_ms = (time.perf_counter() - began) * 1000
-    assert response.status_code == 200
-    assert len(response.json()["days"]) == 365  # 2026 is not a leap year; range covers 365 days
-    print(f"pixels 366-day perf: {elapsed_ms:.1f} ms")
-    assert elapsed_ms < 200

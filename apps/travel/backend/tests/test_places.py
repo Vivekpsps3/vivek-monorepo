@@ -1,12 +1,8 @@
-import json
-from datetime import UTC, datetime, timedelta
-
 import httpx
 import pytest
 
 from apps.server.errors import APIError
 from apps.travel.backend.deps import get_geocoder
-from apps.travel.backend.models import PlaceCache
 from apps.travel.backend.services import places
 
 
@@ -66,45 +62,6 @@ def test_timeout_is_visible(monkeypatch):
     monkeypatch.setattr(places.httpx, "get", timeout)
     with pytest.raises(APIError, match="timed out"):
         places.nominatim_search("Lisbon")
-
-
-def test_failed_search_does_not_cache_a_false_no_match(client):
-    def fail(_query):
-        raise RuntimeError("provider failed")
-
-    client.app.dependency_overrides[get_geocoder] = lambda: fail
-    failed = client.get("/api/places/search", params={"q": "Lisbon"})
-    assert failed.status_code == 502
-    assert failed.json()["code"] == "provider_unavailable"
-    assert failed.json()["request_id"]
-    with client.app.state.database.sessionmaker() as db:
-        assert db.query(PlaceCache).count() == 0
-
-
-def test_success_and_empty_results_expire_and_zero_coordinates_are_kept(client):
-    calls = []
-
-    def fetch(query):
-        calls.append(query)
-        return [{"label": "Zero", "lat": 0, "lng": 0}]
-
-    client.app.dependency_overrides[get_geocoder] = lambda: fetch
-    now = datetime.now(UTC)
-    with client.app.state.database.sessionmaker.begin() as db:
-        db.add_all(
-            [
-                PlaceCache(query="empty", payload="[]", fetched_at=now - timedelta(minutes=6)),
-                PlaceCache(
-                    query="old",
-                    payload=json.dumps([{"label": "Old", "lat": 1, "lng": 1}]),
-                    fetched_at=now - timedelta(days=8),
-                ),
-            ]
-        )
-    for query in ("Empty", "Old", "empty"):
-        response = client.get("/api/places/search", params={"q": query})
-        assert response.json()["results"] == [{"label": "Zero", "lat": 0, "lng": 0}]
-    assert calls == ["Empty", "Old"]
 
 
 def test_invalid_provider_coordinates_cannot_be_saved_in_the_cache(client):

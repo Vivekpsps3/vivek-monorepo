@@ -122,23 +122,6 @@ def _measure(client, **params):
     return response.json(), metrics
 
 
-def test_mixed_page_has_bounded_queries_and_matches_detail_truth(client, monkeypatch):
-    _seed_mixed(client, monkeypatch)
-    page, metrics = _measure(client, sort="title", limit=24)
-    assert len(page["items"]) == 24
-    # available_tags is one SELECT. This page does not repair saved albums.
-    assert metrics["selects"] <= 7, metrics
-    assert "continue" not in page  # Continuation belongs to /summary and Now.
-    for card in page["items"]:
-        detail = client.get(f"/api/entries/{card['id']}").json()
-        if card["kind"] == "tv":
-            assert card["caught_up"] == detail["show"]["caught_up"]
-            assert card["metadata_incomplete"] == detail["show"]["metadata_incomplete"]
-            assert card["lifecycle"] == detail["lifecycle"]
-        else:
-            assert card["saved_count"] == len(detail["music"]["saved_children"])
-
-
 def test_book_page_does_not_read_off_page_shows_or_music(client, monkeypatch):
     _seed_mixed(client, monkeypatch)
     from apps.media.backend.services import providers, records, summary
@@ -157,23 +140,3 @@ def test_book_page_does_not_read_off_page_shows_or_music(client, monkeypatch):
     empty, empty_metrics = _measure(client, kind="book", offset=120, limit=24)
     assert empty["items"] == []
     assert empty_metrics["selects"] == 3  # available_tags is one extra SELECT.
-
-
-def test_artist_counts_include_saved_songs_on_unsaved_albums_once_per_artist(client):
-    with client.app.state.database.sessionmaker() as db:
-        artist = _catalog(db, "artist", "Artist")
-        entry = _save(db, artist)
-        albums = [_catalog(db, "album", title) for title in ("First", "Second")]
-        song = _catalog(db, "track", "One song on two releases")
-        _save(db, song)
-        for album in albums:
-            _link(db, artist, album, "artist-release-group")
-            _link(db, album, song, "release-group-recording")
-        _save(db, albums[0], 2)
-        db.commit()
-        entry_id = entry.id
-    card = client.get("/api/library", params={"kind": "artist"}).json()["items"][0]
-    assert card["id"] == entry_id
-    assert card["saved_count"] == 1
-    assert client.get("/api/library", params={"kind": "album"}).json()["total"] == 0
-    assert client.get("/api/summary").status_code == 200

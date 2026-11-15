@@ -31,3 +31,10 @@ a { color: var(--accent); display: inline-flex; align-items: center; min-height:
   .source { grid-column: 3; grid-row: 1; }
   .event-link { grid-column: 2 / -1; grid-row: 2; }
 }
+
+.month-nav { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-4) 0; }
+.month-nav h3 { margin: 0; }
+.mini-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); max-width: 26rem; gap: 2px; }
+.mini-month > span { text-align: center; font-size: var(--text-xs); color: var(--text-secondary); }
+.mini-month button { min-height: 44px; padding: 0; font: inherit; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--accent); background: var(--card-bg); cursor: pointer; }
+.mini-month button:disabled { color: var(--text-secondary); border-color: transparent; cursor: default; }

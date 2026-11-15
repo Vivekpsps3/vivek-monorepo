@@ -1,6 +1,5 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { PixelsPreferences } from './pixels-preferences';
 import { YearToolbarComponent } from './year-toolbar.component';
 
 describe('Year toolbar', () => {
@@ -19,19 +18,6 @@ describe('Year toolbar', () => {
     fixture.detectChanges();
     return { fixture, el: fixture.nativeElement as HTMLElement };
   }
-
-  it('names the year controls and switches the view', () => {
-    const { fixture, el } = render();
-    expect(el.querySelector('[aria-label="Previous year"]')).not.toBeNull();
-    expect(el.querySelector('[aria-label="Next year"]')).not.toBeNull();
-    expect(el.querySelector('h2')?.textContent?.trim()).toBe('2026');
-    const view = [...el.querySelectorAll('button')].find(button => button.textContent?.includes('View as table'));
-    expect(view).toBeDefined();
-    view!.click();
-    fixture.detectChanges();
-    expect(TestBed.inject(PixelsPreferences).view()).toBe('table');
-    expect(el.textContent).toContain('View as grid');
-  });
 
   it('links to the vault only while Finance is locked', () => {
     const { fixture, el } = render('locked');

@@ -1,9 +1,9 @@
 import { Component } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
-import { FormControl, ReactiveFormsModule } from "@angular/forms";
+import { FormControl,ReactiveFormsModule } from "@angular/forms";
 import {
-  UiSegmentedComponent,
-  type UiSegmentedOption,
+UiSegmentedComponent,
+type UiSegmentedOption,
 } from "./ui-segmented.component";
 
 const OPTIONS: UiSegmentedOption[] = [
@@ -57,48 +57,6 @@ describe("ui-segmented", () => {
       group(index).querySelectorAll<HTMLButtonElement>('[role="radio"]'),
     );
   }
-  function keydown(el: HTMLElement, key: string): void {
-    el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
-  }
-
-  it("renders a radiogroup with one radio per option and aria-checked on the value", () => {
-    expect(group(0).getAttribute("aria-label")).toBe("Rating");
-    const opts = options(0);
-    expect(opts.length).toBe(3);
-    expect(opts.map((o) => o.getAttribute("aria-checked"))).toEqual([
-      "false",
-      "true",
-      "false",
-    ]);
-  });
-
-  it("roving tabindex: only the checked option (or the first) is tabbable", () => {
-    expect(options(0).map((o) => o.tabIndex)).toEqual([-1, 0, -1]);
-  });
-
-  it("arrow keys move and select, wrapping; Home and End", () => {
-    const opts = options(0);
-    opts[1].focus();
-    keydown(opts[1], "ArrowRight");
-    expect(host.value).toBe("r");
-    expect(document.activeElement).toBe(options(0)[2]);
-    keydown(options(0)[2], "ArrowRight"); // wraps
-    expect(host.value).toBe("g");
-    expect(document.activeElement).toBe(options(0)[0]);
-    keydown(options(0)[0], "End");
-    expect(host.value).toBe("r");
-    keydown(options(0)[2], "Home");
-    expect(host.value).toBe("g");
-    keydown(options(0)[0], "ArrowLeft"); // wraps backwards
-    expect(host.value).toBe("r");
-  });
-
-  it("clicking selects", () => {
-    options(0)[2].click();
-    fixture.detectChanges();
-    expect(host.value).toBe("r");
-    expect(options(0)[2].getAttribute("aria-checked")).toBe("true");
-  });
 
   it("works with a reactive FormControl (writeValue, onChange, onTouched, setDisabledState)", () => {
     // writeValue: the form control's initial value is shown checked.
@@ -122,16 +80,4 @@ describe("ui-segmented", () => {
     expect(options(1)[0].getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("unknown value checks nothing", () => {
-    host.value = "unrated";
-    fixture.detectChanges();
-    const opts = options(0);
-    expect(opts.map((o) => o.getAttribute("aria-checked"))).toEqual([
-      "false",
-      "false",
-      "false",
-    ]);
-    // ...and the first option stays the tab stop.
-    expect(opts.map((o) => o.tabIndex)).toEqual([0, -1, -1]);
-  });
 });

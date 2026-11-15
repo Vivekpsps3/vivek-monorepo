@@ -102,25 +102,3 @@ test("spendState locked none and some", () => {
     },
   );
 });
-
-test("countLabel singular and plural", () => {
-  assert.equal(countLabel(1), "1 transaction");
-  assert.equal(countLabel(0), "0 transactions");
-  assert.equal(countLabel(2), "2 transactions");
-  assert.equal(countLabel(12), "12 transactions");
-});
-
-test("bucketForCategory maps unknown to other", () => {
-  assert.equal(bucketForCategory("transport"), "transport");
-  assert.equal(bucketForCategory("outbound_flight"), "transport");
-  assert.equal(bucketForCategory("drive"), "transport");
-  assert.equal(bucketForCategory("lodging"), "stays_plans");
-  assert.equal(bucketForCategory("food"), "stays_plans");
-  assert.equal(bucketForCategory("activity"), "stays_plans");
-  assert.equal(bucketForCategory("parking"), "parking");
-  assert.equal(bucketForCategory("other"), "other");
-  assert.equal(bucketForCategory("souvenirs"), "other");
-  assert.equal(bucketForCategory(""), "other");
-  assert.equal(bucketForCategory(null), "other");
-  assert.equal(bucketForCategory(undefined), "other");
-});

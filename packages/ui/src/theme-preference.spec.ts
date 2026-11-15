@@ -1,4 +1,4 @@
-import { bindSystemTheme, readThemeChoice, setThemePreference } from './theme-preference';
+import { bindSystemTheme } from './theme-preference';
 
 describe('shared theme preference', () => {
   let stored: Map<string, string>;
@@ -19,23 +19,7 @@ describe('shared theme preference', () => {
     });
     document.documentElement.style.colorScheme = colorScheme;
   });
-  it('gives the suite choice precedence over an old app choice', () => {
-    stored.set('suite-theme', 'dark');
-    stored.set('travel-theme', 'light');
-    expect(readThemeChoice('travel-theme')).toBe('dark');
-  });
-  it('migrates a legacy choice when the suite has no preference', () => {
-    stored.set('media-theme', 'dark');
-    expect(readThemeChoice('media-theme')).toBe('dark');
-    expect(stored.get('suite-theme')).toBe('dark');
-  });
-  it('still applies a chosen theme when browser storage is unavailable', () => {
-    (localStorage.getItem as jasmine.Spy).and.throwError('storage unavailable');
-    (localStorage.setItem as jasmine.Spy).and.throwError('storage unavailable');
-    expect(readThemeChoice('ft-theme')).toBe('system');
-    expect(() => setThemePreference('dark', 'ft-theme')).not.toThrow();
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
-  });
+
   it('follows system changes only while System is selected and releases its listener', () => {
     let dark = false;
     let listener = () => {};

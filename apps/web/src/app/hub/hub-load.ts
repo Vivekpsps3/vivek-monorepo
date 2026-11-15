@@ -6,8 +6,8 @@ export type { HubCardState };
 
 export const HUB_SUMMARY_DEADLINE_MS = 8_000;
 export const TRAVEL_SUMMARY_URL = '/travel/api/summary';
-export function travelSummaryUrl(): string {
-  return `${TRAVEL_SUMMARY_URL}?tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`;
+export function travelSummaryUrl(start?: string, end?: string): string {
+  return `${TRAVEL_SUMMARY_URL}?tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}${start && end ? `&start=${start}&end=${end}` : ''}`;
 }
 
 export const MEDIA_SUMMARY_URL = '/media/api/summary';
@@ -94,13 +94,24 @@ export function settleHubCard<T>(
 /** The Media card and Up next settle together from one summary and each needed saved month. */
 export async function fetchHubMedia(
   today: string, signal: AbortSignal, deadlineMs = HUB_SUMMARY_DEADLINE_MS,
+  end?: string, previous?: MediaHubSummary,
 ): Promise<HubFetch<MediaHubSummary>> {
   const started = Date.now();
   const remaining = () => Math.max(0, deadlineMs - (Date.now() - started));
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const urls = end
+    ? [...new Set([today.slice(0, 7), end.slice(0, 7)])].map(month => `/media/api/calendar?month=${month}&tz=${encodeURIComponent(tz)}`)
+    : calendarUrls(today, tz);
   const [summary, ...calendars] = await Promise.all([
-    fetchHubSummary(MEDIA_SUMMARY_URL, signal, decodeMediaSummary, remaining()),
-    ...calendarUrls(today, tz).map(url => fetchHubSummary(url, signal, decodeMediaCalendar, remaining())),
+    previous ? Promise.resolve({ status: 'ok' as const, body: previous })
+      : fetchHubSummary(MEDIA_SUMMARY_URL, signal, decodeMediaSummary, remaining()),
+    ...urls.map(async url => {
+      const month = new URL(url, 'http://local').searchParams.get('month')!;
+      const saved = previous?.calendars.find(calendar => calendar.month === month);
+      if (saved) return { status: 'ok' as const, body: saved };
+      const result = await fetchHubSummary(url, signal, decodeMediaCalendar, remaining());
+      return result.status === 'ok' ? { ...result, body: { ...result.body, month } } : result;
+    }),
   ]);
   if (signal.aborted) return { status: 'cancelled' };
   const all = [summary, ...calendars];

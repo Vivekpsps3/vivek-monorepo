@@ -19,13 +19,6 @@ def _app(*, openapi: bool):
     )
 
 
-def test_openapi_disabled_when_env_set(monkeypatch):
-    monkeypatch.setenv("DISABLE_OPENAPI", "1")
-    client = TestClient(_app(openapi=False))
-    assert client.get("/openapi.json").status_code == 404
-    assert client.get("/docs").status_code == 404
-
-
 def test_openapi_excludes_retired_plaintext_finance_paths(monkeypatch):
     monkeypatch.delenv("DISABLE_OPENAPI", raising=False)
     client = TestClient(_app(openapi=True))

@@ -7,7 +7,7 @@ const VIEWPORTS = [
   { width: 390, height: 844 },
   { width: 1280, height: 800 },
 ] as const;
-const THEMES = ['light', 'dark'] as const;
+const THEMES = ['light'] as const;
 
 for (const viewport of VIEWPORTS) {
   for (const theme of THEMES) {

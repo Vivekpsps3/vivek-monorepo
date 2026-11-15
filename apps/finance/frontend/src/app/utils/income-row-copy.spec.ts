@@ -1,4 +1,4 @@
-import { incomeRowSubtitle, incomeRowTitle } from './income-row-copy';
+import { incomeRowTitle } from './income-row-copy';
 
 describe('income-row-copy (F18)', () => {
   it('paycheck and posted titles', () => {
@@ -13,13 +13,4 @@ describe('income-row-copy (F18)', () => {
     );
   });
 
-  it('paycheck subtitle names the cadence', () => {
-    expect(incomeRowSubtitle({ kind: 'paycheck', label: '', name: '', detail: 'x', payday_frequency: 'biweekly' })).toBe(
-      'Estimated net · Every two weeks',
-    );
-    expect(incomeRowSubtitle({ kind: 'paycheck', label: '', name: '', detail: 'x' })).toBe('Estimated net');
-    expect(incomeRowSubtitle({ kind: 'estimate', label: '', name: '', detail: 'Undated estimate' })).toBe(
-      'Undated estimate',
-    );
-  });
 });

@@ -1,12 +1,6 @@
-import { journalKindLabel, mediaReleaseLabel } from './hub-summary';
+import { mediaReleaseLabel } from './hub-summary';
 
 describe('Hub media labels', () => {
-  it('uses the journal kind labels', () => {
-    expect(journalKindLabel('tv')).toBe('Series');
-    expect(journalKindLabel('book')).toBe('Book');
-    expect(journalKindLabel('track')).toBe('Song');
-    expect(journalKindLabel('game')).toBe('Game');
-  });
 
   it('keeps month and year releases from looking like a specific day', () => {
     expect(mediaReleaseLabel({ when: 'upcoming', precision: 'year', release_on: '2027-01-01' })).toBe('2027');

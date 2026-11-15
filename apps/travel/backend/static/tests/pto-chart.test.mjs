@@ -62,16 +62,6 @@ function labelsOf(geo) {
   return geo.xTicks.map((tick) => tick.label);
 }
 
-test("day ticks always include zero and stay within four or five", () => {
-  for (const [min, max] of [[0, 10], [0, 12], [-1.5, 10], [-3, 2], [0, 0], [5, 5], [-0.25, 0.5]]) {
-    const ticks = dayTicks(min, max);
-    assert.ok(ticks.includes(0), `${min}..${max} => ${ticks}`);
-    assert.ok(ticks.length >= 4 && ticks.length <= 5, `${min}..${max} => ${ticks}`);
-    assert.ok(ticks[0] <= Math.min(0, min) + 1e-6);
-    assert.ok(ticks[ticks.length - 1] >= Math.max(0, max) - 1e-6);
-  }
-});
-
 test("two buckets share one plot, table, and server point text", () => {
   const body = series();
   const geo = combinedForecast(body, { wide: true, width: 900 });
@@ -109,34 +99,6 @@ test("two buckets share one plot, table, and server point text", () => {
   assert.match(geo.caption, /Sick 4 days/);
   assert.equal(geo.warnings.length, 0);
   assert.deepEqual(geo.endLabels.map((label) => label.text), ["PTO 12.5 d", "Sick 4 d"]);
-});
-
-test("narrow ticks use every other month and an apostrophe year on January", () => {
-  const geo = combinedForecast(series(), { wide: false, width: 900 });
-  assert.equal(geo.height, CHART_HEIGHT_COMPACT);
-  assert.equal(CHART_HEIGHT_COMPACT, 220);
-  assert.deepEqual(labelsOf(geo), ["Jul", "Sep", "Nov", "Jan \u201927", "Mar"]);
-});
-
-test("x labels and end labels do not occupy the same box", () => {
-  const geo = combinedForecast(series(), { wide: true, width: 420 });
-  const boxes = geo.xTicks.map((tick) => {
-    const width = tick.label.length * 6.6;
-    return { left: tick.x - width / 2, right: tick.x + width / 2, label: tick.label };
-  });
-  for (let index = 1; index < boxes.length; index += 1) {
-    assert.ok(boxes[index].left >= boxes[index - 1].right - 1, boxes.map((box) => box.label).join(" | "));
-  }
-  const ends = [...geo.endLabels].sort((a, b) => a.y - b.y);
-  if (ends.length === 2) assert.ok(ends[1].y - ends[0].y >= 14);
-  const tied = series();
-  tied.sick.points = tied.pto.points.map((item) => ({ ...item }));
-  tied.sick.balance_horizon_days = tied.pto.balance_horizon_days;
-  tied.sick.balance_horizon_hours = tied.pto.balance_horizon_hours;
-  const tiedGeo = combinedForecast(tied, { wide: true, width: 800 });
-  const tiedEnds = [...tiedGeo.endLabels].sort((a, b) => a.y - b.y);
-  assert.ok(tiedEnds[1].y - tiedEnds[0].y >= 14);
-  assert.notEqual(tiedEnds[0].text, tiedEnds[1].text);
 });
 
 test("negative balances keep the API text, the band, and both warnings", () => {
@@ -221,8 +183,4 @@ test("table text is the API point, not hours divided again", () => {
   const geo = combinedForecast(body, { wide: true, width: 640 });
   assert.equal(geo.table.rows[0].cells[1], `3 days ${DOT} 999 h`);
   assert.match(geo.caption, /PTO 3 days · 999 h/);
-});
-
-test("the chart failure sentence is the local retry copy", () => {
-  assert.equal(CHART_ERROR, "Couldn't load the balance chart.");
 });

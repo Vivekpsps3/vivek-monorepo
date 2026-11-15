@@ -16,9 +16,12 @@ Invalidate old owner/route work before publication, clear private snapshots on l
 and dispose subscriptions/listeners with the actual consumer lifetime. Cancellation
 must not leave a promise that can still mutate shared state.
 
-Hub Up next and app cards share Travel summary, Media summary plus saved calendar
-months, and one browser-only Finance load. Keep the 14-day window and overdue
-rules in those existing projections; reminder PATCH uses every ReminderIn field.
+Hub Up next, its agenda child route, and app cards share Travel summary, Media
+summary plus saved calendar months, and one browser-only Finance load. Keep the
+Hub component alive across `/hub` and `/hub/agenda`; month/source filters live in
+the URL. Compact Up next retains its 14-day window and overdue rules; the agenda
+uses bounded summary windows and authoritative saved dates. Reminder PATCH uses
+every ReminderIn field.
 `hub-up-next.spec.ts` executes with the web browser suite.
 
 Use existing Hub load/state mechanics and shared controls before adding another

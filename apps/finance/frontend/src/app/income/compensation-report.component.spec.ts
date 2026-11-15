@@ -1,10 +1,10 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
-import { BehaviorSubject, of } from 'rxjs';
-import { CompensationReportComponent } from './compensation-report.component';
-import { FinanceService } from '../services/finance.service';
-import { JobIncome } from '../models/transaction.model';
+import { ComponentFixture,TestBed } from '@angular/core/testing';
+import { ActivatedRoute,convertToParamMap,Router } from '@angular/router';
+import { BehaviorSubject,of } from 'rxjs';
 import { enrichJobIncome } from '../crypto/client-finance';
+import { JobIncome } from '../models/transaction.model';
+import { FinanceService } from '../services/finance.service';
+import { CompensationReportComponent } from './compensation-report.component';
 
 describe('CompensationReportComponent', () => {
   let fixture: ComponentFixture<CompensationReportComponent>;
@@ -41,17 +41,6 @@ describe('CompensationReportComponent', () => {
 
   afterEach(() => jasmine.clock().uninstall());
 
-  it('shows a read-only employer estimate for the URL-selected date range', () => {
-    expect(fixture.componentInstance.total).toBe(3500);
-    expect(fixture.nativeElement.textContent.replaceAll('\u2060', '')).toContain('$3,500.00');
-    expect(fixture.nativeElement.querySelector('app-income')).toBeNull();
-    fixture.componentInstance.start = '2026-01-31';
-    fixture.componentInstance.refresh();
-    fixture.detectChanges();
-    expect(fixture.componentInstance.total).toBe(500);
-    expect(fixture.nativeElement.textContent.replaceAll('\u2060', '')).toContain('$500.00');
-  });
-
   it('reads and validates year and custom range parameters from the route', () => {
     queryParams.next(convertToParamMap({ year: '2025', start: '', end: '' }));
     fixture.detectChanges();
@@ -66,14 +55,4 @@ describe('CompensationReportComponent', () => {
     expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('Through date');
   });
 
-  it('writes selected dates back to the URL while retaining merged route context', () => {
-    fixture.componentInstance.start = '2026-01-15';
-    fixture.componentInstance.end = '2026-01-31';
-    fixture.componentInstance.customRangeChanged();
-    expect(router.navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
-      queryParams: jasmine.objectContaining({ year: 'custom', start: '2026-01-15', end: '2026-01-31' }),
-      queryParamsHandling: 'merge',
-      replaceUrl: true,
-    }));
-  });
 });

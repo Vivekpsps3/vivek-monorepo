@@ -646,10 +646,19 @@ def build_home(db, today: date | None = None, *, user_id: int) -> dict:
     }
 
 
-def build_summary(db, today: date | None = None, *, user_id: int) -> dict:
+def build_summary(
+    db,
+    today: date | None = None,
+    *,
+    user_id: int,
+    start: date | None = None,
+    end: date | None = None,
+) -> dict:
     """One owner-scoped response for the next-trip card and the Hub's dated rows."""
     today = today or date.today()
-    end = today + timedelta(days=13)
+    compact = start is None
+    start = start or today
+    end = end or today + timedelta(days=13)
     trips = (
         db.query(Trip)
         .filter(Trip.user_id == user_id)
@@ -693,7 +702,7 @@ def build_summary(db, today: date | None = None, *, user_id: int) -> dict:
             "reminder": None,
         }
         for kind, point in (("trip_start", trip.start_date), ("trip_end", trip.end_date)):
-            if today <= point <= end and (kind != "trip_end" or point != trip.start_date):
+            if start <= point <= end and (kind != "trip_end" or point != trip.start_date):
                 rows.append(
                     {
                         **common,
@@ -704,7 +713,7 @@ def build_summary(db, today: date | None = None, *, user_id: int) -> dict:
                     }
                 )
         for row in trip.transports:
-            if row.depart_at is not None and today <= row.depart_at.date() <= end:
+            if row.depart_at is not None and start <= row.depart_at.date() <= end:
                 rows.append(
                     {
                         **common,
@@ -721,7 +730,7 @@ def build_summary(db, today: date | None = None, *, user_id: int) -> dict:
                 continue
             point = row.due_at.date()
             overdue = point < today and trip.end_date >= today
-            if overdue or today <= point <= end:
+            if (compact and overdue) or start <= point <= end:
                 time = row.due_at.strftime("%H:%M")
                 rows.append(
                     {

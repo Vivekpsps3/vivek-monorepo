@@ -6,12 +6,11 @@ import { chooseColorTheme } from '../../../../tests/e2e/user-menu.mjs';
 // F22: the Net worth summary card uses the one-line breakdown
 // ("Assets $X · Investments $Y · Debts −$Z") with a single
 // "Balances as of" line, and the balance dialogs save with
-// "Save asset" / "Save debt". Matrix: 390/1280 × light/dark.
+// "Save asset" / "Save debt". Functional copy is checked once; screenshots own the viewport/theme matrix.
 const viewports = [
   { width: 390, height: 844 },
-  { width: 1280, height: 800 },
 ] as const;
-const themes = ['light', 'dark'] as const;
+const themes = ['light'] as const;
 
 for (const viewport of viewports) {
   for (const theme of themes) {

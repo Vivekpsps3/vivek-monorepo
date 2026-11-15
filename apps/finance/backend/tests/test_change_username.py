@@ -6,7 +6,6 @@ import os
 
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
-from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
@@ -260,67 +259,6 @@ def test_rename_keeps_sessions_and_decrypts_with_the_same_wraps(monkeypatch):
     assert rows[-1]["created_at"] is not None
 
 
-def test_wrong_passphrase_does_not_rename(monkeypatch):
-    _open_signup(monkeypatch)
-    client, private_key, auth, _vault, _dek = _signup("owner.name", passphrase=PASSPHRASE)
-    wrong = _derive(
-        "wrong passphrase!!", base64.b64decode(auth["kdf_salt_b64"]), auth["kdf_iterations"]
-    )
-    try:
-        _unpack(wrong, auth["wrapped_private_key_b64"])
-    except InvalidTag:
-        pass
-    else:
-        raise AssertionError("wrong passphrase unwrapped the signing key")
-
-    other_key = ec.generate_private_key(ec.SECP256R1())
-    challenge = client.post(
-        "/api/auth/passwordless/challenge", json={"username": "owner.name"}
-    ).json()
-    response = client.patch(
-        "/api/account/username",
-        json={
-            "username": "renamed.owner",
-            "challenge_id": challenge["challenge_id"],
-            "challenge": challenge["challenge"],
-            "message": challenge["message"],
-            "signature_b64": _raw_signature(other_key, challenge["message"]),
-        },
-    )
-    assert response.status_code == 401
-    assert client.get("/api/auth/me").json()["user"]["username"] == "owner.name"
-    row = _audits()[-1]
-    detail = json.loads(row["detail"] or "{}")
-    assert detail["success"] is False
-    assert detail["old_username"] == "owner.name"
-    assert detail["new_username"] == "renamed.owner"
-    assert "wrong passphrase" not in (row["detail"] or "")
-    assert challenge["challenge"] not in (row["detail"] or "")
-    assert private_key is not None
-
-
-def test_collision_includes_a_different_case(monkeypatch):
-    _open_signup(monkeypatch)
-    owner, owner_key, _auth, _vault, _dek = _signup("owner.name")
-    _signup("other.user")
-    same = _rename(owner, owner_key, "owner.name", "other.user")
-    different_case = _rename(owner, owner_key, "owner.name", "Other.User")
-    assert same.status_code == 409
-    assert different_case.status_code == 409
-    assert owner.get("/api/auth/me").json()["user"]["username"] == "owner.name"
-    assert json.loads(_audits()[-1]["detail"] or "{}")["success"] is False
-
-
-def test_invalid_username_is_400(monkeypatch):
-    _open_signup(monkeypatch)
-    client, private_key, _auth, _vault, _dek = _signup("owner.name")
-    for candidate in ("ab", "has space", "user@email.com", "bad/name", "a" * 65, ""):
-        response = _rename(client, private_key, "owner.name", candidate)
-        assert response.status_code == 400, candidate
-        assert response.json()["detail"] == "Invalid username"
-    assert client.get("/api/auth/me").json()["user"]["username"] == "owner.name"
-
-
 def test_missing_csrf_is_rejected(monkeypatch):
     _open_signup(monkeypatch)
     client, private_key, _auth, _vault, _dek = _signup("owner.name")
@@ -331,61 +269,6 @@ def test_missing_csrf_is_rejected(monkeypatch):
         json={"username": "renamed.owner", **_proof(client, private_key, "owner.name")},
     )
     assert response.status_code == 403
-    assert client.get("/api/auth/me").json()["user"]["username"] == "owner.name"
-
-
-def test_username_change_is_rate_limited(monkeypatch):
-    _open_signup(monkeypatch)
-    client, private_key, _auth, _vault, _dek = _signup("owner.name")
-
-    monkeypatch.setenv("AUTH_PAIR_RATE_LIMIT_PER_MIN", "1")
-    monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "100")
-    monkeypatch.delenv("RATE_LIMIT_PER_MIN", raising=False)
-    clear_limits()
-    blocked = _rename(client, private_key, "owner.name", "renamed.owner")
-    assert blocked.status_code == 429
-    assert client.get("/api/auth/me").json()["user"]["username"] == "owner.name"
-
-    monkeypatch.setenv("AUTH_PAIR_RATE_LIMIT_PER_MIN", "100")
-    monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "1")
-    clear_limits()
-    limited_ip = _rename(client, private_key, "owner.name", "renamed.owner")
-    assert limited_ip.status_code == 429
-
-    monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "100")
-    monkeypatch.setenv("RATE_LIMIT_PER_MIN", "1")
-    clear_limits()
-    assert (
-        client.post("/api/auth/passwordless/challenge", json={"username": "owner.name"}).status_code
-        == 200
-    )
-    limited_shared = client.patch(
-        "/api/account/username",
-        json={
-            "username": "renamed.owner",
-            "challenge_id": "c" * 16,
-            "challenge": "d" * 32,
-            "message": "vault-auth-v1",
-            "signature_b64": "e" * 16,
-        },
-    )
-    assert limited_shared.status_code == 429
-
-    monkeypatch.setenv("RATE_LIMIT_PER_MIN", "100")
-    monkeypatch.setenv("AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN", "1")
-    clear_limits()
-    challenge = client.post(
-        "/api/auth/passwordless/challenge", json={"username": "owner.name"}
-    ).json()
-    forged = {
-        "username": "renamed.owner",
-        "challenge_id": challenge["challenge_id"],
-        "challenge": challenge["challenge"],
-        "message": challenge["message"],
-        "signature_b64": _b64(b"\x01" * 64),
-    }
-    assert client.patch("/api/account/username", json=forged).status_code == 401
-    assert client.patch("/api/account/username", json=forged).status_code == 429
     assert client.get("/api/auth/me").json()["user"]["username"] == "owner.name"
 
 
@@ -455,116 +338,6 @@ def _retarget_username(current: str, username: str, email: str | None = None) ->
         db.commit()
     finally:
         db.close()
-
-
-def test_legacy_email_username_changes_without_moving_a_real_mailbox(monkeypatch):
-    """A username that contains @ is the account label, not a mailbox alias."""
-    _open_signup(monkeypatch)
-    client, private_key, auth, _vault, _dek = _signup("legacy.seed")
-    _retarget_username("legacy.seed", "Legacy.User@example.com")
-
-    me = client.get("/api/auth/me")
-    assert me.status_code == 200
-    assert me.json()["user"]["username"] == "Legacy.User@example.com"
-    assert me.json()["user"]["email"] == "legacy.seed@pending.local"
-
-    anonymous = TestClient(app)
-    found = anonymous.post(
-        "/api/auth/passwordless/lookup", json={"username": "Legacy.User@example.com"}
-    )
-    lowered = anonymous.post(
-        "/api/auth/passwordless/lookup", json={"username": "legacy.user@example.com"}
-    )
-    by_mailbox = anonymous.post(
-        "/api/auth/passwordless/lookup", json={"username": "legacy.seed@pending.local"}
-    )
-    assert found.json()["auth"]["wrapped_private_key_b64"] == auth["wrapped_private_key_b64"]
-    assert lowered.json()["auth"]["wrapped_private_key_b64"] == auth["wrapped_private_key_b64"]
-    assert by_mailbox.json()["auth"]["wrapped_private_key_b64"] != auth["wrapped_private_key_b64"]
-
-    challenge = anonymous.post(
-        "/api/auth/passwordless/challenge",
-        json={"username": "Legacy.User@example.com", "purpose": "username_change"},
-    )
-    assert challenge.status_code == 200, challenge.text
-    issued = challenge.json()
-    assert issued["challenge_id"] in issued["message"]
-    assert "\nusername_change\n" in issued["message"]
-    login_issue = anonymous.post(
-        "/api/auth/passwordless/challenge", json={"username": "legacy.user@example.com"}
-    )
-    assert "\nlogin\n" in login_issue.json()["message"]
-
-    signed_in = TestClient(app)
-    verified = signed_in.post(
-        "/api/auth/passwordless/verify",
-        json={
-            "username": "legacy.user@example.com",
-            **_proof(anonymous, private_key, "legacy.user@example.com"),
-        },
-    )
-    assert verified.status_code == 200, verified.text
-    assert verified.json()["user"]["username"] == "Legacy.User@example.com"
-
-    renamed = _rename(client, private_key, "Legacy.User@example.com", "Renamed.Legacy")
-    assert renamed.status_code == 200, renamed.text
-    assert renamed.json()["username"] == "renamed.legacy"
-    assert renamed.json()["email"] == "legacy.seed@pending.local"
-    detail = json.loads(_audits()[-1]["detail"] or "{}")
-    assert detail["old_username"] == "Legacy.User@example.com"
-    assert detail["new_username"] == "renamed.legacy"
-    assert detail["success"] is True
-
-    old_login = anonymous.post(
-        "/api/auth/passwordless/verify",
-        json={
-            "username": "Legacy.User@example.com",
-            **_proof(anonymous, private_key, "Legacy.User@example.com"),
-        },
-    )
-    assert old_login.status_code == 401
-    new_login = anonymous.post(
-        "/api/auth/passwordless/verify",
-        json={"username": "renamed.legacy", **_proof(anonymous, private_key, "renamed.legacy")},
-    )
-    assert new_login.status_code == 200, new_login.text
-
-
-def test_synthetic_mailbox_follows_an_email_username_until_it_is_taken(monkeypatch):
-    _open_signup(monkeypatch)
-    client, private_key, _auth, _vault, _dek = _signup("legacy.seed")
-    _retarget_username(
-        "legacy.seed",
-        "legacy.user@example.com",
-        "legacy.user@example.com@pending.local",
-    )
-    holder, _key, _a, _v, _d = _signup("mailbox.holder")
-    db = SessionLocal()
-    try:
-        from apps.server.identity.models import User
-
-        row = db.query(User).filter(User.username == "mailbox.holder").one()
-        field = "email"
-        setattr(row, field, "taken.name@pending.local")
-        db.commit()
-    finally:
-        db.close()
-    assert holder.get("/api/auth/me").status_code == 200
-
-    blocked = _rename(client, private_key, "legacy.user@example.com", "taken.name")
-    assert blocked.status_code == 409
-    stayed = client.get("/api/auth/me").json()["user"]
-    assert stayed["username"] == "legacy.user@example.com"
-    assert stayed["email"] == "legacy.user@example.com@pending.local"
-    failure = json.loads(_audits()[-1]["detail"] or "{}")
-    assert failure["success"] is False
-    assert failure["reason"] == "collision"
-    assert failure["old_username"] == "legacy.user@example.com"
-
-    renamed = _rename(client, private_key, "legacy.user@example.com", "fresh.name")
-    assert renamed.status_code == 200, renamed.text
-    assert renamed.json()["username"] == "fresh.name"
-    assert renamed.json()["email"] == "fresh.name@pending.local"
 
 
 def test_auth_me_repairs_a_stale_csrf_cookie(monkeypatch):

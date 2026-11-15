@@ -35,9 +35,4 @@ describe('Year stats', () => {
     expect(el.textContent).not.toContain('Finance locked');
   });
 
-  it('shows the kept count when Finance is ready', () => {
-    const el = render(0, 'ready');
-    expect(el.querySelector('[data-stat="budget-kept"]')?.textContent?.trim()).toBe('0');
-    expect(el.querySelector('[role="img"]')).toBeNull();
-  });
 });

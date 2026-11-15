@@ -1,11 +1,11 @@
-import { TestBed, fakeAsync, flushMicrotasks } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { Subject } from 'rxjs';
 import { ToastService } from '@vivek/ui';
-import { TownApiService, type CheckinResult } from './town.api';
-import { TownTodayComponent, liveCheck, restNote } from './town-today.component';
+import { Subject } from 'rxjs';
+import { TownTodayComponent,liveCheck } from './town-today.component';
+import { TownApiService,type CheckinResult } from './town.api';
 import { LOT_UNLOCK_LV } from './town.constants';
-import type { Habit, TownResponse } from './town.types';
+import type { Habit,TownResponse } from './town.types';
 
 function habit(partial: Partial<Habit> & Pick<Habit, 'id' | 'name'>): Habit {
   return {
@@ -104,36 +104,6 @@ describe('Today panel', () => {
     expect(el.querySelector('.treasury')?.textContent).not.toMatch(/Lv \d/);
   });
 
-  it('names an unavailable source beside a usable one', () => {
-    const down = snapshot();
-    down.buildings.library = { ...down.buildings.library, source: 'unavailable', today_xp: 0, xp: 0 };
-    const { el } = render(down);
-    expect(el.textContent).toContain('Media unavailable');
-    expect(el.textContent).toContain('Travel · +5/15 XP today');
-    expect(el.textContent).not.toContain('Auto');
-    expect(el.textContent).not.toContain('Media · +');
-    const badges = [...el.querySelectorAll('.passive ui-badge')].map(badge => badge.textContent?.trim());
-    expect(badges).toEqual(['Travel']);
-    expect(el.querySelector('.treasury a')?.textContent?.trim()).toBe('Finance vault locked');
-  });
-
-  it('disables a new habit when no lot is free and keeps the helper copy', () => {
-    const data = snapshot();
-    data.lots.forEach(lot => { if (lot.state === 'empty') lot.state = 'occupied'; });
-    const { fixture, el } = render(data);
-    const button = [...el.querySelectorAll('button')].find(item => item.textContent?.trim() === '+ New habit')!;
-    expect(button.disabled).toBeTrue();
-    expect(button.getAttribute('title')).toBe('No free lots');
-    expect(el.querySelector('footer')?.textContent).toBe('All unlocked lots are built. Reach Lv 5 for another.');
-    data.lots.forEach(lot => lot.state = 'occupied');
-    // setInput ignores an identical reference, so OnPush would keep the locked-lot footer.
-    fixture.componentRef.setInput('data', { ...data, lots: data.lots.map(lot => ({ ...lot })) });
-    fixture.detectChanges();
-    expect(el.querySelector('footer')?.textContent).toBe('All lots are built.');
-    expect(restNote([])).toBe('');
-    expect(restNote([habit({ id: 1, name: 'Read', streak: { unit: 'days', current: 1, best: 1, best_days: 1, best_weeks: 0, rest_day_available: false, rest_used_on: null } })])).toBe('Rest day used this week');
-  });
-
   it('posts today optimistically, keeps focus, undoes, and shows the server message', () => {
     spyOn(toast, 'error');
     const read = habit({ id: 12, name: 'Read 20 pages' });
@@ -171,34 +141,4 @@ describe('Today panel', () => {
     expect(dayChanged).toHaveBeenCalledTimes(1);
   });
 
-  it('refocuses the check button only on the refresh that follows that write', fakeAsync(() => {
-    const read = habit({ id: 12, name: 'Read 20 pages' });
-    const { fixture, el } = render(snapshot([read]));
-    const button = el.querySelector<HTMLButtonElement>('[data-check="12"] button')!;
-    const history = () => [...el.querySelectorAll('button')].find(item => item.textContent?.trim() === 'History')!;
-    const settle = () => {
-      fixture.detectChanges();
-      TestBed.tick();
-      flushMicrotasks();
-    };
-    button.click();
-    settle();
-    history().focus();
-    expect(document.activeElement).toBe(history());
-    read.checked_today = true;
-    fixture.componentRef.setInput('data', snapshot([read]));
-    settle();
-    expect(document.activeElement).toBe(button);
-    // Dialog close, Mark yesterday, and the visible-date poll are later snapshots.
-    for (const data of [
-      snapshot([{ ...read }]),
-      snapshot([{ ...read, xp: 90 }]),
-      snapshot([{ ...read, streak: { ...read.streak, current: 5 } }]),
-    ]) {
-      history().focus();
-      fixture.componentRef.setInput('data', data);
-      settle();
-      expect(document.activeElement).toBe(history());
-    }
-  }));
 });

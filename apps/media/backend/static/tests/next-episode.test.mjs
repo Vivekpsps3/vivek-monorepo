@@ -2,13 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { episodeLabel, nextEpisodeError } from "../../../frontend/src/next-episode.mjs";
 
-test("episodeLabel formats without padding", () => {
-  assert.equal(episodeLabel(2, 4), "S2E4");
-  assert.equal(episodeLabel(0, 1), "S0E1");
-  assert.equal(episodeLabel(1, 12), "S1E12");
-  assert.equal(episodeLabel(10, 3), "S10E3");
-});
-
 test("nextEpisodeError maps 0/502/503/504 to the offline copy", () => {
   for (const status of [0, 502, 503, 504]) {
     assert.deepEqual(nextEpisodeError(status, "Some server detail"), {

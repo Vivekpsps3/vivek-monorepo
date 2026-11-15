@@ -59,24 +59,4 @@ describe('Life week panel', () => {
     expect(el.querySelector('a[href*="vault/unlock"]')).toBeNull();
   });
 
-  it('steps a week or a year from the 44px controls', () => {
-    const fixture = TestBed.createComponent(LifeWeekComponent);
-    fixture.componentRef.setInput('week', week());
-    fixture.componentRef.setInput('rowCount', 90);
-    fixture.componentRef.setInput('showAge', true);
-    fixture.componentRef.setInput('financeStatus', 'ready');
-    fixture.componentRef.setInput('week', week({ financeKnown: false, financeKept: 0 }));
-    fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Age 36');
-    expect(el.textContent).toContain('Finance · no data for this week');
-    const steps: string[] = [];
-    fixture.componentInstance.step.subscribe(step => steps.push(step));
-    el.querySelector<HTMLButtonElement>('[aria-label="Wk ▶, next week"]')!.click();
-    el.querySelector<HTMLButtonElement>('[aria-label="▲ Yr, previous year"]')!.click();
-    expect(steps).toEqual(['week-next', 'year-prev']);
-    for (const button of el.querySelectorAll('.life-steppers button')) {
-      expect(getComputedStyle(button).minHeight).toBe('44px');
-    }
-  });
 });

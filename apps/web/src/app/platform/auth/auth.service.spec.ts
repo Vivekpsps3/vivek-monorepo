@@ -307,7 +307,7 @@ describe('AuthService passwordless login', () => {
       updated_at: '2026-10-14T00:00:01',
     });
     await expectAsync(pending).toBeResolvedTo(jasmine.objectContaining({ username: 'next.name' }));
-    expect(warn).not.toHaveBeenCalled();
+    expect(warn.calls.allArgs()).withContext('Warnings during username change').toEqual([]);
     expect(JSON.stringify(warn.calls.allArgs())).not.toContain(passphrase);
   });
 

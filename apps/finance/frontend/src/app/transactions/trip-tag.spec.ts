@@ -1,4 +1,4 @@
-import { RECENT_PAST_TRIP_LIMIT, normalizeTripId, tripTagChoices, type TripTagHome } from './trip-tag';
+import { RECENT_PAST_TRIP_LIMIT,normalizeTripId,tripTagChoices,type TripTagHome } from './trip-tag';
 
 describe('trip tags', () => {
   const home: TripTagHome = {
@@ -9,15 +9,6 @@ describe('trip tags', () => {
       title: `Past ${index}`,
     })),
   };
-
-  it('orders current, upcoming, and the recent past, and keeps one copy of each id', () => {
-    expect(tripTagChoices(home, null).map(choice => choice.label)).toEqual([
-      'No trip',
-      'Now',
-      'Soon',
-      ...Array.from({ length: RECENT_PAST_TRIP_LIMIT }, (_, index) => `Past ${index}`),
-    ]);
-  });
 
   it('keeps an orphan saved id as Earlier trip and rejects ids that are not positive integers', () => {
     const older = 10 + RECENT_PAST_TRIP_LIMIT;

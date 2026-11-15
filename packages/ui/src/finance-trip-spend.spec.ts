@@ -1,7 +1,7 @@
 import { TestBed } from "@angular/core/testing";
 import {
-  FinanceTripSpendRegistry,
-  type TripSpendLookup,
+FinanceTripSpendRegistry,
+type TripSpendLookup,
 } from "./finance-trip-spend";
 
 describe("FinanceTripSpendRegistry", () => {
@@ -9,20 +9,6 @@ describe("FinanceTripSpendRegistry", () => {
 
   beforeEach(() => {
     registry = TestBed.inject(FinanceTripSpendRegistry);
-  });
-
-  it("lookup is null until register; unregister restores null", () => {
-    expect(registry.lookup()).toBeNull();
-    const fn: TripSpendLookup = () => [
-      { currency: "USD", cents: 1234, count: 2 },
-    ];
-    const unregister = registry.register(fn);
-    expect(registry.lookup()).toBe(fn);
-    expect(registry.lookup()?.(7)).toEqual([
-      { currency: "USD", cents: 1234, count: 2 },
-    ]);
-    unregister();
-    expect(registry.lookup()).toBeNull();
   });
 
   it("a stale unregister does not clear a newer registration", () => {

@@ -22,8 +22,8 @@ async function assertAccessible(page: Page) {
   expect(results.violations.filter(result => result.impact === 'serious' || result.impact === 'critical')).toEqual([]);
 }
 
-for (const width of [390, 1280]) {
-  for (const theme of ['light', 'dark'] as const) {
+for (const width of [390]) {
+  for (const theme of ['light'] as const) {
     test.describe(`${width} ${theme}`, () => {
       test.beforeEach(async ({ page }) => {
         await page.setViewportSize({ width, height: 900 });

@@ -1,26 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '../../../tests/e2e/fixtures';
+import { expect, test } from '../../../tests/e2e/fixtures';
 
-const reminder = { id: 7, title: 'Check in', due_at: '2026-12-24T09:00', done: false, kind: 'flight', notes: 'Keep this note' };
-const event = { id: 7, kind: 'reminder', date: '2026-12-24', time: '09:00', tz: null, title: 'Check in', overdue: true,
-  trip_id: 12, trip_title: 'Kyoto', href: '/travel/trips/12', reminder };
-const travel = { today: '2026-12-25', next_trip: { id: 12, title: 'Kyoto', destination: 'Kyoto', start_date: '2026-12-26',
-  end_date: '2027-01-07', phase: 'upcoming', days_until: 1, next_action: 'Leaves tomorrow', href: '/travel/trips/12' },
-  up_next: [event, { ...event, id: 12, kind: 'trip_start', date: '2026-12-26', time: null, title: 'Kyoto starts', overdue: false, reminder: null }] };
-const summary = { currently: [{ id: 4, title: 'Example series', kind: 'tv', progress_label: 'S1 E1' }], recent_reviews: [], upcoming: [], next_episodes: [] };
-const mediaEvent = (title: string) => ({ type: 'episode', title, entry_id: 4, watched: false, release_status: 'scheduled' });
-
-async function sources(page: Page) {
-  const calls: string[] = [];
-  await page.route('**/travel/api/summary?*', route => { calls.push('travel'); return route.fulfill({ json: travel }); });
-  await page.route('**/media/api/summary', route => { calls.push('media'); return route.fulfill({ json: summary }); });
-  await page.route('**/media/api/calendar?*', route => {
-    const month = new URL(route.request().url()).searchParams.get('month');
-    calls.push(month!);
-    return route.fulfill({ json: { days: [{ date: month === '2026-12' ? '2026-12-25' : '2027-01-07', events: [mediaEvent(month === '2026-12' ? 'Premiere' : 'Finale')] }] } });
-  });
-  return calls;
-}
+import { reminder, event, travel, summary, mediaEvent, sources } from './hub-fixtures';
 
 test.beforeEach(async ({ page, request }) => {
   expect((await request.post('/e2e/reset?seed=pixels')).ok()).toBeTruthy();
@@ -150,3 +131,51 @@ for (const width of [390, 1280]) {
     });
   }
 }
+
+test('agenda reuses source months, preserves URL history and offers keyboard date navigation', async ({ page }) => {
+  const calls = await sources(page);
+  await page.goto('/hub');
+  await expect(page.getByRole('region', { name: 'Up next' }).getByRole('link', { name: 'Premiere' })).toBeVisible();
+  await page.getByRole('link', { name: 'Explore agenda' }).click();
+  const agenda = page.getByRole('region', { name: 'Agenda', exact: true });
+  await expect(agenda.getByRole('link', { name: 'Premiere' })).toBeVisible();
+  expect(calls.filter(call => call === 'media')).toHaveLength(1);
+  expect(calls.filter(call => call === '2026-12')).toHaveLength(1);
+  await agenda.getByRole('button', { name: 'December 25, 1 event', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#agenda-2026-12-25')).toBeFocused();
+  await agenda.getByRole('button', { name: 'Travel', exact: true }).click();
+  await expect(page).toHaveURL(/sources=media/);
+  await expect(agenda.getByRole('link', { name: 'Check in' })).toHaveCount(0);
+  await agenda.getByRole('button', { name: 'Next month' }).click();
+  await expect(page).toHaveURL(/date=2027-01-01/);
+  await expect(agenda.getByRole('link', { name: 'Finale' })).toBeVisible();
+  await page.goBack();
+  await expect(agenda.getByRole('heading', { name: 'December 2026' })).toBeVisible();
+  await expect(agenda.getByRole('button', { name: 'Travel', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await page.goForward(); await page.reload();
+  await expect(agenda.getByRole('link', { name: 'Finale' })).toBeVisible();
+  await expect(agenda.getByRole('button', { name: 'Travel', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  expect(new URL(page.url()).searchParams.get('sources')).toBe('media');
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});
+
+test('recent notes and long show titles stay inside the Media card at phone and desktop widths', async ({ page }) => {
+  await sources(page);
+  const title = 'LongShowTitle'.repeat(15);
+  const note = 'UnbrokenNote'.repeat(50);
+  await page.route('**/media/api/summary', route => route.fulfill({ json: { ...summary, currently: [], recent_reviews: [{ id: 4, kind: 'tv', title, review_excerpt: note }] } }));
+  await page.goto('/hub');
+  const card = page.getByRole('region', { name: 'In progress' });
+  await expect(card).toContainText(note);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await card.evaluate(node => {
+      const box = node.getBoundingClientRect();
+      return [...node.querySelectorAll('.media-notes li, .media-notes a, .media-notes strong')].every(child => {
+        const rect = child.getBoundingClientRect();
+        return rect.left >= box.left && rect.right <= box.right && child.scrollWidth <= child.clientWidth + 1;
+      });
+    })).toBe(true);
+  }
+});

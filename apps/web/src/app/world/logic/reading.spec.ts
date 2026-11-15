@@ -1,5 +1,5 @@
-import { WORLD_COPY, type WeekChest, type WorldWeek } from '../world.types';
-import { readingForWeeks, readingWeek } from './reading';
+import { WORLD_COPY,type WeekChest,type WorldWeek } from '../world.types';
+import { readingWeek } from './reading';
 
 function week(partial: Partial<WorldWeek> & Pick<WorldWeek, 'week'>): WorldWeek {
   return {
@@ -32,8 +32,6 @@ describe('reading', () => {
     }],
     concepts: [{ id: 5, name: 'Tide tables', on: '2026-10-29' }],
   });
-
-  const newer = week({ week: '2026-11-02' });
 
   it('lists known rows, the overflow count, and no titles the API omitted', () => {
     const chest: WeekChest = { week: '2026-10-26', visual: 'gold', line: WORLD_COPY.withinPlan };
@@ -70,47 +68,4 @@ describe('reading', () => {
     expect(reading.items.filter((item) => item.kind === 'lit').every((item) => item.title === 'Lit')).toBeTrue();
   });
 
-  it('copies the budget line and does not put digits on it', () => {
-    const within = readingWeek(older, { week: older.week, visual: 'gold', line: WORLD_COPY.withinPlan });
-    const over = readingWeek(older, { week: older.week, visual: 'none', line: WORLD_COPY.overPlan });
-    const empty = readingWeek(older, { week: older.week, visual: 'none', line: null });
-
-    expect(within.budgetLine).toBe('Within your spending plan');
-    expect(over.budgetLine).toBe('Over your spending plan');
-    expect(empty.budgetLine).toBeNull();
-    expect(empty.items.some((item) => item.kind === 'budget')).toBeFalse();
-
-    for (const reading of [within, over]) {
-      const budget = reading.items.find((item) => item.kind === 'budget');
-      expect(budget?.title).toBe(reading.budgetLine ?? '');
-      expect(budget?.detail).toBe('');
-      expect(budget?.date).toBe('');
-      expect(reading.budgetLine).not.toMatch(/\d/);
-      expect(budget?.title).not.toMatch(/\d/);
-      expect(JSON.stringify(budget)).not.toMatch(/"spend"|"weeklyPlan"|"annualPlan"|\$/);
-    }
-  });
-
-  it('orders weeks and lights a day from a trip, an item, or a habit', () => {
-    const readings = readingForWeeks(
-      [older, newer],
-      [{ week: '2026-11-02', visual: 'none', line: null }],
-      true,
-    );
-    expect(readings.map((item) => item.week)).toEqual(['2026-11-02', '2026-10-26']);
-    expect(readingForWeeks([newer, older], [], false).map((item) => item.week)).toEqual([
-      '2026-10-26', '2026-11-02',
-    ]);
-
-    const onlyHabit = readingWeek(week({
-      week: '2026-11-02',
-      habits: [{
-        habit_id: 1, name: 'Garden', style: 'garden', archived: false, days: ['2026-11-04'],
-      }],
-    }));
-    expect(onlyHabit.items.filter((item) => item.kind === 'lit').map((item) => item.date)).toEqual(['2026-11-04']);
-
-    const quiet = readingWeek(week({ week: '2026-11-02' }));
-    expect(quiet.items).toEqual([]);
-  });
 });

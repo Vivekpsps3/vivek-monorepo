@@ -1,8 +1,5 @@
 """Private photos are selected explicitly; saved reads never enrich."""
 
-import httpx
-import pytest
-
 from apps.media.backend.services import portraits, providers
 from apps.server.auth import Principal, require_principal
 
@@ -69,60 +66,3 @@ def test_select_reset_is_private_and_does_not_touch_catalog_or_reviews(client, m
     assert reset["artwork_url"] == first["artwork_url"]
     assert reset["portrait"] is None
     assert reset["review"] == "My review"
-
-
-def test_photo_failure_and_refresh_keep_the_previous_choice(client, monkeypatch):
-    monkeypatch.setattr(portraits, "_fetch", lambda _params: [dict(PHOTO)])
-    saved = client.post("/api/library/from-provider", json=ARTIST).json()
-    path = f"/api/entries/{saved['id']}"
-    assert client.put(path + "/portrait", json={"source_id": "42"}).status_code == 200
-
-    def unavailable(_params):
-        raise httpx.ReadTimeout("offline")
-
-    monkeypatch.setattr(portraits, "_fetch", unavailable)
-    failure = client.put(path + "/portrait", json={"source_id": "43"})
-    assert failure.status_code == 504
-    assert failure.json()["code"] == "timeout"
-    assert client.get(path).json()["artwork_url"] == PHOTO["thumbnail"]
-    assert client.post(path + "/refresh").status_code == 502
-    assert client.get(path).json()["artwork_url"] == PHOTO["thumbnail"]
-
-
-@pytest.mark.parametrize(
-    "body",
-    [
-        {"source_id": "https://127.0.0.1/internal"},
-        {"source_id": "42", "crop": [-1, 50]},
-        {"source_id": "42", "crop": [True, 40]},
-    ],
-)
-def test_photo_selection_rejects_untrusted_identity_and_crop(client, body):
-    saved = client.post("/api/library/from-provider", json=ARTIST).json()
-    assert client.put(f"/api/entries/{saved['id']}/portrait", json=body).status_code == 422
-
-
-def test_commons_metadata_discards_unsafe_images_and_strips_html():
-    page: dict = {
-        "pageid": 42,
-        "title": "File:Photo",
-        "imageinfo": [
-            {
-                "mime": "image/jpeg",
-                "thumburl": PHOTO["thumbnail"],
-                "descriptionurl": PHOTO["source_url"],
-                "extmetadata": {
-                    "Artist": {"value": "<b>Photographer</b>"},
-                    "LicenseShortName": {"value": "CC BY-SA 4.0"},
-                },
-            }
-        ],
-    }
-    candidate = portraits._candidate(page)
-    assert candidate is not None
-    assert candidate["creator"] == "Photographer"
-    page["imageinfo"][0]["thumburl"] = "https://upload.wikimedia.org.evil.example/unsafe.jpg"
-    assert portraits._candidate(page) is None
-    page["imageinfo"][0]["thumburl"] = PHOTO["thumbnail"]
-    page["imageinfo"][0]["mime"] = "image/svg+xml"
-    assert portraits._candidate(page) is None

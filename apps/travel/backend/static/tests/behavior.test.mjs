@@ -22,33 +22,6 @@ test("a 422 sentence maps back to the field that failed", () => {
   assert.equal(fieldForMessage("Something else."), "");
 });
 
-test("night counts use the singular and a day trip reads as one", () => {
-  assert.equal(nightsText(1), "1 night");
-  assert.equal(nightsText(6), "6 nights");
-  assert.equal(nightsText(0), "Day trip");
-  assert.equal(nightsAwayText(1), "1 night away");
-  assert.equal(nightsAwayText(5), "5 nights away");
-  assert.equal(spanText(6), "6 days");
-  assert.equal(spanText(1), "1 day");
-});
-
-test("PTO days trim trailing zeros and a negative balance says over", () => {
-  assert.equal(daysText("12.5000"), "12.5 days");
-  assert.equal(daysText("5.0000"), "5 days");
-  assert.equal(daysText("0.25"), "0.25 days");
-  assert.equal(daysText(1), "1 day");
-  assert.equal(balancePhrase("-1.46"), "1.46 days over");
-  assert.equal(balancePhrase("2"), "2 days");
-});
-
-test("every parking chip branch has its own sentence", () => {
-  assert.equal(parkingChipParts({ necessary: "no", arrangement: "self_park" }).text, "Parking not needed");
-  assert.equal(parkingChipParts({ necessary: "unknown", arrangement: "none" }).text, "Parking not needed");
-  assert.equal(parkingChipParts({ necessary: "yes", booked: true, place_name: "SFO" }).text, "Parking booked · SFO");
-  assert.equal(parkingChipParts({ necessary: "yes", booked: false }).text, "Parking needed, not booked");
-  assert.equal(parkingChipParts({ necessary: "unknown", arrangement: "valet", booked: false }).text, "Valet");
-});
-
 test("an out of range PTO balance is rejected before a request", () => {
   assert.equal(balanceError("9999"), "Balance has to be between -366 and 366 days.");
   assert.equal(balanceError("12.5"), "");

@@ -63,12 +63,17 @@ export class PrivateLayoutComponent {
   private lastFocusedPath = '';
   /** Drops a heading-focus retry when a newer navigation starts. */
   private focusAttempt = 0;
+  private focusTimer: ReturnType<typeof setTimeout> | undefined;
 
   private readonly tripSpend = startFinanceTripSpend(inject(Injector));
 
   constructor() {
     const destroy = inject(DestroyRef);
-    destroy.onDestroy(() => this.tripSpend.stop());
+    destroy.onDestroy(() => {
+      this.focusAttempt += 1;
+      clearTimeout(this.focusTimer);
+      this.tripSpend.stop();
+    });
     this.session.user$.pipe(takeUntilDestroyed(destroy)).subscribe(() => {
       this.closeMenu(false);
       this.closeSwitcher(false);
@@ -95,6 +100,7 @@ export class PrivateLayoutComponent {
    * loop steals focus from the next keyboard or menu action.
    */
   private focusArrivedHeading(path: string): void {
+    clearTimeout(this.focusTimer);
     const attempt = ++this.focusAttempt;
     const started = performance.now();
     let confirm = false;
@@ -120,17 +126,17 @@ export class PrivateLayoutComponent {
           if (confirm || performance.now() - started > 400) return;
           heading.tabIndex = -1;
           heading.focus({ preventScroll: true, focusVisible: false } as FocusOptions & { focusVisible?: boolean });
-          setTimeout(tick, 0);
+          this.focusTimer = setTimeout(tick, 0);
           return;
         }
         if (!confirm) {
           confirm = true;
-          setTimeout(tick, 0);
+          this.focusTimer = setTimeout(tick, 0);
         }
         return;
       }
       if (performance.now() - started < 400) {
-        setTimeout(tick, 16);
+        this.focusTimer = setTimeout(tick, 16);
         return;
       }
       if (!dialogOpen) {

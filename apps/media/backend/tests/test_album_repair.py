@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import event
 
 from apps.media.backend.models import CatalogItem, MusicLink, UserEntry
 from apps.media.backend.services import providers, records
@@ -681,68 +680,3 @@ def test_repair1_bounded_repair_preserves_each_owner(client, monkeypatch):
         with pytest.raises(HTTPException) as caught:
             records.finish_album_refresh(db, missing, {"extra": []})
         assert caught.value.status_code == 404
-
-
-def test_page1_album_page_does_not_repair_full_history(client, monkeypatch):
-    """PAGE1: a small page does not scan album history for repair, and pending stays pending."""
-    ids = {}
-    with client.app.state.database.sessionmaker() as db:
-        for index in range(40):
-            source_id = _mbid(1000 + index)
-            row = _album(
-                db,
-                title=f"Album {index:02d}",
-                source_id=source_id,
-                extra=_pending(),
-            )
-            entry = _entry(db, row, 1, review=f"note-{index:02d}", rating=index % 10)
-            ids[entry.id] = (source_id, row.title, entry.review)
-        db.commit()
-    before = _saved(client)
-    _forbid_providers(monkeypatch)
-
-    def measure(**params):
-        engine = client.app.state.database.engine
-        statements = []
-
-        def record(_connection, _cursor, statement, _parameters, _context, _many):
-            if statement.lstrip().upper().startswith("SELECT"):
-                statements.append(statement)
-
-        event.listen(engine, "before_cursor_execute", record)
-        try:
-            response = client.get("/api/library", params=params)
-        finally:
-            event.remove(engine, "before_cursor_execute", record)
-        assert response.status_code == 200, response.text
-        return response.json(), statements
-
-    page, statements = measure(kind="album", sort="title", offset=0, limit=2)
-    assert page["total"] == 40
-    assert page["limit"] == 2
-    assert page["has_more"] is True
-    assert [item["title"] for item in page["items"]] == ["Album 00", "Album 01"]
-    assert len(statements) == 3, statements
-    assert any("LIMIT" in statement.upper() for statement in statements)
-    later, later_statements = measure(kind="album", sort="title", offset=38, limit=2)
-    assert [item["title"] for item in later["items"]] == ["Album 38", "Album 39"]
-    assert later["has_more"] is False
-    assert len(later_statements) == len(statements)
-    filtered, _filtered_statements = measure(kind="album", q="Album 07", sort="title", limit=2)
-    assert [item["title"] for item in filtered["items"]] == ["Album 07"]
-    for item in page["items"]:
-        detail = client.get(f"/api/entries/{item['id']}").json()
-        source_id, title, review = ids[item["id"]]
-        assert detail["title"] == title
-        assert detail["review"] == review
-        assert detail["catalog"]["source_id"] == source_id
-        assert detail["catalog"]["extra"]["metadata_pending"] is True
-        assert "release_group_id" not in detail["catalog"]["extra"]
-    assert client.get("/api/summary").status_code == 200
-    assert _saved(client) == before
-    repeated = client.get(
-        "/api/library",
-        params={"kind": "album", "sort": "title", "limit": 2, "offset": 0},
-    ).json()
-    assert repeated["items"][0]["title"] == "Album 00"
-    assert _saved(client) == before

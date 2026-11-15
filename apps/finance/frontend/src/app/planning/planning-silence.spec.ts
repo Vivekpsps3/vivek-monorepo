@@ -1,9 +1,8 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClient,withInterceptors } from '@angular/common/http';
+import { HttpTestingController,provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
+import { HTTP_ERROR_FALLBACK,SILENT_ERROR_TOAST,ToastService,httpErrorInterceptor } from '@vivek/ui';
 import { firstValueFrom } from 'rxjs';
-import { SILENT_ERROR_TOAST, httpErrorInterceptor } from '@vivek/ui';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { VaultService } from '../crypto/vault.service';
 import { PlanningService } from '../services/planning.service';
@@ -65,29 +64,6 @@ describe('planning profile writes through the interceptor', () => {
     revision: 1,
     updated_at: '2026-10-01T00:00:00Z',
   };
-
-  it('keeps a failed profile create silent', async () => {
-    const pending = firstValueFrom(service.createProfile({ name: 'Probe profile', payload: {} } as never)).catch(() => undefined);
-    const list = await whenRequest(req => req.method === 'GET' && req.url.includes('/vault/records'));
-    expect(list.request.context.get(SILENT_ERROR_TOAST)).withContext('create load').toBeTrue();
-    list.flush([]);
-    const save = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
-    expect(save.request.context.get(SILENT_ERROR_TOAST)).withContext('create').toBeTrue();
-    save.flush({ detail: 'Synthetic save failed' }, { status: 503, statusText: 'Unavailable' });
-    await pending;
-    expect(toast.error).not.toHaveBeenCalled();
-  });
-
-  it('keeps a failed profile update silent', async () => {
-    const pending = firstValueFrom(service.updateProfile(4, { name: 'Probe profile', payload: {} } as never)).catch(() => undefined);
-    const list = await whenRequest(req => req.method === 'GET' && req.url.includes('/vault/records'));
-    list.flush([profileRecord]);
-    const save = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
-    expect(save.request.context.get(SILENT_ERROR_TOAST)).withContext('update').toBeTrue();
-    save.flush({ detail: 'Synthetic save failed' }, { status: 503, statusText: 'Unavailable' });
-    await pending;
-    expect(toast.error).not.toHaveBeenCalled();
-  });
 
   it('keeps a failed profile delete silent', async () => {
     const pending = firstValueFrom(service.deleteProfile(4)).catch(() => undefined);

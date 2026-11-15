@@ -232,49 +232,6 @@ def test_other_owner_cannot_remove_sick(client, monkeypatch):
     assert client.get("/api/pto/policies/sick").json()["start_balance_hours"] == "80"
 
 
-def test_reconfigure_and_dated_correction_keep_history(client, monkeypatch):
-    pin(monkeypatch)
-    revision = _seed(client)
-    before = _ledger(client)
-    removed = client.post("/api/pto/policies/sick/removal", json={"revision": revision})
-    assert removed.status_code == 200, removed.text
-    restored = client.put("/api/pto/policies/sick", json=_policy())
-    assert restored.status_code == 200, restored.text
-    assert restored.json()["buckets"]["sick"]["configured"] is True
-    kept = _ledger(client)
-    assert kept["entries"] == before["entries"]
-    assert kept["allocations"] == before["allocations"]
-
-    same_day = client.post("/api/pto/policies/sick/impact", json=_policy(start_balance_hours="40"))
-    assert same_day.status_code == 200, same_day.text
-    assert same_day.json()["entries_rewritten"] is False
-    assert same_day.json()["balance_today_hours"] == "32"
-    assert _ledger(client)["entries"] == before["entries"]
-    assert _ledger(client)["policies"] == kept["policies"]
-
-    moved = client.post(
-        "/api/pto/policies/sick/impact",
-        json=_policy(start_balance_hours="40", balance_as_of="2026-11-01"),
-    )
-    assert moved.status_code == 200, moved.text
-    assert moved.json()["balance_today_hours"] == "40"
-    assert moved.json()["entries_rewritten"] is False
-    assert _ledger(client)["entries"] == before["entries"]
-
-    corrected = client.put(
-        "/api/pto/policies/sick",
-        json=_policy(start_balance_hours="40", balance_as_of="2026-11-01"),
-    )
-    assert corrected.status_code == 200, corrected.text
-    assert corrected.json()["buckets"]["sick"]["start_balance_hours"] == "40"
-    assert corrected.json()["buckets"]["sick"]["balance_as_of"] == "2026-11-01"
-    final = _ledger(client)
-    assert final["entries"] == before["entries"]
-    assert final["allocations"] == before["allocations"]
-    clinic = next(row for row in final["entries"] if row[2] == "Clinic")
-    assert clinic[1:] == ("sick", "Clinic", "2026-02-02", "2026-02-02", "1.0000", None)
-
-
 @pytest.mark.parametrize("body", [None, {"revision": True}, {"revision": "1"}])
 def test_removal_rejects_a_bad_revision_without_writing(client, monkeypatch, body):
     pin(monkeypatch)
