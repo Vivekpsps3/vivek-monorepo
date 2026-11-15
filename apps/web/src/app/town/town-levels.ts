@@ -27,7 +27,8 @@ export function treasuryTier(weeksKept: number): number {
 }
 
 /**
- * Unlocked treasury. The level is the habit-week tier from TREASURY_WEEKS, not the town level.
+ * Unlocked treasury. The level is the week-count tier from TREASURY_WEEKS, not the town level.
+ * Treasury passes completed Finance budget weeks. Habit streaks stay on weeksKeptRun.
  * The stage is the same sprite stage the world paints.
  */
 export function treasuryUnlocked(weeksKept: number): { level: number; stage: 1 | 2 | 3 } {

@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, effect, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { RouterLink } from '@angular/router';
 import { ToastService, UiBadgeComponent, UiButtonComponent, UiEmptyStateComponent } from '@vivek/ui';
 import { TownApiService, type CheckinResult } from './town.api';
-import { treasuryUnlocked } from './town-levels';
+import { treasuryFace as presentTreasury, type TreasuryFace, type TreasuryView } from './weeks-kept';
 import type { Building, Habit, TownResponse } from './town.types';
 
 const STYLE_NAME = { forge: 'Forge', garden: 'Garden', cottage: 'Cottage' } as const;
@@ -45,7 +46,7 @@ function problem(error: unknown): { code?: string; message: string } {
 
 @Component({
   selector: 'app-town-today',
-  imports: [UiBadgeComponent, UiButtonComponent, UiEmptyStateComponent],
+  imports: [RouterLink, UiBadgeComponent, UiButtonComponent, UiEmptyStateComponent],
   templateUrl: './town-today.component.html',
   styleUrl: './town-today.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -57,8 +58,8 @@ export class TownTodayComponent {
   private readonly host = inject(ElementRef<HTMLElement>);
   readonly data = input.required<TownResponse>();
   readonly vaultPresent = input(false);
-  /** Habit weeks already counted by Town. Null means they could not be read. */
-  readonly weeksKept = input<number | null>(null);
+  /** Completed Finance budget weeks. Habit streaks do not fill this in. */
+  readonly treasury = input<TreasuryView | null>(null);
   readonly live = input('');
   readonly newHabit = output<void>();
   readonly history = output<void>();
@@ -137,10 +138,10 @@ export class TownTodayComponent {
     return formatRest(this.habits());
   }
 
-  treasuryNote(): string {
-    const weeks = this.weeksKept();
-    if (weeks == null || !Number.isFinite(weeks)) return 'Unavailable';
-    return `Lv ${treasuryUnlocked(weeks).level}`;
+  treasuryFace(): TreasuryFace {
+    return presentTreasury(!this.vaultPresent()
+      ? { status: 'locked' }
+      : (this.treasury() ?? { status: 'loading' }));
   }
 
   autoLabel(kind: 'library' | 'inn', building: Building): string {

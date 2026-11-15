@@ -1,16 +1,31 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { Subject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { ToastService } from '@vivek/ui';
 import { VAULT_PRESENCE } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
 import { TownApiService, type CheckinResult } from './town.api';
-import { TownComponent } from './town.component';
+import { TOWN_BUDGET_KEPT, TownComponent } from './town.component';
 import { LOT_UNLOCK_LV } from './town.constants';
 import type { Habit, TownResponse } from './town.types';
 
 function localDay(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+function keptBudgetWeeks(count: number): { weekStart: string; kept: true }[] {
+  const weeks: { weekStart: string; kept: true }[] = [];
+  let cursor = '2026-10-19';
+  for (let index = 0; index < count; index += 1) {
+    weeks.push({ weekStart: cursor, kept: true });
+    const [year, month, day] = cursor.split('-').map(Number);
+    cursor = new Date(Date.UTC(year, month - 1, day - 7)).toISOString().slice(0, 10);
+  }
+  return weeks;
+}
+async function flushBudget(fixture: { detectChanges(): void }): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  fixture.detectChanges();
 }
 function snapshot(): TownResponse {
   const building = { xp: 0, level: 1, stage: 1 as const, level_xp_start: 0, next_level_xp: 50, today_xp: 0, today_cap: 10, source: 'ok' as const };
@@ -24,16 +39,32 @@ function snapshot(): TownResponse {
 describe('Town page', () => {
   let response: Subject<TownResponse>;
   let api: { getTown: jasmine.Spy; checkin: jasmine.Spy };
+  let budget: jasmine.Spy;
+  let user: BehaviorSubject<{ id: number } | null>;
+  let cleared: Subject<void>;
+  const session: { user: { id: number } | null; readonly currentUser: { id: number } | null; user$: BehaviorSubject<{ id: number } | null>; cleared$: Subject<void> } = {
+    user: { id: 7 },
+    get currentUser() { return this.user; },
+    user$: null as unknown as BehaviorSubject<{ id: number } | null>,
+    cleared$: null as unknown as Subject<void>,
+  };
   beforeEach(() => {
     localStorage.clear();
     response = new Subject();
+    user = new BehaviorSubject<{ id: number } | null>({ id: 7 });
+    cleared = new Subject<void>();
+    session.user = { id: 7 };
+    session.user$ = user;
+    session.cleared$ = cleared;
+    budget = jasmine.createSpy('loadFinanceBudgetKept').and.resolveTo({ status: 'locked' });
     api = { getTown: jasmine.createSpy().and.callFake(() => response), checkin: jasmine.createSpy() };
     TestBed.configureTestingModule({
       imports: [TownComponent],
       providers: [
         provideRouter([]),
         { provide: TownApiService, useValue: api },
-        { provide: SessionService, useValue: { currentUser: { id: 7 } } },
+        { provide: SessionService, useValue: session },
+        { provide: TOWN_BUDGET_KEPT, useValue: budget },
       ],
     });
   });
@@ -250,21 +281,17 @@ describe('Town page', () => {
     expect(tile.textContent).toContain('Finance vault locked');
     expect(tile.textContent).not.toMatch(/\d/);
     expect(tile.querySelector('a')?.getAttribute('href')).toBe('/finance/vault/unlock?next=%2Ftown');
-    expect(el.querySelector('.treasury ui-badge')?.textContent?.trim()).toBe('Finance vault locked');
+    expect(el.querySelector('.treasury a')?.textContent?.trim()).toBe('Finance vault locked');
+    expect(budget).not.toHaveBeenCalled();
     expect(el.querySelector('ui-skeleton')).toBeNull();
     expect(tile.textContent).not.toMatch(/\$/);
   });
-  it('shows the treasury tier from habit weeks when the Finance vault is present', () => {
+  it('shows the treasury tier from completed budget weeks, not a long habit streak', async () => {
     localStorage.setItem(VAULT_PRESENCE, '7');
+    let release: (result: { status: string; weeks?: { weekStart: string; kept: boolean | null }[] }) => void = () => undefined;
+    budget.and.returnValue(new Promise(resolve => { release = resolve; }));
     const data = snapshot();
-    const { fixture, el } = render(data);
-    const tile = () => el.querySelectorAll('ul > li')[2] as HTMLElement;
-    expect(tile().querySelector('img')?.getAttribute('src')).toBe('/town/treasury-1.svg');
-    expect(tile().textContent).toContain('Lv 1');
-    expect(tile().querySelector('a')?.getAttribute('href')).toBe('/finance');
-    expect(el.querySelector('.treasury')?.textContent).toContain('Lv 1');
-    expect(el.querySelector('ui-skeleton')).toBeNull();
-    expect(tile().textContent).not.toMatch(/\$/);
+    data.town = { ...data.town, xp: 340, level: 3, level_xp_start: 250, next_level_xp: 500 };
     data.habits = [{
       id: 4, name: 'Walk', slot: 0, building_style: 'garden',
       cadence: { per_week: 3, kind: 'weekly', pending: null }, created_on: '2026-10-05', archived_on: null,
@@ -272,13 +299,105 @@ describe('Town page', () => {
       streak: { unit: 'weeks', current: 4, best: 4, best_days: 0, best_weeks: 4, rest_day_available: null, rest_used_on: null },
       week: { done: 1, target: 3 }, checked_today: false, checked_yesterday: false, can_check_yesterday: true, last7: [],
     } as Habit];
-    response.next(data); fixture.detectChanges();
-    expect(tile().querySelector('img')?.getAttribute('src')).toBe('/town/treasury-3.svg');
-    expect(tile().textContent).toContain('Lv 4');
-    expect(tile().textContent).not.toContain('Lv 3');
-    expect(el.querySelector('.treasury')?.textContent).toContain('Lv 4');
-    expect(el.querySelector('.treasury')?.textContent).not.toContain('Locked');
+    const { fixture, el } = render(data);
+    const tile = () => el.querySelectorAll('ul > li')[2] as HTMLElement;
+    expect(tile().textContent).toContain('Loading');
+    expect(tile().textContent).not.toContain('Lv 4');
+    expect(budget).toHaveBeenCalledOnceWith(
+      jasmine.any(Object),
+      jasmine.any(AbortSignal),
+      { today: '2026-10-29', weeks: 52, includeCurrentWeek: false, deadlineMs: 8000 },
+    );
+    release({
+      status: 'ready',
+      weeks: [
+        { weekStart: '2026-10-26', kept: true },
+        { weekStart: '2026-10-19', kept: false },
+        { weekStart: '2026-10-12', kept: true },
+      ],
+    });
+    await flushBudget(fixture);
+    expect(tile().querySelector('img')?.getAttribute('src')).toBe('/town/treasury-1.svg');
+    expect(tile().textContent).toContain('Lv 1 · 0 weeks');
+    expect(tile().textContent).not.toContain('Lv 4');
+    expect(el.querySelector('.treasury')?.textContent).toContain('Lv 1 · 0 weeks');
+    expect(el.textContent).toContain('Lv 3 · 340 / 500 XP');
+    expect(tile().querySelector('a')?.getAttribute('href')).toBe('/finance');
+    expect(tile().textContent).not.toMatch(/\$/);
     expect(el.querySelector('ui-skeleton')).toBeNull();
+
+    release = () => undefined;
+    budget.and.returnValue(new Promise(resolve => { release = resolve; }));
+    response.next(data);
+    fixture.detectChanges();
+    expect(tile().textContent).toContain('Loading');
+    release({
+      status: 'ready',
+      weeks: [
+        { weekStart: '2026-10-26', kept: false },
+        { weekStart: '2026-10-19', kept: true },
+        { weekStart: '2026-10-12', kept: true },
+      ],
+    });
+    await flushBudget(fixture);
+    expect(tile().querySelector('img')?.getAttribute('src')).toBe('/town/treasury-2.svg');
+    expect(tile().textContent).toContain('Lv 3 · 2 weeks');
+    expect(el.querySelector('.treasury')?.textContent).toContain('Lv 3 · 2 weeks');
+    expect(el.textContent).toContain('Lv 3 · 340 / 500 XP');
+    expect(el.querySelector('ui-skeleton')).toBeNull();
+  });
+  it('clears a visible treasury tier on lock and does not let the old load return', async () => {
+    localStorage.setItem(VAULT_PRESENCE, '7');
+    let release: (result: { status: string; weeks?: { weekStart: string; kept: boolean | null }[] }) => void = () => undefined;
+    budget.and.callFake(() => new Promise(resolve => { release = resolve; }));
+    const { fixture, el } = render(snapshot());
+    const tile = () => el.querySelectorAll('ul > li')[2] as HTMLElement;
+    const xp = 'Lv 3 · 340 / 500 XP';
+    expect(el.textContent).toContain(xp);
+    release({ status: 'ready', weeks: [{ weekStart: '2026-10-19', kept: true }] });
+    await flushBudget(fixture);
+    expect(tile().textContent).toContain('Lv 2 · 1 week');
+
+    response.next(snapshot());
+    fixture.detectChanges();
+    expect(tile().textContent).toContain('Loading');
+    const late = release;
+    localStorage.removeItem(VAULT_PRESENCE);
+    cleared.next();
+    fixture.detectChanges();
+    expect(tile().textContent).toContain('Finance vault locked');
+    expect(tile().textContent).not.toContain('Lv 2');
+    late({ status: 'ready', weeks: keptBudgetWeeks(8) });
+    await flushBudget(fixture);
+    expect(tile().textContent).toContain('Finance vault locked');
+    expect(tile().textContent).not.toContain('Lv 5');
+    expect(el.textContent).toContain(xp);
+    expect(tile().textContent).not.toMatch(/\$/);
+
+    const callsAtLock = budget.calls.count();
+    session.user = { id: 8 };
+    user.next({ id: 8 });
+    fixture.detectChanges();
+    expect(tile().textContent).toContain('Finance vault locked');
+    expect(budget.calls.count()).toBe(callsAtLock);
+
+    session.user = { id: 9 };
+    localStorage.setItem(VAULT_PRESENCE, '9');
+    user.next({ id: 9 });
+    fixture.detectChanges();
+    expect(tile().textContent).toContain('Loading');
+    expect(tile().textContent).not.toContain('Lv 2');
+    release({ status: 'no_plan' });
+    await flushBudget(fixture);
+    expect(tile().textContent).toContain('No spending plan');
+    expect(tile().querySelector('a')?.getAttribute('href')).toBe('/finance/planning');
+    expect(el.textContent).toContain(xp);
+    localStorage.removeItem(VAULT_PRESENCE);
+    session.user = null;
+    user.next(null);
+    fixture.detectChanges();
+    expect(tile().textContent).toContain('Finance vault locked');
+    expect(tile().textContent).not.toContain('No spending plan');
   });
   it('reflows to two columns below the minimum tile width using the scene container', () => {
     const { el } = render(snapshot());

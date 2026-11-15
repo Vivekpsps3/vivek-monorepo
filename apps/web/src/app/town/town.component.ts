@@ -1,11 +1,18 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, Injector, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DOCUMENT } from '@angular/common';
 import { EMPTY, Subject, fromEvent, interval } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
+import { mayPublish, openBoundedWork } from '@vivek/browser';
 import { ToastService, UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent } from '@vivek/ui';
 import { townSpriteUrl } from './town-sprites';
-import { financeVaultPresent } from '../../../../finance/frontend/src/public-api';
+import {
+  VAULT_PRESENCE,
+  bindLockNotices,
+  bindLockSnapshots,
+  financeVaultPresent,
+  loadFinanceBudgetKept,
+} from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
 import { TownApiService, type CheckinResult } from './town.api';
 import { HabitDialogComponent } from './habit-dialog.component';
@@ -13,10 +20,40 @@ import { HistoryDialogComponent } from './history-dialog.component';
 import { TownLotComponent } from './town-lot.component';
 import { TownTodayComponent, liveCheck } from './town-today.component';
 import { stage } from './town-levels';
-import { weeksKeptRun } from './weeks-kept';
+import {
+  FINANCE_BUDGET_WEEKS,
+  treasuryFromBudget,
+  type FinanceBudgetWeek,
+  type TreasuryView,
+} from './weeks-kept';
 import { applySeen, readSeen } from './town-seen';
 import type { TownResponse } from './town.types';
 import { WORLD_COPY } from '../world/world.types';
+
+/** Same bound as the Finance budget facade default. Town does not import Hub to share the constant. */
+const TREASURY_DEADLINE_MS = 8_000;
+
+export type TownBudgetKept = (
+  injector: Injector,
+  signal: AbortSignal,
+  opts: { today: string; weeks: number; includeCurrentWeek?: boolean; deadlineMs?: number },
+) => Promise<{ status: string; weeks?: readonly FinanceBudgetWeek[] }>;
+
+/** Tests replace this. Production calls the Finance public loader, which imports crypto only when invoked. */
+export const TOWN_BUDGET_KEPT = new InjectionToken<TownBudgetKept>('TOWN_BUDGET_KEPT', {
+  factory: () => loadFinanceBudgetKept,
+});
+
+function vaultOpenFor(userId: number | null): boolean {
+  if (userId == null || !financeVaultPresent()) return false;
+  try {
+    const marked = localStorage.getItem(VAULT_PRESENCE);
+    if (marked == null) return true;
+    return marked === String(userId);
+  } catch {
+    return false;
+  }
+}
 
 @Component({
   selector: 'app-town',
@@ -30,11 +67,17 @@ export class TownComponent {
   private readonly destroy = inject(DestroyRef);
   private readonly session = inject(SessionService);
   private readonly toast = inject(ToastService);
+  private readonly injector = inject(Injector);
+  private readonly budgetKept = inject(TOWN_BUDGET_KEPT);
   private readonly loads = new Subject<void>();
+  private budgetAbort = new AbortController();
+  private budgetEpoch = 0;
+  private ownerId: number | null | undefined;
   private pendingLive: CheckinResult | null = null;
   /** Day already requested by a visibility or interval refresh. One in-flight load, not one per tick. */
   private pendingDay: string | null = null;
   readonly data = signal<TownResponse | null>(null);
+  readonly treasury = signal<TreasuryView>({ status: 'locked' });
   readonly financeVaultPresent = financeVaultPresent;
   readonly state = signal<'loading' | 'ready' | 'unavailable'>('loading');
   readonly live = signal('');
@@ -47,6 +90,10 @@ export class TownComponent {
   readonly exploreWorld = WORLD_COPY.explore;
   private readonly document = inject(DOCUMENT);
   constructor() {
+    this.session.user$.pipe(takeUntilDestroyed(this.destroy)).subscribe(user => this.noteOwner(user?.id ?? null));
+    this.session.cleared$.pipe(takeUntilDestroyed(this.destroy)).subscribe(() => this.dropTreasury());
+    this.destroy.onDestroy(bindLockNotices(() => this.dropTreasury()));
+    this.destroy.onDestroy(bindLockSnapshots(() => this.dropTreasury()));
     this.loads.pipe(
       switchMap(() => this.api.getTown().pipe(catchError((error: { status?: number }) => {
         this.pendingDay = null;
@@ -97,6 +144,7 @@ export class TownComponent {
     const toasted = this.observe(sorted);
     this.data.set(sorted);
     this.state.set('ready');
+    this.refreshTreasury(sorted.town.today);
     const pending = this.pendingLive;
     this.pendingLive = null;
     if (!pending?.checked) return;
@@ -133,12 +181,66 @@ export class TownComponent {
     this.reload();
   }
   habit(id: number | null) { return this.data()?.habits.find(habit => habit.id === id); }
-  weeksKept(data: TownResponse): number | null {
-    if (!Array.isArray(data.habits)) return null;
+
+  private noteOwner(userId: number | null): void {
+    if (this.ownerId === undefined) {
+      this.ownerId = userId;
+      const today = this.data()?.town.today;
+      if (today) this.refreshTreasury(today);
+      return;
+    }
+    if (this.ownerId === userId) return;
+    this.ownerId = userId;
+    this.dropTreasury();
+    const today = this.data()?.town.today;
+    if (today && vaultOpenFor(userId)) this.refreshTreasury(today);
+  }
+
+  /** Drop the visible tier before any in-flight Finance result can publish it. */
+  private dropTreasury(): void {
+    this.budgetEpoch += 1;
+    this.budgetAbort.abort();
+    this.budgetAbort = new AbortController();
+    this.treasury.set({ status: 'locked' });
+  }
+
+  private refreshTreasury(today: string): void {
+    const owner = this.ownerId ?? null;
+    if (!vaultOpenFor(owner)) {
+      this.dropTreasury();
+      return;
+    }
+    this.budgetEpoch += 1;
+    this.budgetAbort.abort();
+    this.budgetAbort = new AbortController();
+    const epoch = this.budgetEpoch;
+    const ctrl = this.budgetAbort;
+    this.treasury.set({ status: 'loading' });
+    void this.publishTreasury(today, epoch, ctrl);
+  }
+
+  private async publishTreasury(today: string, epoch: number, ctrl: AbortController): Promise<void> {
+    const work = openBoundedWork({ controller: ctrl });
+    const still = (): boolean => mayPublish(work, epoch === this.budgetEpoch)
+      && this.session.currentUser?.id === this.ownerId
+      && vaultOpenFor(this.ownerId ?? null);
     try {
-      return weeksKeptRun(data.habits);
+      if (!still()) return;
+      const result = await this.budgetKept(this.injector, work.signal, {
+        today,
+        weeks: FINANCE_BUDGET_WEEKS,
+        includeCurrentWeek: false,
+        deadlineMs: TREASURY_DEADLINE_MS,
+      });
+      if (!still()) return;
+      const view = treasuryFromBudget(result, today);
+      if (!view || !still()) return;
+      this.treasury.set(view);
     } catch {
-      return null;
+      if (!still()) return;
+      this.treasury.set({ status: 'unavailable' });
+    } finally {
+      work.dispose();
     }
   }
 }

@@ -6,7 +6,7 @@
   <span class="label name" [title]="view().name">{{ view().name }}</span>
   <span class="label sub-label">{{ view().label }}</span>
 </ng-template>
-@if (kind() === 'treasury' && !vaultPresent()) {
+@if (view().external) {
   <a class="tile" [href]="view().link"><ng-container [ngTemplateOutlet]="contents" /></a>
 } @else if (view().link) {
   <a class="tile" [routerLink]="view().link"><ng-container [ngTemplateOutlet]="contents" /></a>

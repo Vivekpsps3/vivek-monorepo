@@ -1,4 +1,5 @@
 import { TestBed, fakeAsync, flushMicrotasks } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { Subject } from 'rxjs';
 import { ToastService } from '@vivek/ui';
 import { TownApiService, type CheckinResult } from './town.api';
@@ -38,7 +39,10 @@ describe('Today panel', () => {
       checkin: jasmine.createSpy().and.callFake(() => checkin),
       undoCheckin: jasmine.createSpy().and.callFake(() => (undo = new Subject<CheckinResult>())),
     };
-    TestBed.configureTestingModule({ imports: [TownTodayComponent], providers: [{ provide: TownApiService, useValue: api }] });
+    TestBed.configureTestingModule({
+      imports: [TownTodayComponent],
+      providers: [provideRouter([]), { provide: TownApiService, useValue: api }],
+    });
     toast = TestBed.inject(ToastService);
   });
 
@@ -71,7 +75,8 @@ describe('Today panel', () => {
     expect(el.textContent).not.toContain('Auto');
     expect(el.querySelectorAll('.passive ui-badge')[0]?.textContent?.trim()).toBe('Media');
     expect(el.querySelectorAll('.passive ui-badge')[1]?.textContent?.trim()).toBe('Travel');
-    expect(el.querySelector('.treasury ui-badge')?.textContent?.trim()).toBe('Finance vault locked');
+    expect(el.querySelector('.treasury a')?.textContent?.trim()).toBe('Finance vault locked');
+    expect(el.querySelector('.treasury a')?.getAttribute('href')).toBe('/finance/vault/unlock?next=%2Ftown');
     expect(el.querySelector('ui-skeleton')).toBeNull();
     expect(el.textContent).toContain('Rest days: Forge ✓, Cottage used');
     const button = el.querySelector<HTMLButtonElement>('button')!;
@@ -83,15 +88,16 @@ describe('Today panel', () => {
     expect(history).toHaveBeenCalled();
     fixture.componentRef.setInput('data', snapshot([]));
     fixture.componentRef.setInput('vaultPresent', true);
-    // 8 kept weeks is treasury tier 5. The snapshot town is level 3, which must not leak in.
-    fixture.componentRef.setInput('weeksKept', 8);
+    // 8 kept budget weeks is treasury tier 5. The snapshot town is level 3, which must not leak in.
+    fixture.componentRef.setInput('treasury', { status: 'ready', run: 8, saturated: false, tier: 5, stage: 3 });
     fixture.detectChanges();
     expect(el.textContent).toContain('No active habits');
     expect(el.querySelector('ui-skeleton')).toBeNull();
     expect(el.querySelector('.treasury')?.textContent).toContain('Lv 5');
+    expect(el.querySelector('.treasury a')?.getAttribute('href')).toBe('/finance');
     expect(el.textContent).not.toContain('Locked');
     expect(el.querySelector('.treasury')?.textContent).not.toMatch(/\$/);
-    fixture.componentRef.setInput('weeksKept', null);
+    fixture.componentRef.setInput('treasury', { status: 'unavailable' });
     fixture.detectChanges();
     expect(el.querySelector('ui-skeleton')).toBeNull();
     expect(el.querySelector('.treasury')?.textContent).toContain('Unavailable');
@@ -107,7 +113,8 @@ describe('Today panel', () => {
     expect(el.textContent).not.toContain('Auto');
     expect(el.textContent).not.toContain('Media · +');
     const badges = [...el.querySelectorAll('.passive ui-badge')].map(badge => badge.textContent?.trim());
-    expect(badges).toEqual(['Travel', 'Finance vault locked']);
+    expect(badges).toEqual(['Travel']);
+    expect(el.querySelector('.treasury a')?.textContent?.trim()).toBe('Finance vault locked');
   });
 
   it('disables a new habit when no lot is free and keeps the helper copy', () => {

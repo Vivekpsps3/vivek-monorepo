@@ -2,6 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../../../tests/e2e/fixtures';
 import type { TownResponse } from '../src/app/town/town.types';
 
+const BUDGET_PASSPHRASE = 'Synthetic town budget passphrase';
+
 const FOREIGN_HABIT = "Other's habit";
 
 test.describe('Town', () => {
@@ -165,8 +167,169 @@ test.describe('Town', () => {
     await page.reload();
     await expect(todayPanel).toContainText('Travel · +0/15 XP today');
   });
+
+test('treasury follows completed budget weeks and clears when Finance locks', async ({ page }) => {
+  test.setTimeout(360_000);
+  const records: string[] = [];
+  page.on('request', request => {
+    if (request.url().includes('/vault/records')) records.push(request.url());
+  });
+  await page.goto('/town');
+  const scene = page.getByRole('list', { name: 'Town buildings' });
+  const treasury = scene.getByRole('link', { name: /Treasury/ });
+  const todayTreasury = page.locator('app-town-today .treasury a');
+  await expect(treasury).toContainText('Finance vault locked');
+  await expect(treasury).not.toContainText(/Lv \d/);
+  await expect(todayTreasury).toContainText('Finance vault locked');
+  await expect(scene.getByRole('button', { name: /Read 20 pages/ })).toContainText(/day streak/);
+  expect(records).toEqual([]);
+  const before: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+
+  // The setup screen posts /api/finance/vault/setup. The vault router serves /api/vault/setup.
+  await page.route('**/api/finance/vault/setup', async route => {
+    const response = await route.fetch({
+      url: route.request().url().replace('/api/finance/vault/setup', '/api/vault/setup'),
+    });
+    await route.fulfill({ response });
+  });
+  await page.goto('/finance/vault/setup?next=%2Ffinance%2Fplanning');
+  await page.getByLabel('Vault passphrase', { exact: true }).fill(BUDGET_PASSPHRASE);
+  await page.getByLabel('Confirm passphrase', { exact: true }).fill(BUDGET_PASSPHRASE);
+  await page.getByRole('button', { name: 'Create vault', exact: true }).click();
+  // 600k PBKDF2 iterations finish after the default expect timeout.
+  await expect(page).toHaveURL(/\/finance\/planning/, { timeout: 150_000 });
+  await page.goto('/town');
+  await expect(treasury).toContainText('No spending plan');
+  await expect(treasury).toHaveAttribute('href', '/finance/planning');
+  await expect(todayTreasury).toHaveAttribute('href', '/finance/planning');
+  await expect(treasury).not.toContainText(/Lv \d/);
+  await expect(scene.getByRole('button', { name: /Read 20 pages/ })).toContainText(/day streak/);
+
+  await page.goto('/finance/planning');
+  await page.getByLabel('Spending basis', { exact: true }).selectOption('manual');
+  await page.getByLabel('Manual annual spending', { exact: true }).fill('36500');
+  await page.getByLabel('Planning question', { exact: true }).selectOption('simulation');
+  const saved = page.locator('ui-card').filter({ has: page.getByRole('heading', { name: 'Saved inputs' }) });
+  await saved.locator('input[name="savedInputName"]').fill('Town budget');
+  await saved.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('Saved inputs updated.')).toBeVisible();
+  await page.goto('/town');
+  await expect(treasury).toContainText('No budget data');
+  await expect(treasury).toHaveAttribute('href', '/finance/spending');
+  await expect(todayTreasury).toHaveAttribute('href', '/finance/spending');
+
+  await page.goto('/finance/spending');
+  await page.locator('ui-page-header').getByRole('button', { name: 'Add transaction', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add transaction' });
+  await dialog.locator('#tx-date').fill('2025-10-27');
+  await dialog.locator('#tx-type').selectOption('expense');
+  await dialog.locator('#tx-category').fill('Food');
+  await dialog.locator('#tx-amount').fill('1.00');
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await page.goto('/town');
+  await expect(treasury).toContainText('Lv 5 · 52+ weeks');
+  await expect(treasury.locator('img')).toHaveAttribute('src', /treasury-3\.svg$/);
+  await expect(todayTreasury).toContainText('Lv 5 · 52+ weeks');
+  await expect(treasury).not.toContainText('$');
+  await expect(todayTreasury).not.toContainText('$');
+  const after: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+  expect(after.town.xp).toBe(before.town.xp);
+  await expect(page.locator('app-town header')).toContainText(`Lv ${after.town.level} · ${after.town.xp} / ${after.town.next_level_xp} XP`);
+  await expect(scene.getByRole('button', { name: /Read 20 pages/ })).toContainText(/day streak/);
+
+  await page.goto('/settings/finance');
+  await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+  await expect(page.getByText('Finance locked.')).toBeVisible();
+  await page.goto('/town');
+  await expect(treasury).toContainText('Finance vault locked');
+  await expect(treasury).not.toContainText('52+');
+  await expect(treasury).not.toContainText(/Lv \d/);
+  await expect(todayTreasury).toContainText('Finance vault locked');
+  const locked: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+  expect(locked.town.xp).toBe(before.town.xp);
 });
 
+test('TF5 Hub card stays free of Treasury and answers loading, retry, expiry, empty, and keyboard', async ({ page, request }) => {
+  let gate = Promise.resolve();
+  await page.route('**/api/town/summary**', async route => {
+    await gate;
+    await route.continue();
+  });
+  let release = (): void => undefined;
+  gate = new Promise(resolve => { release = resolve; });
+  const going = page.goto('/hub');
+  const town = page.locator('section[aria-labelledby="town-heading"]');
+  await expect(town).toHaveAttribute('aria-busy', 'true');
+  release();
+  await going;
+  await page.unroute('**/api/town/summary**');
+
+  const summary = await (await page.request.get('/api/town/summary?tz=America%2FLos_Angeles')).json() as {
+    level: number; xp: number; level_xp_start: number; next_level_xp: number; name: string;
+  };
+  const bar = town.getByRole('progressbar', { name: 'Town XP' });
+  await expect(bar).toHaveAttribute('aria-valuemin', String(summary.level_xp_start));
+  await expect(bar).toHaveAttribute('aria-valuemax', String(summary.next_level_xp));
+  await expect(bar).toHaveAttribute('aria-valuenow', String(summary.xp));
+  await expect(bar).toHaveAttribute('aria-valuetext', `Level ${summary.level}, ${summary.xp} of ${summary.next_level_xp} XP`);
+  await expect(town).toContainText(`${summary.name}`);
+  await expect(town).not.toContainText('Treasury');
+  await expect(town).not.toContainText('Health');
+  expect(await town.innerText()).not.toMatch(/\$/);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const openTown = town.getByRole('link', { name: 'Open Town' });
+  await openTown.focus();
+  await expect(openTown).toBeFocused();
+  expect((await openTown.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/town\/?$/);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/hub');
+  await expect(town.getByRole('link', { name: 'Open Town' })).toBeVisible();
+  expect((await town.getByRole('link', { name: 'Open Town' }).boundingBox())?.height).toBeGreaterThanOrEqual(44);
+
+  const credited = await readOk(await page.request.post('/media/api/library', {
+    data: { kind: 'movie', title: 'Hub Film', status: 'completed' },
+  }));
+  expect(JSON.parse(credited).id).toBeGreaterThan(0);
+  await page.reload();
+  await expect(town.getByRole('progressbar', { name: 'Town XP' })).toHaveAttribute('aria-valuenow', String(summary.xp + 10));
+
+  await page.route('**/api/town/summary**', route => route.fulfill({
+    status: 503, contentType: 'application/json', body: '{}',
+  }));
+  await page.goto('/hub');
+  await expect(town).toContainText("Couldn't load your town.");
+  const retry = town.getByRole('button', { name: 'Retry' });
+  expect((await retry.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await retry.focus();
+  await expect(retry).toBeFocused();
+  await page.unroute('**/api/town/summary**');
+  await page.keyboard.press('Enter');
+  await expect(town.getByRole('progressbar', { name: 'Town XP' })).toBeVisible();
+
+  await page.route('**/api/town/summary**', route => route.fulfill({
+    status: 401, contentType: 'application/json', body: JSON.stringify({ detail: 'expired' }),
+  }));
+  await page.goto('/hub');
+  await expect(town).toContainText('Your session ended. Sign in again to see your town.');
+  await expect(town.getByRole('progressbar', { name: 'Town XP' })).toHaveCount(0);
+  await page.unroute('**/api/town/summary**');
+
+  expect((await request.post('/e2e/reset?seed=town-empty')).ok()).toBeTruthy();
+  await page.goto('/hub');
+  const start = town.getByRole('link', { name: 'Choose a first habit' });
+  await expect(town).toContainText('Start your town');
+  await expect(town).not.toContainText('habits done today');
+  expect((await start.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await start.focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/town\/?$/);
+});
+
+});
 function shiftDay(iso: string, days: number): string {
   const [year, month, day] = iso.split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
