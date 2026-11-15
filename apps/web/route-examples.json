@@ -1,0 +1,160 @@
+{
+  "examples": [
+    {
+      "id": "profile",
+      "path": "settings/profile",
+      "owner": "settings",
+      "status": "mounted",
+      "query": "from=pixels",
+      "fragment": "birthday"
+    },
+    {
+      "id": "travel-trip",
+      "path": "travel/trips/42",
+      "owner": "travel",
+      "status": "mounted",
+      "angular": "travel/trips/:id"
+    },
+    {
+      "id": "media-season",
+      "path": "media/item/7/season/2",
+      "owner": "media",
+      "status": "mounted",
+      "angular": "media/item/:id/season/:season",
+      "clientRedirect": "media/item/7"
+    },
+    {
+      "id": "media-discography",
+      "path": "media/item/7/discography",
+      "owner": "media",
+      "status": "mounted",
+      "angular": "media/item/:id/discography"
+    },
+    {
+      "id": "finance-portfolio",
+      "path": "finance/portfolio",
+      "owner": "finance",
+      "status": "mounted",
+      "clientRedirect": "finance/have?t=holdings"
+    },
+    {
+      "id": "pixels",
+      "path": "pixels",
+      "owner": "pixels",
+      "status": "mounted"
+    },
+    {
+      "id": "town-world",
+      "path": "town/world",
+      "owner": "town",
+      "status": "mounted"
+    },
+    {
+      "id": "have-alias",
+      "path": "have",
+      "owner": "finance",
+      "status": "alias",
+      "target": "finance/have",
+      "query": "t=holdings"
+    },
+    {
+      "id": "blog-alias",
+      "path": "blog",
+      "owner": "site",
+      "status": "alias",
+      "target": "home",
+      "query": "from=deep"
+    },
+    {
+      "id": "login-alias",
+      "path": "login",
+      "owner": "auth",
+      "status": "alias",
+      "target": "auth/login"
+    },
+    {
+      "id": "town-clinic",
+      "path": "town/clinic",
+      "owner": "town",
+      "status": "reserved"
+    },
+    {
+      "id": "town-gym",
+      "path": "town/gym",
+      "owner": "town",
+      "status": "reserved"
+    },
+    {
+      "id": "public-root",
+      "path": "",
+      "owner": "site",
+      "status": "public"
+    },
+    {
+      "id": "public-home",
+      "path": "home",
+      "owner": "site",
+      "status": "public"
+    },
+    {
+      "id": "unknown-page",
+      "path": "nope",
+      "owner": "shell",
+      "status": "unknown-page"
+    },
+    {
+      "id": "unknown-settings",
+      "path": "settings/not-a-section",
+      "owner": "settings",
+      "status": "unknown-page"
+    },
+    {
+      "id": "unknown-pixels",
+      "path": "pixelsx",
+      "owner": "pixels",
+      "status": "unknown-page"
+    },
+    {
+      "id": "unknown-town",
+      "path": "townx",
+      "owner": "town",
+      "status": "unknown-page"
+    },
+    {
+      "id": "unknown-travel",
+      "path": "travel/no-such-page",
+      "owner": "travel",
+      "status": "unknown-page"
+    },
+    {
+      "id": "unknown-finance",
+      "path": "finance/no-such-page",
+      "owner": "finance",
+      "status": "unknown-page"
+    },
+    {
+      "id": "unknown-asset",
+      "path": "finance/assets/missing.js",
+      "owner": "finance",
+      "status": "unknown-asset"
+    },
+    {
+      "id": "unknown-root-asset",
+      "path": "not-a-real-asset.js",
+      "owner": "shell",
+      "status": "unknown-asset"
+    },
+    {
+      "id": "unknown-api",
+      "path": "media/api/missing",
+      "owner": "media",
+      "status": "unknown-api"
+    },
+    {
+      "id": "unknown-api-root",
+      "path": "api/no-such-route",
+      "owner": "shell",
+      "status": "unknown-api"
+    }
+  ]
+}
