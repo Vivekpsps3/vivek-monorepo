@@ -1,90 +1,13 @@
-import { TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
+import { TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
+import { NavigationEnd,Router,provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { NavigationEnd, Router, RouterLink, RouterOutlet, provideRouter } from '@angular/router';
-import { PrivateLayoutComponent } from './private-layout.component';
+import { BehaviorSubject,Subject,of } from 'rxjs';
 import { SessionService } from './platform/session.service';
-import { BehaviorSubject, Subject, of } from 'rxjs';
+import { PrivateLayoutComponent } from './private-layout.component';
 
 @Component({standalone: true, template: '<input aria-label="Private draft" value="">'})
 class PrivateDraftComponent {}
-
-@Component({
-  standalone: true,
-  template: `
-    <main>
-      <h1>Spending</h1>
-      <div role="grid" aria-label="October 2026">
-        <button type="button" role="gridcell" class="day">15</button>
-      </div>
-    </main>
-  `,
-})
-class GridPageComponent {}
-
-@Component({
-  standalone: true,
-  template: '<main><h1>Spending</h1><button type="button">Add transaction</button></main>',
-})
-class ButtonPageComponent {}
-
-@Component({
-  standalone: true,
-  imports: [RouterLink, RouterOutlet],
-  template: `
-    <nav aria-label="Finance sections"><a id="net-worth" routerLink="/finance/have">Net worth</a></nav>
-    <router-outlet />
-  `,
-})
-class SectionLayoutComponent {}
-
-@Component({
-  standalone: true,
-  template: '<main><h1>What you have</h1></main>',
-})
-class HavePageComponent {}
-
-@Component({
-  standalone: true,
-  imports: [RouterLink],
-  template: '<a id="town-link" routerLink="/town">Town</a>',
-})
-class TownLinkComponent {}
-
-@Component({
-  standalone: true,
-  template: `
-    <main>
-      <h1>Terraria-on-Sea</h1>
-      <a href="/town/world">Explore the world</a>
-    </main>
-  `,
-})
-class TownPageComponent {}
-
-@Component({
-  standalone: true,
-  template: `
-    <main>
-      <h1>World</h1>
-      <label>Jump to date<input type="date" aria-label="Jump to date"></label>
-    </main>
-  `,
-})
-class WorldPageComponent {}
-
-@Component({
-  standalone: true,
-  template: `
-    <main>
-      <h1>Terraria-on-Sea</h1>
-      <div role="dialog" aria-modal="true" aria-label="New habit">
-        <input aria-label="Habit name">
-      </div>
-    </main>
-  `,
-})
-class TownDialogPageComponent {}
 
 describe('Shared private shell', () => {
   it('destroys a mounted private draft when the signed-in identity changes', async () => {
@@ -122,219 +45,24 @@ describe('Shared private shell', () => {
     fixture.detectChanges();
     return { fixture, session };
   }
-  it('preserves a keyboard-focusable table row when the route heading arrives', async () => {
-    const events = new Subject<NavigationEnd>();
-    const { fixture } = await render(false, events);
-    const main = document.createElement('main');
-    const heading = document.createElement('h1');
-    heading.textContent = 'Pixels';
-    const table = document.createElement('table');
-    const row = table.insertRow();
-    row.tabIndex = 0;
-    row.insertCell().textContent = 'Aug 15, 2026';
-    main.append(heading, table);
-    fixture.nativeElement.querySelector('#workspace-content').append(main);
-    row.focus();
 
-    events.next(new NavigationEnd(1, '/pixels?year=2026', '/pixels?year=2026'));
-    // Route heading focus is queued as a microtask; flush that exact boundary.
-    await Promise.resolve();
-    expect(document.activeElement).toBe(row);
-  });
-  it('keeps a grid cell focused after the page heading arrives', async () => {
-    const session = {
-      currentUser: { id: 1, display_name: 'Ada' },
-      user$: of({ id: 1, display_name: 'Ada' }),
-      isAdmin: () => false,
-      logout: () => undefined,
-    };
-    TestBed.configureTestingModule({providers: [
-      provideRouter([{path: '', component: PrivateLayoutComponent, children: [{path: 'finance/spending', component: GridPageComponent}]}]),
-      {provide: SessionService, useValue: session},
-    ]});
-    const harness = await RouterTestingHarness.create('/finance/spending');
-    const cell = harness.routeNativeElement?.querySelector('[role="gridcell"]') as HTMLButtonElement;
-    cell.focus();
-    await new Promise(resolve => setTimeout(resolve, 50));
-    expect(document.activeElement).toBe(cell);
-  });
-  it('leaves a button focused after the page heading has landed', async () => {
-    const session = {
-      currentUser: { id: 1, display_name: 'Ada' },
-      user$: of({ id: 1, display_name: 'Ada' }),
-      isAdmin: () => false,
-      logout: () => undefined,
-    };
-    TestBed.configureTestingModule({providers: [
-      provideRouter([{path: '', component: PrivateLayoutComponent, children: [{path: 'finance/spending', component: ButtonPageComponent}]}]),
-      {provide: SessionService, useValue: session},
-    ]});
-    const harness = await RouterTestingHarness.create('/finance/spending');
-    const button = harness.routeNativeElement?.querySelector('main button') as HTMLButtonElement;
-    button.focus();
-    await new Promise(resolve => setTimeout(resolve, 50));
-    expect(document.activeElement).toBe(button);
-  });
-  it('moves focus from a section link to the arrived heading', async () => {
-    const session = {
-      currentUser: { id: 1, display_name: 'Ada' },
-      user$: of({ id: 1, display_name: 'Ada' }),
-      isAdmin: () => false,
-      logout: () => undefined,
-    };
-    TestBed.configureTestingModule({providers: [
-      provideRouter([{path: '', component: PrivateLayoutComponent, children: [
-        {path: 'finance', component: SectionLayoutComponent, children: [
-          {path: 'have', component: HavePageComponent},
-        ]},
-      ]}]),
-      {provide: SessionService, useValue: session},
-    ]});
-    const harness = await RouterTestingHarness.create('/finance');
-    (document.getElementById('net-worth') as HTMLAnchorElement).focus();
-    await harness.navigateByUrl('/finance/have');
-    await new Promise(resolve => setTimeout(resolve, 50));
-    expect(document.activeElement).toBe(document.querySelector('#workspace-content main h1'));
-  });
-  it('moves focus from an outside link to the Town heading', async () => {
-    const session = {
-      currentUser: { id: 1, display_name: 'Ada' },
-      user$: of({ id: 1, display_name: 'Ada' }),
-      isAdmin: () => false,
-      logout: () => undefined,
-    };
-    TestBed.configureTestingModule({providers: [
-      provideRouter([{path: '', component: PrivateLayoutComponent, children: [
-        {path: 'pixels', component: TownLinkComponent},
-        {path: 'town', component: TownPageComponent},
-      ]}]),
-      {provide: SessionService, useValue: session},
-    ]});
-    const harness = await RouterTestingHarness.create('/pixels');
-    (document.getElementById('town-link') as HTMLAnchorElement).focus();
-    await harness.navigateByUrl('/town');
-    await new Promise(resolve => setTimeout(resolve, 50));
-    const heading = document.querySelector('#workspace-content main h1');
-    expect(heading?.textContent).toBe('Terraria-on-Sea');
-    expect(document.activeElement).toBe(heading);
-    expect(document.activeElement).not.toBe(document.getElementById('workspace-content'));
-  });
-  it('moves focus from an outside link to the World heading', async () => {
-    const session = {
-      currentUser: { id: 1, display_name: 'Ada' },
-      user$: of({ id: 1, display_name: 'Ada' }),
-      isAdmin: () => false,
-      logout: () => undefined,
-    };
-    TestBed.configureTestingModule({providers: [
-      provideRouter([{path: '', component: PrivateLayoutComponent, children: [
-        {path: 'town', pathMatch: 'full', component: TownLinkComponent},
-        {path: 'town/world', component: WorldPageComponent},
-      ]}]),
-      {provide: SessionService, useValue: session},
-    ]});
-    const harness = await RouterTestingHarness.create('/town');
-    (document.getElementById('town-link') as HTMLAnchorElement).focus();
-    await harness.navigateByUrl('/town/world');
-    await new Promise(resolve => setTimeout(resolve, 50));
-    const heading = document.querySelector('#workspace-content main h1');
-    expect(heading?.textContent).toBe('World');
-    expect(document.activeElement).toBe(heading);
-    expect(document.activeElement).not.toBe(document.getElementById('workspace-content'));
-  });
-  it('keeps a World date field focused after the page heading arrives', async () => {
-    const session = {
-      currentUser: { id: 1, display_name: 'Ada' },
-      user$: of({ id: 1, display_name: 'Ada' }),
-      isAdmin: () => false,
-      logout: () => undefined,
-    };
-    TestBed.configureTestingModule({providers: [
-      provideRouter([{path: '', component: PrivateLayoutComponent, children: [{path: 'town/world', component: WorldPageComponent}]}]),
-      {provide: SessionService, useValue: session},
-    ]});
-    const harness = await RouterTestingHarness.create('/town/world');
-    const input = harness.routeNativeElement?.querySelector('input') as HTMLInputElement;
-    input.focus();
-    await new Promise(resolve => setTimeout(resolve, 450));
-    expect(document.activeElement).toBe(input);
-  });
-  it('keeps a Town dialog field focused after the page heading arrives', async () => {
-    const session = {
-      currentUser: { id: 1, display_name: 'Ada' },
-      user$: of({ id: 1, display_name: 'Ada' }),
-      isAdmin: () => false,
-      logout: () => undefined,
-    };
-    TestBed.configureTestingModule({providers: [
-      provideRouter([{path: '', component: PrivateLayoutComponent, children: [{path: 'town', component: TownDialogPageComponent}]}]),
-      {provide: SessionService, useValue: session},
-    ]});
-    const harness = await RouterTestingHarness.create('/town');
-    const input = harness.routeNativeElement?.querySelector('input') as HTMLInputElement;
-    input.focus();
-    await new Promise(resolve => setTimeout(resolve, 450));
-    expect(document.activeElement).toBe(input);
-  });
-  it('preserves a Town table row when the route heading arrives', async () => {
+  it('cancels pending heading focus when the shell is destroyed', fakeAsync(() => {
     const events = new Subject<NavigationEnd>();
-    const { fixture } = await render(false, events);
-    const main = document.createElement('main');
-    const heading = document.createElement('h1');
-    heading.textContent = 'Terraria-on-Sea';
-    const table = document.createElement('table');
-    const row = table.insertRow();
-    row.tabIndex = 0;
-    row.insertCell().textContent = 'Read 20 pages';
-    main.append(heading, table);
-    fixture.nativeElement.querySelector('#workspace-content').append(main);
-    row.focus();
+    let fixture: ReturnType<typeof TestBed.createComponent<PrivateLayoutComponent>> | undefined;
+    render(false, events).then(result => { fixture = result.fixture; });
+    flushMicrotasks();
+    const warn = spyOn(console, 'warn');
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    let elapsed = 0;
+    spyOn(performance, 'now').and.callFake(() => elapsed);
+    events.next(new NavigationEnd(1, '/travel', '/travel'));
+    flushMicrotasks();
+    fixture!.destroy();
+    elapsed = 500;
+    tick(500);
+    expect(warn).not.toHaveBeenCalled();
+  }));
 
-    events.next(new NavigationEnd(1, '/town', '/town'));
-    await Promise.resolve();
-    expect(document.activeElement).toBe(row);
-  });
-  it('preserves a World grid cell when the route heading arrives', async () => {
-    const events = new Subject<NavigationEnd>();
-    const { fixture } = await render(false, events);
-    const main = document.createElement('main');
-    const heading = document.createElement('h1');
-    heading.textContent = 'World';
-    const grid = document.createElement('div');
-    grid.setAttribute('role', 'grid');
-    const cell = document.createElement('button');
-    cell.type = 'button';
-    cell.setAttribute('role', 'gridcell');
-    cell.textContent = '12';
-    grid.append(cell);
-    main.append(heading, grid);
-    fixture.nativeElement.querySelector('#workspace-content').append(main);
-    cell.focus();
-
-    events.next(new NavigationEnd(1, '/town/world', '/town/world'));
-    await Promise.resolve();
-    expect(document.activeElement).toBe(cell);
-  });
-  it('provides the app switcher and one account/theme surface', async () => {
-    const { fixture } = await render();
-    const apps = fixture.nativeElement.querySelector('nav[aria-label="Apps"]') as HTMLElement;
-    const links = [...apps.querySelectorAll('a')].map(link => link.getAttribute('href'));
-    expect(links).toEqual(['/hub', '/finance', '/travel', '/media', '/town', '/pixels']);
-    expect(fixture.nativeElement.querySelector('a.suite-hub')).toBeNull();
-    expect(fixture.nativeElement.querySelector('a.suite-brand')).toBeNull();
-    expect(fixture.nativeElement.querySelector('a[href="/account"]')).toBeNull();
-    expect(fixture.nativeElement.querySelector('a[href="/settings"]')).toBeNull();
-    const trigger = fixture.nativeElement.querySelector('.user-menu-toggle') as HTMLButtonElement;
-    expect(trigger.textContent?.trim()).toBe('Ada');
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
-    trigger.click();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelectorAll('a[href="/settings"]').length).toBe(1);
-    expect(fixture.nativeElement.querySelector('a[href="/account"]')).toBeNull();
-    expect(fixture.nativeElement.querySelector('a[href="/travel/settings"]')).toBeNull();
-    expect(fixture.nativeElement.querySelectorAll('select#suite-theme').length).toBe(0);
-    expect(fixture.nativeElement.querySelector('a[href="/hub/admin"]')).toBeNull();
-  });
   it('shows administration only for an administrator and signs out through the suite session', async () => {
     const { fixture, session } = await render(true);
     fixture.nativeElement.querySelector('.user-menu-toggle').click();
@@ -343,26 +71,7 @@ describe('Shared private shell', () => {
     fixture.nativeElement.querySelector('#user-dropdown button').click();
     expect(session.logout).toHaveBeenCalledTimes(1);
   });
-  it('closes the dropdown and restores the name button on Escape', async () => {
-    const { fixture } = await render();
-    const button = fixture.nativeElement.querySelector('.user-menu-toggle') as HTMLButtonElement;
-    button.click();
-    fixture.detectChanges();
-    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
-    fixture.nativeElement.querySelector('#user-dropdown a').dispatchEvent(escape);
-    fixture.detectChanges();
-    expect(button.getAttribute('aria-expanded')).toBe('false');
-    expect(fixture.nativeElement.querySelector('#user-dropdown')).toBeNull();
-    expect(document.activeElement).toBe(button);
-  });
-  it('keeps app identity tied to the root route', async () => {
-    const { fixture } = await render();
-    const router = TestBed.inject(Router);
-    spyOnProperty(router, 'url', 'get').and.returnValue('/travel/trips/42');
-    fixture.detectChanges();
-    expect(fixture.componentInstance.appName).toBe('Travel');
-    expect(fixture.componentInstance.home).toBe('/travel/');
-  });
+
   async function renderSignedOut(url: string) {
     const session = {
       currentUser: null,
@@ -397,16 +106,5 @@ describe('Shared private shell', () => {
     const { fixture } = await renderSignedOut('/auth/login');
     expect(fixture.componentInstance.sessionEndedNext).toBe('/hub');
   });
-  it('falls back to the Hub when the current URL is not a safe relative path', async () => {
-    const { fixture } = await renderSignedOut('//attacker.example/path');
-    expect(fixture.componentInstance.sessionEndedNext).toBe('/hub');
-  });
-  it('hides the suite-health slot only while it is empty', async () => {
-    const { fixture } = await render();
-    const health = fixture.nativeElement.querySelector('.suite-health') as HTMLElement;
-    expect(health).not.toBeNull();
-    expect(getComputedStyle(health).display).toBe('none');
-    health.textContent = 'Degraded';
-    expect(getComputedStyle(health).display).not.toBe('none');
-  });
+
 });

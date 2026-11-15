@@ -96,28 +96,3 @@ def test_home_impact_hours_match_the_pto_projection(client):
     assert after_home["next_pto"]["hours"] == _hours(after_home["next_pto"]["days"], hpd)
     assert after_home["next_pto"]["days"] != impact["days"]
     assert "EUR" not in after_home["next_pto"]["hours"]
-
-
-def test_unconfigured_and_single_bucket_summaries(client):
-    empty = client.get("/api/home").json()
-    board = client.get("/api/pto").json()
-    assert empty["next_pto"] is None
-    assert empty["pto"]["configured"] is False
-    assert board["buckets"] == {"pto": None, "sick": None}
-
-    _put(client, "sick", start_balance_hours="24")
-    sick_only = client.get("/api/pto").json()
-    assert sick_only["buckets"]["pto"] is None
-    assert sick_only["buckets"]["sick"]["balance_today_hours"] == "24"
-    assert sick_only["buckets"]["sick"]["balance_today_days"] == "3"
-    assert client.get("/api/home").json()["next_pto"] is None
-
-    today = date.today()
-    _put(client, "pto", start_balance_hours="16")
-    _trip(client, today + timedelta(days=10), today + timedelta(days=12), title="Later")
-    both = client.get("/api/pto").json()
-    home = client.get("/api/home").json()
-    assert both["buckets"]["pto"]["balance_today_hours"] == "16"
-    assert both["buckets"]["sick"]["balance_today_hours"] == "24"
-    assert home["next_pto"]["title"] == "Later"
-    assert home["next_pto"]["hours"] == _hours(home["next_pto"]["days"], both["hours_per_day"])

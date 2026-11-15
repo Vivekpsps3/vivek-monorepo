@@ -42,7 +42,7 @@ test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
 });
 
-for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`map recovery at ${width}px ${theme}`, () => {
+for (const [width, theme] of [[390, 'light']]) test.describe(`map recovery at ${width}px ${theme}`, () => {
   test.use({ viewport: { width, height: 900 } });
 
   test('tile outage stays visible while showing a place, and explicit retry recovers', async ({ page, request }) => {

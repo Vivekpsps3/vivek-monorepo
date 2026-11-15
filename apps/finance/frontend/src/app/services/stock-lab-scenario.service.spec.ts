@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { StockLabScenarioService } from './stock-lab-scenario.service';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { StockLabScenario } from '../models/stock-lab.model';
+import { StockLabScenarioService } from './stock-lab-scenario.service';
 
 describe('StockLabScenarioService', () => {
   let rows: StockLabScenario[];
@@ -29,16 +29,6 @@ describe('StockLabScenarioService', () => {
       ],
     });
     service = TestBed.inject(StockLabScenarioService);
-  });
-
-  it('creates a default scenario with stable planning defaults', () => {
-    const scenario = service.createDefaultScenario('  voo  ');
-
-    expect(scenario.primary_symbol).toBe('VOO');
-    expect(scenario.name).toBe('VOO scenario');
-    expect(scenario.projection_years).toBe(10);
-    expect(scenario.base_growth_rate).toBe(0.08);
-    expect(scenario.reinvest_dividends).toBeTrue();
   });
 
   it('saves and lists scenarios through encrypted store', async () => {

@@ -14,7 +14,6 @@ apps/finance/backend/services/market_data.py	SIM103	1
 apps/finance/backend/services/market_data.py	UP006	7
 apps/finance/backend/services/market_data.py	UP035	2
 apps/finance/backend/services/market_data.py	UP045	11
-apps/finance/backend/tests/test_market_data.py	RUF012	10
 apps/media/backend/models.py	UP017	1
 apps/media/backend/services/followups.py	SIM105	1
 apps/media/backend/services/followups.py	UP017	1

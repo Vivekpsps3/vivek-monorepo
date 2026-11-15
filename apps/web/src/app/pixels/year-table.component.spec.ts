@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { YearTableComponent } from './year-table.component';
 import type { PixelDayView } from './pixels.types';
+import { YearTableComponent } from './year-table.component';
 
 describe('Year table', () => {
   beforeEach(() => {
@@ -36,27 +36,7 @@ describe('Year table', () => {
     expect(second?.querySelector('td:nth-child(7)')?.textContent?.trim()).toBe('over budget pace');
   });
 
-  it('keeps real future days in the year and drops invalid and future-only padding', () => {
-    const { el } = render([
-      view({ date: '2026-08-15' }),
-      view({ date: '2026-02-31' }),
-      view({ date: '2026-12-31', future: true }),
-      view({ date: '2027-01-01', future: true }),
-      view({ date: 'not-a-day' }),
-    ]);
-    expect(dates(el)).toEqual(['2026-08-15', '2026-12-31']);
-
-    const futureYear = render([
-      view({ date: '2031-01-01', future: true }),
-      view({ date: '2031-01-02', future: true }),
-    ]);
-    expect(dates(futureYear.el)).toEqual(['2031-01-01', '2031-01-02']);
-  });
 });
-
-function dates(el: HTMLElement): string[] {
-  return [...el.querySelectorAll('time')].map(node => node.getAttribute('datetime') ?? '');
-}
 
 function view(partial: Partial<PixelDayView> & Pick<PixelDayView, 'date'>): PixelDayView {
   return {

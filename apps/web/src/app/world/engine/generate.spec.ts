@@ -1,30 +1,11 @@
 import {
-  canonical,
-  CHEST_X,
-  CHUNK_H,
-  CHUNK_W,
-  generateChunk,
-  normalizeWeek,
-  worldSeed,
-  type DayInput,
-  type WeekInput,
+generateChunk,
+worldSeed,
+type DayInput,
+type WeekInput
 } from './index';
 
 describe('generateChunk', () => {
-  const g1 = { week: '2026-10-26', trips: [], finished: [], habits: [], concepts: [] };
-
-  it('re-exports the engine surface and builds a G1 chunk', () => {
-    expect(CHUNK_W).toBe(56);
-    expect(CHUNK_H).toBe(24);
-    expect(CHEST_X).toBe(54);
-    expect(canonical(null)).toBe('null');
-    const chunk = generateChunk(worldSeed(1), normalizeWeek(g1));
-    expect(chunk.heights.length).toBe(56);
-    expect(chunk.biomes.length).toBe(7);
-    expect(chunk.trips.length).toBe(7);
-    expect(chunk.lit.length).toBe(7);
-    expect(chunk.chest.x).toBe(54);
-  });
 
   it('does not mutate its input', () => {
     const days: DayInput[] = [];

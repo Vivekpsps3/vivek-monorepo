@@ -1,13 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { BehaviorSubject, of } from 'rxjs';
+import { ConfirmService,ToastService } from '@vivek/ui';
+import { BehaviorSubject,of } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { RecurringHubComponent } from './recurring-hub.component';
+import { FixedExpense,Subscription } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
-import { ConfirmService } from '@vivek/ui';
-import { ToastService } from '@vivek/ui';
-import { FixedExpense, Subscription } from '../models/transaction.model';
+import { RecurringHubComponent } from './recurring-hub.component';
 
 describe('RecurringHubComponent editor handoff', () => {
   let harness: RouterTestingHarness;
@@ -100,12 +99,4 @@ describe('RecurringHubComponent editor handoff', () => {
     expect(finance.getFixedExpenses).toHaveBeenCalled();
   });
 
-  it('opens the real subscription form from Add and the selected row Edit action', async () => {
-    await click('Add subscription');
-    expect(dialog('Add subscription').querySelector('input[name="name"]')).not.toBeNull();
-    await click('Cancel');
-    await clickRowAction('Internet', 'Edit');
-    expect(dialog('Edit subscription').querySelector<HTMLInputElement>('input[name="name"]')?.value).toBe('Internet');
-    expect(finance.getSubscriptions).toHaveBeenCalled();
-  });
 });

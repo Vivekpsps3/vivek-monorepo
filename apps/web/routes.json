@@ -8,7 +8,7 @@
   ],
   "private": [
     "auth/(?:login|signup)",
-    "hub(?:/admin)?",
+    "hub(?:/(?:admin|agenda))?",
     "account",
     "town(?:/(?:world|clinic|gym))?",
     "pixels(?:/life)?",

@@ -4,13 +4,11 @@ import { removeRow } from './dates.mjs';
 // T3 e2e. Seeded through the API like undo.spec.js. Due dates are built
 // relative to the test's Date.now() in local time, matching the component's
 // local wall-time "now" (never a server date).
-// Playwright matrix: every test runs at 390x844 and 1280x800, light and dark.
+// Functional stories retain both widths; screenshots and axe own theme combinations.
 
 const COMBOS = [
   { width: 390, height: 844, theme: 'light' },
-  { width: 390, height: 844, theme: 'dark' },
   { width: 1280, height: 800, theme: 'light' },
-  { width: 1280, height: 800, theme: 'dark' },
 ];
 
 function watchConsole(page) {

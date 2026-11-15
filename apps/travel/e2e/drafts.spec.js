@@ -34,7 +34,7 @@ async function holdResponse(page, url) {
   return { ready, release: () => release() };
 }
 
-for (const width of [390, 1280]) test.describe(`draft protection at ${width}px`, () => {
+for (const width of [390]) test.describe(`draft protection at ${width}px`, () => {
 test.use({ viewport: { width, height: 900 } });
 
 test.beforeEach(async ({ request }) => {

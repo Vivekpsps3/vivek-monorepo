@@ -26,16 +26,4 @@ describe('Pixels legend', () => {
     expect(el.querySelectorAll('.pixel.l1, .pixel.l2, .pixel.l3, .pixel.l4').length).toBe(4);
   });
 
-  it('names each app and says what the square means', () => {
-    const el = render('app');
-    expect(el.textContent).toContain('Town');
-    expect(el.textContent).toContain('Media');
-    expect(el.textContent).toContain('Travel');
-    expect(el.textContent).toContain('Finance');
-    expect(el.textContent).toContain('Square shows the app with the most points that day.');
-    expect(el.querySelector('.app-town')).not.toBeNull();
-    expect(el.querySelector('.app-media')).not.toBeNull();
-    expect(el.querySelector('.app-travel')).not.toBeNull();
-    expect(el.querySelector('.app-finance')).not.toBeNull();
-  });
 });

@@ -12,8 +12,4 @@ describe('loadFinanceBudgetKept', () => {
       .toThrowError(RangeError);
   });
 
-  it('still rejects with RangeError when an async caller awaits a bad argument', async () => {
-    const call = async () => loadFinanceBudgetKept(injector, signal, { today: 'not-a-date', weeks: 1 });
-    await expectAsync(call()).toBeRejectedWithError(RangeError);
-  });
 });

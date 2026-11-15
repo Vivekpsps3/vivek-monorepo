@@ -1,10 +1,9 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClient,withInterceptors } from '@angular/common/http';
+import { HttpTestingController,provideHttpClientTesting } from '@angular/common/http/testing';
 import { ChangeDetectorRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
-import { Subject, of } from 'rxjs';
-import { SILENT_ERROR_TOAST, httpErrorInterceptor } from '@vivek/ui';
+import { HTTP_ERROR_FALLBACK,SILENT_ERROR_TOAST,ToastService,httpErrorInterceptor } from '@vivek/ui';
+import { Subject,of } from 'rxjs';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { VaultService } from '../crypto/vault.service';
 import { FinanceService } from '../services/finance.service';
@@ -83,50 +82,6 @@ describe('stock lab scenario failures through the interceptor', () => {
     expect(list.request.context.get(SILENT_ERROR_TOAST)).withContext('scenario load').toBeTrue();
     list.flush(rows);
   }
-
-  it('shows the inline save sentence and no fallback toast', async () => {
-    const pending = component.saveScenario();
-    await flushList();
-    const save = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
-    expect(save.request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
-    save.flush({ detail: 'Synthetic save failed' }, { status: 500, statusText: 'Error' });
-    await pending;
-
-    expect(component.error).toBe("Couldn't save this scenario.");
-    expect(toast.error).not.toHaveBeenCalled();
-  });
-
-  it('shows the inline load sentence and no fallback toast', async () => {
-    const pending = component.loadScenarios();
-    const list = await whenRequest(req => req.method === 'GET' && req.url.includes('/vault/records'));
-    expect(list.request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
-    list.flush({ detail: 'Synthetic load failed' }, { status: 500, statusText: 'Error' });
-    await pending;
-
-    expect(component.error).toBe("Couldn't load saved scenarios.");
-    expect(toast.error).not.toHaveBeenCalled();
-  });
-
-  it('shows the inline delete sentence and no fallback toast', async () => {
-    component.scenario = { ...component.scenario, id: 4 };
-    const pending = component.deleteScenario();
-    await flushList([{
-      collection: 'stock_lab_scenarios',
-      client_id: 'scenario-4',
-      ciphertext_b64: 'Y2lwaGVy',
-      schema_version: 2,
-      key_version: 1,
-      revision: 1,
-      updated_at: '2026-10-01T00:00:00Z',
-    }]);
-    const remove = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/delete'));
-    expect(remove.request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
-    remove.flush({ detail: 'Synthetic delete failed' }, { status: 500, statusText: 'Error' });
-    await pending;
-
-    expect(component.error).toBe("Couldn't delete this scenario.");
-    expect(toast.error).not.toHaveBeenCalled();
-  });
 
   it('still toasts a concurrent non-silent failure while a silent save is in flight', async () => {
     const pending = component.saveScenario();

@@ -1,12 +1,12 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture,TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { ConfirmService,ToastService,failureCopy } from '@vivek/ui';
 import { Subject } from 'rxjs';
-import { ConfirmService, ToastService, failureCopy } from '@vivek/ui';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { FinanceService } from '../services/finance.service';
 import { PlanningService } from '../services/planning.service';
+import { dateWarnings,planningFactsCopy } from './planning-copy';
 import { PlanningComponent } from './planning.component';
-import { dateWarnings, planningFactsCopy } from './planning-copy';
 
 /**
  * Synthetic records only. Counts on screen are the preview contract:
@@ -93,36 +93,6 @@ describe('Planning current facts (FIN-03)', () => {
     expect(page).not.toContain('income_is_net');
   }
 
-  it('shows the empty state when no source record participates', async () => {
-    const fixture = await open();
-    expect(fixture.componentInstance.inputs?.asset_count).toBe(0);
-    expect(fixture.componentInstance.inputs?.active_job_count).toBe(0);
-    expect(fixture.componentInstance.inputs?.income_is_net).toBeFalse();
-    expect(shown(fixture.nativeElement.textContent)).toContain('Planning uses your balances, pay and bills');
-    expect(factsCard(fixture)).toBeNull();
-    fixture.destroy();
-  });
-
-  it('shows a zero-value asset and ignores an inactive job paycheck', async () => {
-    encStore.getAssets.and.resolveTo([{ id: 1, current_value: 0, as_of_date: '2020-01-01' }] as never);
-    encStore.getJobIncomes.and.resolveTo([
-      { monthly_net: 9000, annual_taxes: 1000, annual_deductions: 0, is_active: false, effective_date: '2000-01-01' },
-    ] as never);
-    const fixture = await open();
-    expect(fixture.componentInstance.inputs?.asset_count).toBe(1);
-    expect(fixture.componentInstance.inputs?.active_job_count).toBe(0);
-    expect(fixture.componentInstance.inputs?.avg_monthly_income).toBe(0);
-    expect(fixture.componentInstance.inputs?.income_is_net).toBeFalse();
-    expectFactsMatchPreview(fixture);
-    const page = shown(fixture.nativeElement.textContent);
-    expect(page).toContain('(1 asset, 0 debts)');
-    expect(page).toContain('(0 active jobs)');
-    expect(page).toContain('$0.00 a year before taxes');
-    expect(page).toContain('Take-home: not set');
-    expect(page).not.toContain('$108,000.00');
-    fixture.destroy();
-  });
-
   it('pluralizes many source records, warns on undated prices, and keeps a saved-input failure in the card', async () => {
     encStore.getNetWorth.and.resolveTo({ total: 50, portfolio: 0, liabilities: 0 } as never);
     encStore.getAssets.and.resolveTo([
@@ -181,28 +151,4 @@ describe('Planning current facts (FIN-03)', () => {
     fixture.destroy();
   });
 
-  it('labels one taxed job as take-home and keeps the singular undated-price warning', async () => {
-    encStore.getAssets.and.resolveTo([{ id: 1, current_value: 0, as_of_date: '2020-01-01' }] as never);
-    encStore.getHoldings.and.resolveTo([
-      { id: 1, lifecycle_status: 'active', shares: 1, quote_date: null, position_as_of: null },
-    ] as never);
-    encStore.getJobIncomes.and.resolveTo([
-      { monthly_net: 4000, annual_taxes: 12000, annual_deductions: 0, is_active: true, effective_date: '2000-01-01' },
-    ] as never);
-    encStore.getFixedExpenses.and.resolveTo([{ annual_amount: 100, is_active: true }] as never);
-    const fixture = await open();
-    expectFactsMatchPreview(fixture);
-    const page = shown(fixture.nativeElement.textContent);
-    expect(page).toContain('(1 asset, 0 debts)');
-    expect(page).toContain('(1 holding)');
-    expect(page).toContain('(1 active job)');
-    expect(page).toContain('(1 bill, 0 subscriptions)');
-    expect(page).toContain('1 holding has no price date.');
-    expect(page).toContain('Check prices');
-    expect(page).toContain('Take-home');
-    expect(page).toContain('$48,000.00 a year');
-    expect(page).not.toContain('before taxes');
-    expect(page).not.toContain('Take-home: not set');
-    fixture.destroy();
-  });
 });

@@ -4,11 +4,14 @@
 
     <app-up-next
       [ownerId]="userId ?? null" [today]="today"
+      [expanded]="expanded" [windowStart]="windowStart" [windowEnd]="windowEnd" [selectedSources]="agendaSources"
+      (windowChange)="changeAgendaWindow($event)" (sourcesChange)="changeAgendaSources($event)"
       [travel]="travel" [travelState]="travelState" [travelPending]="travelPending" [travelUpdatedAt]="travelUpdatedAt"
       [media]="media" [mediaState]="mediaState" [mediaPending]="mediaPending" [mediaUpdatedAt]="mediaUpdatedAt"
       [financeState]="financeState" [financePending]="financePending" [billsDue]="billsDueThisWeek" [financeUpdatedAt]="financeUpdatedAt"
       (retryTravel)="retryTravel()" (retryMedia)="retryMedia()" (retryFinance)="retryFinance()" />
 
+    @if (!expanded) {
     <div class="pair">
       <section class="side-panel" aria-labelledby="travel-heading" [attr.aria-busy]="travelState === 'loading' || travelPending">
         <div class="panel-head">
@@ -83,7 +86,7 @@
           }
           @if (!media.currently.length && media.recent_reviews.length) {
             <h3>Recent notes</h3>
-            <ul class="rows">
+            <ul class="rows media-notes">
               @for (item of media.recent_reviews.slice(0, 2); track item.id) {
                 <li><a [routerLink]="'/media/item/' + item.id">{{ item.title }}</a><strong>{{ item.review_excerpt || (item.rating == null ? 'Unrated' : item.rating + '/10') }}</strong></li>
               }
@@ -248,5 +251,6 @@
       </section>
     </div>
 
+    }
   </main>
 </div>

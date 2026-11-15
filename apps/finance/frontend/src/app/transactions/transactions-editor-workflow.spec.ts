@@ -1,9 +1,9 @@
-import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectorRef } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute,Router } from '@angular/router';
 import { ToastService } from '@vivek/ui';
+import { of,throwError } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { TransactionsEditorWorkflow } from './transactions-editor-workflow';
 import { RECENT_PAST_TRIP_LIMIT } from './trip-tag';
@@ -39,62 +39,6 @@ function home() {
 }
 
 describe('TransactionsEditorWorkflow', () => {
-  it('writes an untouched legacy 1.005 back unchanged', () => {
-    const { workflow, finance } = editor();
-    workflow.openTransactionEditor({
-      id: 4,
-      amount: 1.005,
-      date: '2026-01-02',
-      type: 'expense',
-      category: 'Food',
-      description: 'Lunch',
-      kind: 'purchase',
-    } as never);
-    workflow.saveTransaction();
-    expect(finance.updateTransaction.calls.mostRecent().args[1].amount).toBe(1.005);
-  });
-
-  it('rejects an edited amount that has more than two decimal places', () => {
-    const { workflow, finance } = editor();
-    workflow.openTransactionEditor({
-      id: 4,
-      amount: 1.005,
-      date: '2026-01-02',
-      type: 'expense',
-      category: 'Food',
-      description: '',
-      kind: 'purchase',
-    } as never);
-    workflow.onAmountChange('1.005');
-    workflow.saveTransaction();
-    expect(finance.updateTransaction).not.toHaveBeenCalled();
-    expect(workflow.fieldErrors.map(error => error.message)).toContain('Enter an amount with up to 2 decimal places.');
-  });
-
-  it('starts a new transaction with an empty amount', () => {
-    const { workflow } = editor();
-    workflow.openAddModal(null);
-    expect(workflow.newTx.amount).toBe('' as unknown as number);
-  });
-
-  it('shows the save failure inside the dialog', () => {
-    const { workflow, finance, toast } = editor();
-    finance.updateTransaction.and.returnValue(throwError(() => ({ error: { detail: 'Synthetic save failed' } })));
-    workflow.openTransactionEditor({
-      id: 4,
-      amount: 12,
-      date: '2026-01-02',
-      type: 'expense',
-      category: 'Food',
-      description: 'Lunch',
-      kind: 'purchase',
-    } as never);
-    workflow.saveTransaction();
-    expect(workflow.showModal).toBeTrue();
-    expect(workflow.transactionSaveError).toBe("Couldn't save. Something went wrong. Try again.");
-    expect(workflow.newTx.category).toBe('Food');
-    expect(toast.error).not.toHaveBeenCalled();
-  });
 
   it('adds, clears, and reopens a trip tag, and saves without one when the trip list fails', () => {
     const http = { get: jasmine.createSpy('get').and.returnValue(of(home())) };

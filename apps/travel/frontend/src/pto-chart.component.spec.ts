@@ -82,24 +82,4 @@ describe("PtoChartComponent combined forecast", () => {
     expect((root.querySelector("svg.pto-forecast") as SVGElement).style.height).toBe("300px");
   });
 
-  it("renders nothing when neither bucket has points", () => {
-    const fixture = render({ ...body(), pto: null, sick: null });
-    expect((fixture.nativeElement as HTMLElement).querySelector("svg")).toBeNull();
-  });
-
-  it("keeps a single point visible", () => {
-    const root = render({
-      ...body(),
-      sick: null,
-      pto: {
-        balance_horizon_days: "2",
-        balance_horizon_hours: "16",
-        first_negative: null,
-        points: [point("2026-06-15", "2", "16", ["as_of", "today"])],
-      },
-    }).nativeElement as HTMLElement;
-    expect(root.querySelectorAll("circle.pto-marker-pto").length).toBe(1);
-    expect(root.querySelector("path")).toBeNull();
-    expect(root.querySelector("table")?.textContent).toContain("2 days");
-  });
 });

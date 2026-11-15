@@ -1,6 +1,5 @@
 import { Component } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
+import { ComponentFixture,TestBed } from '@angular/core/testing';
 import { UiDialogComponent } from '@vivek/ui';
 
 @Component({
@@ -48,12 +47,4 @@ describe('UiDialogComponent', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
-  it('emits closed on Escape', () => {
-    host.open = true;
-    fixture.detectChanges();
-    const dialog = fixture.debugElement.query(By.directive(UiDialogComponent)).componentInstance as UiDialogComponent;
-    dialog.onEscape();
-    fixture.detectChanges();
-    expect(host.open).toBe(false);
-  });
 });

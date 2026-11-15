@@ -1,10 +1,10 @@
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController,provideHttpClientTesting } from '@angular/common/http/testing';
+import { ComponentFixture,TestBed,fakeAsync,tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { ToastService } from '@vivek/ui';
-import { UpNextComponent } from './up-next.component';
 import type { TravelEvent } from '../hub-decode';
+import { UpNextComponent } from './up-next.component';
 
 function reminderEvent(): TravelEvent {
   return { id: 7, kind: 'reminder', date: '2026-12-24', time: '09:00', tz: null, title: 'Check in', overdue: true,
@@ -139,8 +139,8 @@ describe('Up next reminder actions and source states', () => {
     fixture.componentRef.setInput('financeState', 'empty'); fixture.componentRef.setInput('billsDue', 0);
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Nothing due in the next two weeks.');
-    expect(fixture.nativeElement.querySelectorAll('a').length).toBe(1);
-    expect(fixture.nativeElement.querySelector('a').getAttribute('href')).toBe('/travel/trips/new');
+    expect(fixture.nativeElement.querySelectorAll('a').length).toBe(2);
+    expect(fixture.nativeElement.querySelector('ui-button a').getAttribute('href')).toBe('/travel/trips/new');
     fixture.componentRef.setInput('mediaState', 'unavailable'); fixture.detectChanges();
     expect(fixture.nativeElement.textContent).not.toContain('Nothing due');
     expect(fixture.nativeElement.textContent).toContain("Couldn't load Media dates.");

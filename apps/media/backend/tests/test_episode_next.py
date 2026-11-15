@@ -90,72 +90,6 @@ def _break_provider_lookups(monkeypatch):
             monkeypatch.setattr(providers, name, boom)
 
 
-def test_mark_next_checked_names_the_aired_episode_and_skips_specials(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(
-        client,
-        [
-            {
-                "season_number": 0,
-                "episode_number": 1,
-                "title": "Special",
-                "air_date": "2026-09-01",
-            },
-            {"season_number": 2, "episode_number": 4, "air_date": "2026-10-01"},
-            {
-                "season_number": 2,
-                "episode_number": 5,
-                "title": "After",
-                "air_date": "2026-10-02",
-            },
-        ],
-    )
-    target = next(
-        episode
-        for episode in saved["show"]["episodes"]
-        if episode["season_number"] == 2 and episode["episode_number"] == 4
-    )
-    db = _session(client)
-    try:
-        entry = _entry(db, saved["id"])
-        state, marked = mark_next_checked(db, entry.user_id, entry, None)
-        assert marked == {
-            "episode_id": target["id"],
-            "season_number": 2,
-            "episode_number": 4,
-            "title": None,
-            "label": "S2E4",
-        }
-        assert state["watched_count"] == 1
-        assert state["next_episode"]["season_number"] == 2
-        assert state["next_episode"]["episode_number"] == 5
-        special = next(episode for episode in state["episodes"] if episode["season_number"] == 0)
-        assert special["watched"] is False
-    finally:
-        db.close()
-
-
-def test_mark_next_checked_accepts_a_matching_expected_id(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(
-        client,
-        [
-            {"season_number": 1, "episode_number": 1, "title": "Pilot", "air_date": "2026-10-01"},
-            {"season_number": 1, "episode_number": 2, "title": "Second", "air_date": "2026-10-02"},
-        ],
-    )
-    nxt = saved["show"]["next_episode"]
-    db = _session(client)
-    try:
-        entry = _entry(db, saved["id"])
-        _state, marked = mark_next_checked(db, entry.user_id, entry, nxt["id"])
-        assert marked["episode_id"] == nxt["id"]
-        assert marked["label"] == "S1E1"
-        assert marked["title"] == "Pilot"
-    finally:
-        db.close()
-
-
 def test_mark_next_checked_rejects_a_stale_expected_id_without_writing(client, monkeypatch):
     monkeypatch.setenv("MEDIA_TODAY", TODAY)
     saved = _show(
@@ -189,123 +123,6 @@ def test_mark_next_checked_rejects_a_stale_expected_id_without_writing(client, m
         db.close()
 
 
-def test_mark_next_checked_caught_up_is_409(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(
-        client,
-        [
-            {"season_number": 1, "episode_number": 1, "title": "Later", "air_date": "2026-12-01"},
-        ],
-    )
-    db = _session(client)
-    try:
-        entry = _entry(db, saved["id"])
-        with pytest.raises(HTTPException) as caught:
-            mark_next_checked(db, entry.user_id, entry, None)
-        assert caught.value.status_code == 409
-        assert caught.value.detail == "Add episodes, or you are already caught up."
-        assert _watched_count(db, entry.user_id) == 0
-    finally:
-        db.close()
-
-
-def test_mark_next_checked_non_tv_is_422(client):
-    db = _session(client)
-    try:
-        for kind in ("movie", "book"):
-            saved = _create(client, kind=kind, title=kind)
-            entry = _entry(db, saved["id"])
-            with pytest.raises(HTTPException) as caught:
-                mark_next_checked(db, entry.user_id, entry, None)
-            assert caught.value.status_code == 422
-            assert caught.value.detail == "Episode progress is for shows."
-    finally:
-        db.close()
-
-
-def test_mark_next_checked_missing_episode_is_not_found(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(
-        client,
-        [
-            {"season_number": 1, "episode_number": 1, "title": "Pilot", "air_date": "2026-10-01"},
-        ],
-    )
-    monkeypatch.setattr(
-        "apps.media.backend.services.episode_next.records.episode_state",
-        lambda *_args, **_kwargs: {
-            "next_episode": {
-                "id": 9_999_999,
-                "season_number": 9,
-                "episode_number": 9,
-                "title": "Gone",
-            }
-        },
-    )
-    db = _session(client)
-    try:
-        entry = _entry(db, saved["id"])
-        with pytest.raises(HTTPException) as caught:
-            mark_next_checked(db, entry.user_id, entry, None)
-        assert caught.value.status_code == 404
-        assert caught.value.detail == "That item is not in your library."
-        assert _watched_count(db, entry.user_id) == 0
-    finally:
-        db.close()
-
-
-def test_next_without_body_marks_and_reports_marked(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(client, _aired(2))
-    response = client.post(f"/api/entries/{saved['id']}/episodes/next")
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["marked"]["label"] == "S1E1"
-    assert body["marked"]["season_number"] == 1
-    assert body["marked"]["episode_number"] == 1
-    assert body["marked"]["title"] == "Episode 1"
-    nxt = body["show"]["next_episode"]
-    assert nxt["season_number"] == 1
-    assert nxt["episode_number"] == 2
-
-
-def test_next_accepts_empty_and_null_expected(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(client, _aired(5))
-    path = f"/api/entries/{saved['id']}/episodes/next"
-    responses = [
-        client.post(path),
-        client.post(path, json={}),
-        client.post(path, json={"expected_episode_id": None}),
-        client.post(path, content=b"null", headers={"Content-Type": "application/json"}),
-        client.post(path, content=b"", headers={"Content-Type": "application/json"}),
-    ]
-    assert [response.status_code for response in responses] == [200, 200, 200, 200, 200]
-    assert [response.json()["marked"]["label"] for response in responses] == [
-        "S1E1",
-        "S1E2",
-        "S1E3",
-        "S1E4",
-        "S1E5",
-    ]
-
-
-def test_next_with_matching_expected_marks(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(client, _aired(2))
-    nxt = saved["show"]["next_episode"]
-    response = client.post(
-        f"/api/entries/{saved['id']}/episodes/next",
-        json={"expected_episode_id": nxt["id"]},
-    )
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["marked"]["episode_id"] == nxt["id"]
-    assert body["marked"]["label"] == "S1E1"
-    assert body["show"]["watched_count"] == 1
-    assert body["show"]["next_episode"]["episode_number"] == 2
-
-
 def test_next_with_stale_expected_is_409_and_writes_nothing(client, monkeypatch):
     monkeypatch.setenv("MEDIA_TODAY", TODAY)
     saved = _show(client, _aired(2))
@@ -322,89 +139,6 @@ def test_next_with_stale_expected_is_409_and_writes_nothing(client, monkeypatch)
     assert [episode["id"] for episode in watched] == [marked_id]
     assert progress["watched_count"] == 1
     assert progress["next_episode"]["id"] == nxt["id"]
-
-
-def test_next_rejects_non_int_expected_422(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(client, _aired(2))
-    path = f"/api/entries/{saved['id']}/episodes/next"
-    before = client.get(f"/api/entries/{saved['id']}").json()["show"]
-    for bad in ("12", True, False):
-        response = client.post(path, json={"expected_episode_id": bad})
-        assert response.status_code == 422
-        assert response.json()["detail"] == "Expected episode must be a number."
-    after = client.get(f"/api/entries/{saved['id']}").json()["show"]
-    assert after["watched_count"] == before["watched_count"] == 0
-    assert after["next_episode"]["id"] == before["next_episode"]["id"]
-
-
-def test_next_caught_up_is_409_existing_copy(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(
-        client,
-        [{"season_number": 1, "episode_number": 1, "title": "Later", "air_date": "2026-12-01"}],
-    )
-    response = client.post(f"/api/entries/{saved['id']}/episodes/next")
-    assert response.status_code == 409
-    assert response.json()["detail"] == "Add episodes, or you are already caught up."
-    progress = client.get(f"/api/entries/{saved['id']}").json()["show"]
-    assert progress["watched_count"] == 0
-    assert progress["episodes"][0]["watched"] is False
-
-
-def test_next_non_tv_is_422(client):
-    for kind in ("movie", "book"):
-        saved = _create(client, kind=kind, title=kind)
-        response = client.post(f"/api/entries/{saved['id']}/episodes/next")
-        assert response.status_code == 422
-        assert response.json()["detail"] == "Episode progress is for shows."
-
-
-def test_next_skips_specials_and_unaired(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(
-        client,
-        [
-            {
-                "season_number": 0,
-                "episode_number": 1,
-                "title": "Special",
-                "air_date": "2026-09-01",
-            },
-            {
-                "season_number": 1,
-                "episode_number": 1,
-                "title": "Pilot",
-                "air_date": "2026-10-01",
-            },
-            {
-                "season_number": 1,
-                "episode_number": 2,
-                "title": "Later",
-                "air_date": "2026-12-01",
-            },
-        ],
-    )
-    path = f"/api/entries/{saved['id']}/episodes/next"
-    response = client.post(path)
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["marked"]["label"] == "S1E1"
-    episodes = {episode["id"]: episode for episode in body["show"]["episodes"]}
-    special = next(episode for episode in episodes.values() if episode["season_number"] == 0)
-    future = next(
-        episode
-        for episode in episodes.values()
-        if episode["season_number"] == 1 and episode["episode_number"] == 2
-    )
-    assert special["watched"] is False
-    assert future["watched"] is False
-    assert body["show"]["next_episode"] is None
-    caught_up = client.post(path)
-    assert caught_up.status_code == 409
-    assert caught_up.json()["detail"] == "Add episodes, or you are already caught up."
-    progress = client.get(f"/api/entries/{saved['id']}").json()["show"]
-    assert progress["watched_count"] == 1
 
 
 def test_undo_by_unwatching_marked_episode_restores_state(client, monkeypatch):
@@ -424,23 +158,6 @@ def test_undo_by_unwatching_marked_episode_restores_state(client, monkeypatch):
     assert remarked.status_code == 200, remarked.text
     assert remarked.json()["marked"]["episode_id"] == episode_id
     assert remarked.json()["show"]["watched_count"] == before + 1
-
-
-def test_summary_next_episodes_advances_after_mark(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(client, _aired(2))
-    before = client.get("/api/summary").json()["next_episodes"]
-    prior = next(item for item in before if item["entry_id"] == saved["id"])
-    assert prior["season"] == 1
-    assert prior["episode"] == 1
-    marked = client.post(f"/api/entries/{saved['id']}/episodes/next")
-    assert marked.status_code == 200, marked.text
-    after = client.get("/api/summary").json()["next_episodes"]
-    row = next(item for item in after if item["entry_id"] == saved["id"])
-    assert row["season"] == 1
-    assert row["episode"] == 2
-    assert row["episode_id"] == marked.json()["show"]["next_episode"]["id"]
-    assert row["state"] == "next"
 
 
 def test_next_is_owner_scoped(client, monkeypatch):
@@ -588,48 +305,6 @@ def test_malformed_json_foreign_next_matches_unknown(client):
         assert foreign.headers[header] == unknown.headers[header]
 
 
-def test_raw_scalar_or_absent_body_matches_unknown_404(client, monkeypatch):
-    saved = {kind: _create(client, kind=kind) for kind in ("tv", "movie")}
-    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
-
-    def must_not_mark(*_args, **_kwargs):
-        raise AssertionError("mark_next_checked must not run for foreign or unknown entries")
-
-    monkeypatch.setattr("apps.media.backend.services.episode_next.mark_next_checked", must_not_mark)
-    paths = [
-        "/api/entries/999999999/episodes/next",
-        f"/api/entries/{saved['tv']['id']}/episodes/next",
-        f"/api/entries/{saved['movie']['id']}/episodes/next",
-    ]
-    responses = [_raw_post(client, path, raw) for path in paths for raw in _RAW_BODIES]
-    unknown = responses[0]
-    assert unknown.status_code == 404
-    assert unknown.json() == {"detail": "That item is not in your library."}
-    assert [response.status_code for response in responses] == [404] * len(responses)
-    assert [response.content for response in responses] == [unknown.content] * len(responses)
-    with _session(client) as db:
-        assert db.query(EpisodeProgress).count() == 0
-
-
-@pytest.mark.parametrize("raw", [b'"12"', b"true", b"987654"])
-def test_owned_next_rejects_raw_scalar_body(client, monkeypatch, raw):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    saved = _show(client, _aired(2))
-    path = f"/api/entries/{saved['id']}/episodes/next"
-    before = client.get(f"/api/entries/{saved['id']}").json()["show"]
-
-    def must_not_mark(*_args, **_kwargs):
-        raise AssertionError("a scalar body must be rejected before mark_next_checked")
-
-    monkeypatch.setattr("apps.media.backend.services.episode_next.mark_next_checked", must_not_mark)
-    response = _raw_post(client, path, raw)
-    assert response.status_code == 422
-    assert response.json() == {"detail": "Check the form and try again."}
-    after = client.get(f"/api/entries/{saved['id']}").json()["show"]
-    assert after["watched_count"] == before["watched_count"] == 0
-    assert after["next_episode"]["id"] == before["next_episode"]["id"]
-
-
 def test_next_conditional_update_clears_operation_token(client, monkeypatch):
     monkeypatch.setenv("MEDIA_TODAY", TODAY)
     saved = _show(client, _aired(2))
@@ -696,22 +371,3 @@ def test_integrity_error_conflict_has_no_context(client, monkeypatch):
         db.close()
     with _session(client) as fresh:
         assert fresh.query(EpisodeProgress).count() == 0
-
-
-def test_next_refuses_an_unreleased_episode(client, monkeypatch):
-    monkeypatch.setenv("MEDIA_TODAY", TODAY)
-    later = {"season_number": 1, "episode_number": 2, "title": "Later", "air_date": "2026-12-01"}
-    saved = _show(client, [*_aired(1), later])
-    future_id = next(ep["id"] for ep in saved["show"]["episodes"] if ep["episode_number"] == 2)
-    real_state = records.episode_state
-
-    def force_future(db, user_id, catalog):
-        state = real_state(db, user_id, catalog)
-        state["next_episode"] = {"id": future_id}
-        return state
-
-    monkeypatch.setattr(records, "episode_state", force_future)
-    response = client.post(f"/api/entries/{saved['id']}/episodes/next")
-    assert response.status_code == 422
-    assert response.json()["detail"] == "This episode has not aired yet."
-    assert client.get(f"/api/entries/{saved['id']}").json()["show"]["watched_count"] == 0

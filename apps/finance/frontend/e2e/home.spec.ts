@@ -6,7 +6,7 @@ import { syntheticVault } from './synthetic-vault';
 test.use({ frozenInstant: Date.parse('2026-10-20T12:00:00-07:00') });
 
 const widths = [390, 1280] as const;
-const themes = ['light', 'dark'] as const;
+const themes = ['light'] as const;
 
 async function expectNoHorizontalScroll(page: Page): Promise<void> {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);

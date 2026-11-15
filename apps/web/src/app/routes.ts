@@ -13,7 +13,10 @@ export const routes: Routes = [
     { path: 'account', redirectTo: () => '/settings/account', pathMatch: 'full' },
     { path: 'settings', loadChildren: () => import('./settings/settings.routes').then(m => m.SETTINGS_ROUTES) },
   { path: 'hub/admin', title: 'Account administration', canActivate: [authGuard, adminGuard], loadComponent: () => import('./account/suite-admin.component').then(m => m.SuiteAdminComponent) },
-  { path: 'hub', title: 'Workspace', pathMatch: 'full', canActivate: [authGuard], loadComponent: () => import('./hub/hub.component').then(m => m.HubComponent) },
+  { path: 'hub', title: 'Workspace', canActivate: [authGuard], loadComponent: () => import('./hub/hub.component').then(m => m.HubComponent), children: [
+    { path: '', pathMatch: 'full', children: [] },
+    { path: 'agenda', title: 'Hub agenda', children: [] },
+  ] },
     { path: 'town', title: 'Town', children: [
       { path: '', loadComponent: () => import('./town/town.component').then(m => m.TownComponent) },
       { path: 'world', title: 'World', loadComponent: () => import('./world/ui/world.component').then(m => m.WorldComponent) },

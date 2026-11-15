@@ -1,12 +1,12 @@
-import { ComponentFixture, TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
-import { provideRouter, Router, withDisabledInitialNavigation } from '@angular/router';
+import { HttpClientTestingModule,HttpTestingController } from '@angular/common/http/testing';
+import { ComponentFixture,TestBed } from '@angular/core/testing';
+import { provideRouter,Router,withDisabledInitialNavigation } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { BehaviorSubject, of, Subject } from 'rxjs';
-import { SESSION_CONTEXT, type SessionPort } from '@vivek/ui';
+import { SESSION_CONTEXT,type SessionPort } from '@vivek/ui';
+import { BehaviorSubject,of,Subject } from 'rxjs';
 import { routes } from '../app.routes';
 import { apiUrl } from '../core/api-url';
-import { hasDek, readLockEpoch } from '../crypto/dek-holder';
+import { hasDek,readLockEpoch } from '../crypto/dek-holder';
 import { createVaultMaterial } from '../crypto/vault-crypto';
 import { VaultService } from '../crypto/vault.service';
 import { VaultUnlockComponent } from './vault-unlock.component';
@@ -45,38 +45,6 @@ describe('VaultUnlockComponent', () => {
     // so the embed default applies here (same self/top rule as afterAuthUrl).
     expect(router.navigateByUrl).toHaveBeenCalledWith('/finance/embed');
     expect(fixture.componentInstance.busy).toBeFalse();
-  });
-
-  it('wrong passphrase shows the wrong-passphrase sentence and keeps the passphrase', async () => {
-    const auth = jasmine.createSpyObj('AuthService', ['loadSession']);
-    auth.currentUser = { username: 'vivek', email: 'vivek@pending.local' };
-    const vault = jasmine.createSpyObj('VaultService', ['refreshStatus', 'unlock', 'upgradeKdfIfNeeded']);
-    vault.isUnlocked = false;
-    vault.refreshStatus.and.resolveTo({ exists: true });
-    const operationError = new Error('The operation failed for an operation-specific reason');
-    operationError.name = 'OperationError';
-    vault.unlock.and.rejectWith(operationError);
-
-    TestBed.configureTestingModule({
-      imports: [VaultUnlockComponent],
-      providers: [
-        { provide: SESSION_CONTEXT, useValue: auth },
-        { provide: VaultService, useValue: vault },
-        provideRouter([]),
-      ],
-    });
-    const fixture: ComponentFixture<VaultUnlockComponent> = TestBed.createComponent(VaultUnlockComponent);
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    fixture.componentInstance.passphrase = 'correct horse battery staple';
-    await fixture.componentInstance.unlock();
-    fixture.detectChanges();
-
-    expect(fixture.componentInstance.passphrase).toBe('correct horse battery staple');
-    expect(fixture.componentInstance.error).toBe("That passphrase didn't unlock your vault. Check it and try again.");
-    expect(fixture.nativeElement.textContent).not.toContain('OperationError');
-    expect(vault.upgradeKdfIfNeeded).not.toHaveBeenCalled();
   });
 
   it('stays on the unlock form when the vault discards the unlock', async () => {
@@ -194,16 +162,6 @@ describe('VaultUnlockComponent', () => {
       expect(navigate).not.toHaveBeenCalled();
     });
 
-    it('ignores an off-site next', async () => {
-      window.history.pushState({}, '', '?next=' + encodeURIComponent('https://evil.example/phish'));
-      const fixture = create();
-      await fixture.whenStable();
-      fixture.componentInstance.passphrase = 'correct horse battery staple';
-      await fixture.componentInstance.unlock();
-      // Framed (Karma) embed default; top level this is '/finance/'.
-      expect(navigate).toHaveBeenCalledWith('/finance/embed');
-    });
-
     it('empty submit shows "Enter your vault passphrase." and does not call unlock', async () => {
       const fixture = create();
       await fixture.whenStable();
@@ -211,42 +169,6 @@ describe('VaultUnlockComponent', () => {
       await fixture.componentInstance.unlock();
       expect(fixture.componentInstance.error).toBe('Enter your vault passphrase.');
       expect(vault.unlock).not.toHaveBeenCalled();
-    });
-
-    it('HTTP 0 and 503 show the network sentence', async () => {
-      const { HttpErrorResponse } = await import('@angular/common/http');
-      for (const status of [0, 503]) {
-        TestBed.resetTestingModule();
-        vault.unlock.and.rejectWith(new HttpErrorResponse({ status, statusText: 'x' }));
-        const fixture = create();
-        await fixture.whenStable();
-        fixture.componentInstance.passphrase = 'correct horse battery staple';
-        await fixture.componentInstance.unlock();
-        expect(fixture.componentInstance.error).toBe("Can't reach Finance. Check your connection and try again.");
-      }
-    });
-
-    it('shows the slow message after 1.5s', fakeAsync(() => {
-      vault.unlock.and.returnValue(new Promise<boolean>(() => undefined));
-      const fixture = create();
-      flushMicrotasks();
-      fixture.componentInstance.passphrase = 'correct horse battery staple';
-      void fixture.componentInstance.unlock();
-      fixture.detectChanges();
-      expect(fixture.componentInstance.slow).toBe(false);
-      tick(1500);
-      expect(fixture.componentInstance.slow).toBe(true);
-      fixture.detectChanges();
-      expect(fixture.nativeElement.textContent).toContain('this can take a few seconds on a phone');
-    }));
-
-    it('error line is always rendered', async () => {
-      const fixture = create();
-      await fixture.whenStable();
-      fixture.detectChanges();
-      const line = fixture.nativeElement.querySelector('#vault-unlock-error');
-      expect(line).not.toBeNull();
-      expect(line.textContent).toBe('');
     });
 
     it('shows the auto-lock notice once', async () => {

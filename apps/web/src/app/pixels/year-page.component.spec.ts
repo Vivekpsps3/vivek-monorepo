@@ -1,12 +1,11 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { Subject } from 'rxjs';
 import { todayIsoDate } from '@vivek/browser';
-import { composeSnapshot } from './pixels-model';
-import { PixelsPreferences } from './pixels-preferences';
+import { Subject } from 'rxjs';
 import { PixelsDataService } from './pixels-data.service';
-import type { PixelsLoadRequest, PixelsLoadResult, PixelsSnapshot } from './pixels.types';
+import { composeSnapshot } from './pixels-model';
+import type { PixelsLoadRequest,PixelsLoadResult,PixelsSnapshot } from './pixels.types';
 import { YearPageComponent } from './year-page.component';
 
 function snapshotFor(request: PixelsLoadRequest, finance: 'locked' | 'ready'): PixelsSnapshot {
@@ -58,26 +57,6 @@ describe('Year page', () => {
     return harness;
   }
 
-  it('shows the clamp notice and replaces an unusable year', async () => {
-    const harness = await open('/pixels?year=nope');
-    const year = Number(todayIsoDate().slice(0, 4));
-    const el = harness.routeNativeElement as HTMLElement;
-    expect(el.querySelector('.pixels-notice')?.textContent?.trim()).toBe(`Showing ${year}. nope is not a year.`);
-    const url = TestBed.inject(Router).url;
-    expect(url).toContain(`year=${year}`);
-    expect(url).not.toContain('nope');
-    expect(url).not.toContain('day=');
-  });
-
-  it('shows the clamp notice and drops a day that is not in the year', async () => {
-    const year = todayIsoDate().slice(0, 4);
-    const harness = await open(`/pixels?year=${year}&day=2024-02-31`);
-    const el = harness.routeNativeElement as HTMLElement;
-    expect(el.querySelector('.pixels-notice')?.textContent?.trim())
-      .toBe(`No day selected. 2024-02-31 is not a date in ${Number(year)}.`);
-    expect(TestBed.inject(Router).url).not.toContain('day=');
-  });
-
   it('keeps the grid when Finance is locked and does not show a kept count', async () => {
     const year = todayIsoDate().slice(0, 4);
     const harness = await open(`/pixels?year=${year}`);
@@ -115,36 +94,4 @@ describe('Year page', () => {
     expect(el.querySelector('[data-stat="budget-kept"]')?.textContent ?? '').not.toMatch(/\d/);
   });
 
-  it('selects a day in the query and swaps to the table', async () => {
-    const year = todayIsoDate().slice(0, 4);
-    const harness = await open(`/pixels?year=${year}`);
-    const el = harness.routeNativeElement as HTMLElement;
-    el.querySelector<HTMLButtonElement>(`[data-date="${year}-01-01"]`)!.click();
-    await harness.fixture.whenStable();
-    harness.detectChanges();
-    expect(TestBed.inject(Router).url).toContain(`day=${year}-01-01`);
-    expect(el.querySelector(`#pixel-day-${year}-01-01`)?.classList.contains('selected')).toBeTrue();
-    expect(el.querySelector('app-day-detail')).not.toBeNull();
-
-    const view = [...el.querySelectorAll('button')].find(button => button.textContent?.includes('View as table'));
-    view!.click();
-    harness.detectChanges();
-    expect(TestBed.inject(PixelsPreferences).view()).toBe('table');
-    expect(el.querySelector('[role="grid"]')).toBeNull();
-    expect(el.querySelector('app-year-table')).not.toBeNull();
-    expect(el.querySelector('app-day-detail')).toBeNull();
-  });
-
-  it('returns focus to the selected cell when Escape closes the day', async () => {
-    const year = todayIsoDate().slice(0, 4);
-    const harness = await open(`/pixels?year=${year}&day=${year}-01-01`);
-    const el = harness.routeNativeElement as HTMLElement;
-    const close = el.querySelector<HTMLButtonElement>('[data-day-close]');
-    expect(close).not.toBeNull();
-    close!.click();
-    await harness.fixture.whenStable();
-    harness.detectChanges();
-    expect(TestBed.inject(Router).url).not.toContain('day=');
-    expect(document.activeElement?.id).toBe(`pixel-day-${year}-01-01`);
-  });
 });

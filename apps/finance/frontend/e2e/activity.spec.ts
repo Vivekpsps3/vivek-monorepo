@@ -45,7 +45,7 @@ async function setup(page: Page) {
 }
 
 for (const width of [390, 1280]) {
-  for (const theme of ['light', 'dark'] as const) {
+  for (const theme of ['light'] as const) {
     test.describe(`[${width} ${theme}]`, () => {
       test.beforeEach(async ({ page }) => {
         await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });

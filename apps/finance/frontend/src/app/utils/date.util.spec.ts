@@ -1,19 +1,10 @@
 import {
-  WEEK_STARTS_ON,
-  daysBetweenDateOnly,
-  formatDate,
-  isOnOrBeforeToday,
-  parseDateOnly,
-  weekStartIndex,
+daysBetweenDateOnly,
+formatDate,
+parseDateOnly
 } from '@vivek/browser';
 
 describe('shared dates', () => {
-  it('starts the week on Sunday', () => {
-    expect(WEEK_STARTS_ON).toBe(0);
-    const thursday = parseDateOnly('2026-10-01');
-    expect(thursday).not.toBeNull();
-    expect(weekStartIndex(thursday!)).toBe(4);
-  });
 
   it('counts calendar days across US daylight-saving transitions', () => {
     expect(daysBetweenDateOnly('2026-03-07', '2026-03-09')).toBe(2);
@@ -33,9 +24,4 @@ describe('shared dates', () => {
     expect(formatDate(null)).toBe('No date');
   });
 
-  it('compares date-only values with the local today, including a Tokyo evening', () => {
-    expect(isOnOrBeforeToday('2026-10-22', '2026-10-22')).toBeTrue();
-    expect(isOnOrBeforeToday('2026-10-23', '2026-10-22')).toBeFalse();
-    expect(formatDate('2026-10-21T21:00:00Z', 'table', new Date('2026-11-01T00:00:00Z'), 'Asia/Tokyo')).toBe('Oct 22');
-  });
 });

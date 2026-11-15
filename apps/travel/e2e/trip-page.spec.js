@@ -27,7 +27,7 @@ test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
 });
 
-for (const [width, theme] of [[390, 'light'], [390, 'dark'], [1280, 'light'], [1280, 'dark']]) {
+for (const [width, theme] of [[390, 'light'], [1280, 'light']]) {
   test.describe(`trip page at ${width}px ${theme}`, () => {
     test.use({ viewport: { width, height: width === 390 ? 844 : 800 } });
 

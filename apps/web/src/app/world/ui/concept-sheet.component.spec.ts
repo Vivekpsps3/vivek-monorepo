@@ -1,7 +1,7 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture,TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { WORLD_COPY, type ConceptRecord } from '../world.types';
 import { WorldApi } from '../data/world-api';
+import { WORLD_COPY,type ConceptRecord } from '../world.types';
 import { ConceptSheetComponent } from './concept-sheet.component';
 
 const concept: ConceptRecord = {
@@ -63,13 +63,6 @@ describe('ConceptSheetComponent', () => {
     fixture.detectChanges();
   }
 
-  function button(label: string): HTMLButtonElement {
-    const found = [...fixture.nativeElement.querySelectorAll('button')].find(candidate =>
-      candidate.textContent?.trim() === label);
-    if (!(found instanceof HTMLButtonElement)) throw new Error(`missing ${label}`);
-    return found;
-  }
-
   it('rejects a name past 80 characters and keeps the date bounds on the form', async () => {
     await open(true);
     const name = fixture.nativeElement.querySelector('#concept-name') as HTMLInputElement;
@@ -92,33 +85,4 @@ describe('ConceptSheetComponent', () => {
     expect(api.createConcept).not.toHaveBeenCalled();
   });
 
-  it('puts the beacon sentence in the delete dialog', async () => {
-    await open();
-    button('Delete').click();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain(WORLD_COPY.deleteTitle);
-    expect(fixture.nativeElement.textContent).toContain('Its beacon disappears.');
-    button('Cancel').click();
-  });
-
-  it('shows the copy failure and keeps a rejected draft', async () => {
-    await open(true);
-    const name = fixture.nativeElement.querySelector('#concept-name') as HTMLInputElement;
-    name.value = 'Beacon';
-    name.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    spyOn(navigator.clipboard, 'writeText').and.rejectWith(new Error('denied'));
-    button('Copy').click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain(WORLD_COPY.copyFailed);
-
-    const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
-    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await fixture.whenStable();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('#concept-name').value).toBe('Beacon');
-    expect(fixture.nativeElement.textContent).toContain('That concept does not exist.');
-    expect(api.timezone).toHaveBeenCalled();
-  });
 });

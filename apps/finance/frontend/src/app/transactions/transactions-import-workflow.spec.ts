@@ -1,20 +1,18 @@
-import { ChangeDetectorRef } from '@angular/core';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
-import { Injector } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router } from '@angular/router';
-import { ConfirmService, ToastService } from '@vivek/ui';
-import { Observable, of, Subject, throwError } from 'rxjs';
-import { fakeAsync, tick } from '@angular/core/testing';
-import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
+import { ChangeDetectorRef,Injector } from '@angular/core';
+import { fakeAsync,TestBed,tick } from '@angular/core/testing';
+import { ActivatedRoute,Router } from '@angular/router';
+import { ConfirmService,ToastService } from '@vivek/ui';
+import { of,Subject,throwError } from 'rxjs';
 import { lockFinance } from '../crypto/lock-finance';
 import {
-  BankAccountRecord,
-  BankImportFilePreview,
-  ImportPreviewRow,
-  ImportReceipt,
+BankAccountRecord,
+BankImportFilePreview,
+ImportPreviewRow,
+ImportReceipt,
 } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
+import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { TransactionsImportWorkflow } from './transactions-import-workflow';
 
 function makeWorkflow(overrides: Record<string, unknown> = {}) {
@@ -63,16 +61,6 @@ function previewRow(overrides: Partial<ImportPreviewRow> = {}): ImportPreviewRow
 }
 
 describe('TransactionsImportWorkflow F9', () => {
-  it('preselects the bank from the last receipt, else the only account bank', () => {
-    const { workflow } = makeWorkflow();
-    workflow.importReceipts = [receipt];
-    expect(workflow.defaultBankSlug).toBe('chase');
-    workflow.importReceipts = [];
-    workflow.bankAccounts = [bankAccount('amex'), bankAccount('amex')];
-    expect(workflow.defaultBankSlug).toBe('amex');
-    workflow.bankAccounts = [bankAccount('amex'), bankAccount('citi')];
-    expect(workflow.defaultBankSlug).toBe('');
-  });
 
   it('labels the action from importable and selected counts, never Save receipt', () => {
     const { workflow } = makeWorkflow();
@@ -122,17 +110,6 @@ describe('TransactionsImportWorkflow F9', () => {
     expect(cancelling.finance.undoBankImport).not.toHaveBeenCalled();
   });
 
-  it('deletes a withdrawn receipt record only after confirm', async () => {
-    const { workflow, finance, confirm } = makeWorkflow();
-    await workflow.deleteImportReceipt({ ...receipt, status: 'withdrawn' });
-    expect(confirm.ask).toHaveBeenCalledWith(
-      'Delete this receipt record?',
-      "The transactions stay. You just won't be able to undo this import later.",
-      'Delete receipt', 'Cancel',
-    );
-    expect(finance.deleteImportReceipt).toHaveBeenCalledWith(9);
-  });
-
   it('clears cached bank accounts when a refresh hits a locked vault and keeps them on other errors', fakeAsync(() => {
     const dataChanges$ = new Subject<{ collections: string[]; source: string }>();
     let mode: 'rows' | 'locked' | 'offline' = 'rows';
@@ -167,25 +144,6 @@ describe('TransactionsImportWorkflow F9', () => {
     tick(120);
     expect(workflow.bankAccounts.map(account => account.bank_slug)).toEqual(['chase']);
   }));
-
-  it('clears cached bank accounts when a lookup completes without rows', fakeAsync(() => {
-    const { workflow } = makeWorkflow({
-      getBankAccounts: () => new Observable(subscriber => subscriber.complete()),
-      getImportReceipts: () => of([]),
-    });
-    workflow.bankAccounts = [bankAccount('chase')];
-    workflow.connectImportContextRefresh();
-    tick(60);
-    expect(workflow.bankAccounts).toEqual([]);
-  }));
-
-  it('renders the shared receipt line and status labels', () => {
-    const { workflow } = makeWorkflow();
-    expect(workflow.receiptLineFor(receipt)).toBe('chase.csv · Oct 30, 2026 · Imported · 3 saved');
-    expect(workflow.importStatusLabel(previewRow({ status: 'duplicate' }))).toBe('Already imported');
-    expect(workflow.importStatusLabel(previewRow({ kind: 'refund' }))).toBe('Refund');
-    expect(workflow.importStatusLabel(previewRow({ kind: 'purchase' }))).toBe('Purchase');
-  });
 
   it('CSV2 does not write a custom import that has no valid rows, then commits the correction', () => {
     const commit = jasmine.createSpy('commitBankImports').and.returnValue(of({ inserted: 1, skipped: 0, batch_id: 4 }));

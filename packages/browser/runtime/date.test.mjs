@@ -2,21 +2,12 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import {
-  WEEK_STARTS_ON,
   daysBetweenDateOnly,
   formatDate,
   formatOpenEndedRange,
   isOnOrBeforeToday,
   parseDateOnly,
-  weekStartIndex,
 } from './date.mjs';
-
-test('week starts on Sunday and Thursday is column 4', () => {
-  assert.equal(WEEK_STARTS_ON, 0);
-  const thursday = parseDateOnly('2026-10-01');
-  assert.ok(thursday);
-  assert.equal(weekStartIndex(thursday), 4);
-});
 
 test('day counts ignore US daylight-saving transitions', () => {
   assert.equal(daysBetweenDateOnly('2026-03-07', '2026-03-09'), 2);

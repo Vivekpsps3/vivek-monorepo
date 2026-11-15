@@ -1,5 +1,5 @@
 import { decodeTravelSummary } from './hub-decode';
-import { fetchHubMedia, fetchHubSummary, settleHubCard } from './hub-load';
+import { fetchHubMedia,fetchHubSummary,settleHubCard } from './hub-load';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -122,7 +122,7 @@ describe('one Media source load', () => {
     const calls = spyOn(window, 'fetch').and.callFake((input: RequestInfo | URL) =>
       Promise.resolve(jsonResponse(200, String(input).includes('/calendar?') ? { days: [] } : summary)));
     const result = await fetchHubMedia('2026-12-25', new AbortController().signal);
-    expect(result).toEqual({ status: 'ok', body: { ...summary, calendars: [{ days: [] }, { days: [] }] } });
+    expect(result).toEqual({ status: 'ok', body: { ...summary, calendars: [{ days: [], month: '2026-12' }, { days: [], month: '2027-01' }] } });
     expect(calls.calls.allArgs().map(args => String(args[0]).split('&')[0])).toEqual([
       '/media/api/summary', '/media/api/calendar?month=2026-12', '/media/api/calendar?month=2027-01',
     ]);

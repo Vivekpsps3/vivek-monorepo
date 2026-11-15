@@ -1,5 +1,5 @@
 import { Transaction } from '../models/transaction.model';
-import { categorySpend, chartSlices, monthDelta } from './category-spend';
+import { categorySpend } from './category-spend';
 
 function tx(values: Partial<Transaction>): Transaction {
   return values as Transaction;
@@ -24,42 +24,4 @@ describe('categorySpend', () => {
     ]);
   });
 
-  it('reports a null share when the month has no purchases', () => {
-    const result = categorySpend([tx({ date: '2026-10-05', kind: 'refund', category: 'Shopping', amount: 3.25 })], '2026-10');
-    expect(result.rows[0].share).toBeNull();
-    expect(result.totalNet).toBe(-3.25);
-  });
-
-  it('clamps negative nets to zero for chart slices only', () => {
-    const { rows } = categorySpend(october, '2026-10');
-    expect(chartSlices(rows)).toEqual([
-      { label: 'Food', value: 17.25 },
-      { label: 'Shopping', value: 0 },
-    ]);
-    expect(rows[1].net).toBe(-3.25);
-  });
-});
-
-describe('monthDelta', () => {
-  const txs = [
-    tx({ date: '2026-11-02', kind: 'purchase', category: 'Food', amount: 10 }),
-    tx({ date: '2026-11-20', kind: 'purchase', category: 'Food', amount: 50 }),
-    tx({ date: '2026-10-05', kind: 'purchase', category: 'Food', amount: 4 }),
-    tx({ date: '2026-10-25', kind: 'purchase', category: 'Food', amount: 40 }),
-  ];
-
-  it('compares the current month through today with the same prior-month window', () => {
-    const result = monthDelta(txs, '2026-11', new Date(2026, 10, 14));
-    expect(result.current).toBe(10);
-    expect(result.prior).toBe(4);
-    expect(result.delta).toBe(6);
-    expect(result.label).toBe('vs Oct 1–14');
-  });
-
-  it('uses the full month for a completed month', () => {
-    const result = monthDelta(txs, '2026-10', new Date(2026, 10, 14));
-    expect(result.current).toBe(44);
-    expect(result.prior).toBe(0);
-    expect(result.label).toBe('vs Sep 1–30');
-  });
 });

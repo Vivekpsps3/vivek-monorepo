@@ -53,3 +53,16 @@ for (const [hour, greeting] of [[4, 'Good evening'], [5, 'Good morning'], [11, '
     expect(hubGreeting(' ', hour)).toBe(greeting);
   });
 }
+
+
+it('expands only authoritative dates, retaining watched release dates without inventing completion history', () => {
+  const event = reminderEvent();
+  const calendar: MediaCalendar = { days: [
+    { date: '2026-12-01', events: [{ type: 'episode', title: 'Earlier release', entry_id: 4, watched: true, release_status: 'scheduled' }] },
+    { date: '2026-12-02', events: [{ type: 'sequel', title: 'Unsupported follow-up', entry_id: 4, watched: false, release_status: 'scheduled' }] },
+    { date: '2027-01-01', events: [{ type: 'episode', title: 'Outside month', entry_id: 4, watched: false, release_status: 'scheduled' }] },
+  ] };
+  expect(upNextRows([event], [calendar], '2026-12-25', '2026-12-01', '2026-12-31', true).map(row => [row.title, row.date]))
+    .toEqual([['Check in', '2026-12-24'], ['Earlier release', '2026-12-01']]);
+  expect(upNextRows([event], [calendar], '2026-12-25').map(row => row.title)).toEqual(['Check in', 'Outside month']);
+});

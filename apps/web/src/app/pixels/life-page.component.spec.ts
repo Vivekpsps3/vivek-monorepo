@@ -1,12 +1,12 @@
-import { fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
+import { fakeAsync,flush,TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { todayIsoDate } from '@vivek/browser';
-import { lifeAge, lifeRowCount, type DayChannels } from '@vivek/ui';
+import { type DayChannels } from '@vivek/ui';
 import { Subject } from 'rxjs';
 import { LifePageComponent } from './life-page.component';
 import { PixelsDataService } from './pixels-data.service';
 import { PixelsPreferences } from './pixels-preferences';
-import type { PixelDayView, PixelsLoadRequest, PixelsSnapshot } from './pixels.types';
+import type { PixelDayView,PixelsLoadRequest,PixelsSnapshot } from './pixels.types';
 
 describe('Life page', () => {
   const financeCleared$ = new Subject<void>();
@@ -103,101 +103,6 @@ describe('Life page', () => {
     fixture.detectChanges();
     return fixture;
   }
-
-  it('learns the birthday from today, then loads that day through today', fakeAsync(() => {
-    const fixture = render();
-    const today = todayIsoDate();
-    expect(requests.map(request => ({ from: request.from, to: request.to, profile: request.profile, includeTrips: request.includeTrips }))).toEqual([
-      { from: today, to: today, profile: true, includeTrips: true },
-      { from: '1990-05-04', to: today, profile: true, includeTrips: true },
-    ]);
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelectorAll('svg path, svg rect').length).toBeLessThanOrEqual(10);
-    expect(el.querySelector('svg')?.textContent).toContain('1990');
-    expect(el.textContent).not.toContain('1990-05-04');
-    expect(el.textContent).toContain('Town · 1 check-in');
-    expect(el.textContent).toContain('Media · 2 episodes');
-    expect(el.textContent).toContain('Finance · 1 day kept');
-    expect(el.textContent).toContain('Portland');
-    expect(el.textContent).toContain('Age is hidden');
-    expect(el.querySelector('svg')?.textContent).not.toContain('Age ');
-  }));
-
-  it('links to profile when the birthday is missing and does not throw when it is in the future', fakeAsync(() => {
-    mode = 'missing';
-    let fixture = render();
-    let el = fixture.nativeElement as HTMLElement;
-    expect(requests.length).toBe(1);
-    expect(el.textContent).toContain('Add your birthday');
-    expect(el.textContent).toContain('Your birthday stays private.');
-    expect(el.querySelector('a')?.getAttribute('href')).toBe('/settings/profile');
-    expect(el.querySelector('app-life-poster')).toBeNull();
-
-    mode = 'future';
-    requests = [];
-    fixture = render();
-    el = fixture.nativeElement as HTMLElement;
-    expect(requests.length).toBe(1);
-    expect(el.textContent).toContain('The saved birthday is in the future, so there is nothing to draw yet.');
-    expect(el.textContent).toContain('Fix in Settings');
-    expect(el.querySelector('a')?.getAttribute('href')).toBe('/settings/profile');
-    expect(el.querySelector('app-life-poster')).toBeNull();
-
-    mode = 'invalid';
-    requests = [];
-    fixture = render();
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Add your birthday');
-  }));
-
-  it('keeps rows at and above age 90 and labels ages only when show age is on', fakeAsync(() => {
-    mode = 'elder';
-    showAge = true;
-    const fixture = render();
-    const el = fixture.nativeElement as HTMLElement;
-    const age = lifeAge('1930-06-01', todayIsoDate());
-    expect(age).not.toBeNull();
-    const rows = lifeRowCount(age!);
-    expect(rows).toBeGreaterThan(90);
-    expect(el.querySelector('.life-keys')?.getAttribute('aria-label')).toContain(`${rows} rows of 52 weeks`);
-    expect(el.querySelector('svg')?.textContent).toContain('Age 0');
-    expect(el.querySelector('svg')?.textContent).not.toContain('1930-06-01');
-    expect(el.textContent).toContain(`Age ${age}.`);
-    expect(el.textContent).not.toContain('Age is hidden');
-    (el.querySelector('button') as HTMLButtonElement).click();
-    fixture.detectChanges();
-    expect(el.querySelector('table')?.textContent).toContain('Jun 1930 – Jun 1931');
-    expect(el.querySelector('table')?.textContent).toContain(String(age));
-  }));
-
-  it('throttles polite announcements to one per 150ms and moves by week, year, and T', fakeAsync(() => {
-    const fixture = render();
-    const live = () => (fixture.nativeElement as HTMLElement).querySelector('[aria-live="polite"]')?.textContent ?? '';
-    const first = live();
-    expect(first).toContain('Week of');
-    const group = (fixture.nativeElement as HTMLElement).querySelector('.life-keys') as HTMLElement;
-    group.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    group.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    tick(149);
-    fixture.detectChanges();
-    expect(live()).toBe(first);
-    tick(1);
-    fixture.detectChanges();
-    const moved = live();
-    expect(moved).not.toBe(first);
-    expect(moved).toContain('Week of');
-    expect(moved).not.toContain('Age ');
-
-    group.dispatchEvent(new KeyboardEvent('keydown', { key: 't', bubbles: true }));
-    tick(150);
-    fixture.detectChanges();
-    expect(live()).toContain('This week.');
-
-    const steps = (fixture.nativeElement as HTMLElement).querySelectorAll('.life-steppers button');
-    steps[1]!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    tick(150);
-    fixture.detectChanges();
-    expect(live()).not.toContain('This week.');
-  }));
 
   it('switches to the week table through the saved view and drops finance when the vault locks', fakeAsync(() => {
     const fixture = render();

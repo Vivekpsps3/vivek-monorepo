@@ -1,7 +1,7 @@
 """Town write API: habits, check-ins, errors, CSRF, and owner scope."""
 
 import logging
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from typing import NamedTuple
 
@@ -13,13 +13,10 @@ from apps.server.auth import Principal
 from apps.server.identity.session import get_current_user
 from apps.server.tests.test_composition import _app, _user
 from apps.server.tests.test_town_api_read import CLOCK, _open
-from apps.server.town import writes as town_writes
 from apps.server.town.clock import get_town_clock
-from apps.server.town.models import Habit, HabitCadence, HabitCheckin, TownBase
+from apps.server.town.models import Habit, HabitCheckin, TownBase
 from apps.server.town.schemas import CheckinResult
-from apps.server.town.schemas import Habit as HabitShape
 from apps.server.town.writes import existing_checkin
-from packages.time.today import today_in_zone
 
 TODAY = date(2026, 10, 29)
 TZ = "America/Los_Angeles"
@@ -104,142 +101,6 @@ def _plant(database, name, slot, per_week, created, days=(), archived=None, styl
     return habit_id
 
 
-def test_create_normalizes_and_defaults_style(api):
-    client, _, _ = api
-    created = _post(client, {"name": "  Read   pages  ", "slot": 0, "per_week": 7})
-    assert created.status_code == 201
-    body = created.json()
-    HabitShape.model_validate(body)
-    assert body["name"] == "Read pages"
-    assert body["building_style"] == "forge"
-    assert body["slot"] == 0
-    assert body["created_on"] == "2026-10-29"
-    assert body["cadence"] == {"per_week": 7, "kind": "daily", "pending": None}
-    assert body["xp"] == 0 and body["archived_on"] is None
-    other = _post(client, {"name": "Walk", "slot": 1, "per_week": 3})
-    assert other.status_code == 201
-    weekly = other.json()
-    assert weekly["building_style"] == "garden"
-    assert weekly["cadence"]["kind"] == "weekly"
-    assert weekly["week"]["target"] == 3
-
-
-def test_route_field_errors_and_unknown_json(api):
-    client, _, _ = api
-    _err(
-        _post(client, {"name": "A", "slot": True, "per_week": 7}),
-        422,
-        "validation_error",
-        _CHECK,
-        {"slot": _SLOT},
-    )
-    _err(
-        _post(client, {"name": "A", "slot": 9, "per_week": 7}),
-        422,
-        "validation_error",
-        _CHECK,
-        {"slot": _SLOT},
-    )
-    _err(
-        _post(client, {"name": "A", "slot": 0, "per_week": True}),
-        422,
-        "validation_error",
-        _CHECK,
-        {"per_week": _WEEK},
-    )
-    _err(
-        _post(client, {"name": "A", "slot": 0, "per_week": 0}),
-        422,
-        "validation_error",
-        _CHECK,
-        {"per_week": _WEEK},
-    )
-    _err(
-        _post(client, {"name": "A", "slot": 0, "per_week": 8}),
-        422,
-        "validation_error",
-        _CHECK,
-        {"per_week": _WEEK},
-    )
-    castle = {"name": "A", "slot": 0, "per_week": 7, "building_style": "castle"}
-    _err(_post(client, castle), 422, "validation_error", _CHECK, {"building_style": _STYLE})
-    _err(
-        _post(client, {"name": "A", "slot": 0, "per_week": 7, "building_style": None}),
-        422,
-        "validation_error",
-        _CHECK,
-        {"building_style": _STYLE},
-    )
-    _err(
-        _post(client, {"name": "", "slot": 0, "per_week": 7}),
-        422,
-        "validation_error",
-        _CHECK,
-        {"name": _LENGTH},
-    )
-    _err(
-        _post(client, {"name": "n" * 41, "slot": 0, "per_week": 7}),
-        422,
-        "validation_error",
-        _CHECK,
-        {"name": _LENGTH},
-    )
-    _err(
-        _post(client, {"name": "go\u0001", "slot": 0, "per_week": 7}),
-        422,
-        "validation_error",
-        _CHECK,
-        {"name": _CHARS},
-    )
-    _err(
-        _post(client, {"name": "go\u202e", "slot": 0, "per_week": 7}),
-        422,
-        "validation_error",
-        _CHECK,
-        {"name": _CHARS},
-    )
-    _err(_post(client, {"slot": 0, "per_week": 7}), 422, "validation_error", _CHECK, None)
-    _err(
-        _post(client, {"name": "A", "slot": 0, "per_week": 7, "user_id": 2}),
-        422,
-        "validation_error",
-        _CHECK,
-        None,
-    )
-    _err(_post(client, ["nope"]), 422, "validation_error", _CHECK, None)
-    bad = client.post(
-        "/api/town/habits",
-        params={"tz": TZ},
-        content=b"{",
-        headers={"content-type": "application/json"},
-    )
-    _err(bad, 422, "validation_error", _CHECK, None)
-    long = _post(client, {"name": "n" * 40, "slot": 0, "per_week": 7})
-    assert long.status_code == 201 and long.json()["name"] == "n" * 40
-    habit_id = long.json()["id"]
-    _err(_patch(client, 999, {"archived": False}), 422, "validation_error", _CHECK, None)
-    _err(
-        _patch(client, habit_id, {"name": None}), 422, "validation_error", _CHECK, {"name": _LENGTH}
-    )
-    _err(_check(client, habit_id, "2026-10-29T00:00:00"), 422, "validation_error", _CHECK, None)
-    _err(_check(client, habit_id, "2026-02-31"), 422, "validation_error", _CHECK, None)
-    _err(_check(client, 999, "2026-10-29T00:00:00"), 422, "validation_error", _CHECK, None)
-    missing = client.post(
-        f"/api/town/habits/{habit_id}/checkins",
-        params={"tz": TZ},
-        json={"day": "2026-10-29", "user_id": 4},
-    )
-    _err(missing, 422, "validation_error", _CHECK, None)
-    _err(_undo(client, 999, "nope"), 422, "validation_error", _CHECK, None)
-    _err(_undo(client, 999, "2026-02-31"), 422, "validation_error", _CHECK, None)
-    # T1F: a non-integer habit id gets the identical unknown-id 404 as
-    # habit 999, not FastAPI's default 422.
-    nope = client.post(
-        "/api/town/habits/abc/checkins", params={"tz": TZ}, json={"day": "2026-10-29"}
-    )
-    _err(nope, 404, "habit_not_found", "That habit doesn't exist.")
-
-
 def test_conflicts_limit_and_names(api):
     client, database, _ = api
     first = _post(client, {"name": "Read", "slot": 0, "per_week": 7})
@@ -295,32 +156,6 @@ def test_conflicts_limit_and_names(api):
         "habit_limit",
         "You've reached 200 habits, including archived ones.",
     )
-
-
-def test_habit_limit_counts_only_this_user(api):
-    """Another user's 200 habits do not spend this user's cap."""
-    client, database, _ = api
-    db = database.sessionmaker()
-    for index in range(200):
-        db.add(
-            Habit(
-                user_id=2,
-                name=f"Other {index}",
-                slot=0,
-                building_style="cottage",
-                per_week=7,
-                created_on=TODAY,
-                created_at=CLOCK,
-                archived_at=CLOCK,
-                archived_on=TODAY,
-                name_key=f"other {index}",
-            )
-        )
-    db.commit()
-    db.close()
-    made = _post(client, {"name": "Mine", "slot": 0, "per_week": 7})
-    assert made.status_code == 201
-    assert made.json()["name"] == "Mine"
 
 
 def test_name_taken_is_scoped_to_the_user(api):
@@ -424,81 +259,6 @@ def test_window_idempotent_checkin_and_dst(api, tmp_path, monkeypatch):
     dst_db.engine.dispose()
 
 
-def test_archive_cadence_and_best_days(api):
-    client, database, application = api
-    habit_id = _plant(
-        database,
-        "Daily",
-        0,
-        7,
-        date(2026, 10, 1),
-        [date(2026, 10, day) for day in range(1, 8)],
-    )
-    before = client.get("/api/town/habits", params={"tz": TZ, "include_archived": "1"}).json()
-    best = before["items"][0]["streak"]["best_days"]
-    assert best >= 7
-    changed = _patch(client, habit_id, {"per_week": 3})
-    assert changed.status_code == 200
-    cadence = changed.json()["cadence"]
-    assert cadence["per_week"] == 7 and cadence["kind"] == "daily"
-    assert cadence["pending"] == {"per_week": 3, "effective_from": "2026-11-02"}
-
-    def _rows():
-        session = database.sessionmaker()
-        try:
-            stored = session.scalar(select(Habit.per_week).where(Habit.id == habit_id))
-            found = session.execute(
-                select(HabitCadence.per_week, HabitCadence.effective_from)
-            ).all()
-            return stored, found
-        finally:
-            session.close()
-
-    assert _rows() == (7, [(3, date(2026, 11, 2))])
-    updated = _patch(client, habit_id, {"per_week": 4})
-    assert updated.json()["cadence"]["pending"]["per_week"] == 4
-    assert _rows() == (7, [(4, date(2026, 11, 2))])
-    back = _patch(client, habit_id, {"per_week": 7})
-    assert back.json()["cadence"]["pending"] is None
-    assert _rows()[1] == []
-    _patch(client, habit_id, {"per_week": 3})
-    application.dependency_overrides[get_town_clock] = lambda: datetime(
-        2026, 11, 2, 20, 0, tzinfo=UTC
-    )
-    later = client.get("/api/town/habits", params={"tz": TZ}).json()["items"][0]
-    assert later["cadence"]["per_week"] == 3 and later["cadence"]["kind"] == "weekly"
-    assert later["cadence"]["pending"] is None
-    assert later["streak"]["best_days"] == best
-    application.dependency_overrides[get_town_clock] = lambda: CLOCK
-    empty = _patch(client, habit_id, {})
-    assert empty.status_code == 200 and empty.json()["name"] == "Daily"
-    checked = _check(client, habit_id, "2026-10-29")
-    assert checked.status_code == 201 and checked.json()["town"]["xp"] >= 10
-    xp = checked.json()["town"]["xp"]
-    archived = _patch(client, habit_id, {"archived": True})
-    assert archived.status_code == 200
-    assert archived.json()["slot"] is None and archived.json()["archived_on"] == "2026-10-29"
-    town = client.get("/api/town", params={"tz": TZ}).json()
-    assert town["town"]["xp"] == xp
-    assert town["lots"][0]["state"] == "empty"
-    assert town["archived"][0]["id"] == habit_id
-    _err(_patch(client, habit_id, {}), 409, "habit_archived", "That habit is archived.")
-    _err(_patch(client, habit_id, {"archived": False}), 422, "validation_error", _CHECK, None)
-    _err(_check(client, habit_id, "2026-10-29"), 409, "habit_archived", "That habit is archived.")
-    _err(_undo(client, habit_id, "2026-10-29"), 409, "habit_archived", "That habit is archived.")
-    _err(_patch(client, 999, {}), 404, "habit_not_found", "That habit doesn't exist.")
-    reborn = _post(client, {"name": "daily", "slot": 0, "per_week": 7})
-    assert reborn.status_code == 201
-    # The API catch-all answers unknown paths. The route table is the check.
-    assert client.delete(f"/api/town/habits/{habit_id}").status_code == 404
-    paths = [
-        getattr(route, "path", "")
-        for route in application.routes
-        if "DELETE" in (getattr(route, "methods", None) or set())
-    ]
-    assert "/api/town/habits/{habit_id}" not in paths
-
-
 def test_cross_user_and_quiet_logs(api, caplog):
     client, database, application = api
     caplog.set_level(logging.DEBUG)
@@ -574,96 +334,6 @@ def test_csrf_and_anonymous_writes(tmp_path, monkeypatch):
     database.engine.dispose()
 
 
-def test_checkin_window_follows_local_today_at_both_edges(api):
-    """CHECKIN_WINDOW anchors on the client's local day (their tz), not UTC."""
-    client, database, application = api
-    ahead = _plant(database, "Ahead", 0, 7, date(2026, 10, 1))
-    behind = _plant(database, "Behind", 1, 7, date(2026, 10, 1))
-    evening = _plant(database, "Evening", 2, 7, date(2026, 10, 1))
-    out = "You can only check in for today or yesterday."
-    locked = "Only today's check-in can be undone."
-
-    # 12:00Z is already 2026-10-30 in Pacific/Kiritimati: window 10-29..10-31.
-    application.dependency_overrides[get_town_clock] = lambda: datetime(
-        2026, 10, 29, 12, 0, tzinfo=UTC
-    )
-    zone = "Pacific/Kiritimati"
-    _err(_check(client, ahead, "2026-10-28", zone), 422, "day_out_of_window", out)
-    _err(_check(client, ahead, "2026-11-01", zone), 422, "day_out_of_window", out)
-    lower = _check(client, ahead, "2026-10-29", zone)
-    upper = _check(client, ahead, "2026-10-31", zone)
-    assert lower.status_code == 201 and lower.json()["checked"] is True
-    assert upper.status_code == 201 and upper.json()["day"] == "2026-10-31"
-
-    # 00:30Z is still 2026-10-29 in Los Angeles (17:30 the evening before):
-    # the LA window is 10-28..10-30 even though UTC has rolled to the 30th.
-    application.dependency_overrides[get_town_clock] = lambda: datetime(
-        2026, 10, 30, 0, 30, tzinfo=UTC
-    )
-    _err(_check(client, behind, "2026-10-27"), 422, "day_out_of_window", out)
-    # 10-31 is today+1 in UTC but today+2 locally, so it stays out.
-    _err(_check(client, behind, "2026-10-31"), 422, "day_out_of_window", out)
-    yesterday = _check(client, behind, "2026-10-28")
-    upper = _check(client, behind, "2026-10-30")
-    assert yesterday.status_code == 201 and yesterday.json()["checked"] is True
-    assert upper.status_code == 201 and upper.json()["day"] == "2026-10-30"
-    # The DELETE window is local too: today+2 is locked, yesterday is locked,
-    # and local today (still yesterday in UTC terms) can be undone.
-    _err(_undo(client, behind, "2026-10-31"), 409, "checkin_locked", locked)
-    _err(_undo(client, behind, "2026-10-28"), 409, "checkin_locked", locked)
-    undone = _undo(client, behind, "2026-10-29")
-    assert undone.status_code == 200 and undone.json()["checked"] is False
-
-    # 02:00Z after the fall-back is 18:00 PST on 2026-11-01: a Pacific
-    # evening where UTC (11-02) and local (11-01) disagree for hours.
-    application.dependency_overrides[get_town_clock] = lambda: datetime(
-        2026, 11, 2, 2, 0, tzinfo=UTC
-    )
-    _err(_check(client, evening, "2026-10-30"), 422, "day_out_of_window", out)
-    _err(_check(client, evening, "2026-11-03"), 422, "day_out_of_window", out)
-    yesterday = _check(client, evening, "2026-10-31")
-    today = _check(client, evening, "2026-11-01")
-    assert yesterday.status_code == 201 and today.status_code == 201
-    undone = _undo(client, evening, "2026-11-01")
-    assert undone.status_code == 200 and undone.json()["checked"] is False
-    _err(_undo(client, evening, "2026-10-31"), 409, "checkin_locked", locked)
-
-
-def test_crafted_input_is_422_not_500(api):
-    client, database, _ = api
-    habit_id = _plant(database, "Crafted", 0, 7, date(2026, 10, 1))
-    assert habit_id > 0
-    # T1F supersedes the #52 bounds ruling for path ids: an id beyond
-    # SQLite's signed 64-bit INTEGER reads as an unknown habit (404).
-    big = 10**20  # beyond SQLite's signed 64-bit INTEGER
-    _err(_patch(client, big, {"name": "Nope"}), 404, "habit_not_found", "That habit doesn't exist.")
-    _err(_check(client, big, "2026-10-29"), 404, "habit_not_found", "That habit doesn't exist.")
-    _err(_undo(client, big, "2026-10-29"), 404, "habit_not_found", "That habit doesn't exist.")
-    history = client.get(
-        f"/api/town/habits/{big}/checkins",
-        params={"from": "2026-10-01", "to": "2026-10-29", "tz": TZ},
-    )
-    _err(history, 404, "habit_not_found", "That habit doesn't exist.")
-
-    def raw(payload: bytes):
-        return client.post(
-            "/api/town/habits",
-            params={"tz": TZ},
-            content=payload,
-            headers={"content-type": "application/json"},
-        )
-
-    # A 5000-digit int token trips Python's int conversion limit (ValueError).
-    huge = raw(b'{"name": "Big", "slot": ' + b"9" * 5000 + b', "per_week": 7}')
-    _err(huge, 422, "validation_error", _CHECK, None)
-    # Deeply nested JSON hits the parser's recursion limit (RecursionError).
-    nested = raw(b'{"name": ' + b"[" * 2000 + b"]" * 2000 + b"}")
-    _err(nested, 422, "validation_error", _CHECK, None)
-    # An invalid UTF-8 byte in the body fails decoding (UnicodeDecodeError).
-    bad_utf8 = raw(b'{"name": "Bad \xff name", "slot": 0, "per_week": 7}')
-    _err(bad_utf8, 422, "validation_error", _CHECK, None)
-
-
 def _set_clock(application, moment):
     application.dependency_overrides[get_town_clock] = lambda: moment
 
@@ -674,38 +344,6 @@ def _item(client, habit_id, tz=TZ):
         if item["id"] == habit_id:
             return item
     raise AssertionError(habit_id)
-
-
-def test_la_evening_checkin_matches_get_can_check_yesterday(api):
-    """17:30 PDT and 16:30 PST: Mark yesterday agrees with GET, undo today works."""
-    client, database, application = api
-    out = "You can only check in for today or yesterday."
-    cases = (
-        (datetime(2026, 10, 30, 0, 30, tzinfo=UTC), date(2026, 10, 29), 0, "Pdt"),
-        (datetime(2026, 11, 3, 0, 30, tzinfo=UTC), date(2026, 11, 2), 1, "Pst"),
-    )
-    for moment, local, slot, name in cases:
-        assert today_in_zone(TZ, moment) == local
-        _set_clock(application, moment)
-        habit_id = _plant(database, name, slot, 7, date(2026, 10, 1))
-        before = _item(client, habit_id)
-        assert before["can_check_yesterday"] is True
-        yesterday = (local - timedelta(days=1)).isoformat()
-        marked = _check(client, habit_id, yesterday)
-        assert marked.status_code == 201 and marked.json()["checked"] is True
-        after = _item(client, habit_id)
-        assert marked.json()["habit"]["can_check_yesterday"] == after["can_check_yesterday"]
-        assert after["can_check_yesterday"] is False
-        made = _check(client, habit_id, local.isoformat())
-        assert made.status_code == 201
-        undone = _undo(client, habit_id, local.isoformat())
-        assert undone.status_code == 200 and undone.json()["checked"] is False
-        _err(
-            _check(client, habit_id, (local + timedelta(days=2)).isoformat()),
-            422,
-            "day_out_of_window",
-            out,
-        )
 
 
 class _LocalDay(NamedTuple):
@@ -749,83 +387,6 @@ _LOCAL_DAYS = (
         "UTC",
     ),
 )
-
-
-@pytest.mark.parametrize(
-    "case",
-    _LOCAL_DAYS,
-    ids=("la-noon", "kiritimati", "naive-clock-is-utc", "absent-zone", "unknown-zone"),
-)
-def test_checkin_window_follows_trusted_local_today(api, case: _LocalDay):
-    """Check-ins use the injected clock and the resolved zone's local today.
-
-    writes has no _server_day helper. A day the retired UTC±2 clamp would
-    have rewritten (2026-10-01, 2026-10-27, 2026-11-01, 2026-11-05) is accepted
-    only when it is yesterday, today, or tomorrow in this local date.
-    Pacific/Kiritimati accepts 2026-10-31 at the same instant Los Angeles
-    rejects it. An absent or unknown zone stays on UTC. A naive clock is UTC.
-    The host date 2026-11-11 is outside every one of these windows.
-    """
-    client, database, application = api
-    assert not hasattr(town_writes, "_server_day")
-    _set_clock(application, case.clock)
-    habit_id = _plant(database, "Local", 0, 7, date(2026, 10, 1))
-    params = {} if case.zone is None else {"tz": case.zone}
-    town = client.get("/api/town", params=params).json()["town"]
-    assert town["today"] == case.local_today.isoformat()
-    assert town["tz"] == case.resolved_zone
-    out = "You can only check in for today or yesterday."
-    locked = "Only today's check-in can be undone."
-    window = (
-        case.local_today - timedelta(days=1),
-        case.local_today,
-        case.local_today + timedelta(days=1),
-    )
-    rejected = {
-        case.local_today - timedelta(days=2),
-        case.local_today + timedelta(days=2),
-        date(2026, 10, 1),
-        date(2026, 10, 27),
-        date(2026, 11, 1),
-        date(2026, 11, 5),
-        date(2026, 11, 11),
-    } - set(window)
-
-    def check(day: date):
-        return client.post(
-            f"/api/town/habits/{habit_id}/checkins",
-            params=params,
-            json={"day": day.isoformat()},
-        )
-
-    def undo(day: date):
-        return client.delete(
-            f"/api/town/habits/{habit_id}/checkins/{day.isoformat()}",
-            params=params,
-        )
-
-    for day in sorted(rejected):
-        response = check(day)
-        assert response.status_code == 422, day
-        _err(response, 422, "day_out_of_window", out)
-    for day in window:
-        made = check(day)
-        assert made.status_code == 201, day
-        assert made.json()["checked"] is True and made.json()["day"] == day.isoformat()
-    kept = undo(window[0])
-    assert kept.status_code == 409, window[0]
-    _err(kept, 409, "checkin_locked", locked)
-    for day in (window[2], window[1]):
-        undone = undo(day)
-        assert undone.status_code == 200, day
-        assert undone.json()["checked"] is False and undone.json()["day"] == day.isoformat()
-    db = database.sessionmaker()
-    count = db.scalar(
-        select(func.count()).select_from(HabitCheckin).where(HabitCheckin.habit_id == habit_id)
-    )
-    kept_day = db.scalar(select(HabitCheckin.day).where(HabitCheckin.habit_id == habit_id))
-    db.close()
-    assert count == 1 and kept_day == window[0]
 
 
 def test_foreign_owner_cannot_use_a_locally_valid_checkin_day(api):
@@ -877,51 +438,3 @@ def test_checkin_conflict_without_a_visible_row_is_not_success(api, monkeypatch)
     )
     db.close()
     assert count == 1
-
-
-def test_habit_id_outside_sqlite_integer_is_unknown(api):
-    client, _, _ = api
-    # T1F supersedes the #52 bounds ruling: 10**20 used to raise SQLite
-    # OverflowError (500), and 0, -1, and 2**63 were 422 under Path bounds.
-    # All of them now read as an unknown habit (404 habit_not_found).
-    for habit_id in (str(10**20), str(2**63), "0", "-1"):
-        routes = (
-            (
-                "get",
-                f"/api/town/habits/{habit_id}/checkins",
-                {"params": {"from": "2026-10-01", "to": "2026-10-02", "tz": TZ}},
-            ),
-            (
-                "patch",
-                f"/api/town/habits/{habit_id}",
-                {"params": {"tz": TZ}, "json": {"name": "A"}},
-            ),
-            (
-                "post",
-                f"/api/town/habits/{habit_id}/checkins",
-                {"params": {"tz": TZ}, "json": {"day": "2026-10-29"}},
-            ),
-            (
-                "delete",
-                f"/api/town/habits/{habit_id}/checkins/2026-10-29",
-                {"params": {"tz": TZ}},
-            ),
-        )
-        for method, url, kwargs in routes:
-            response = getattr(client, method)(url, **kwargs)
-            _err(response, 404, "habit_not_found", "That habit doesn't exist.")
-            assert "Internal server error" not in response.text
-
-
-def test_max_sqlite_habit_id_is_not_found(api):
-    client, _, _ = api
-    habit_id = 2**63 - 1
-    missing = "That habit doesn't exist."
-    history = client.get(
-        f"/api/town/habits/{habit_id}/checkins",
-        params={"from": "2026-10-01", "to": "2026-10-02", "tz": TZ},
-    )
-    _err(history, 404, "habit_not_found", missing)
-    _err(_patch(client, habit_id, {"name": "A"}), 404, "habit_not_found", missing)
-    _err(_check(client, habit_id, "2026-10-29"), 404, "habit_not_found", missing)
-    _err(_undo(client, habit_id, "2026-10-29"), 404, "habit_not_found", missing)

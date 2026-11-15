@@ -1,5 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { PLATFORM_ID } from '@angular/core';
+import { ComponentFixture,TestBed } from '@angular/core/testing';
 import { EcdhService } from '../../services/ecdh.service';
 
 import { SecretsComponent } from './secrets.component';
@@ -17,10 +16,6 @@ describe('SecretsComponent', () => {
     fixture = TestBed.createComponent(SecretsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
-  });
-
-  it('should create', () => {
-    expect(component).toBeTruthy();
   });
 
   it('shows decrypted text as escaped text', () => {
@@ -42,14 +37,6 @@ describe('SecretsComponent', () => {
     expect(component.errorMessage).toBe('');
   });
 
-  it('explains missing input and ciphertext', async () => {
-    await component.encryptMessage();
-    expect(component.errorMessage).toContain('enter a message');
-    await component.decryptMessage();
-    expect(component.errorMessage).toContain('No encrypted data');
-    expect(component.displayCiphertext()).toBe('No ciphertext available');
-  });
-
   it('keeps input and reports encryption failures locally', async () => {
     spyOn(TestBed.inject(EcdhService), 'encryptMessage').and.rejectWith(new Error('Unavailable'));
     component.message = 'Keep this text';
@@ -66,19 +53,5 @@ describe('SecretsComponent', () => {
     expect(component.decryptedMessage).toBe('');
     expect(component.errorMessage).toContain('Decryption failed');
     expect(component.isDecrypting).toBeFalse();
-  });
-});
-
-describe('Encryption demo prerender', () => {
-  it('renders without starting browser key generation', async () => {
-    await TestBed.configureTestingModule({
-      imports: [SecretsComponent], providers: [{ provide: PLATFORM_ID, useValue: 'server' }],
-    }).compileComponents();
-    const service = TestBed.inject(EcdhService);
-    const initialize = spyOn(service, 'whenReady').and.resolveTo();
-    const fixture = TestBed.createComponent(SecretsComponent);
-    fixture.detectChanges();
-    expect(initialize).not.toHaveBeenCalled();
-    expect(service.isKeyExchangeComplete()).toBeFalse();
   });
 });

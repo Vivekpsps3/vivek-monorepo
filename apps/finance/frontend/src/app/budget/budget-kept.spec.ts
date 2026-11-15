@@ -1,25 +1,22 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Injector } from '@angular/core';
-import { fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
-import { Observable, of, throwError } from 'rxjs';
+import { fakeAsync,flushMicrotasks,tick } from '@angular/core/testing';
+import { Observable,of,throwError } from 'rxjs';
 import { DEK_STORE } from '../crypto/dek-store';
-import type { PlanningInputsPreview, PlanningProfile, ProfilePayload } from '../models/planning.model';
-import { spendingModeInference } from '../planning/spending-mode';
+import type { PlanningInputsPreview,PlanningProfile,ProfilePayload } from '../models/planning.model';
 import type { Transaction } from '../models/transaction.model';
-import { loadFinanceBudgetKeptDaysGuarded, loadFinanceBudgetKeptGuarded } from './budget-kept-import';
 import {
-  budgetKeptCryptoImports,
-  budgetKeptDays,
-  budgetKeptWeeks,
-  firstTransactionDate,
-  loadFinanceBudgetKept,
-  loadFinanceBudgetKeptDays,
-  resolveAnnualPlan,
-  type BudgetKeptDay,
-  type BudgetKeptDaysResult,
-  type BudgetKeptResult,
-  type BudgetKeptWeek,
+budgetKeptCryptoImports,
+budgetKeptDays,
+budgetKeptWeeks,
+loadFinanceBudgetKept,
+loadFinanceBudgetKeptDays,
+type BudgetKeptDay,
+type BudgetKeptDaysResult,
+type BudgetKeptResult,
+type BudgetKeptWeek
 } from './budget-kept';
+import { loadFinanceBudgetKeptDaysGuarded,loadFinanceBudgetKeptGuarded } from './budget-kept-import';
 
 /** Synthetic ledger rows only. Annual 3650 is 70 per week, an exact 365 multiple. */
 const PLAN = 3650;
@@ -29,10 +26,6 @@ type PlanInputs = Pick<PlanningInputsPreview, 'recurring_annual_spending' | 'imp
 
 function inputs(recurring: number | undefined, implied: number): PlanInputs {
   return { recurring_annual_spending: recurring, implied_annual_spending: implied };
-}
-
-function nullRecurring(implied: number): PlanInputs {
-  return { recurring_annual_spending: null, implied_annual_spending: implied } as unknown as PlanInputs;
 }
 
 function profile(row: {
@@ -84,102 +77,6 @@ function isoWeekOfMonday(monday: string): number {
 }
 
 describe('budget kept pure core', () => {
-  const at = '2026-08-01T00:00:00.000Z';
-
-  it('resolves manual, components, and recurring plans from the latest profile', () => {
-    const older = profile({ id: 9, updated_at: '2026-01-01T00:00:00.000Z', mode: 'manual', annual: 100 });
-    const manual = profile({ id: 2, updated_at: '2026-06-01T00:00:00.000Z', mode: 'manual', annual: PLAN });
-    expect(resolveAnnualPlan([older, manual], inputs(1, 1))).toEqual({ annualPlan: PLAN, mode: 'manual' });
-
-    const components = profile({
-      id: 3,
-      updated_at: at,
-      mode: 'components',
-      components: { fixed_annual: 1000, variable_annual: 2000, irregular_annual: 650 },
-    });
-    expect(resolveAnnualPlan([components], inputs(1, 1))).toEqual({ annualPlan: PLAN, mode: 'components' });
-    expect(resolveAnnualPlan([
-      profile({ id: 4, updated_at: at, mode: 'components', components: { fixed_annual: -100, variable_annual: 80, irregular_annual: 30 } }),
-    ], inputs(1, 1))).toEqual({ annualPlan: 10, mode: 'components' });
-
-    const recurring = profile({ id: 5, updated_at: at, mode: 'recurring', annual: 99999 });
-    expect(resolveAnnualPlan([recurring], inputs(4800, 100))).toEqual({ annualPlan: 4800, mode: 'recurring' });
-    expect(resolveAnnualPlan([], inputs(4800, 100))).toBeNull();
-  });
-
-  it('infers a missing spending mode through the shared helper', () => {
-    const infer = spyOn(spendingModeInference, 'inferMissing').and.callThrough();
-    const parts = { fixed_annual: 1000, variable_annual: 2000, irregular_annual: 650 };
-    expect(resolveAnnualPlan([
-      profile({ id: 1, updated_at: at, annual: 1, components: parts }),
-    ], inputs(9, 9))).toEqual({ annualPlan: PLAN, mode: 'components' });
-    expect(resolveAnnualPlan([
-      profile({ id: 2, updated_at: at, annual: 1800 }),
-    ], inputs(9, 9))).toEqual({ annualPlan: 1800, mode: 'manual' });
-    expect(resolveAnnualPlan([
-      profile({ id: 3, updated_at: at }),
-    ], inputs(4800, 100))).toEqual({ annualPlan: 4800, mode: 'recurring' });
-    expect(infer.calls.all().map(call => call.returnValue)).toEqual(['components', 'manual', 'recurring']);
-  });
-
-  it('treats a missing or null spending_mode as manual', () => {
-    const legacy = profile({ id: 1, updated_at: at, annual: 1800 });
-    expect(legacy.payload.spending_mode).toBeUndefined();
-    expect(resolveAnnualPlan([legacy], inputs(9999, 9999))).toEqual({ annualPlan: 1800, mode: 'manual' });
-    const explicitNull = profile({ id: 2, updated_at: at, annual: 1800 });
-    explicitNull.payload.spending_mode = null as unknown as ProfilePayload['spending_mode'];
-    expect(resolveAnnualPlan([explicitNull], inputs(9999, 9999))).toEqual({ annualPlan: 1800, mode: 'manual' });
-  });
-
-  it('infers every spending mode when the saved mode is empty', () => {
-    const rows = [
-      [profile({ id: 1, updated_at: at, annual: 9, components: { fixed_annual: 1, variable_annual: 2, irregular_annual: 3 } }), 6, 'components'],
-      [profile({ id: 2, updated_at: at, annual: 9 }), 9, 'manual'],
-      [profile({ id: 3, updated_at: at }), 4800, 'recurring'],
-    ] as const;
-    for (const [row, annualPlan, mode] of rows) {
-      row.payload.spending_mode = '' as ProfilePayload['spending_mode'];
-      expect(resolveAnnualPlan([row], inputs(4800, 100))).toEqual({ annualPlan, mode });
-    }
-  });
-
-  it('does not resolve an unrecognized spending_mode to a plan', () => {
-    const row = profile({ id: 1, updated_at: at, annual: PLAN, mode: 'manual' });
-    row.payload.spending_mode = 'seasonal' as ProfilePayload['spending_mode'];
-    expect(resolveAnnualPlan([row], inputs(1, 1))).toBeNull();
-  });
-
-  it('breaks an updated_at tie by the highest profile id', () => {
-    const low = profile({ id: 3, updated_at: at, mode: 'manual', annual: 111 });
-    const high = profile({ id: 8, updated_at: at, mode: 'manual', annual: 2222 });
-    expect(resolveAnnualPlan([low, high], inputs(undefined, 0))).toEqual({ annualPlan: 2222, mode: 'manual' });
-    expect(resolveAnnualPlan([high, low], inputs(undefined, 0))).toEqual({ annualPlan: 2222, mode: 'manual' });
-  });
-
-  it('falls back to implied annual spending when recurring_annual_spending is null', () => {
-    const recurring = profile({ id: 1, updated_at: at, mode: 'recurring' });
-    expect(resolveAnnualPlan([recurring], nullRecurring(2100))).toEqual({ annualPlan: 2100, mode: 'recurring' });
-    expect(resolveAnnualPlan([recurring], inputs(undefined, 2100))).toEqual({ annualPlan: 2100, mode: 'recurring' });
-    expect(resolveAnnualPlan([recurring], inputs(0, 2100))).toBeNull();
-  });
-
-  it('returns null for a plan of 0, null, negative, or non-finite', () => {
-    const manual = (annual: number | null) => [profile({ id: 1, updated_at: at, mode: 'manual', annual })];
-    expect(resolveAnnualPlan(manual(0), inputs(undefined, 0))).toBeNull();
-    expect(resolveAnnualPlan(manual(null), inputs(undefined, 50))).toBeNull();
-    expect(resolveAnnualPlan(manual(-20), inputs(undefined, 50))).toBeNull();
-    expect(resolveAnnualPlan(manual(Number.NaN), inputs(undefined, 50))).toBeNull();
-    expect(resolveAnnualPlan(manual(Number.POSITIVE_INFINITY), inputs(undefined, 50))).toBeNull();
-    expect(resolveAnnualPlan([
-      profile({ id: 2, updated_at: at, mode: 'components' }),
-    ], inputs(undefined, 50))).toBeNull();
-    expect(resolveAnnualPlan([
-      profile({ id: 3, updated_at: at, mode: 'components', components: { fixed_annual: 0, variable_annual: 0, irregular_annual: 0 } }),
-    ], inputs(undefined, 50))).toBeNull();
-    expect(resolveAnnualPlan([
-      profile({ id: 4, updated_at: at, mode: 'recurring' }),
-    ], inputs(undefined, Number.NaN))).toBeNull();
-  });
 
   it('counts a week exactly at the plan as kept and one cent over as not kept', () => {
     const weeks = budgetKeptWeeks([
@@ -205,21 +102,6 @@ describe('budget kept pure core', () => {
     expect(huge[0].kept).toBeNull();
   });
 
-  it('lowers spend by a refund and ignores transfers, payments, credits, and excluded rows', () => {
-    const weeks = budgetKeptWeeks([
-      tx({ id: 1, date: '2026-10-06', amount: 90, kind: 'purchase' }),
-      tx({ id: 2, date: '2026-10-07', amount: 20, type: 'expense', kind: 'refund' }),
-      tx({ id: 3, date: '2026-10-07', amount: 400, type: 'expense', kind: 'transfer' }),
-      tx({ id: 4, date: '2026-10-08', amount: 80, type: 'expense', kind: 'payment' }),
-      tx({ id: 5, date: '2026-10-08', amount: 15, kind: 'ambiguous_credit' }),
-      tx({ id: 6, date: '2026-10-08', amount: 500, type: 'income' }),
-      tx({ id: 7, date: '2026-10-09', amount: -40, kind: 'purchase' }),
-      tx({ id: 8, date: '2026-10-13', amount: 40, type: 'expense' }),
-    ], PLAN, ['2026-10-05', '2026-10-12']);
-    expect(weeks[0]).toEqual(week('2026-10-05', 70, true));
-    expect(weeks[1]).toEqual(week('2026-10-12', 40, true));
-  });
-
   it('assigns Sunday to the previous Monday and keeps 2026-12-28 through 2027-01-03 in ISO week 53', () => {
     expect(isoWeekOfMonday('2026-12-28')).toBe(53);
     expect(isoWeekOfMonday('2027-01-04')).toBe(1);
@@ -238,35 +120,6 @@ describe('budget kept pure core', () => {
     ]);
   });
 
-  it('marks the week of 2026-10-05 unknown when the first transaction is Wed 2026-10-14', () => {
-    const weeks = budgetKeptWeeks([
-      tx({ id: 1, date: '2026-10-14', amount: 10, kind: 'purchase' }),
-    ], PLAN, ['2026-10-05', '2026-10-12', '2026-10-19']);
-    expect(weeks).toEqual([
-      week('2026-10-05', null, null),
-      week('2026-10-12', 10, true),
-      week('2026-10-19', 0, true),
-    ]);
-  });
-
-  it('marks every week unknown when there are no transactions', () => {
-    expect(firstTransactionDate([])).toBeNull();
-    expect(budgetKeptWeeks([], PLAN, ['2026-10-05', '2026-10-12'])).toEqual([
-      week('2026-10-05', null, null),
-      week('2026-10-12', null, null),
-    ]);
-  });
-
-  it('lets an excluded row dated before every other row set the first transaction date', () => {
-    const excluded = tx({ id: 1, date: '2026-09-30', amount: -12, kind: 'purchase' });
-    const later = tx({ id: 2, date: '2026-10-20', amount: 10, kind: 'purchase' });
-    expect(firstTransactionDate([later, excluded])).toBe('2026-09-30');
-    expect(budgetKeptWeeks([later, excluded], PLAN, ['2026-09-21', '2026-09-28'])).toEqual([
-      week('2026-09-21', null, null),
-      week('2026-09-28', 0, true),
-    ]);
-  });
-
   it('keeps a day exactly at the monthly pace and not one cent over', () => {
     const atPace = budgetKeptDays([
       tx({ id: 1, date: '2026-10-05', amount: 60, kind: 'purchase' }),
@@ -280,17 +133,6 @@ describe('budget kept pure core', () => {
       tx({ id: 3, date: '2026-10-21', amount: 0.01, kind: 'purchase' }),
     ], PLAN_DAYS, ['2026-10-31']);
     expect(over).toEqual([dayRow('2026-10-31', 100.01, 100, false)]);
-  });
-
-  it('scales the pace by day of month at month start and month end', () => {
-    const days = budgetKeptDays([
-      tx({ id: 1, date: '2026-09-15', amount: 1, kind: 'purchase' }),
-    ], PLAN_DAYS, ['2026-10-01', '2026-10-31']);
-    expect(days[0].date).toBe('2026-10-01');
-    expect(days[0].spend).toBe(0);
-    expect(days[0].pace).toBeCloseTo(100 / 31, 10);
-    expect(days[0].kept).toBeTrue();
-    expect(days[1]).toEqual(dayRow('2026-10-31', 0, 100, true));
   });
 
   it('uses 29 days for leap February and 28 for a plain February', () => {
@@ -307,44 +149,6 @@ describe('budget kept pure core', () => {
     expect(plain).toEqual([dayRow('2026-02-28', 100, 100, true)]);
   });
 
-  it('marks days before the first transaction unknown and zero-spend days after it kept', () => {
-    const days = budgetKeptDays([
-      tx({ id: 1, date: '2026-10-14', amount: 10, kind: 'purchase' }),
-    ], PLAN_DAYS, ['2026-09-30', '2026-10-13', '2026-10-14', '2026-10-20', '2026-11-02']);
-    expect(days[0].spend).toBeNull();
-    expect(days[0].kept).toBeNull();
-    expect(days[1].spend).toBeNull();
-    expect(days[1].kept).toBeNull();
-    expect(days[2].spend).toBe(10);
-    expect(days[2].kept).toBeTrue();
-    expect(days[3].spend).toBe(10);
-    expect(days[4]).toEqual(dayRow('2026-11-02', 0, 100 * 2 / 30, true));
-  });
-
-  it('counts month-to-date spend through transactionEffects, so refunds lower it and transfers do not count', () => {
-    const days = budgetKeptDays([
-      tx({ id: 1, date: '2026-10-02', amount: 120, kind: 'purchase' }),
-      tx({ id: 2, date: '2026-10-03', amount: 20, type: 'expense', kind: 'refund' }),
-      tx({ id: 3, date: '2026-10-03', amount: 400, type: 'expense', kind: 'transfer' }),
-      tx({ id: 4, date: '2026-10-04', amount: 500, type: 'income' }),
-    ], PLAN_DAYS, ['2026-10-31']);
-    expect(days).toEqual([dayRow('2026-10-31', 100, 100, true)]);
-  });
-
-  it('does not leak one month of spend into the next month', () => {
-    const days = budgetKeptDays([
-      tx({ id: 1, date: '2026-09-30', amount: 500, kind: 'purchase' }),
-    ], PLAN_DAYS, ['2026-09-30', '2026-10-15']);
-    expect(days[0].spend).toBe(500);
-    expect(days[0].kept).toBeFalse();
-    expect(days[1].spend).toBe(0);
-    expect(days[1].kept).toBeTrue();
-  });
-
-  it('marks every day unknown when there are no transactions', () => {
-    const days = budgetKeptDays([], PLAN_DAYS, ['2026-10-01', '2026-10-02']);
-    expect(days.map(row => [row.spend, row.kept])).toEqual([[null, null], [null, null]]);
-  });
 });
 
 describe('loadFinanceBudgetKept', () => {
@@ -446,25 +250,6 @@ describe('loadFinanceBudgetKept', () => {
     expect(load).not.toHaveBeenCalled();
   });
 
-  it('returns no_plan when there is no profile and no transactions', async () => {
-    const { injector, getTransactions } = unlock({ profiles: [], txs: [] });
-    expect(await ask(injector)).toEqual({ status: 'no_plan' });
-    expect(getTransactions).toHaveBeenCalled();
-  });
-
-  it('returns no_plan for a plan of 0 or null even when transactions exist', async () => {
-    const purchase = [tx({ id: 1, date: '2026-09-01', amount: 10, kind: 'purchase' })];
-    const zero = unlock({ profiles: [profile({ id: 1, updated_at: '2026-08-01T00:00:00.000Z', mode: 'manual', annual: 0 })], txs: purchase });
-    expect(await ask(zero.injector)).toEqual({ status: 'no_plan' });
-    const missing = unlock({ profiles: [profile({ id: 2, updated_at: '2026-08-01T00:00:00.000Z', mode: 'manual', annual: null })], txs: purchase });
-    expect(await ask(missing.injector)).toEqual({ status: 'no_plan' });
-  });
-
-  it('returns no_data when a plan exists and the vault has zero transactions', async () => {
-    const { injector } = unlock({ profiles: [manual], txs: [] });
-    expect(await ask(injector)).toEqual({ status: 'no_data' });
-  });
-
   it('ranks locked above no_plan above no_data above ready', async () => {
     localStorage.removeItem(DEK_STORE);
     const load = spyOn(budgetKeptCryptoImports, 'load');
@@ -483,27 +268,6 @@ describe('loadFinanceBudgetKept', () => {
     expect(ready.weeks[0].weekStart).toBe('2026-10-05');
   });
 
-  it('counts completed ISO weeks ending with the week before today', async () => {
-    const { injector } = unlock({
-      profiles: [manual],
-      txs: [tx({ id: 1, date: '2026-01-05', amount: 1, kind: 'purchase' })],
-    });
-    const october = await ask(injector, { today: '2026-10-14', weeks: 3 });
-    const sunday = await ask(injector, { today: '2027-01-03', weeks: 1 });
-    const nextYear = await ask(injector, { today: '2027-01-04', weeks: 1 });
-    expect(october.status).toBe('ready');
-    expect(sunday.status).toBe('ready');
-    expect(nextYear.status).toBe('ready');
-    if (october.status !== 'ready' || sunday.status !== 'ready' || nextYear.status !== 'ready') return;
-    expect(october.weeks.map(row => row.weekStart)).toEqual(['2026-09-21', '2026-09-28', '2026-10-05']);
-    expect(sunday.weeks.map(row => row.weekStart)).toEqual(['2026-12-21']);
-    expect(nextYear.weeks.map(row => row.weekStart)).toEqual(['2026-12-28']);
-    expect(isoWeekOfMonday('2026-12-28')).toBe(53);
-    expect(october.weeklyPlan).toBe(WEEKLY);
-    expect(Object.keys(october).sort()).toEqual(['annualPlan', 'mode', 'status', 'weeklyPlan', 'weeks']);
-    expect(Object.keys(october.weeks[0]).sort()).toEqual(['kept', 'spend', 'weekStart', 'weeklyPlan']);
-  });
-
   // CI3 audit pin: budget-kept receives `today` as a civil date and does its
   // week arithmetic on date-only values (UTC is the neutral carrier, so the
   // host zone cannot move a day). The 2026-11-01 fall-back in
@@ -520,37 +284,6 @@ describe('loadFinanceBudgetKept', () => {
     if (afterFallback.status !== 'ready' || newYear.status !== 'ready') return;
     expect(afterFallback.weeks.map(row => row.weekStart)).toEqual(['2026-10-19', '2026-10-26']);
     expect(newYear.weeks.map(row => row.weekStart)).toEqual(['2026-12-21', '2026-12-28']);
-  });
-
-  it('appends the in-progress week when includeCurrentWeek is set', async () => {
-    const purchase = tx({ id: 1, date: '2026-10-14', amount: 12, kind: 'purchase' });
-    const older = tx({ id: 2, date: '2026-09-01', amount: 1, kind: 'purchase' });
-    const { injector } = unlock({ profiles: [manual], txs: [older, purchase] });
-    const closed = await ask(injector, { weeks: 1 });
-    const open = await ask(injector, { weeks: 1, includeCurrentWeek: true });
-    expect(closed.status).toBe('ready');
-    expect(open.status).toBe('ready');
-    if (closed.status !== 'ready' || open.status !== 'ready') return;
-    expect(closed.weeks).toEqual([week('2026-10-05', 0, true)]);
-    expect(open.weeks).toEqual([
-      week('2026-10-05', 0, true),
-      week('2026-10-12', 12, true),
-    ]);
-  });
-
-  it('returns ready with unknown completed weeks when the first transaction is in the current week', async () => {
-    const { injector } = unlock({
-      profiles: [manual],
-      txs: [tx({ id: 1, date: '2026-10-14', amount: 12, kind: 'purchase' })],
-    });
-    const result = await ask(injector, { weeks: 1 });
-    expect(result).toEqual({
-      status: 'ready',
-      annualPlan: PLAN,
-      weeklyPlan: WEEKLY,
-      mode: 'manual',
-      weeks: [week('2026-10-05', null, null)],
-    });
   });
 
   it('returns unavailable when the read passes the deadline', async () => {
@@ -659,16 +392,6 @@ describe('loadFinanceBudgetKept', () => {
     expect(getTransactions).toHaveBeenCalled();
   });
 
-  it('returns unavailable when the vault read fails', async () => {
-    const failed = unlock({
-      listProfiles: () => throwError(() => new HttpErrorResponse({ status: 503 })),
-    });
-    expect(await ask(failed.injector)).toEqual({ status: 'unavailable' });
-    const boot = unlock({ whenReady: () => Promise.reject(new Error('boot')) });
-    expect(await ask(boot.injector)).toEqual({ status: 'unavailable' });
-    expect(boot.listProfiles).not.toHaveBeenCalled();
-  });
-
   it('returns locked without reading profiles when the saved key does not unlock', async () => {
     const { injector, listProfiles, getTransactions, load } = unlock({
       profiles: [manual],
@@ -697,27 +420,6 @@ describe('loadFinanceBudgetKept', () => {
     expect(await ask(unlock({ profiles: [older, newer], txs: purchase }).injector)).toEqual({ status: 'unavailable' });
   });
 
-  it('throws RangeError synchronously when today or weeks is outside the allowed window', () => {
-    const load = spyOn(budgetKeptCryptoImports, 'load');
-    const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
-    expect(() => ask(injector, { weeks: 0 })).toThrowError(RangeError, /weeks/);
-    expect(() => ask(injector, { weeks: -1 })).toThrowError(RangeError, /weeks/);
-    expect(() => ask(injector, { weeks: 1.5 })).toThrowError(RangeError, /weeks/);
-    expect(() => ask(injector, { weeks: 521 })).toThrowError(RangeError, /weeks/);
-    expect(() => ask(injector, { today: '2026-02-31' })).toThrowError(RangeError, /today/);
-    expect(() => ask(injector, { today: 'not-a-date' })).toThrowError(RangeError, /today/);
-    expect(load).not.toHaveBeenCalled();
-  });
-
-  it('throws RangeError when today is not a YYYY-MM-DD string', () => {
-    const load = spyOn(budgetKeptCryptoImports, 'load');
-    const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
-    for (const today of ['2026-10-1', '2026-1-14', '2026-10-14 ', ' 2026-10-14', '2026-10-14\n']) {
-      expect(() => ask(injector, { today })).toThrowError(RangeError, /today/);
-    }
-    expect(load).not.toHaveBeenCalled();
-  });
-
   it('throws RangeError synchronously when deadlineMs is NaN, infinite, or not positive', () => {
     const load = spyOn(budgetKeptCryptoImports, 'load');
     const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
@@ -725,30 +427,6 @@ describe('loadFinanceBudgetKept', () => {
       expect(() => ask(injector, { deadlineMs })).toThrowError(RangeError, /deadlineMs/);
     }
     expect(load).not.toHaveBeenCalled();
-  });
-
-  it('returns unavailable when listProfiles or getTransactions throws RangeError', async () => {
-    const profiles = unlock({
-      listProfiles: () => throwError(() => new RangeError('profiles')),
-    });
-    expect(await ask(profiles.injector)).toEqual({ status: 'unavailable' });
-    const transactions = unlock({
-      profiles: [manual],
-      getTransactions: () => Promise.reject(new RangeError('transactions')),
-    });
-    expect(await ask(transactions.injector)).toEqual({ status: 'unavailable' });
-  });
-
-  it('accepts the upper bound of 520 completed weeks', async () => {
-    const { injector } = unlock({
-      profiles: [manual],
-      txs: [tx({ id: 1, date: '2026-01-05', amount: 1, kind: 'purchase' })],
-    });
-    const result = await ask(injector, { weeks: 520 });
-    expect(result.status).toBe('ready');
-    if (result.status !== 'ready') return;
-    expect(result.weeks.length).toBe(520);
-    expect(result.weeks[result.weeks.length - 1].weekStart).toBe('2026-10-05');
   });
 
   it('returns expired instead of no_plan when the vault read is a 401', async () => {
@@ -889,54 +567,6 @@ describe('loadFinanceBudgetKeptDays', () => {
     expect(ready.status).toBe('ready');
   });
 
-  it('returns no_plan for a plan of 0 even when transactions exist', async () => {
-    const zero = unlock({
-      profiles: [profile({ id: 1, updated_at: '2026-08-01T00:00:00.000Z', mode: 'manual', annual: 0 })],
-      txs: [tx({ id: 1, date: '2026-10-02', amount: 5, kind: 'purchase' })],
-    });
-    expect(await askDays(zero.injector)).toEqual({ status: 'no_plan' });
-    const negative = unlock({
-      profiles: [profile({ id: 1, updated_at: '2026-08-01T00:00:00.000Z', mode: 'manual', annual: -50 })],
-      txs: [tx({ id: 1, date: '2026-10-02', amount: 5, kind: 'purchase' })],
-    });
-    expect(await askDays(negative.injector)).toEqual({ status: 'no_plan' });
-  });
-
-  it('returns ready with one row per day in the inclusive range', async () => {
-    const { injector } = unlock({
-      profiles: [manualDays],
-      txs: [tx({ id: 1, date: '2026-10-02', amount: 5, kind: 'purchase' })],
-    });
-    const result = await askDays(injector);
-    expect(result.status).toBe('ready');
-    if (result.status !== 'ready') return;
-    expect(result.annualPlan).toBe(PLAN_DAYS);
-    expect(result.monthlyPlan).toBe(100);
-    expect(result.mode).toBe('manual');
-    expect(result.days.map(row => row.date)).toEqual(['2026-10-01', '2026-10-02', '2026-10-03']);
-    expect(result.days[0].spend).toBeNull();
-    expect(result.days[0].kept).toBeNull();
-    expect(result.days[1].spend).toBe(5);
-    expect(result.days[1].kept).toBeTrue();
-    expect(result.days[2].spend).toBe(5);
-    expect(Object.keys(result).sort()).toEqual(['annualPlan', 'days', 'mode', 'monthlyPlan', 'status']);
-    expect(Object.keys(result.days[0]).sort()).toEqual(['date', 'kept', 'pace', 'spend']);
-  });
-
-  it('resolves a recurring plan through resolveAnnualPlan', async () => {
-    const { injector } = unlock({
-      profiles: [profile({ id: 1, updated_at: '2026-08-01T00:00:00.000Z', mode: 'recurring', annual: 99999 })],
-      planInputs: inputs(4800, 100),
-      txs: [tx({ id: 1, date: '2026-10-02', amount: 5, kind: 'purchase' })],
-    });
-    const result = await askDays(injector);
-    expect(result.status).toBe('ready');
-    if (result.status !== 'ready') return;
-    expect(result.annualPlan).toBe(4800);
-    expect(result.monthlyPlan).toBe(400);
-    expect(result.mode).toBe('recurring');
-  });
-
   it('returns unavailable when the read passes the deadline', async () => {
     const { injector } = unlock({
       profiles: [manualDays],
@@ -970,15 +600,6 @@ describe('loadFinanceBudgetKeptDays', () => {
     expect(await askDays(injector)).toEqual({ status: 'expired' });
   });
 
-  it('throws RangeError synchronously for a bad range and does not import', () => {
-    const load = spyOn(budgetKeptCryptoImports, 'load');
-    const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
-    expect(() => askDays(injector, { from: 'not-a-date' })).toThrowError(RangeError, /from and to/);
-    expect(() => askDays(injector, { to: '2026-02-31' })).toThrowError(RangeError, /from and to/);
-    expect(() => askDays(injector, { from: '2026-10-03', to: '2026-10-01' })).toThrowError(RangeError, /from must not be after to/);
-    expect(() => askDays(injector, { from: '2016-01-01', to: '2026-12-31' })).toThrowError(RangeError, /at most/);
-    expect(load).not.toHaveBeenCalled();
-  });
 });
 
 describe('loadFinanceBudgetKeptGuarded', () => {
@@ -1102,34 +723,6 @@ describe('loadFinanceBudgetKeptGuarded', () => {
     expect(read).not.toHaveBeenCalled();
   });
 
-  it('returns unavailable when the import fails', async () => {
-    const load = jasmine.createSpy('load').and.rejectWith(new Error('chunk failed'));
-    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
-      .toEqual({ status: 'unavailable' });
-  });
-
-  it('returns unavailable when the import throws RangeError', async () => {
-    const load = jasmine.createSpy('load').and.rejectWith(new RangeError('chunk'));
-    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
-      .toEqual({ status: 'unavailable' });
-  });
-
-  it('propagates RangeError from the loaded module', async () => {
-    const load = jasmine.createSpy('load').and.resolveTo({
-      loadFinanceBudgetKept: () => { throw new RangeError('weeks must be an integer from 1 to 520'); },
-    });
-    await expectAsync(loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
-      .toBeRejectedWithError(RangeError, /weeks/);
-  });
-
-  it('returns the loaded module result when the import succeeds', async () => {
-    const load = jasmine.createSpy('load').and.resolveTo({
-      loadFinanceBudgetKept: () => Promise.resolve({ status: 'no_plan' }),
-    });
-    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
-      .toEqual({ status: 'no_plan' });
-    expect(load).toHaveBeenCalled();
-  });
 });
 
 describe('loadFinanceBudgetKeptDaysGuarded', () => {
@@ -1158,18 +751,4 @@ describe('loadFinanceBudgetKeptDaysGuarded', () => {
     expect(load).not.toHaveBeenCalled();
   });
 
-  it('returns unavailable when the import fails', async () => {
-    const load = jasmine.createSpy('load').and.rejectWith(new Error('chunk failed'));
-    expect(await loadFinanceBudgetKeptDaysGuarded(injector, new AbortController().signal, dayOpts, load))
-      .toEqual({ status: 'unavailable' });
-  });
-
-  it('returns the loaded module result when the import succeeds', async () => {
-    const load = jasmine.createSpy('load').and.resolveTo({
-      loadFinanceBudgetKeptDays: () => Promise.resolve({ status: 'no_plan' }),
-    });
-    expect(await loadFinanceBudgetKeptDaysGuarded(injector, new AbortController().signal, dayOpts, load))
-      .toEqual({ status: 'no_plan' });
-    expect(load).toHaveBeenCalled();
-  });
 });

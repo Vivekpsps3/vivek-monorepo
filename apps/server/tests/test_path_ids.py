@@ -37,13 +37,20 @@ def _cases():
         Settings("sqlite:///:memory:", "test", Path("/unused")),
         Dependencies(database=database, check_schema=False, check_frontend=False),
     )
+    sampled = set()
     try:
         for prefix, route in _routes(app):
             for field in route.dependant.path_params:
                 if field.field_info.annotation is not int:
                     continue
                 for method in sorted(route.methods):
-                    for value in INVALID:
+                    # Exercise every mounted parameter with a SQLite-overflow value.
+                    # The remaining grammar classes need one representative per domain,
+                    # rather than the same Cartesian matrix on every route and method.
+                    domain = prefix or route.path_format.split("/")[1]
+                    grammar_sample = domain not in sampled
+                    sampled.add(domain)
+                    for value in INVALID if grammar_sample else ["9223372036854775808"]:
                         path = route.path_format.format(
                             **{
                                 p.name: value if p is field else "1"

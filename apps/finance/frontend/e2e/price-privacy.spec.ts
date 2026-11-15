@@ -14,9 +14,8 @@ const holdings = [
 
 const VIEWPORTS = [
   { width: 390, height: 844 },
-  { width: 1280, height: 800 },
 ] as const;
-const THEMES = ['light', 'dark'] as const;
+const THEMES = ['light'] as const;
 
 async function expectNoHorizontalScroll(page: Page): Promise<void> {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

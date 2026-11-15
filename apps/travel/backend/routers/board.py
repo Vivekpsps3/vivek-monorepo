@@ -26,6 +26,8 @@ def home(
 @router.get("/summary")
 def summary(
     tz: str | None = None,
+    start: date | None = None,
+    end: date | None = None,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -36,7 +38,11 @@ def summary(
         today = today_in_zone(zone) if zone else None
     except (ZoneInfoNotFoundError, ValueError, OSError) as exc:
         raise HTTPException(status_code=422, detail="Use a valid IANA timezone.") from exc
-    return build_summary(db, today=today, user_id=principal.id)
+    if (start is None) != (end is None):
+        raise HTTPException(status_code=422, detail="Supply both start and end.")
+    if start is not None and end is not None and not 0 <= (end - start).days <= 41:
+        raise HTTPException(status_code=422, detail="Ask for 1 to 42 days in order.")
+    return build_summary(db, today=today, user_id=principal.id, start=start, end=end)
 
 
 @router.get("/calendar")

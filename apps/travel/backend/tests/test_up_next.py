@@ -188,3 +188,31 @@ def test_summary_timezone_moves_both_today_and_window_at_utc_midnight(client, mo
     assert [row["title"] for row in utc["up_next"]] == ["Boundary starts"]
     assert pacific["next_trip"]["days_until"] == 14
     assert utc["next_trip"]["days_until"] == 13
+
+
+def test_agenda_window_history_overlap_bounds_and_owner(client, upcoming):
+    compact = client.get("/api/summary?tz=UTC").json()
+    window = client.get("/api/summary?tz=UTC&start=2026-12-01&end=2026-12-31").json()
+    assert window["next_trip"] == compact["next_trip"]
+    assert any(
+        row["title"] == "Finished starts" and row["date"] == "2026-12-01"
+        for row in window["up_next"]
+    )
+    assert all(row["trip_id"] != upcoming[1] for row in window["up_next"])
+    assert not any(row["title"] in {"Done", "Undated"} for row in window["up_next"])
+    for row in compact["up_next"]:
+        if "2026-12-01" <= row["date"] <= "2026-12-31":
+            assert row in window["up_next"]
+    for query in [
+        "start=2026-12-01",
+        "end=2026-12-31",
+        "start=2026-12-31&end=2026-12-01",
+        "start=2026-01-01&end=2026-12-31",
+        "start=2026-02-30&end=2026-03-01",
+    ]:
+        assert client.get("/api/summary?" + query).status_code == 422
+    assert client.get("/api/summary?start=2026-12-01&end=2027-01-11").status_code == 200
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
+    foreign = client.get("/api/summary?tz=UTC&start=2026-12-01&end=2026-12-31").json()
+    assert {row["trip_id"] for row in foreign["up_next"]} == {upcoming[1]}
+    assert "Finished" not in str(foreign)

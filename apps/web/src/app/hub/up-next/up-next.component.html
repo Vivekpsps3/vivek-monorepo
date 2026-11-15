@@ -1,17 +1,35 @@
 <section class="up-next" aria-labelledby="up-next-heading" [attr.aria-busy]="loading()">
   <div class="heading">
-    <div><p class="eyebrow">Across the suite</p><h2 id="up-next-heading">Up next</h2></div>
+    <div><p class="eyebrow">Across the suite</p><h2 id="up-next-heading">{{ expanded() ? "Agenda" : "Up next" }}</h2></div>
     <div class="filters" role="group" aria-label="Upcoming sources">
       @for (source of sources(); track source.id) {
         <ui-button variant="secondary" [pressed]="filters().includes(source.id)" (clicked)="toggleSource(source.id)">{{ source.label }}</ui-button>
       }
     </div>
   </div>
+  @if (expanded()) {
+    <div class="month-nav" aria-label="Agenda date window">
+      <ui-button variant="secondary" (clicked)="moveMonth(-1)">Previous month</ui-button>
+      <h3 aria-live="polite">{{ monthLabel() }}</h3>
+      <ui-button variant="secondary" (clicked)="moveMonth(1)">Next month</ui-button>
+      <a routerLink="/hub/agenda" [queryParams]="{ sources: filters().join(',') }">This month</a>
+      <a routerLink="/hub">Back to Hub</a>
+    </div>
+    <div class="mini-month" role="group" aria-label="Agenda mini-month">
+      @for (label of ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; track label) { <span aria-hidden="true">{{ label }}</span> }
+      @for (date of monthDays(); track $index) {
+        @if (date) {
+          <button type="button" [attr.aria-label]="dayLabel(date)" [disabled]="!hasEvents(date)" (click)="focusDate(date)">{{ +date.slice(8) }}</button>
+        } @else { <span></span> }
+      }
+    </div>
+    <p class="empty">Saved trip dates, departures, reminder due dates and exact Media release dates. Watched episodes retain their release dates; viewing and reminder completion history is unavailable.</p>
+  } @else { <a routerLink="/hub/agenda">Explore agenda</a> }
   @if (expired()) {
     <ui-state state="expired" thing="what's up next" />
   } @else {
     @for (group of groups(); track group.title) {
-      <h3>{{ group.title }}</h3>
+      <h3 [id]="expanded() ? 'agenda-' + group.title : null" [attr.tabindex]="expanded() ? -1 : null">{{ group.title }}</h3>
       <ul>
         @for (row of group.rows; track row.key) {
           <li [class.done]="row.reminder?.done">
@@ -27,7 +45,7 @@
         }
       </ul>
     }
-    @if (moreSources().size) {
+    @if (!expanded() && moreSources().size) {
       <div class="more">
         @if (moreSources().has('travel')) { <a routerLink="/travel/calendar">See all in Travel</a> }
         @if (moreSources().has('media')) { <a routerLink="/media/calendar">See all in Media</a> }
@@ -45,7 +63,7 @@
     @if (financeState() === 'loading' && skeleton()) { <ui-skeleton variant="lines" [lines]="1" /> }
     @if (financeState() === 'locked') {
       <div class="finance-row"><ui-icon name="lock" /><span>Bills hidden: Finance is locked</span>
-        <ui-button variant="secondary" size="sm" href="/finance/vault/unlock" [queryParams]="{ next: '/hub' }" label="Unlock" /></div>
+        <ui-button variant="secondary" size="sm" href="/finance/vault/unlock" [queryParams]="{ next: expanded() ? '/hub/agenda' : '/hub' }" label="Unlock" /></div>
     } @else if ((financeState() === 'ready' || financeState() === 'stale' || financeState() === 'empty') && billsDue() !== null) {
       @if (billsDue()! > 0) {
         <div class="finance-row"><ui-icon name="credit-card" /><span>{{ billsDue() }} {{ billsDue() === 1 ? 'bill' : 'bills' }} due this week</span>
@@ -55,7 +73,7 @@
     } @else if (financeState() === 'unavailable') {
       <ui-state state="unavailable" thing="bill count" [pending]="financePending()" (retry)="retryFinance.emit()" />
     }
-    @if (empty()) { <p class="empty">Nothing due in the next two weeks.</p><ui-button size="sm" href="/travel/trips/new" label="Plan a trip" /> }
-    @if (rows().length === 0 && filters().length < 2 && !loading()) { <p class="empty">No upcoming activity in the selected sources.</p> }
+    @if (empty()) { <p class="empty">{{ expanded() ? "No dated activity in this window." : "Nothing due in the next two weeks." }}</p><ui-button size="sm" href="/travel/trips/new" label="Plan a trip" /> }
+    @if (rows().length === 0 && filters().length < 2 && !loading()) { <p class="empty">No dated activity in the selected sources.</p> }
   }
 </section>

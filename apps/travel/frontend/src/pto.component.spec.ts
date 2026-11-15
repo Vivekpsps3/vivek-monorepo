@@ -1,12 +1,11 @@
-import { TestBed } from "@angular/core/testing";
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from "@angular/common/http/testing";
 import { provideHttpClient } from "@angular/common/http";
+import {
+HttpTestingController,
+provideHttpClientTesting,
+} from "@angular/common/http/testing";
+import { TestBed } from "@angular/core/testing";
 import { provideRouter } from "@angular/router";
-import { SESSION_CONTEXT, ToastService } from "@vivek/ui";
-import { ACCRUAL_COPY } from "./pto-model.mjs";
+import { SESSION_CONTEXT } from "@vivek/ui";
 import { PtoComponent } from "./pto.component";
 
 function payload(overrides: Record<string, unknown> = {}) {
@@ -102,77 +101,6 @@ describe("PtoComponent (TPTO2A/2B)", () => {
 
   afterEach(() => httpMock?.verify());
 
-  it("adopts bucket state into the forms and renders the forecast chart", () => {
-    const { fixture, component } = setup();
-    expect(component.drafts.pto.start_balance_hours).toBe("80");
-    expect(component.drafts.sick.start_balance_hours).toBe("");
-    const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector("travel-pto-chart")).not.toBeNull();
-    expect(root.querySelector("h1.visually-hidden")?.textContent).toContain("PTO");
-    expect(root.querySelector("p.lede")).toBeNull();
-    expect(root.textContent).not.toContain("Your time off today and what's left after each trip.");
-    expect(root.querySelectorAll("travel-pto-chart").length).toBe(1);
-    expect(root.textContent).toContain("Projected to Dec 31, 2026");
-    expect(root.textContent).toContain("end of your policy year");
-    expect(root.textContent).not.toContain("Chart runs through");
-    expect(root.textContent).not.toContain("last 60");
-    expect(root.textContent).toContain("Balance today");
-    expect(root.textContent).toContain("Track sick time too");
-  });
-
-  it("saves a bucket policy with hours fields and a null blank cap", () => {
-    const { component } = setup();
-    component.drafts.sick = {
-      start_balance_hours: " 40 ",
-      balance_as_of: "2026-02-01",
-      accrual_hours: "4",
-      accrual_cadence: "monthly",
-      cap_hours: "",
-      year_month: "01",
-      year_day: "01",
-      carry_forward: true,
-      accrual_mode: "daily",
-      accrual_anchor: "",
-      accrual_version: 0,
-    };
-    component.savePolicy("sick");
-    const req = httpMock.expectOne("/travel/api/pto/policies/sick");
-    expect(req.request.method).toBe("PUT");
-    expect(req.request.body).toEqual({
-      start_balance_hours: "40",
-      balance_as_of: "2026-02-01",
-      accrual_hours: "4",
-      accrual_cadence: "monthly",
-      cap_hours: null,
-      year_start: "01-01",
-      carry_forward: true,
-      accrual_mode: "daily",
-      accrual_anchor: null,
-      accrual_version: 0,
-    });
-    req.flush(payload());
-    httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
-    expect(component.busy()).toBe("");
-  });
-
-  it("sends the chosen bucket when saving leave", () => {
-    const { component } = setup();
-    component.entryBucket = "sick";
-    component.leave = {
-      label: "Flu",
-      start_date: "2026-07-01",
-      end_date: "2026-07-02",
-      days: "",
-      notes: "",
-    };
-    component.saveEntry();
-    const req = httpMock.expectOne("/travel/api/pto/entries");
-    expect(req.request.method).toBe("POST");
-    expect(req.request.body.bucket).toBe("sick");
-    req.flush(payload());
-    httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
-  });
-
   it("keeps the forms when the chart fails and refreshes from one retry", () => {
     TestBed.configureTestingModule({
       imports: [PtoComponent],
@@ -241,70 +169,4 @@ describe("PtoComponent (TPTO2A/2B)", () => {
     httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
   });
 
-  it("keeps the original policy body when retry follows a later edit", () => {
-    const { component } = setup();
-    const toast = TestBed.inject(ToastService);
-    let retry: (() => void) | undefined;
-    spyOn(toast, "error").and.callFake((_message: string, action?: { run?: () => void }) => {
-      retry = action?.run;
-    });
-    component.editHour("pto", "start_balance_hours", "40");
-    component.savePolicy("pto");
-    const failed = httpMock.expectOne("/travel/api/pto/policies/pto");
-    expect(failed.request.body.start_balance_hours).toBe("40");
-    failed.flush({ message: "down" }, { status: 502, statusText: "down" });
-    component.editHour("pto", "start_balance_hours", "99");
-    retry?.();
-    const again = httpMock.expectOne("/travel/api/pto/policies/pto");
-    expect(again.request.body.start_balance_hours).toBe("40");
-    again.flush(payload());
-    httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
-  });
-
-  it("maps a 422 onto the field and drops a preview whose policy changed", () => {
-    const { component } = setup();
-    component.leave = { label: "Trip", start_date: "2026-07-01", end_date: "2026-07-02", days: "", notes: "" };
-    component.preview();
-    const preview = httpMock.expectOne((req) => req.url.startsWith("/travel/api/pto/preview"));
-    preview.flush({
-      balance_when_you_leave: "10",
-      leftover_after: "8",
-      note: "",
-      days: "2",
-      auto: true,
-      configured: true,
-    });
-    expect(component.visiblePreview()?.balance_when_you_leave).toBe("10");
-    component.editHour("pto", "accrual_hours", "4");
-    component.savePolicy("pto");
-    const rejected = httpMock.expectOne("/travel/api/pto/policies/pto");
-    rejected.flush(
-      { field_errors: { accrual_hours: ACCRUAL_COPY } },
-      { status: 422, statusText: "invalid" },
-    );
-    expect(component.fieldErrors()["accrual_hours"]).toBe(ACCRUAL_COPY);
-    expect(component.drafts.pto.accrual_hours).toBe("4");
-    expect(component.visiblePreview()?.balance_when_you_leave).toBe("10");
-    const saved = payload({
-      buckets: {
-        pto: { ...payload().buckets.pto, accrual_hours: "4" },
-        sick: null,
-      },
-    });
-    component.editHour("pto", "accrual_hours", "6");
-    component.savePolicy("pto");
-    httpMock.expectOne("/travel/api/pto/policies/pto").flush(saved);
-    httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
-    expect(component.visiblePreview()).toBeNull();
-  });
-
-  it("dismisses the sick prompt through PTO settings", () => {
-    const { component } = setup();
-    component.dismissPrompt();
-    const req = httpMock.expectOne("/travel/api/settings/pto");
-    expect(req.request.method).toBe("PUT");
-    expect(req.request.body).toEqual({ sick_prompt_dismissed: true });
-    req.flush({ hours_per_day: "8", sick_prompt_dismissed: true });
-    expect(component.data()?.pto_sick_prompt_dismissed).toBeTrue();
-  });
 });

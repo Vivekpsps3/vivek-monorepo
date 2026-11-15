@@ -7,6 +7,9 @@
 - [Public API](frontend/src/public-api.ts) is the supported shell integration.
   Finance data crosses through its public API and the existing spending registry.
 
+Hub summary date windows require both start/end, in order, at most 42 days.
+Omitted dates retain the 14-day/overdue projection and the current next-trip card.
+
 Preserve currencies as separate Travel amounts: a multi-currency trip total is not
 Finance's USD total. Keep day boundaries, carry/cap/reset/history and hours-per-workday
 semantics explicit. Charts display server points; components must not grow a second

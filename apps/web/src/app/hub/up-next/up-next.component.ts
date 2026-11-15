@@ -17,6 +17,38 @@ import { browserTimeZone, isoDateInZone } from '@vivek/browser';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UpNextComponent {
+  expanded = input(false);
+  windowStart = input('');
+  windowEnd = input('');
+  selectedSources = input<readonly AgendaSource[]>(['travel', 'media']);
+  windowChange = output<string>();
+  sourcesChange = output<readonly AgendaSource[]>();
+  readonly monthLabel = computed(() => new Date(this.windowStart() + 'T12:00:00').toLocaleDateString(undefined, { month: 'long', year: 'numeric' }));
+  readonly monthDays = computed(() => {
+    if (!this.expanded()) return [];
+    const first = new Date(this.windowStart() + 'T12:00:00');
+    const days = Number(this.windowEnd().slice(8));
+    return [...Array.from({ length: first.getDay() }, () => ''),
+      ...Array.from({ length: days }, (_, i) => shiftDay(this.windowStart(), i))];
+  });
+
+  moveMonth(direction: number): void {
+    const point = new Date(this.windowStart() + 'T12:00:00');
+    point.setMonth(point.getMonth() + direction);
+    this.windowChange.emit(isoDateInZone(point, browserTimeZone()));
+  }
+
+  dayLabel(date: string): string {
+    const count = this.rows().filter(row => row.date === date).length;
+    return `${new Date(date + 'T12:00:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}, ${count} ${count === 1 ? 'event' : 'events'}`;
+  }
+
+  hasEvents(date: string): boolean { return this.rows().some(row => row.date === date); }
+
+  focusDate(date: string): void {
+    document.getElementById(`agenda-${date}`)?.focus();
+  }
+
   ownerId = input<number | null>(null);
   today = input.required<Date>();
   travel = input<TravelSummary | null>(null);
@@ -50,9 +82,13 @@ export class UpNextComponent {
   readonly expired = computed(() => [...this.sources().map(source => source.state), this.financeState()].includes('expired'));
   readonly loading = computed(() => this.sources().some(source => source.state === 'loading') || this.financeState() === 'loading' || this.sources().some(source => source.pending) || this.financePending());
   readonly rows = computed(() => upNextRows(this.travel()?.up_next ?? [], this.media()?.calendars ?? [],
-    isoDateInZone(this.today(), browserTimeZone())).filter(row => this.filters().includes(row.source)));
+    isoDateInZone(this.today(), browserTimeZone()), this.expanded() ? this.windowStart() : undefined,
+    this.expanded() ? this.windowEnd() : undefined, this.expanded()).filter(row => this.filters().includes(row.source)));
   readonly groups = computed(() => {
     const today = isoDateInZone(this.today(), browserTimeZone());
+    if (this.expanded()) {
+      return [...new Set(this.rows().map(row => row.date))].sort().map(date => ({ title: date, rows: this.rows().filter(row => row.date === date) }));
+    }
     const visible = this.rows().slice(0, 6);
     return [
       { title: 'Today', rows: visible.filter(row => row.overdue || row.date === today) },
@@ -65,6 +101,7 @@ export class UpNextComponent {
     source.state === 'ready' || source.state === 'empty') && (this.financeState() === 'ready' || this.financeState() === 'empty') && this.billsDue() === 0);
 
   constructor() {
+    effect(() => this.filters.set(this.selectedSources()));
     // A reload, owner switch or disposal invalidates pending writes and any toast Undo closure.
     effect(() => {
       this.ownerId(); this.travel(); this.travelPending(); this.travelState();
@@ -80,6 +117,7 @@ export class UpNextComponent {
 
   toggleSource(source: AgendaSource): void {
     this.filters.update(values => values.includes(source) ? values.filter(value => value !== source) : [...values, source]);
+    this.sourcesChange.emit(this.filters());
   }
 
   retry(source: AgendaSource): void {

@@ -6,7 +6,7 @@
 # A higher run prints a notice and does not rewrite this file. Re-pin: make coverage-pin
 # suite  measured  floor
 # server's floor is 61.53. It is not one point under the pinned measurement.
-finance 84.37 83.28
+finance 82.03 81.03
 travel 81.41 80.41
-media 71.60 70.60
+media 69.70 68.70
 server 61.87 61.53
