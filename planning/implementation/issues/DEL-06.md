@@ -6,7 +6,7 @@
 - Kind: `implementation`
 - Dependencies: none
 - Conflict groups: `shared-styles`, `finance-presentation`, `private-shell`, `planning-guidance`
-- Verification profiles: `shared_front`, `server_back`, `docs`
+- Verification profiles: `shared_front`, `finance_back`, `travel_back`, `media_back`, `server_back`, `ops`, `docs`
 
 Owner-selected broad deletion on 2026-11-14. Base `5bc07c2aab4345446f408d6e331cd1bef193f4d6`.
 Read root/app AGENTS and the [deletion contract](../deletion-strategy.md).
@@ -24,6 +24,7 @@ are gone, and completed planning archives no longer compete with current guidanc
 
 ## Source paths
 
+- `apps/server/requirements.lock`
 - `packages/ui/kit.css`
 - `packages/ui/controls.css`
 - `packages/ui/src/ui-menu/ui-menu.component.ts`
@@ -40,6 +41,7 @@ are gone, and completed planning archives no longer compete with current guidanc
 - `apps/web/src/app/hub/hub.component.css`
 - `apps/web/src/styles.css`
 - `apps/server/tests/test_town_passive.py`
+- `apps/server/requirements.lock`
 - `planning/`
 - `docs/`
 
@@ -50,7 +52,8 @@ are gone, and completed planning archives no longer compete with current guidanc
 3. Migrate menu triggers and public demo buttons to existing component styling, then delete global card/header/button copies. Retain live back links and public navigation.
 4. Remove only verified unused Finance/Hub/Travel selectors and no-caller Finance helpers. Review dynamic classes, projected content and deep selectors manually.
 5. Replace completed remediation records and superseded brief/reviews with pinned history links; retain active packets, Living World requirements and implementation evidence.
-6. Execute launch-expanded checks plus actual-diff root gates; record parity, consumer ledger and physical production/test/docs/binary changes separately before opening the PR.
+6. Keep the current dependency audit passing through only the two advisory-fixed transitive pins (OpenTelemetry API 1.45.2 and Soup Sieve 4.0), preserving all other versions; validate the patched environment, full backend gates and disposable image/schema checks.
+7. Execute launch-expanded checks plus actual-diff root gates; record parity, consumer ledger and physical production/test/docs/binary changes separately before opening the PR.
 
 ## Acceptance
 

@@ -2277,7 +2277,11 @@
       ],
       "verification_profiles": [
         "shared_front",
+        "finance_back",
+        "travel_back",
+        "media_back",
         "server_back",
+        "ops",
         "docs"
       ]
     }
