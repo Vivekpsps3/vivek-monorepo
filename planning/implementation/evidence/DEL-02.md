@@ -63,7 +63,7 @@ Resolved attempts: the first fast gate used system Python and failed importing A
 
 ## Handoff
 
-- PR / scoped roadmap note: local gates complete; publication links will be recorded after opening. Leaf closure keyword only, parents referenced.
+- PR: https://github.com/Vivekpsps3/vivek-monorepo/pull/372 (`Closes #214` only). Scoped roadmap note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6899220902. Parents are referenced, not closed.
 - Actual merge/deployment: neither performed.
 - External support prerequisite: resolved by the explicit retirement decision above.
-- Next actor/action: publish the complete PR closing #214 and append the scoped #134 note. Merge requires owner authorization. #200 remains open until merged acceptance is reconciled; no deployment is inferred.
+- Next actor/action: await required PR checks and owner merge authorization. #200 remains open until merged acceptance is reconciled; no deployment is inferred.
