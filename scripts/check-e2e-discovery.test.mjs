@@ -77,22 +77,22 @@ test('an exclusion with an owner and no reason fails', () => {
 
 test('an owned omission is not-run and a selected file stays listed', () => {
   const report = withTree({
-    'apps/web/e2e/pixels-settings.spec.ts': 'test("settings", () => {});\n',
+    'apps/web/e2e/unselected-journey.spec.ts': 'test("hidden", () => {});\n',
     'apps/web/e2e/pixels-year.spec.ts': 'test("year", () => {});\n',
   }, (root) => evaluateDiscovery({
     root,
     projects: [{ name: 'town', testDir: 'apps/web/e2e', testMatch: townTestMatch }],
     exclusions: [{
       project: 'town',
-      file: 'apps/web/e2e/pixels-settings.spec.ts',
+      file: 'apps/web/e2e/unselected-journey.spec.ts',
       owner: 'UX-01',
       issue: '#259',
-      reason: 'Profile settings stay unselected.',
+      reason: 'A spec outside the town selector stays unselected.',
     }],
   }));
   assert.equal(report.ok, true, report.errors.join('\n'));
   assert.deepEqual(report.counts, [{ name: 'town', listed: 1 }]);
-  assert.deepEqual(report.notes, ['not-run project=town path=apps/web/e2e/pixels-settings.spec.ts owner=UX-01 issue=#259']);
+  assert.deepEqual(report.notes, ['not-run project=town path=apps/web/e2e/unselected-journey.spec.ts owner=UX-01 issue=#259']);
   assert.match(formatReport(report), /status=listed-not-executed/);
   assert.match(formatReport(report), /discovery list is not execution/);
   assert.doesNotMatch(formatReport(report), /\bpassed\b/i);

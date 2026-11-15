@@ -159,7 +159,9 @@ describe('route parity', () => {
         continue;
       }
       if (example.status === 'alias') {
-        expect(aliases[example.path]).withContext(example.id).toBe(example.target);
+        const target = example.target;
+        if (!target) throw new Error(`${example.id} alias has no target`);
+        expect(aliases[example.path]).withContext(example.id).toBe(target);
         continue;
       }
       expect(hits.length).withContext(example.id).toBeGreaterThan(0);
