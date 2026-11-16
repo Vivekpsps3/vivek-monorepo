@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ToastService, UiButtonComponent, UiCardComponent, UiInputComponent } from '@vivek/ui';
 import { UsernameChangeComponent } from '../hub/username-change.component';
@@ -7,7 +8,7 @@ import { SessionService } from '../platform/session.service';
 @Component({
   selector: 'app-account-section',
   standalone: true,
-  imports: [UiButtonComponent, UiCardComponent, UiInputComponent, UsernameChangeComponent],
+  imports: [RouterLink, UiButtonComponent, UiCardComponent, UiInputComponent, UsernameChangeComponent],
   templateUrl: './account-section.component.html',
   styleUrl: './account-section.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

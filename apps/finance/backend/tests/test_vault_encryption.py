@@ -244,7 +244,7 @@ def test_vault_upsert_requires_explicit_revision_and_preserves_key_version():
     assert rewritten.json()[0]["key_version"] == 7
 
 
-def test_vault_wrap_update_rejects_a_weaker_kdf():
+def test_vault_setup_rejects_a_weaker_kdf_and_independent_updates_are_retired():
     client = authenticated_client(app, email="vault-kdf@example.com")
     setup = client.post(
         "/api/vault/setup",
@@ -256,11 +256,17 @@ def test_vault_wrap_update_rejects_a_weaker_kdf():
         },
     )
     assert setup.status_code == 200, setup.text
-    weaker = client.put(
-        "/api/vault/wraps",
-        json={"kdf_iterations": 310000, "wrapped_dek_b64": _b64(48)},
+    weaker = client.post(
+        "/api/vault/setup",
+        json={"kdf_salt_b64": _b64(16), "kdf_iterations": 310000, "wrapped_dek_b64": _b64(48)},
     )
     assert weaker.status_code == 422
+    before = client.get("/api/vault/status").json()
+    retired = client.put(
+        "/api/vault/wraps", json={"kdf_iterations": 310000, "wrapped_dek_b64": _b64(48)}
+    )
+    assert retired.status_code == 410
+    assert client.get("/api/vault/status").json() == before
 
 
 def test_plaintext_migration_endpoints_are_retired():

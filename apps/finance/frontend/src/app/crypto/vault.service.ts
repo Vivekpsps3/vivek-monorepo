@@ -1,6 +1,6 @@
 import { Injectable, inject, isDevMode } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, firstValueFrom, Observable } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, fromEvent, Observable, takeUntil } from 'rxjs';
 import { apiUrl } from '../core/api-url';
 import {
   clearDekLocal,
@@ -18,8 +18,8 @@ import {
   writeBlindIndexProgress,
   type StoredVaultKeys,
 } from './vault-crypto';
-import { rewrapSigningKey, WrappedSigningKey } from '@vivek/auth';
-import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
+import { rewrapSigningKey, signChallenge, WrappedSigningKey } from '@vivek/auth';
+import { DEFAULT_PBKDF2_ITERATIONS, openBoundedWork } from '@vivek/browser';
 import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
 import { silentErrorToast } from '@vivek/ui';
 import { SESSION_CONTEXT } from '@vivek/ui';
@@ -70,6 +70,8 @@ export class VaultService {
   private statusSubject = new BehaviorSubject<VaultStatus | null>(null);
   private unlockedSubject = new BehaviorSubject<boolean>(false);
   private authWrap: WrappedSigningKey | null = null;
+  private credentialGeneration = 0;
+  private credentialAction?: AbortController;
   private boot: Promise<void>;
   /** Failed KDF upgrades since this page loaded. The session stays unlocked either way. */
   kdfUpgradeFailures = 0;
@@ -263,6 +265,9 @@ export class VaultService {
     this.reindexGeneration += 1;
     this.reindexTask = null;
     wipeDek();
+    this.credentialGeneration += 1;
+    this.credentialAction?.abort();
+    this.authWrap = null;
     this.unlockedWrap = null;
     const cleared = clearDekLocal();
     if (counting) {
@@ -303,56 +308,95 @@ export class VaultService {
    * must not delay navigation. A failed write leaves the previous wraps in place.
    */
   async upgradeKdfIfNeeded(passphrase: string): Promise<void> {
+    if (this.credentialAction) return;
+    const generation = this.credentialGeneration;
     try {
-      await this.ensureAuthWrap();
-      await this.applyKdfUpgrade(passphrase);
-    } catch {
+      if (this.authWrap && this.authWrap.kdf_iterations >= DEFAULT_PBKDF2_ITERATIONS &&
+          (this.currentStatus?.kdf_iterations ?? 0) >= DEFAULT_PBKDF2_ITERATIONS) return;
+      await this.rotateCredentialWraps(passphrase, passphrase, true, generation);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      // A lock or a newer manual change makes this background action obsolete.
+      if (generation !== this.credentialGeneration || !this.isUnlocked) return;
       this.kdfUpgradeFailures += 1;
       this.toast.error("Couldn't finish a security upgrade. We'll retry next time you unlock.");
     }
   }
 
-  private async ensureAuthWrap(): Promise<void> {
-    if (this.authWrap?.wrapped_private_key_b64 && this.authWrap.kdf_iterations) return;
-    const body = await firstValueFrom(
-      this.http.get<{ auth: WrappedSigningKey }>(apiUrl('/auth/passwordless/wraps'), { context: silentErrorToast() })
-    );
-    if (body?.auth?.wrapped_private_key_b64) this.authWrap = body.auth;
+  /** One revision-bound write; the caller locks participating tabs after eligible success. */
+  async changePassphrase(current: string, next: string, signal: AbortSignal): Promise<void> {
+    if (!current || next.length < 12 || next.length > 1024 || current === next) throw new Error('Choose a different passphrase of 12–1,024 characters.');
+    await this.rotateCredentialWraps(current, next, false, ++this.credentialGeneration, signal);
   }
 
-  private async applyKdfUpgrade(passphrase: string): Promise<void> {
-    const status = this.statusSubject.value;
-    const auth = this.authWrap;
-    const authStale = !!auth && auth.kdf_iterations < DEFAULT_PBKDF2_ITERATIONS;
-    const vaultStale = !!status?.kdf_iterations && status.kdf_iterations < DEFAULT_PBKDF2_ITERATIONS && !!this.dek;
-    if (!authStale && !vaultStale) return;
-    if (authStale && auth) {
-      const wrapped = await this.rewrapAuthWrap(passphrase, auth);
-      await firstValueFrom(this.http.put(apiUrl('/auth/passwordless/wraps'), wrapped, { context: silentErrorToast() }));
-      this.authWrap = wrapped;
+  private async rotateCredentialWraps(current: string, next: string, onlyIfStale: boolean, generation: number, parentSignal?: AbortSignal): Promise<void> {
+    this.credentialAction?.abort();
+    const action = new AbortController(); this.credentialAction = action;
+    const work = openBoundedWork({ parents: [action.signal, parentSignal], deadlineMs: 120_000 });
+    const signal = work.signal;
+    const epoch = this.epoch, lockAt = readLockEpoch(), userId = this.ownerId();
+    const sessionRevision = this.sessionPort?.revision;
+    let dek: CryptoKey | null = this.dek, verified: CryptoKey | null = null;
+    const clear = (): void => { current = ''; next = ''; dek = null; verified = null; };
+    signal.addEventListener('abort', clear, { once: true });
+    const ownerSubscription = this.sessionPort?.user$.subscribe(() => {
+      if (this.ownerId() !== userId || this.sessionPort?.revision !== sessionRevision) action.abort();
+    });
+    const check = (): void => {
+      if (signal?.aborted || generation !== this.credentialGeneration || sessionRevision !== this.sessionPort?.revision ||
+          !dek || dek !== this.dek || !this.owns(epoch, lockAt, userId)) {
+        clear(); throw new DOMException('Credential change cancelled.', 'AbortError');
+      }
+    };
+    const read = <T>(request: Observable<T>): Promise<T> => firstValueFrom(request.pipe(takeUntil(fromEvent(signal, 'abort'))));
+    const options = { context: silentErrorToast() };
+    try {
+      const result = await work.run(async () => {
+        await this.boot; check();
+        const stored = await read(this.http.get<{ wrap_revision: number; auth: WrappedSigningKey; vault: VaultStatus }>(apiUrl('/auth/passwordless/credentials'), options));
+        check();
+        if (onlyIfStale && stored.auth.kdf_iterations >= DEFAULT_PBKDF2_ITERATIONS &&
+            (stored.vault.kdf_iterations ?? 0) >= DEFAULT_PBKDF2_ITERATIONS) return;
+        const vault = stored.vault;
+        if (!vault.kdf_salt_b64 || !vault.kdf_iterations || !vault.wrapped_dek_b64) throw new Error('Vault is unavailable.');
+        try {
+          verified = await unlockWithPassphrase(current, vault.kdf_salt_b64, vault.kdf_iterations, vault.wrapped_dek_b64);
+          check();
+          // Verify the fresh wrap belongs to the held key without replacing or exporting it.
+          await decryptJson(verified, await encryptJson(this.requireDek(), { credentials: true }));
+        } catch {
+          check(); throw new Error('Current vault passphrase could not be verified.');
+        }
+        check();
+        const challenge = await read(this.http.post<{ challenge_id: string; challenge: string; message: string }>(
+          apiUrl('/auth/passwordless/challenge'), { username: this.sessionPort?.currentUser?.username, purpose: 'credential_rotation' }, options));
+        check();
+        let auth: WrappedSigningKey, wrapped: { kdf_salt_b64: string; kdf_iterations: number; wrapped_dek_b64: string }, signature: string;
+        try {
+          [auth, wrapped, signature] = await Promise.all([
+            rewrapSigningKey(current, stored.auth, Math.max(DEFAULT_PBKDF2_ITERATIONS, stored.auth.kdf_iterations), next),
+            rewrapDekWithPassphrase(current, { kdf_salt_b64: vault.kdf_salt_b64, kdf_iterations: vault.kdf_iterations, wrapped_dek_b64: vault.wrapped_dek_b64 }, next, Math.max(DEFAULT_PBKDF2_ITERATIONS, vault.kdf_iterations)),
+            signChallenge(current, stored.auth, challenge.message),
+          ]);
+        } catch { check(); throw new Error('Current vault passphrase could not be verified.'); }
+        check();
+        const updated = await read(this.http.post<{ auth: WrappedSigningKey; vault: VaultStatus }>(apiUrl('/auth/passwordless/credentials'), {
+          expected_wrap_revision: stored.wrap_revision, auth, vault: wrapped,
+          challenge_id: challenge.challenge_id, challenge: challenge.challenge, message: challenge.message, signature_b64: signature,
+        }, options));
+        check();
+        this.authWrap = updated.auth;
+        this.statusSubject.next(updated.vault);
+        this.unlockedWrap = updated.vault.wrapped_dek_b64 ?? null;
+      });
+      if (result.status === 'failed') throw result.error;
+      if (result.status === 'deadline') throw new Error('Credential change timed out.');
+      if (result.status === 'cancelled') throw new DOMException('Credential change cancelled.', 'AbortError');
+    } finally {
+      clear(); signal.removeEventListener('abort', clear);
+      ownerSubscription?.unsubscribe(); work.dispose();
+      if (this.credentialAction === action) this.credentialAction = undefined;
     }
-    if (vaultStale && this.dek && status) {
-      const rewrap = await this.rewrapVaultDek(passphrase);
-      const updated = await firstValueFrom(
-        this.http.put<VaultStatus>(apiUrl('/vault/wraps'), rewrap, { context: silentErrorToast() })
-      );
-      this.statusSubject.next(updated);
-      this.unlockedWrap = updated.wrapped_dek_b64 ?? this.unlockedWrap;
-    }
-  }
-
-  private rewrapAuthWrap(passphrase: string, auth: WrappedSigningKey): Promise<WrappedSigningKey> {
-    return rewrapSigningKey(passphrase, auth, DEFAULT_PBKDF2_ITERATIONS);
-  }
-
-  private rewrapVaultDek(passphrase: string): Promise<{ kdf_salt_b64: string; kdf_iterations: number; wrapped_dek_b64: string }> {
-    const status = this.statusSubject.value;
-    if (!status?.kdf_salt_b64 || !status.kdf_iterations || !status.wrapped_dek_b64) throw new Error('Vault is locked');
-    return rewrapDekWithPassphrase(passphrase, {
-      kdf_salt_b64: status.kdf_salt_b64,
-      kdf_iterations: status.kdf_iterations,
-      wrapped_dek_b64: status.wrapped_dek_b64,
-    }, passphrase, DEFAULT_PBKDF2_ITERATIONS);
   }
 
   async unlock(passphrase: string, forceRefresh = false): Promise<boolean> {

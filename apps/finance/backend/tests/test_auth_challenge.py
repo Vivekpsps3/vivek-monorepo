@@ -328,32 +328,43 @@ def test_password_only_migration_routes_are_retired_without_mutating_accounts():
         assert db.query(UserSession).count() == 0
 
 
-def test_authenticated_user_can_update_signing_key_wrap():
-    client = TestClient(app)
-    material = passwordless_material()
-    bootstrap = client.post(
-        "/api/auth/bootstrap/passwordless",
-        json={
-            "username": "first.admin",
-            "display_name": "First Admin",
-            **material,
+def _atomic_rotation(client, private_key, username="legacy.user", *, auth=None, vault=None):
+    stored = client.get("/api/auth/passwordless/credentials").json()
+    issued = client.post(
+        "/api/auth/passwordless/challenge",
+        json={"username": username, "purpose": "credential_rotation"},
+    ).json()
+    return {
+        "expected_wrap_revision": stored["wrap_revision"],
+        "auth": auth or {**stored["auth"], "kdf_iterations": MIN_PBKDF2_ITERATIONS},
+        "vault": vault
+        or {
+            "kdf_salt_b64": stored["vault"]["kdf_salt_b64"],
+            "kdf_iterations": MIN_PBKDF2_ITERATIONS,
+            "wrapped_dek_b64": stored["vault"]["wrapped_dek_b64"],
         },
-    )
-    client.headers["X-CSRF-Token"] = bootstrap.json()["csrf_token"]
-    replacement = {
-        **material["auth"],
-        "wrapped_private_key_b64": "YW5vdGhlci1sb25nLWVuY3J5cHRlZC1wcml2YXRlLWtleS1wYXlsb2Fk",
-        "recovery_wrapped_private_key_b64": "",
+        **{name: issued[name] for name in ("challenge_id", "challenge", "message")},
+        "signature_b64": _raw_signature(private_key, issued["message"]),
     }
 
-    response = client.put("/api/auth/passwordless/wraps", json=replacement)
 
-    assert response.status_code == 200
+def test_authenticated_user_updates_both_wraps_with_a_signed_atomic_request():
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    _enroll_legacy_user(private_key)
+    client = TestClient(app)
+    session = _verify(client, private_key, "legacy.user")
+    client.headers["X-CSRF-Token"] = session["csrf_token"]
+    body = _atomic_rotation(client, private_key)
+    body["auth"]["wrapped_private_key_b64"] = _b64(AUTH_WRAP_BYTES)
+    response = client.post("/api/auth/passwordless/credentials", json=body)
+    assert response.status_code == 200, response.text
+    assert response.json()["auth"] == body["auth"]
+    assert response.json()["vault"]["kdf_iterations"] == MIN_PBKDF2_ITERATIONS
     assert (
         TestClient(app)
-        .post("/api/auth/passwordless/lookup", json={"username": "first.admin"})
+        .post("/api/auth/passwordless/lookup", json={"username": "legacy.user"})
         .json()["auth"]
-        == replacement
+        == body["auth"]
     )
 
 
@@ -583,18 +594,17 @@ def test_existing_user_with_legacy_kdf_can_still_log_in_and_rewrap(caplog):
         "recovery_wrapped_private_key_b64": "",
     }
     with caplog.at_level(logging.INFO, logger="finance.auth"):
-        assert client.put("/api/auth/passwordless/wraps", json=upgraded_auth).status_code == 200
-        assert (
-            client.put(
-                "/api/vault/wraps",
-                json={
-                    "kdf_salt_b64": _b64(16),
-                    "kdf_iterations": MIN_PBKDF2_ITERATIONS,
-                    "wrapped_dek_b64": _b64(60),
-                },
-            ).status_code
-            == 200
+        body = _atomic_rotation(
+            client,
+            private_key,
+            auth=upgraded_auth,
+            vault={
+                "kdf_salt_b64": _b64(16),
+                "kdf_iterations": MIN_PBKDF2_ITERATIONS,
+                "wrapped_dek_b64": _b64(60),
+            },
         )
+        assert client.post("/api/auth/passwordless/credentials", json=body).status_code == 200
     assert "signing-key wrap KDF iterations raised" in caplog.text
     assert "vault wrap KDF iterations raised" in caplog.text
 
@@ -851,16 +861,13 @@ def test_session_wrap_updates_are_not_on_the_login_budget(monkeypatch):
     client = TestClient(app, client=("203.0.113.8", 50000))
     session = _verify(client, private_key, "legacy.user")
     client.headers["X-CSRF-Token"] = session["csrf_token"]
+    first = _atomic_rotation(client, private_key)
+    second = _atomic_rotation(client, private_key)
+    second["expected_wrap_revision"] += 1
     monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "1")
     clear_limits()
-    body = {
-        "kdf_salt_b64": _b64(16),
-        "kdf_iterations": MIN_PBKDF2_ITERATIONS,
-        "wrapped_private_key_b64": _b64(AUTH_WRAP_BYTES),
-        "recovery_wrapped_private_key_b64": "",
-    }
-    assert client.put("/api/auth/passwordless/wraps", json=body).status_code == 200
-    assert client.put("/api/auth/passwordless/wraps", json=body).status_code == 200
+    assert client.post("/api/auth/passwordless/credentials", json=first).status_code == 200
+    assert client.post("/api/auth/passwordless/credentials", json=second).status_code == 200
     anonymous = TestClient(app, client=("203.0.113.8", 50000))
     assert (
         anonymous.post(

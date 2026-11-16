@@ -22,18 +22,29 @@
     </fieldset>
   </ui-card>
   <ui-card>
+    <h2>Change vault passphrase</h2>
+    <p class="settings-help" id="passphrase-help">Use 12–1,024 characters. Your records stay encrypted with the same keys. Passphrases are verified only in this browser. After success, Finance locks in participating tabs and other browser sessions sign out. Keep your new passphrase: it cannot be reset.</p>
+    <form class="backup-form" (submit)="$event.preventDefault(); changePassphrase()" novalidate aria-describedby="passphrase-help" [attr.aria-busy]="changeBusy">
+      <ui-input #changeCurrentControl inputId="passphrase-current" label="Current passphrase" type="password" autocomplete="current-password" [disabled]="changeBusy" [invalid]="changeInvalid === 'current'" [describedBy]="changeError ? 'passphrase-error' : undefined" [(value)]="changeCurrent" />
+      <ui-input #changeNextControl inputId="passphrase-next" label="New passphrase" type="password" autocomplete="new-password" [disabled]="changeBusy" [invalid]="changeInvalid === 'next'" [describedBy]="changeError ? 'passphrase-error' : undefined" [(value)]="changeNext" />
+      <ui-input #changeConfirmControl inputId="passphrase-confirm" label="Confirm new passphrase" type="password" autocomplete="new-password" [disabled]="changeBusy" [invalid]="changeInvalid === 'confirm'" [describedBy]="changeError ? 'passphrase-error' : undefined" [(value)]="changeConfirm" />
+      @if (changeError) { <p id="passphrase-error" class="form-error" role="alert" tabindex="-1" #changeAlert>{{ changeError }}</p> }
+      <ui-button type="submit" [disabled]="changeBusy || backupBusy || restoreBusy" [busy]="changeBusy">Change passphrase</ui-button>
+    </form>
+  </ui-card>
+  <ui-card>
     <h2>Encrypted recovery backup</h2>
     <p class="settings-help" id="backup-help">Save every vault collection, including Finance and Health, in one encrypted file. Keep the file and its separate backup password: both are needed to restore. Your current passphrase verifies this action locally. CSV downloads remain separate conveniences.</p>
     <form class="backup-form" (submit)="$event.preventDefault(); createBackup()" aria-describedby="backup-help" [attr.aria-busy]="backupBusy">
-      <ui-input #backupCurrent label="Current vault passphrase" type="password" autocomplete="current-password" [disabled]="backupBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="currentPassphrase" />
-      <ui-input label="Backup password" type="password" autocomplete="new-password" [disabled]="backupBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="backupPassword" />
-      <ui-input label="Confirm backup password" type="password" autocomplete="new-password" [disabled]="backupBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="backupConfirm" />
+      <ui-input #backupCurrent label="Current vault passphrase" type="password" autocomplete="current-password" [disabled]="backupBusy || changeBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="currentPassphrase" />
+      <ui-input label="Backup password" type="password" autocomplete="new-password" [disabled]="backupBusy || changeBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="backupPassword" />
+      <ui-input label="Confirm backup password" type="password" autocomplete="new-password" [disabled]="backupBusy || changeBusy" [describedBy]="backupError ? 'backup-error' : undefined" [(value)]="backupConfirm" />
       <p class="settings-help">Choose at least 12 characters. This password protects the file independently of your vault passphrase; reusing it is your choice. Maximum: 10,000 records and 16 MiB of recovery data. No partial backup is downloaded.</p>
       @if (backupError) {
         <p id="backup-error" class="form-error" role="alert" tabindex="-1" #backupAlert>{{ backupError }}</p>
       }
       <div class="backup-actions">
-        <ui-button type="submit" [disabled]="backupBusy" [busy]="backupBusy">Download encrypted backup</ui-button>
+        <ui-button type="submit" [disabled]="backupBusy || changeBusy" [busy]="backupBusy">Download encrypted backup</ui-button>
         @if (backupBusy) {
           <ui-button type="button" variant="secondary" (clicked)="cancelBackup()">Cancel backup</ui-button>
         }
@@ -46,14 +57,14 @@
     <p class="settings-help" id="restore-help">Open a recovery file with its backup password. Validation happens in this browser before any writes. Merge keeps existing record IDs; replace applies the complete backup to this signed-in vault.</p>
     @if (!restorePlan) {
       <form class="backup-form" (submit)="$event.preventDefault(); previewRestore()" aria-describedby="restore-help">
-        <label class="settings-help">Encrypted backup file <input #restoreFileControl type="file" accept=".vvr,application/json" [disabled]="restoreBusy" (change)="selectRestoreFile($event)" /></label>
-        <ui-input label="Restore backup password" type="password" autocomplete="off" [disabled]="restoreBusy" [(value)]="restorePassword" />
+        <label class="settings-help">Encrypted backup file <input #restoreFileControl type="file" accept=".vvr,application/json" [disabled]="restoreBusy || changeBusy" (change)="selectRestoreFile($event)" /></label>
+        <ui-input label="Restore backup password" type="password" autocomplete="off" [disabled]="restoreBusy || changeBusy" [(value)]="restorePassword" />
         <fieldset class="settings-row">
           <legend>Restore mode</legend>
-          <label class="settings-radio"><input type="radio" name="restore-mode" value="merge" [checked]="restoreMode === 'merge'" [disabled]="restoreBusy" (change)="restoreMode = 'merge'" /> Merge: skip existing IDs</label>
-          <label class="settings-radio"><input type="radio" name="restore-mode" value="replace" [checked]="restoreMode === 'replace'" [disabled]="restoreBusy" (change)="restoreMode = 'replace'" /> Replace the active vault</label>
+          <label class="settings-radio"><input type="radio" name="restore-mode" value="merge" [checked]="restoreMode === 'merge'" [disabled]="restoreBusy || changeBusy" (change)="restoreMode = 'merge'" /> Merge: skip existing IDs</label>
+          <label class="settings-radio"><input type="radio" name="restore-mode" value="replace" [checked]="restoreMode === 'replace'" [disabled]="restoreBusy || changeBusy" (change)="restoreMode = 'replace'" /> Replace the active vault</label>
         </fieldset>
-        <ui-button type="submit" [disabled]="restoreBusy" [busy]="restoreBusy">Preview encrypted backup</ui-button>
+        <ui-button type="submit" [disabled]="restoreBusy || changeBusy" [busy]="restoreBusy">Preview encrypted backup</ui-button>
       </form>
     } @else {
       @if (restorePlan.previousCompletion; as previous) {
@@ -70,20 +81,20 @@
       </div>
       @for (stage of restorePlan.unfinished; track stage.id) {
         <p class="settings-help">An unfinished {{ stage.mode }} restore is available. Choosing the same file and mode resumes completed batches; discarding affects only staged records.</p>
-        <ui-button type="button" variant="secondary" [disabled]="restoreBusy" (clicked)="discardRestore(stage.id)">Discard staged restore</ui-button>
+        <ui-button type="button" variant="secondary" [disabled]="restoreBusy || changeBusy" (clicked)="discardRestore(stage.id)">Discard staged restore</ui-button>
       }
       @if (restorePlan.mode === 'replace') {
         <p class="settings-help">Replacement removes current records absent from this backup. Save a recovery backup of the current vault first.</p>
-        <ui-button type="button" variant="secondary" [disabled]="restoreBusy" (clicked)="offerBackup()">Create pre-restore backup</ui-button>
-        <label class="settings-radio"><input type="checkbox" [checked]="restoreAcknowledged" [disabled]="restoreBusy" (change)="restoreAcknowledged = !restoreAcknowledged" /> I saved a backup or choose to continue without one.</label>
-        <ui-input label="Type REPLACE to confirm" [disabled]="restoreBusy" [(value)]="restoreConfirmation" />
+        <ui-button type="button" variant="secondary" [disabled]="restoreBusy || changeBusy" (clicked)="offerBackup()">Create pre-restore backup</ui-button>
+        <label class="settings-radio"><input type="checkbox" [checked]="restoreAcknowledged" [disabled]="restoreBusy || changeBusy" (change)="restoreAcknowledged = !restoreAcknowledged" /> I saved a backup or choose to continue without one.</label>
+        <ui-input label="Type REPLACE to confirm" [disabled]="restoreBusy || changeBusy" [(value)]="restoreConfirmation" />
       }
       <p class="settings-help">Staging leaves active data unchanged. Activation applies all confirmed changes together and cannot be cancelled once accepted. Finance then locks in every participating tab; unlock to load restored records.</p>
       <div class="backup-actions">
         @if (!restorePlan.staged) {
-          <ui-button type="button" [disabled]="restoreBusy || backupBusy" [busy]="restoreBusy" (clicked)="stageRestore()">Stage encrypted restore</ui-button>
+          <ui-button type="button" [disabled]="restoreBusy || backupBusy || changeBusy" [busy]="restoreBusy" (clicked)="stageRestore()">Stage encrypted restore</ui-button>
         } @else {
-          <ui-button type="button" [disabled]="restoreBusy || backupBusy" [busy]="restoreBusy" (clicked)="activateRestore()">Activate restore</ui-button>
+          <ui-button type="button" [disabled]="restoreBusy || backupBusy || changeBusy" [busy]="restoreBusy" (clicked)="activateRestore()">Activate restore</ui-button>
         }
       </div>
     }

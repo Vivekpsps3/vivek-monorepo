@@ -17,14 +17,6 @@ class VaultCreateRequest(BaseModel):
     key_version: int = 1
 
 
-class VaultUpdateRequest(BaseModel):
-    kdf_salt_b64: str | None = None
-    kdf_iterations: int | None = Field(None, ge=MIN_PBKDF2_ITERATIONS, le=MAX_PBKDF2_ITERATIONS)
-    wrapped_dek_b64: str | None = None
-    recovery_wrapped_dek_b64: str | None = None
-    key_version: int | None = None
-
-
 class VaultResponse(BaseModel):
     exists: bool
     kdf_algorithm: str | None = None
