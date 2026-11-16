@@ -28,7 +28,7 @@ Node 24 `/tmp/node24/bin`, repository Python 3.12 venv, Chromium 156 at `/home/v
 | --- | --- |
 | `make test-fast`, `make lint-web`, `make typecheck-web` (venv on PATH) | PASS |
 | `make lint-python`, `make typecheck-python` | PASS: Ruff 91, suppressions 6, mypy 82 baseline findings; no Python implementation change |
-| `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS: 399 tests |
+| `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS: 399 initial tests; final shared-UI rerun 400 |
 | `npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` | PASS: 503 tests |
 | `COVERAGE_FILE=/tmp/hub05-server.coverage ./scripts/coverage-gate.sh server` | PASS: 357 tests, 74.27%; additional performance probe passed |
 | `make build-frontends` | PASS; initial-size warning (not the error gate), existing unused imports warnings |
@@ -40,7 +40,7 @@ Initial failures were fixed: health import crossed the platform boundary (now st
 
 ## Handoff
 
-- PR: https://github.com/Vivekpsps3/vivek-monorepo/pull/380; implementation tree `2086d7d`, opened after required gates passed.
+- PR: https://github.com/Vivekpsps3/vivek-monorepo/pull/380; initial implementation `2086d7d`, final tested implementation `2142899`, opened after required gates passed.
 - Roadmap note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6931270885.
 - Merge/deployment: not merged or deployed.
 - Remaining parent scope: HUB-06 and Town-owned TOWN-06; TOWN-05 is still open and required by TOWN-06.
