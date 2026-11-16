@@ -55,6 +55,6 @@ Fixed initial failures without lowering gates: declared new current-head/drift e
 ## Handoff
 
 - PR: https://github.com/Vivekpsps3/vivek-monorepo/pull/381, opened after required local gates passed; tested implementation tree `21df518`.
-- Roadmap note: key-specific append-only update on #134; no parent/global body changes.
+- Roadmap note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6932243509; no parent/global body changes.
 - Not merged or deployed. Production requires the normal migration/deployment workflow and configured HTTPS origin; no real feed has been activated by this work.
 - Parent's Town-owned reflection still depends on open Town Hall work. Next actor: review/merge with owner authorization; integration owner reconciles the queue after merges.
