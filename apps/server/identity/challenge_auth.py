@@ -20,7 +20,8 @@ CHALLENGE_TTL = timedelta(minutes=5)
 PROTOCOL = "vault-auth-v1"
 PURPOSE_LOGIN = "login"
 PURPOSE_USERNAME_CHANGE = "username_change"
-PURPOSES = frozenset({PURPOSE_LOGIN, PURPOSE_USERNAME_CHANGE})
+PURPOSE_CREDENTIAL_ROTATION = "credential_rotation"
+PURPOSES = frozenset({PURPOSE_LOGIN, PURPOSE_USERNAME_CHANGE, PURPOSE_CREDENTIAL_ROTATION})
 CHALLENGE_FAILURE_DETAIL = "Invalid or expired vault authentication challenge"
 # Documented dev clients and the same-site local server. Production sets CORS_ORIGINS.
 _DEV_ORIGINS = (

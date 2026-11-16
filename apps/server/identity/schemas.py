@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from apps.finance.backend.kdf_policy import MAX_PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS
-from apps.finance.backend.schemas_vault import VaultCreateRequest
+from apps.finance.backend.schemas_vault import VaultCreateRequest, VaultResponse
 from apps.server.identity.username_policy import (
     USERNAME_MAX,
     USERNAME_MIN,
@@ -100,7 +100,7 @@ class PasswordlessSignupRequest(BaseModel):
 class PasswordlessChallengeRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=64)
     # Omitted by the login client. Rename asks for username_change.
-    purpose: Literal["login", "username_change"] = "login"
+    purpose: Literal["login", "username_change", "credential_rotation"] = "login"
 
 
 class PasswordlessChallengeResponse(BaseModel):
@@ -183,3 +183,32 @@ class SignupPolicyResponse(BaseModel):
     mode: Literal["closed", "open", "invite", "allowlist"]
     signup_open: bool
     invite_code_required: bool
+
+
+class CredentialVaultWrap(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kdf_salt_b64: str = Field(min_length=16, max_length=4096)
+    kdf_iterations: int = Field(ge=MIN_PBKDF2_ITERATIONS, le=MAX_PBKDF2_ITERATIONS)
+    wrapped_dek_b64: str = Field(min_length=32, max_length=8192)
+
+
+class CredentialRotationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_wrap_revision: int = Field(ge=1)
+    auth: AuthPrivateKeyWrap
+    vault: CredentialVaultWrap
+    challenge_id: str = Field(min_length=16, max_length=128)
+    challenge: str = Field(min_length=32, max_length=256)
+    message: str = Field(min_length=1, max_length=2048)
+    signature_b64: str = Field(min_length=16, max_length=256)
+
+
+class StoredAuthPrivateKeyWrap(AuthPrivateKeyWrap):
+    # Read historical iterations; new writes still enforce the current floor.
+    kdf_iterations: int = Field(ge=1, le=MAX_PBKDF2_ITERATIONS)
+
+
+class CredentialWrapsResponse(BaseModel):
+    wrap_revision: int
+    auth: StoredAuthPrivateKeyWrap
+    vault: VaultResponse

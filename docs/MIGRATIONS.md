@@ -218,3 +218,14 @@ without knowing these tables. Normal owner reset explicitly removes temporary
 stages. A downgrade drops only the temporary tables; active vault records remain.
 The synthetic migration regression and seeded adoption/upgrade rehearsal verify
 ciphertext/revision preservation and foreign-key integrity.
+
+## Credential wrap revision
+
+`site_credential_wrap_revision_v1` follows `site_vault_restore_v1` and adds only
+`users.credential_wrap_revision INTEGER NOT NULL DEFAULT 1`. Existing credential
+wraps, recovery columns, records, indexes and sessions are preserved, including
+legacy KDF iterations. Prior images can read/write the expanded schema and insert
+accounts using the database default. Finish replacing older processes before
+enabling the new rotation UI: an older image's wrap writers cannot advance the
+new revision. The synthetic upgrade/downgrade regression and seeded adoption/upgrade
+rehearsal verify preservation and an empty final model diff.

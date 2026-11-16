@@ -88,6 +88,9 @@ def vault_update_wraps(
     db: Session = Depends(get_db, scope="function"),
 ):
     # Session cookie plus CSRF. Not counted against the login IP or account budgets.
+    from apps.server.identity.credential_rotation import advance_wrap_revision
+
+    advance_wrap_revision(db, current_user.id, current_user.credential_wrap_revision)
     previous = store.get_vault(db, _user_id(current_user))
     previous_iterations = previous.kdf_iterations if previous else None
     store.update_vault_wraps(
