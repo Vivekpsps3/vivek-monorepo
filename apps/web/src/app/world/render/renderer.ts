@@ -1,9 +1,39 @@
+import { addDays } from '../engine';
 import { BAND, CHUNK_H, CHUNK_W, GROUND, type Biome } from '../engine/constants';
-import type { Chunk, Prop } from '../engine/types';
+import type { Chunk } from '../engine/types';
 import { DISTRICT_TILES, PIER_TILES, presentLayoutLots, TOWN_NPCS } from '../town-layout';
 import { buildingSprite, stage, townSpriteUrl, treasuryTier } from '../../town';
 import type { TownHealthStages } from '../../town/health';
 import { SpriteAtlas, worldSpriteUrl } from './atlas';
+
+export interface SceneObject {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  sprite: string;
+}
+
+/** Paint and picking share these bounds, in chunk-local tiles and paint order. */
+export function sceneObjects(chunk: Chunk): SceneObject[] {
+  return [
+    ...chunk.structures.map(item => ({
+      id: `habit:${item.habit}`, x: item.x, y: surfaceAt(chunk, item.x) - 4,
+      w: 4, h: 4, sprite: townSpriteUrl(item.sprite),
+    })),
+    ...chunk.props.map(item => ({
+      id: item.k === 'concept' ? `concept:${item.id}` : item.k === 'artifact' ? `finished:${item.id}:${addDays(chunk.week, Math.floor(item.x / BAND))}` : `pile:${item.x}`,
+      x: item.x, y: surfaceAt(chunk, item.x) - 2, w: 2, h: 2,
+      sprite: worldSpriteUrl(item.k === 'concept' ? 'beacon' : item.k === 'artifact' ? item.kind : 'pile'),
+    })),
+  ];
+}
+
+export function hitObjects(objects: readonly SceneObject[], x: number, y: number, padding = 0): SceneObject[] {
+  return objects.filter(item => x >= item.x - padding && x <= item.x + item.w + padding
+    && y >= item.y - padding && y <= item.y + item.h + padding).reverse();
+}
 
 export interface RenderContext {
   fillRect(x: number, y: number, w: number, h: number): void;
@@ -55,37 +85,30 @@ interface GroundInk {
 
 const GROUND_INK: Record<ThemeName, Record<Biome, GroundInk>> = {
   light: {
-    meadow: { top: '#3d8a5a', fill: '#4e3b2a' },
-    forest: { top: '#2f6b45', fill: '#3a2e22' },
-    snow: { top: '#e7eef2', fill: '#b7c3cc' },
-    desert: { top: '#e2c078', fill: '#c4a15a' },
-    jungle: { top: '#1f7a46', fill: '#3d4a28' },
+    meadow: { top: '#678b68', fill: '#b7a483' },
+    forest: { top: '#4e7355', fill: '#a89b7c' },
+    snow: { top: '#e7eef2', fill: '#c6d2d1' },
+    desert: { top: '#e2c078', fill: '#c9ae79' },
+    jungle: { top: '#1f7a46', fill: '#929975' },
   },
   dark: {
-    meadow: { top: '#2f6e48', fill: '#3a2c20' },
-    forest: { top: '#244e34', fill: '#2c241c' },
+    meadow: { top: '#2f6e48', fill: '#494638' },
+    forest: { top: '#244e34', fill: '#3d4537' },
     snow: { top: '#c5d0d8', fill: '#8e9aa3' },
-    desert: { top: '#c4a15a', fill: '#8a6a32' },
-    jungle: { top: '#19633a', fill: '#2c381e' },
+    desert: { top: '#c9ae79', fill: '#8a6a32' },
+    jungle: { top: '#19633a', fill: '#374936' },
   },
 };
 
-const SKY: Record<ThemeName, string> = { light: '#c5dff5', dark: '#121a24' };
-const HILL: Record<ThemeName, string> = { light: '#9aafc4', dark: '#2a3a4c' };
+const SKY: Record<ThemeName, string> = { light: '#dcebe8', dark: '#192c34' };
+const HILL: Record<ThemeName, string> = { light: '#b5cdc3', dark: '#304b48' };
 const INK: Record<ThemeName, string> = { light: '#1c1916', dark: '#f4f1ea' };
 const MISSING: Record<ThemeName, string> = { light: '#d7cdb8', dark: '#4a4338' };
 const WATER: Record<ThemeName, string> = { light: '#3a7ca5', dark: '#1a3c52' };
 const PLANK: Record<ThemeName, string> = { light: '#9a5f25', dark: '#6e4520' };
 const SEAM = '#1c1916';
-const FOG: Record<ThemeName, string> = {
-  light: 'rgba(28,25,22,.45)',
-  dark: 'rgba(10,14,20,.62)',
-};
-const FOG_DITHER: Record<ThemeName, string> = {
-  light: 'rgba(28,25,22,.85)',
-  dark: 'rgba(10,14,20,.9)',
-};
-const HILL_RISE = 5;
+const ACTIVITY: Record<ThemeName, string> = { light: '#0f6e6a', dark: '#8fd0c8' };
+const HORIZON: Record<ThemeName, string> = { light: 'rgba(237,243,238,.38)', dark: 'rgba(20,30,39,.38)' };
 
 function px(tile: number, scale: number): number {
   return Math.round(tile * scale);
@@ -145,12 +168,6 @@ function blit(
   markMissing(ctx, dx, dy + dh - Math.max(1, Math.round(scale)), scale, theme);
 }
 
-function propUrl(prop: Prop): string {
-  if (prop.k === 'concept') return worldSpriteUrl('beacon');
-  if (prop.k === 'artifact') return worldSpriteUrl(prop.kind);
-  return worldSpriteUrl('pile');
-}
-
 export function renderChunkBitmap(
   canvas: BitmapCanvas,
   chunk: Chunk,
@@ -171,14 +188,23 @@ export function renderChunkBitmap(
   ctx.fillStyle = SKY[theme];
   ctx.fillRect(0, 0, width, height);
 
+  // Restrained distant coast and clouds. Only presentation changes; chunk
+  // heights, biome assignments and all generated object positions stay intact.
+  ctx.fillStyle = theme === 'light' ? '#f6eed4' : '#ced8bf';
+  ctx.fillRect(px(43, scale), px(3, scale), px(2, scale), px(2, scale));
+  ctx.fillStyle = theme === 'light' ? '#f0f5ed' : '#3a5055';
+  for (const [x, y, w] of [[5, 4, 7], [8, 3, 3], [29, 6, 8], [32, 5, 3]]) {
+    ctx.fillRect(px(x, scale), px(y, scale), px(w, scale), px(1, scale));
+  }
+  for (let x = 0; x < CHUNK_W; x++) {
+    const ridge = 10 + Math.floor(2 * Math.sin(x / 9) + Math.cos(x / 4));
+    ctx.fillStyle = HILL[theme];
+    ctx.fillRect(px(x, scale), px(ridge, scale), px(1, scale), px(CHUNK_H - ridge, scale));
+  }
+
   const columns = Math.min(CHUNK_W, chunk.heights.length);
   for (let x = 0; x < columns; x++) {
     const surface = surfaceAt(chunk, x);
-    const hillTop = Math.max(0, surface - HILL_RISE);
-    if (hillTop < surface) {
-      ctx.fillStyle = HILL[theme];
-      ctx.fillRect(px(x, scale), px(hillTop, scale), px(1, scale), px(surface - hillTop, scale));
-    }
     if (surface >= CHUNK_H) continue;
     const colors = ink[biomeAt(chunk, x)];
     ctx.fillStyle = colors.top;
@@ -191,14 +217,9 @@ export function renderChunkBitmap(
   }
 
   for (const decor of chunk.decor) blitSprite(ctx, atlas, worldSpriteUrl(decor.kind), decor.x, surfaceAt(chunk, decor.x), 2, 3, scale, theme);
-  for (const structure of chunk.structures) {
-    blitSprite(ctx, atlas, townSpriteUrl(structure.sprite), structure.x, surfaceAt(chunk, structure.x), 4, 4, scale, theme);
+  for (const item of sceneObjects(chunk)) {
+    blit(ctx, atlas, item.sprite, px(item.x, scale), px(item.y, scale), px(item.w, scale), px(item.h, scale), scale, theme);
   }
-  for (const prop of chunk.props) blitSprite(ctx, atlas, propUrl(prop), prop.x, surfaceAt(chunk, prop.x), 2, 2, scale, theme);
-
-  ctx.fillStyle = INK[theme];
-  ctx.font = fontOf(scale);
-  ctx.fillText(chunk.week, 1, Math.max(1, Math.round(scale)));
 }
 
 function blitSprite(
@@ -282,12 +303,6 @@ function fogBlocked(tile: number, districtOrigin: number): boolean {
   return (tile >= districtOrigin && tile < districtEnd) || (tile >= districtEnd && tile < seaEnd);
 }
 
-function ditherEdge(ctx: RenderContext, x: number, height: number, color: string): void {
-  ctx.fillStyle = color;
-  const edge = Math.round(x);
-  for (let y = 0; y < height; y += 2) ctx.fillRect(edge, y, 1, 1);
-}
-
 export function paintViewport(ctx: RenderContext, args: {
   scale: number;
   cameraX: number;
@@ -297,6 +312,8 @@ export function paintViewport(ctx: RenderContext, args: {
   fogTiles: readonly { tile: number }[];
   chests: readonly { tile: number; visual: 'sealed' | 'gold' | 'none' }[];
   selectionTile: number | null;
+  selectionObject?: SceneObject | null;
+  futureTiles?: readonly { tile: number }[];
   district: ReturnType<typeof districtPaint> | null;
   districtOrigin: number;
   showPier: boolean;
@@ -345,16 +362,17 @@ export function paintViewport(ctx: RenderContext, args: {
     }
   }
 
-  const fogTiles = new Set(args.fogTiles.map(entry => entry.tile));
-  for (const tile of fogTiles) {
-    if (fogBlocked(tile, args.districtOrigin)) continue;
-    if (!sees(tile, tile + 1, args.cameraX, viewEnd)) continue;
-    const x = px(tile - args.cameraX, scale);
-    ctx.fillStyle = FOG[theme];
-    ctx.fillRect(x, 0, px(1, scale), height);
-    const veil = (neighbor: number): boolean => fogTiles.has(neighbor) && !fogBlocked(neighbor, args.districtOrigin);
-    if (!veil(tile - 1)) ditherEdge(ctx, x, height, FOG_DITHER[theme]);
-    if (!veil(tile + 1)) ditherEdge(ctx, x + scale - 1, height, FOG_DITHER[theme]);
+  // Activity is a small ground marker, never a veil over unrecorded life.
+  ctx.fillStyle = ACTIVITY[theme];
+  for (const { tile } of args.fogTiles) {
+    if (fogBlocked(tile, args.districtOrigin) || !sees(tile, tile + 1, args.cameraX, viewEnd)) continue;
+    ctx.fillRect(px(tile - args.cameraX, scale), height - px(1, scale), px(1, scale), Math.max(2, scale / 3));
+  }
+  ctx.fillStyle = HORIZON[theme];
+  for (const { tile } of args.futureTiles ?? []) {
+    if (sees(tile, tile + 1, args.cameraX, viewEnd)) {
+      ctx.fillRect(px(tile - args.cameraX, scale), 0, px(1, scale), height);
+    }
   }
 
   for (const chest of args.chests) {
@@ -366,12 +384,19 @@ export function paintViewport(ctx: RenderContext, args: {
       atlas,
       worldSpriteUrl(id),
       px(chest.tile - args.cameraX, scale),
-      px(GROUND - 1, scale),
-      px(1, scale),
-      px(1, scale),
+      px(GROUND - 2, scale),
+      px(2, scale),
+      px(2, scale),
       scale,
       theme,
     );
+  }
+
+  if (args.selectionObject) {
+    const item = args.selectionObject;
+    ctx.strokeStyle = INK[theme];
+    ctx.strokeRect(px(item.x - args.cameraX, scale) - 3, px(item.y, scale) - 3,
+      px(item.w, scale) + 6, px(item.h, scale) + 6);
   }
 
   if (args.selectionTile != null && Number.isFinite(args.selectionTile)) {

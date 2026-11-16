@@ -18,10 +18,39 @@ export function worldSpriteUrl(id: string): string {
 function loadImage(src: string): Promise<CanvasImageSource> {
   return new Promise((resolve, reject) => {
     const image = new Image();
-    image.onload = () => resolve(image);
+    image.onload = () => resolve(trimSprite(image));
     image.onerror = () => reject(new Error('sprite failed to load'));
     image.src = src;
   });
+}
+
+/** Existing art has generous transparent gutters. Keep its aspect and baseline
+ * while using the assigned scene footprint, instead of painting a tiny mark. */
+function trimSprite(image: HTMLImageElement): CanvasImageSource {
+  if (!image.naturalWidth || !image.naturalHeight) return image;
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext('2d');
+  if (!context) return image;
+  context.drawImage(image, 0, 0);
+  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+  let left = canvas.width, right = -1, top = canvas.height, bottom = -1;
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      if (data[(y * canvas.width + x) * 4 + 3] === 0) continue;
+      left = Math.min(left, x); right = Math.max(right, x);
+      top = Math.min(top, y); bottom = Math.max(bottom, y);
+    }
+  }
+  if (right < left || bottom < top) return image;
+  const width = right - left + 1, height = bottom - top + 1;
+  const side = Math.max(width, height);
+  canvas.width = side;
+  canvas.height = side;
+  context.imageSmoothingEnabled = false;
+  context.drawImage(image, left, top, width, height, Math.floor((side - width) / 2), side - height, width, height);
+  return canvas;
 }
 
 function isSameOrigin(src: string): boolean {

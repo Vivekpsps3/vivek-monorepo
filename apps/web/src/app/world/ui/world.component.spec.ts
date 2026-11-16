@@ -367,7 +367,8 @@ describe('World production controller ownership', () => {
       channel.postMessage({ version: 1, userId: 7, kind: 'signout', tabId: financeTabId() });
       await new Promise(resolve => setTimeout(resolve, 30));
       channel.close();
-      expect(cleared).toEqual([owners[1], owners[1], owners[1], owners[1]]);
+      expect(cleared).toEqual([owners[1]]);
+      expect(second.componentInstance.view()).toBeNull();
 
       second.destroy();
       second = undefined;
@@ -377,7 +378,7 @@ describe('World production controller ownership', () => {
 
       session.cleared$.next();
       window.dispatchEvent(new StorageEvent('storage', { key: 'finance-vault-lock', newValue: '1' }));
-      expect(cleared).toEqual([owners[1], owners[1], owners[1], owners[1]]);
+      expect(cleared).toEqual([owners[1]]);
     } finally {
       first?.destroy();
       second?.destroy();

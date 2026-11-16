@@ -16,7 +16,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { NavigationStart, Router } from '@angular/router';
+import { NavigationEnd, NavigationStart, Router, RouterLink } from '@angular/router';
 import { filter } from 'rxjs';
 import {
   ThemeService,
@@ -33,6 +33,9 @@ import { FIXED_LOTS, weeksKeptRun, type TownResponse } from '../../town';
 import { loadTownHealthStages, type TownHealthStages } from '../../town/health';
 import { BAND, CHEST_X, CHUNK_H, CHUNK_W, dayIndex } from '../engine';
 import {
+  addIsoDays,
+  isoMonday,
+  readingDay,
   applyCamera,
   bandAt,
   bitmapKey,
@@ -41,7 +44,6 @@ import {
   inertiaFactor,
   isTap,
   litSummary,
-  panDurationMs,
   prefersReducedMotion,
   prependedWeekCount,
   readFogEnabled,
@@ -50,7 +52,6 @@ import {
   scaleForWidth,
   shouldPage,
   shouldScheduleFrame,
-  snapWeek,
   tileOfDay,
   writeFogEnabled,
   type BitmapCache,
@@ -60,6 +61,8 @@ import {
 } from '../logic';
 import { SpriteAtlas, worldSpriteUrl } from '../render/atlas';
 import {
+  hitObjects,
+  sceneObjects,
   districtPaint,
   paintViewport,
   renderChunkBitmap,
@@ -101,6 +104,7 @@ export interface WorldView {
 
 export interface ExplorerController {
   loadInitial(signal: AbortSignal): Promise<void>;
+  ensureWeek?(week: string, signal: AbortSignal): Promise<void>;
   pageOlder(signal: AbortSignal, force?: boolean): Promise<void>;
   refetchWeeks(weeks: readonly string[], signal: AbortSignal): Promise<void>;
   applyConceptEdit(edit: ConceptEdit, signal: AbortSignal): Promise<void>;
@@ -178,7 +182,7 @@ function connectController(): ExplorerController {
 
 @Component({
   selector: 'app-world',
-  imports: [UiButtonComponent, UiEmptyStateComponent, ConceptSheetComponent],
+  imports: [RouterLink, UiButtonComponent, UiEmptyStateComponent, ConceptSheetComponent],
   templateUrl: './world.component.html',
   styleUrl: './world.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -200,6 +204,14 @@ export class WorldComponent {
   private readonly panelRef = viewChild<ElementRef<HTMLElement>>('weekPanel');
 
   readonly mode = signal<'list' | 'map'>('map');
+  readonly selectedDate = signal('');
+  readonly selectedItemId = signal<string | null>(null);
+  readonly choices = signal<ReadingItem[]>([]);
+  readonly dateBusy = signal(false);
+  readonly historyBusy = signal(false);
+  private navigationId = 0;
+  private dateWork = new AbortController();
+  private followingSelection = false;
   readonly reduced = signal(false);
   readonly fogOn = signal(true);
   readonly view = signal<WorldView | null>(null);
@@ -224,7 +236,6 @@ export class WorldComponent {
   private work = new AbortController();
   private disposed = false;
   private placed = false;
-  private painted = false;
   private dragging = false;
   private moving = false;
   private pendingDrag = false;
@@ -232,10 +243,10 @@ export class WorldComponent {
   private frameQueued = false;
   private raf = 0;
   private bootId = 0;
+  private financeEpoch = 0;
   private slowTimer = 0;
   private paging = false;
   private pointer: { id: number; x: number; y: number; lastX: number } | null = null;
-  private anim: { from: number; to: number; start: number; dur: number } | null = null;
   private observer?: ResizeObserver;
   private readonly cleanups: Array<() => void> = [];
 
@@ -258,7 +269,7 @@ export class WorldComponent {
   });
 
   readonly centerReading = computed(() => {
-    const week = this.centerWeek();
+    const week = this.selectedDate() ? isoMonday(this.selectedDate()) : this.centerWeek();
     const snap = this.view();
     if (!week || !snap || this.inTown()) return null;
     const source = this.weeksOldest().find(item => item.week === week);
@@ -267,20 +278,69 @@ export class WorldComponent {
     return readingWeek(source, chest);
   });
 
+  readonly activeWeek = computed(() => this.weeksOldest().find(week => week.week === this.centerReading()?.week) ?? null);
+  readonly dayItems = computed(() => {
+    const week = this.activeWeek();
+    return week && this.selectedDate() ? readingDay(week, this.selectedDate()) : [];
+  });
+  readonly selectedItem = computed<ReadingItem | null>(() => {
+    const reading = this.centerReading();
+    const id = this.selectedItemId();
+    const item = reading?.items.find(item => item.id === id);
+    if (item) return item;
+    if (reading && id === `budget:${reading.week}`) return {
+      id, kind: 'budget', title: 'Weekly spending plan', date: reading.week,
+      detail: 'Unlock Finance to view this completed week’s spending-plan status.',
+    };
+    return null;
+  });
+  readonly dayStrip = computed(() => {
+    const week = this.centerReading()?.week;
+    const source = this.activeWeek();
+    const today = this.serverToday();
+    if (!week || !source) return [];
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = addIsoDays(week, index);
+      const count = readingDay(source, date).length;
+      return { date, name: this.formatDate(date, { weekday: 'short' }), number: Number(date.slice(8)), count, future: date > today };
+    });
+  });
+  readonly selectedScene = computed(() => {
+    const index = this.weeksOldest().findIndex(week => week.week === this.centerReading()?.week);
+    const loaded = this.view()?.chunks.find(chunk => chunk.week.week === this.centerReading()?.week);
+    const object = loaded && sceneObjects(loaded.chunk).find(item => item.id === this.selectedItemId());
+    if (loaded && this.selectedItemId() === `budget:${loaded.week.week}`) return {
+      id: this.selectedItemId()!, x: index * CHUNK_W + loaded.chunk.chest.x,
+      y: 14, w: 2, h: 2, sprite: worldSpriteUrl('chest-sealed'),
+    };
+    return object ? { ...object, x: object.x + index * CHUNK_W } : null;
+  });
+  readonly weekItemCount = computed(() => {
+    const week = this.activeWeek();
+    return week ? week.trips.length + week.finished.length + (week.finished_more ?? 0) + week.concepts.length
+      + week.habits.filter(habit => habit.days.some(day => day >= week.week && day <= addIsoDays(week.week, 6))).length : 0;
+  });
+  readonly weekTitle = computed(() => {
+    const week = this.centerReading()?.week;
+    return week ? `${this.formatDate(week, { day: 'numeric', month: 'short' })} – ${this.formatDate(addIsoDays(week, 6), { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Your journey';
+  });
+  readonly dayState = computed(() => {
+    if (this.error()) return 'Activity unavailable';
+    if (this.selectedDate() > this.serverToday()) return 'On the horizon';
+    return this.dayItems().length ? 'Recorded activity' : 'No recorded activity';
+  });
   readonly liveText = computed(() => {
     if (!this.view()) return '';
     if (this.inTown()) return WORLD_COPY.town;
-    const reading = this.centerReading();
-    if (!reading) return '';
-    const count = reading.items.length;
-    return `${reading.label}. ${count === 1 ? '1 item' : `${count} items`}.`;
+    const count = this.dayItems().length;
+    return this.selectedDate() ? `${this.selectedDate()}. ${count} recorded ${count === 1 ? 'item' : 'items'}.` : '';
   });
 
   readonly litText = computed(() => {
     const snap = this.view();
     if (!snap?.meta) return '';
     const weeks = this.weeksOldest();
-    const rows = (snap.chunks ?? []).map(chunk => ({ week: chunk.week.week, lit: chunk.chunk.lit ?? [] }));
+    const rows = (snap.chunks ?? []).map(chunk => ({ week: chunk.week.week, lit: (chunk.chunk.lit ?? []).filter((_, day) => addIsoDays(chunk.week.week, day) <= snap.meta!.today) }));
     const oldest = weeks[0]?.week ?? snap.meta.start_week;
     const summary = litSummary(rows, snap.meta.start_week, oldest <= snap.meta.start_week);
     const text = WORLD_COPY.litSummary(summary.lit, summary.total, summary.since);
@@ -289,7 +349,7 @@ export class WorldComponent {
 
   readonly showEmpty = computed(() => {
     if (this.busy() || this.error() || !this.view()) return false;
-    return this.readings().every(week => week.items.length === 0);
+    return this.readings().every(week => week.items.every(item => item.kind === 'budget' || item.kind === 'lit'));
   });
 
   readonly canLoadOlder = computed(() => {
@@ -309,17 +369,44 @@ export class WorldComponent {
     });
     this.theme.theme$.pipe(takeUntilDestroyed()).subscribe(() => this.paint());
     this.session.cleared$.pipe(takeUntilDestroyed()).subscribe(() => {
-      this.work.abort();
-      this.work = new AbortController();
       this.onFinanceCleared();
+      this.shutdown();
+      const canvas = this.canvasRef()?.nativeElement;
+      if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+      this.view.set(null);
+      this.townData.set(null);
+      this.names.set({});
+      this.error.set(null);
+      this.townFailed.set(false);
+      this.selectedDate.set('');
+      this.selectedItemId.set(null);
+      this.choices.set([]);
+      this.conceptsOpen.set(false);
+      this.busy.set(false);
+      this.bitmaps = createBitmapCache();
+      this.paint();
     });
     this.destroyRef.onDestroy(bindLockNotices(() => this.onFinanceCleared()));
+    // The router may skip a popstate that matches its last URL, because date
+    // selections use Location.go. Listen to the actual browser history too.
+    const history = this.location.subscribe(() => {
+      if (!this.disposed && this.location.path().split('?')[0] === '/town/world' && this.view()?.meta) {
+        void this.restoreQuery();
+      }
+    });
+    this.cleanups.push(() => history.unsubscribe());
     this.router.events.pipe(
       filter((event): event is NavigationStart => event instanceof NavigationStart),
       takeUntilDestroyed(),
     ).subscribe(event => {
       const path = event.url.split(/[?#]/)[0];
       if (path !== '/town/world') this.shutdown();
+    });
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      takeUntilDestroyed(),
+    ).subscribe(() => {
+      if (!this.disposed && this.view()?.meta) void this.restoreQuery();
     });
     this.destroyRef.onDestroy(() => this.shutdown());
     afterNextRender(() => this.bindStage());
@@ -332,6 +419,21 @@ export class WorldComponent {
 
   serverToday(): string {
     return this.view()?.meta?.today ?? '';
+  }
+
+  lastDate(): string {
+    const week = this.view()?.meta?.current_week;
+    return week ? addIsoDays(week, 6) : '';
+  }
+
+  sourceName(item: ReadingItem): string {
+    return { habit: 'Town', finished: 'Media', concept: 'Concepts', trip: 'Travel', lit: 'World', budget: 'Finance' }[item.kind];
+  }
+
+  itemSprite(item: ReadingItem, week: string): string {
+    const loaded = this.view()?.chunks.find(chunk => chunk.week.week === week);
+    const object = loaded && sceneObjects(loaded.chunk).find(row => row.id === item.id);
+    return object?.sprite ?? worldSpriteUrl(item.kind === 'trip' ? 'signpost' : item.kind === 'concept' ? 'beacon' : 'pile');
   }
 
   conceptId(item: ReadingItem): number | null {
@@ -355,30 +457,149 @@ export class WorldComponent {
   }
 
   stepWeek(delta: number): void {
-    this.move({ type: 'week', delta });
+    const base = this.selectedDate() || this.view()?.meta?.current_week;
+    if (base) void this.visitDate(addIsoDays(base, delta * 7), false, this.readDayQuery() !== null);
   }
 
   goToday(): void {
-    const meta = this.view()?.meta;
-    if (!meta) return;
-    const week = snapWeek(meta.today, meta.start_week, meta.current_week);
-    const offset = dayIndex(week, meta.today);
-    const day = offset >= 0 && offset < 7 ? offset : 0;
-    this.move({ type: 'jump', week, day });
+    const today = this.serverToday();
+    if (today) void this.visitDate(today);
   }
 
   onJump(event: Event): void {
     const value = event.target instanceof HTMLInputElement ? event.target.value : '';
-    const meta = this.view()?.meta;
-    if (!value || !meta) return;
-    this.move({ type: 'jump', week: snapWeek(value, meta.start_week, meta.current_week), day: 0 });
+    if (this.validDate(value)) void this.visitDate(value);
   }
 
   onKey(event: KeyboardEvent): void {
     const command = commandForKey(event);
-    if (!command) return;
+    if (!command || this.busy() || this.dateBusy()) return;
     event.preventDefault();
-    this.move(command);
+    if (command.type === 'week') this.stepWeek(command.delta);
+    else if (command.type === 'band') {
+      const date = this.selectedDate() || this.serverToday();
+      if (date) void this.visitDate(addIsoDays(date, command.delta));
+    } else if (command.type === 'home') {
+      const oldest = this.weeksOldest()[0]?.week;
+      if (oldest) void this.visitDate(oldest);
+    } else if (command.type === 'end') this.goTown();
+    else this.move(command);
+  }
+
+  goTown(): void {
+    this.followingSelection = false;
+    this.selectedItemId.set(null);
+    this.choices.set([]);
+    this.move({ type: 'end' });
+  }
+
+  formatDate(date: string, options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }): string {
+    if (!this.validDate(date)) return date;
+    return new Intl.DateTimeFormat('en', { ...options, timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
+  }
+
+  private validDate(value: string): boolean {
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`))
+      && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+  }
+
+  async visitDate(raw: string, replace = false, includeDay = true, recenter = true): Promise<void> {
+    const meta = this.view()?.meta;
+    if (!meta || !this.validDate(raw) || this.disposed) return;
+    const date = raw < meta.start_week ? meta.start_week : raw > addIsoDays(meta.current_week, 6) ? addIsoDays(meta.current_week, 6) : raw;
+    const week = isoMonday(date);
+    const id = ++this.navigationId;
+    this.dateWork.abort();
+    this.dateWork = new AbortController();
+    const signal = AbortSignal.any([this.dateWork.signal, this.work.signal]);
+    this.dateBusy.set(true);
+    this.writeSelectionQuery(week, includeDay ? date : null, replace);
+    try {
+      if (!this.weeksOldest().some(item => item.week === week)) {
+        await this.controller.ensureWeek?.(week, signal);
+        if (signal.aborted || id !== this.navigationId) return;
+        this.pull();
+        if (!this.weeksOldest().some(item => item.week === week)) {
+          this.error.set(this.view()?.error || 'That date could not be loaded. Try again.');
+          return;
+        }
+        await this.refreshArt();
+      }
+      if (signal.aborted || id !== this.navigationId) return;
+      this.error.set(this.view()?.error ?? null);
+      this.selectedDate.set(date);
+      this.selectedItemId.set(null);
+      this.choices.set([]);
+      this.inTown.set(false);
+      this.followingSelection = true;
+      this.centerWeek.set(week);
+      this.centerDay.set(dayIndex(week, date));
+      const index = this.weeksOldest().findIndex(item => item.week === week);
+      this.selectedTile.set(tileOfDay(index, dayIndex(week, date)));
+      if (recenter) this.move({ type: 'jump', week, day: dayIndex(week, date) });
+      this.writeSelectionQuery(week, includeDay ? date : null, replace);
+      this.paint();
+    } finally {
+      if (id === this.navigationId) this.dateBusy.set(false);
+    }
+  }
+
+  inspectItem(item: ReadingItem, week: string): void {
+    const source = this.weeksOldest().find(row => row.week === week);
+    const habit = source?.habits.find(row => item.id === `habit:${row.habit_id}`);
+    const trip = source?.trips.find(row => item.id === `trip:${row.id}`);
+    const selected = this.selectedDate();
+    const sameWeek = !!selected && isoMonday(selected) === week;
+    let occurrence = item.date || week;
+    if (item.kind === 'budget') occurrence = addIsoDays(week, 6);
+    else if (trip) {
+      occurrence = sameWeek && selected >= trip.start && selected <= trip.end ? selected : trip.start;
+    } else if (habit) {
+      occurrence = sameWeek && habit.days.includes(selected) ? selected
+        : habit.days.filter(day => day >= week && day <= addIsoDays(week, 6)).sort()[0] || week;
+    }
+    if (occurrence < week) occurrence = week;
+    const visit = this.visitDate(occurrence, false, true, false);
+    const id = this.navigationId;
+    void visit.then(() => {
+      if (this.disposed || id !== this.navigationId || this.selectedDate() !== occurrence) return;
+      this.selectedItemId.set(item.id);
+      this.choices.set([]);
+      this.focusPanel();
+      this.paint();
+    });
+  }
+
+  itemKind(item: ReadingItem): string {
+    return { habit: 'Habit', finished: 'Media', concept: 'Learning', trip: 'Travel', lit: 'Activity', budget: 'Weekly spending plan' }[item.kind];
+  }
+
+  itemDates(item: ReadingItem): string {
+    if (item.kind !== 'habit') return item.date;
+    const week = this.activeWeek();
+    return week?.habits.find(habit => item.id === `habit:${habit.habit_id}`)?.days
+      .filter(day => day >= week.week && day <= addIsoDays(week.week, 6)).sort().join(', ') ?? '';
+  }
+
+  itemReason(item: ReadingItem): string {
+    if (item.id.startsWith('finished-more:')) return 'Additional completions are counted for this week. Their titles and exact dates are not included in this view.';
+    switch (item.kind) {
+      case 'habit': return 'This building represents recorded habit check-ins for this week. Its appearance reflects this week’s check-ins, not your current Town level.';
+      case 'finished': return 'This keepsake marks a recorded completion in Media. The date comes from the saved completion.';
+      case 'concept': return 'This beacon marks the date you recorded understanding this concept.';
+      case 'trip': return 'This landscape follows a booked or completed trip. Its scenery is illustrative; the title, place and dates come from Travel.';
+      default: return 'This is a weekly summary, separate from your daily activity.';
+    }
+  }
+
+  sourceHref(item: ReadingItem): string | null {
+    const id = item.id.split(':')[1];
+    if (item.kind === 'finished' && /^\d+$/.test(id)) return `/media/item/${id}`;
+    if (item.kind === 'trip' && /^\d+$/.test(id)) return `/travel/trips/${id}?day=${this.selectedDate()}`;
+    if (item.kind === 'habit') return '/town';
+    if (item.kind === 'budget') return this.chests().toolbar?.href ?? WORLD_COPY.reviewSpendingHref;
+    if (item.id.startsWith('finished-more:')) return '/media/library';
+    return null;
   }
 
   openConcepts(id?: number, create = false): void {
@@ -404,6 +625,7 @@ export class WorldComponent {
     this.work.abort();
     this.work = new AbortController();
     this.error.set(null);
+    this.placed = false;
     void this.boot();
   }
 
@@ -431,13 +653,7 @@ export class WorldComponent {
   }
 
   loadOlder(): void {
-    const signal = this.work.signal;
-    void this.controller.pageOlder(signal, true).then(() => {
-      if (signal.aborted) return;
-      const shifted = this.pull();
-      if (shifted) this.syncCenter(false);
-      this.paint();
-    });
+    void this.pageIfNeeded(true);
   }
 
   private async boot(): Promise<void> {
@@ -451,13 +667,13 @@ export class WorldComponent {
       if (signal.aborted || id !== this.bootId) return;
       this.pull();
       this.applySavedFog();
-      this.placeCamera();
+      await this.placeCamera();
       await this.loadDistrict(signal);
       if (signal.aborted || id !== this.bootId) return;
       await this.loadHealth(signal);
       if (signal.aborted || id !== this.bootId) return;
       this.error.set(this.view()?.error ?? null);
-      await this.atlas.ensure(this.artUrls());
+      await this.refreshArt();
       if (signal.aborted || id !== this.bootId) return;
       this.bitmaps = createBitmapCache();
       this.paint();
@@ -475,6 +691,7 @@ export class WorldComponent {
   }
 
   private async applyConceptChange(change: ConceptChange): Promise<void> {
+    if (this.disposed) return;
     if (change.id != null && change.name) {
       const id = change.id;
       const name = change.name;
@@ -487,6 +704,7 @@ export class WorldComponent {
     await this.controller.applyConceptEdit(edit, signal);
     if (signal.aborted || change.kind !== 'weeks') return;
     this.pull();
+    await this.refreshArt();
     this.paint();
   }
 
@@ -513,16 +731,21 @@ export class WorldComponent {
   }
 
   private async loadHealth(signal: AbortSignal): Promise<void> {
+    const epoch = this.financeEpoch;
     try {
       const stages = await loadTownHealthStages(this.injector, signal);
-      if (!signal.aborted) this.health.set(stages);
+      if (!signal.aborted && epoch === this.financeEpoch) this.health.set(stages);
     } catch {
-      if (!signal.aborted) this.health.set({ state: 'unavailable' });
+      if (!signal.aborted && epoch === this.financeEpoch) this.health.set({ state: 'unavailable' });
     }
   }
 
   private onFinanceCleared(): void {
+    if (this.disposed) return;
+    this.financeEpoch += 1;
     this.controller.clearFinance();
+    this.health.set({ state: 'locked' });
+    if (this.selectedItemId()?.startsWith('budget:')) this.selectedItemId.set(null);
     this.pull();
     this.paint();
   }
@@ -549,39 +772,37 @@ export class WorldComponent {
       townStatus: snapshot?.townStatus,
       town: this.townData() ?? this.townFromController() ?? snapshot?.town ?? null,
     });
+    this.error.set(snapshot?.error ?? null);
     const status = snapshot?.townStatus;
     if ((status === 'failed' || status === 'unavailable') && !this.townData()) this.townFailed.set(true);
     else if (this.view()?.town) this.townFailed.set(false);
     const added = prependedWeekCount(before, this.weeksOldest().map(week => week.week));
     if (added <= 0) return false;
     this.model = { x: this.model.x + added * CHUNK_W, reduced: this.reduced() };
+    if (this.selectedTile() != null) this.selectedTile.update(tile => tile == null ? null : tile + added * CHUNK_W);
     this.publishCamera();
     return true;
   }
 
-  private placeCamera(): void {
-    if (this.placed) return;
-    const meta = this.view()?.meta;
-    if (!meta) return;
+  private async placeCamera(): Promise<void> {
+    if (this.placed || !this.view()?.meta) return;
     this.placed = true;
-    const raw = this.readWeekQuery();
-    if (raw) {
-      const snapped = snapWeek(raw, meta.start_week, meta.current_week);
-      this.move({ type: 'jump', week: snapped, day: 0 }, true);
-      this.writeWeekQuery(snapped);
-      return;
-    }
-    this.move({ type: 'end' }, true);
+    await this.restoreQuery();
   }
 
-  private move(command: CameraCommand, instant = false): void {
+  private async restoreQuery(): Promise<void> {
+    const day = this.readDayQuery();
+    const week = this.readWeekQuery();
+    const validWeek = week && this.validDate(week);
+    const date = day && this.validDate(day) ? day : validWeek ? isoMonday(week) : this.serverToday();
+    await this.visitDate(date, true, day !== null || !validWeek);
+  }
+
+  private move(command: CameraCommand): void {
     const layout = this.layout();
     if (command.type === 'select-center') {
       this.model = cameraApi.apply(this.model, command, layout);
-      const band = bandAt(this.model.x, layout.viewportTiles, layout.weeks);
-      const index = Math.max(0, layout.weeks.indexOf(band.week));
-      this.selectedTile.set(tileOfDay(index, band.day));
-      this.syncCenter();
+      this.paint();
       this.focusPanel();
       this.paint();
       return;
@@ -594,40 +815,24 @@ export class WorldComponent {
       this.requestFrame();
       return;
     }
-    const next = cameraApi.apply(this.model, command, layout);
-    const duration = instant ? 0 : panDurationMs(this.reduced());
-    if (duration === 0 || next.x === this.model.x) {
-      this.anim = null;
-      this.model = { x: next.x, reduced: this.reduced() };
-      this.moving = false;
-      this.syncCenter();
-      this.paint();
-      return;
-    }
-    this.anim = { from: this.model.x, to: next.x, start: performance.now(), dur: duration };
-    this.moving = true;
-    this.requestFrame();
+    this.model = cameraApi.apply(this.model, command, layout);
+    this.moving = false;
+    this.syncCenter();
+    this.paint();
   }
 
   private requestFrame(): void {
     if (this.frameQueued || this.disposed) return;
     if (!shouldScheduleFrame(this.moving, this.dragging || this.pendingDrag)) return;
     this.frameQueued = true;
-    this.raf = requestAnimationFrame(now => {
+    this.raf = requestAnimationFrame(() => {
       this.frameQueued = false;
-      this.zone.run(() => this.onFrame(now));
+      this.zone.run(() => this.onFrame());
     });
   }
 
-  private onFrame(now: number): void {
-    if (this.anim) {
-      const t = this.anim.dur <= 0 ? 1 : Math.min(1, (now - this.anim.start) / this.anim.dur);
-      this.model = {
-        x: this.anim.from + (this.anim.to - this.anim.from) * t,
-        reduced: this.reduced(),
-      };
-      if (t >= 1) this.anim = null;
-    } else if (!this.dragging && Math.abs(this.velocity) > 0.02) {
+  private onFrame(): void {
+    if (!this.dragging && Math.abs(this.velocity) > 0.02) {
       const factor = inertiaFactor(this.reduced());
       if (factor === 0) this.velocity = 0;
       else {
@@ -638,7 +843,7 @@ export class WorldComponent {
     }
     const dragActive = this.dragging && this.pendingDrag;
     this.pendingDrag = false;
-    const coasting = this.anim != null || (!this.dragging && Math.abs(this.velocity) > 0.02);
+    const coasting = !this.dragging && Math.abs(this.velocity) > 0.02;
     this.moving = coasting;
     this.syncCenter();
     this.paint();
@@ -647,14 +852,22 @@ export class WorldComponent {
 
   private syncCenter(page = true): void {
     const layout = this.layout();
-    const band = bandAt(this.model.x, layout.viewportTiles, layout.weeks);
-    const changed = band.week !== this.centerWeek() || band.day !== this.centerDay() || band.inTown !== this.inTown();
-    this.centerWeek.set(band.week);
-    this.centerDay.set(band.day);
-    this.inTown.set(band.inTown);
-    if (changed && band.week && !band.inTown) this.writeWeekQuery(band.week);
+    if (!this.followingSelection) {
+      const band = bandAt(this.model.x, layout.viewportTiles, layout.weeks);
+      this.centerWeek.set(band.week);
+      this.centerDay.set(band.day);
+      this.inTown.set(band.inTown);
+      if (!this.dragging && !this.moving && band.week && !band.inTown) {
+        const date = addIsoDays(band.week, band.day);
+        this.selectedDate.set(date);
+        this.selectedItemId.set(null);
+        this.choices.set([]);
+        this.selectedTile.set(tileOfDay(layout.weeks.indexOf(band.week), band.day));
+        this.writeSelectionQuery(band.week, date, true);
+      }
+    }
     this.publishCamera();
-    if (page) void this.pageIfNeeded();
+    if (page && !this.busy() && !this.dateBusy()) void this.pageIfNeeded();
   }
 
   private publishCamera(): void {
@@ -662,21 +875,24 @@ export class WorldComponent {
   }
 
   /** Page older history while the viewport is within four chunks of the loaded edge. */
-  private async pageIfNeeded(): Promise<void> {
-    if (this.paging || this.disposed || !shouldPage(this.model.x, 0) || !this.canLoadOlder()) return;
+  private async pageIfNeeded(force = false): Promise<void> {
+    if (this.paging || this.dateBusy() || this.disposed || (!force && !shouldPage(this.model.x, 0)) || !this.canLoadOlder()) return;
     this.paging = true;
+    this.historyBusy.set(true);
     const signal = this.work.signal;
     let shifted = false;
     try {
-      await this.controller.pageOlder(signal);
+      await this.controller.pageOlder(signal, force);
       if (signal.aborted || this.disposed) return;
       shifted = this.pull();
       if (shifted) this.syncCenter(false);
-      this.paint();
+      await this.refreshArt();
+      if (!signal.aborted) this.paint();
     } finally {
       this.paging = false;
+      this.historyBusy.set(false);
     }
-    if (shifted) await this.pageIfNeeded();
+    if (shifted && !force) await this.pageIfNeeded();
   }
 
   private readWeekQuery(): string | null {
@@ -686,12 +902,20 @@ export class WorldComponent {
     return week?.trim() ? week.trim() : null;
   }
 
-  private writeWeekQuery(week: string): void {
-    const meta = this.view()?.meta;
-    if (!meta) return;
-    const snapped = snapWeek(week, meta.start_week, meta.current_week);
-    if (this.readWeekQuery() === snapped) return;
-    this.location.replaceState('/town/world', `week=${snapped}`);
+  private readDayQuery(): string | null {
+    const path = this.location.path();
+    return new URLSearchParams(path.split('?')[1] ?? '').get('day');
+  }
+
+  private writeSelectionQuery(week: string, day: string | null, replace: boolean): void {
+    const params = new URLSearchParams(this.location.path().split('?')[1] ?? '');
+    params.set('week', week);
+    if (day) params.set('day', day);
+    else params.delete('day');
+    const query = params.toString();
+    if (this.location.path() === `/town/world?${query}`) return;
+    if (replace) this.location.replaceState('/town/world', query);
+    else this.location.go('/town/world', query);
   }
 
   private layout(): CameraLayout {
@@ -715,7 +939,7 @@ export class WorldComponent {
     return this.cssWidth() / this.scaleNow();
   }
 
-  private scaleNow(): 2 | 3 {
+  private scaleNow(): number {
     return scaleForWidth(this.cssWidth());
   }
 
@@ -763,11 +987,20 @@ export class WorldComponent {
 
   private artUrls(): string[] {
     const urls = WORLD_ART.map(id => worldSpriteUrl(id));
+    for (const loaded of this.view()?.chunks ?? []) {
+      for (const object of sceneObjects(loaded.chunk)) urls.push(object.sprite);
+    }
     const district = this.district();
     if (!district) return urls;
     for (const lot of district.lots) if (lot.spriteUrl) urls.push(lot.spriteUrl);
     for (const npc of district.npcs) urls.push(npc.spriteUrl);
     return urls;
+  }
+
+  private async refreshArt(): Promise<void> {
+    await this.atlas.ensure(this.artUrls());
+    if (this.disposed) return;
+    this.bitmaps = createBitmapCache();
   }
 
   private paint(): void {
@@ -777,8 +1010,10 @@ export class WorldComponent {
     const scale = this.scaleNow();
     const cssHeight = CHUNK_H * scale;
     const dpr = Math.max(1, window.devicePixelRatio || 1);
-    canvas.width = Math.round(cssWidth * dpr);
-    canvas.height = Math.round(cssHeight * dpr);
+    const width = Math.round(cssWidth * dpr);
+    const height = Math.round(cssHeight * dpr);
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
     canvas.style.width = `${cssWidth}px`;
     canvas.style.height = `${cssHeight}px`;
     const ctx = canvas.getContext('2d');
@@ -788,7 +1023,6 @@ export class WorldComponent {
     const snap = this.view();
     const weeks = this.weeksOldest();
     if (!snap || weeks.length === 0) {
-      if (this.painted) return;
       ctx.clearRect(0, 0, cssWidth, cssHeight);
       return;
     }
@@ -815,14 +1049,19 @@ export class WorldComponent {
       if (source) bitmaps.push({ originTile: tileOfDay(index, 0), source });
     }
     const fogTiles: { tile: number }[] = [];
+    const futureTiles: { tile: number }[] = [];
     const meta = snap.meta;
-    if (this.fogOn() && meta) {
+    if (meta) {
       for (let index = start; index <= end; index += 1) {
         const loaded = byWeek.get(weeks[index].week);
         if (!loaded) continue;
         fogMask(loaded.chunk.lit ?? [], weeks[index].week, meta.current_week, meta.today).forEach((fog, day) => {
-          if (!fog) return;
-          for (let offset = 0; offset < BAND; offset += 1) fogTiles.push({ tile: tileOfDay(index, day) + offset });
+          const future = addIsoDays(weeks[index].week, day) > meta.today;
+          for (let offset = 0; offset < BAND; offset += 1) {
+            const entry = { tile: tileOfDay(index, day) + offset };
+            if (future) futureTiles.push(entry);
+            else if (this.fogOn() && !fog) fogTiles.push(entry);
+          }
         });
       }
     }
@@ -842,42 +1081,58 @@ export class WorldComponent {
       fogTiles,
       chests,
       selectionTile: this.selectedTile(),
+      selectionObject: this.selectedScene(),
+      futureTiles,
       district: this.district(),
       districtOrigin: tileOfDay(weeks.length, 0),
       showPier: true,
       atlas: this.atlas,
     });
-    this.painted = true;
-  }
-
-  private conceptAt(tile: number): number | null {
-    const weeks = this.layout().weeks;
-    const index = Math.floor(tile / CHUNK_W);
-    if (index < 0 || index >= weeks.length) return null;
-    const loaded = (this.view()?.chunks ?? []).find(chunk => chunk.week.week === weeks[index]);
-    if (!loaded) return null;
-    const local = tile - index * CHUNK_W;
-    for (const prop of loaded.chunk.props) {
-      if (prop.k === 'concept' && local >= prop.x && local < prop.x + 2) return prop.id;
+    const visibleCount = Math.max(0, end - start + 1);
+    if (bitmaps.length < visibleCount) {
+      this.pendingDrag = true;
+      this.requestFrame();
     }
-    return null;
   }
 
-  private selectAt(clientX: number): void {
+  private selectAt(clientX: number, clientY: number): void {
     const rect = this.canvasRef()?.nativeElement.getBoundingClientRect();
-    const local = rect ? clientX - rect.left : 0;
-    const tile = this.model.x + local / this.scaleNow();
-    const concept = this.conceptAt(tile);
-    if (concept != null) {
-      this.openConcepts(concept);
+    if (!rect || !this.view()?.meta || this.busy() || this.dateBusy()) return;
+    const tile = this.model.x + (clientX - rect.left) / this.scaleNow();
+    const y = (clientY - rect.top) / this.scaleNow();
+    const weeks = this.weeksOldest();
+    const index = Math.floor(tile / CHUNK_W);
+    if (index >= weeks.length) {
+      this.goTown();
+      this.focusPanel();
       return;
     }
-    const layout = this.layout();
-    const index = Math.min(Math.max(layout.weeks.length - 1, 0), Math.max(0, Math.floor(tile / CHUNK_W)));
+    if (index < 0) return;
+    const week = weeks[index];
+    const loaded = this.view()?.chunks.find(chunk => chunk.week.week === week.week);
+    const objects = loaded ? hitObjects(sceneObjects(loaded.chunk), tile - index * CHUNK_W, y, 0.4) : [];
+    const reading = readingWeek(week, this.chests().weeks.find(chest => chest.week === week.week));
+    const matches = objects.flatMap(object => {
+      if (object.id.startsWith('pile:')) return reading.items.filter(item => item.kind === 'concept' || item.kind === 'finished');
+      const item = reading.items.find(row => row.id === object.id);
+      return item ? [item] : [];
+    }).filter((item, i, all) => all.findIndex(row => row.id === item.id) === i);
+    const chest = this.chests().weeks.find(item => item.week === week.week);
+    const chestX = loaded?.chunk.chest.x ?? CHEST_X;
+    if (chest && chest.visual !== 'none' && tile - index * CHUNK_W >= chestX && tile - index * CHUNK_W <= chestX + 2 && y >= 14 && y <= 16) {
+      matches.push({ id: `budget:${week.week}`, kind: 'budget', title: 'Weekly spending plan', detail: chest.line ?? 'Unlock Finance to view this week.', date: '' });
+    }
     const day = Math.min(6, Math.max(0, Math.floor((tile - index * CHUNK_W) / BAND)));
-    this.selectedTile.set(layout.weeks.length ? tileOfDay(index, day) : null);
-    this.focusPanel();
-    this.paint();
+    if (matches.length === 1) this.inspectItem(matches[0], week.week);
+    else {
+      const visit = this.visitDate(addIsoDays(week.week, day), false, true, false);
+      const id = this.navigationId;
+      void visit.then(() => {
+        if (this.disposed || id !== this.navigationId) return;
+        this.choices.set(matches);
+        this.focusPanel();
+      });
+    }
   }
 
   private focusPanel(): void {
@@ -890,28 +1145,36 @@ export class WorldComponent {
     const move = (event: PointerEvent) => this.onPointerMove(event);
     const down = (event: PointerEvent) => this.onPointerDown(event);
     const up = (event: PointerEvent) => this.endPointer(event);
+    const cancel = (event: PointerEvent) => this.endPointer(event, true);
     const wheel = (event: WheelEvent) => this.onWheel(event);
     stage.addEventListener('pointerdown', down);
     stage.addEventListener('pointermove', move);
     stage.addEventListener('pointerup', up);
-    stage.addEventListener('pointercancel', up);
+    stage.addEventListener('pointercancel', cancel);
     stage.addEventListener('wheel', wheel, { passive: false });
     this.cleanups.push(() => {
       stage.removeEventListener('pointerdown', down);
       stage.removeEventListener('pointermove', move);
       stage.removeEventListener('pointerup', up);
-      stage.removeEventListener('pointercancel', up);
+      stage.removeEventListener('pointercancel', cancel);
       stage.removeEventListener('wheel', wheel);
     });
     if (typeof ResizeObserver !== 'undefined') {
-      this.observer = new ResizeObserver(() => this.zone.run(() => this.paint()));
+      this.observer = new ResizeObserver(() => this.zone.run(() => {
+        const date = this.selectedDate();
+        if (this.inTown()) this.model = cameraApi.apply(this.model, { type: 'end' }, this.layout());
+        else if (date && !this.dragging) {
+          this.model = cameraApi.apply(this.model, { type: 'jump', week: isoMonday(date), day: dayIndex(isoMonday(date), date) }, this.layout());
+        }
+        this.paint();
+      }));
       this.observer.observe(stage);
     }
     this.paint();
   }
 
   private onPointerDown(event: PointerEvent): void {
-    if (event.button !== 0) return;
+    if (this.mode() === 'list' || event.button !== 0 || this.pointer || this.busy() || this.dateBusy()) return;
     this.pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX };
     this.velocity = 0;
     const target = event.currentTarget;
@@ -927,8 +1190,9 @@ export class WorldComponent {
     if (!this.dragging) {
       if (isTap(distance)) return;
       this.dragging = true;
+      this.followingSelection = false;
+      this.selectedItemId.set(null);
       this.moving = true;
-      active.lastX = event.clientX;
     }
     const dxTiles = -(event.clientX - active.lastX) / this.scaleNow();
     active.lastX = event.clientX;
@@ -937,7 +1201,7 @@ export class WorldComponent {
     this.move({ type: 'drag', dxTiles });
   }
 
-  private endPointer(event: PointerEvent): void {
+  private endPointer(event: PointerEvent, cancelled = false): void {
     const active = this.pointer;
     if (!active || event.pointerId !== active.id) return;
     const distance = Math.hypot(event.clientX - active.x, event.clientY - active.y);
@@ -945,10 +1209,19 @@ export class WorldComponent {
     this.pointer = null;
     this.dragging = false;
     this.pendingDrag = false;
+    const target = event.currentTarget;
+    if (target instanceof HTMLElement && target.hasPointerCapture?.(event.pointerId)) target.releasePointerCapture(event.pointerId);
+    if (cancelled) {
+      this.velocity = 0;
+      this.moving = false;
+      this.syncCenter();
+      this.paint();
+      return;
+    }
     if (!wasDragging && isTap(distance)) {
       this.velocity = 0;
       this.moving = false;
-      this.selectAt(event.clientX);
+      this.selectAt(event.clientX, event.clientY);
       return;
     }
     if (inertiaFactor(this.reduced()) === 0 || Math.abs(this.velocity) < 0.02) {
@@ -963,9 +1236,11 @@ export class WorldComponent {
   }
 
   private onWheel(event: WheelEvent): void {
+    if (this.mode() === 'list') return;
     const delta = event.shiftKey ? event.deltaY : event.deltaX;
     if (!delta) return;
     event.preventDefault();
+    this.followingSelection = false;
     this.velocity = 0;
     this.moving = true;
     this.move({ type: 'drag', dxTiles: delta / this.scaleNow() });
@@ -988,6 +1263,7 @@ export class WorldComponent {
     this.disposed = true;
     this.clearSlow();
     this.work.abort();
+    this.dateWork.abort();
     cancelAnimationFrame(this.raf);
     this.observer?.disconnect();
     for (const cleanup of this.cleanups) cleanup();

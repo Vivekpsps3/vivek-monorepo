@@ -19,8 +19,10 @@ export interface CameraLayout {
   weeks: readonly string[];
 }
 
-export function scaleForWidth(cssWidth: number): 2 | 3 {
-  return cssWidth < 1024 ? 2 : 3;
+export function scaleForWidth(cssWidth: number): number {
+  // A phone shows a few days; desktop shows about a week. Structures must
+  // remain recognizable, rather than shrinking a whole history into a ribbon.
+  return Math.max(10, Math.min(18, Math.floor(cssWidth / CHUNK_W)));
 }
 
 export function prefersReducedMotion(match?: (query: string) => boolean): boolean {
