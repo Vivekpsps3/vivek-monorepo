@@ -68,10 +68,10 @@ def _insert_concept(
     )
 
 
-def test_vault_restore_is_the_only_head(tmp_path) -> None:
+def test_credential_wrap_revision_is_the_only_head(tmp_path) -> None:
     database = tmp_path / "heads.db"
     config = make_config(f"sqlite:///{database}")
-    assert _heads(config) == ["site_vault_restore_v1"]
+    assert _heads(config) == ["site_credential_wrap_revision_v1"]
 
 
 def test_world_concepts_registered_in_unified_schema() -> None:

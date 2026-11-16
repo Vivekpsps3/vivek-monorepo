@@ -501,3 +501,31 @@ server {
 `Cross-Origin-Opener-Policy: same-origin` and
 `Cross-Origin-Resource-Policy: same-origin` keep other sites from embedding
 or scripting these responses. They do not split `/travel` from `/finance`.
+
+## Atomic credential rotation
+
+Authenticated clients read `/api/auth/passwordless/credentials` for a coherent pair
+of signing-key and DEK wraps plus `wrap_revision`. A POST to the same route requires
+CSRF, `expected_wrap_revision`, both replacement wraps and a fresh signed
+`credential_rotation` challenge bound to the configured origin and current owner.
+Login and username-change proofs cannot authorize this operation. New wraps obey
+the current KDF floor; historical wraps remain readable at their stored iterations.
+The browser must rewrap the same signing private key and raw DEK locally, with fresh
+salts, rather than exporting a non-extractable key or rewriting encrypted records.
+The server cannot inspect the encrypted key contents to enforce key continuity.
+
+One transaction consumes the proof, compares/advances the shared wrap revision,
+writes both wraps, and revokes the owner's other server sessions. The requesting
+session keeps its existing cookie and CSRF token. An exception, stale revision or
+commit failure rolls back the complete operation, including challenge consumption
+and revocations. A retry after rollback still needs an unexpired proof; a committed
+proof cannot be replayed. Record ciphertext, blind indexes, key versions, signing
+public key and legacy recovery columns are unchanged.
+
+The separate signing/DEK wrap endpoints remain for automatic KDF upgrades until
+the passphrase UI adopts this contract. Both writers advance the shared revision;
+their two calls are not a passphrase-change protocol. Revoking a server session
+cannot erase keys or plaintext already held in a remote browser. Participating
+same-origin tabs must clear local keys through the existing lock lifecycle when
+the passphrase UI completes; cross-origin/offline clients are bounded by their
+next authenticated request and cannot be remotely erased.

@@ -50,6 +50,9 @@ class User(Base):
     auth_kdf_iterations: Mapped[int | None] = mapped_column(Integer, nullable=True)
     auth_wrapped_private_key_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
     auth_recovery_wrapped_private_key_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
+    credential_wrap_revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
     passwordless_enrolled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     birthday: Mapped[date | None] = mapped_column(Date)
     pixels_show_age: Mapped[bool] = mapped_column(

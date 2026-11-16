@@ -21,12 +21,14 @@ from apps.server.identity.auth_decoy import decoy_passwordless_material
 from apps.server.identity.challenge_auth import (
     CHALLENGE_FAILURE_DETAIL,
     CHALLENGE_TTL,
+    PURPOSE_CREDENTIAL_ROTATION,
     PURPOSE_LOGIN,
     bound_challenge_origin,
     issue_challenge,
     render_challenge_message,
     verify_challenge,
 )
+from apps.server.identity.credential_rotation import advance_wrap_revision, store_auth_wrap
 from apps.server.identity.models import AuthEnrollment, User, UserRole, UserSession
 from apps.server.identity.schemas import (
     AdminInvitationResponse,
@@ -35,6 +37,8 @@ from apps.server.identity.schemas import (
     AdminUserUpdate,
     AuthPrivateKeyWrap,
     BootstrapStatusResponse,
+    CredentialRotationRequest,
+    CredentialWrapsResponse,
     InvitationEnrollRequest,
     InvitationPreview,
     LoginResponse,
@@ -46,7 +50,9 @@ from apps.server.identity.schemas import (
     PasswordlessVerifyRequest,
     SelfDataResetRequest,
     SignupPolicyResponse,
+    StoredAuthPrivateKeyWrap,
     UserPublic,
+    VaultResponse,
 )
 from apps.server.identity.session import (
     audit_event,
@@ -117,17 +123,6 @@ def _require_p256_public_key(public_key_b64: str) -> None:
         raise HTTPException(status_code=400, detail="Invalid public key") from exc
     if not isinstance(key, ec.EllipticCurvePublicKey) or not isinstance(key.curve, ec.SECP256R1):
         raise HTTPException(status_code=400, detail="A P-256 public key is required")
-
-
-def _store_auth_wrap(user: User, auth: AuthPrivateKeyWrap) -> None:
-    user.auth_kdf_salt_b64 = auth.kdf_salt_b64
-    user.auth_kdf_iterations = auth.kdf_iterations
-    user.auth_wrapped_private_key_b64 = auth.wrapped_private_key_b64
-    incoming_recovery = auth.recovery_wrapped_private_key_b64 or ""
-    # An empty update must not wipe a stored recovery wrap. The column is unused
-    # by current clients, and KDF re-wrap sends an empty string.
-    if incoming_recovery or not user.auth_recovery_wrapped_private_key_b64:
-        user.auth_recovery_wrapped_private_key_b64 = incoming_recovery
 
 
 def _auth_material(user: User) -> dict:
@@ -209,7 +204,7 @@ def passwordless_bootstrap_first_admin(
     user.auth_public_key_b64 = body.public_key_b64
     user.auth_algorithm = "ECDSA_P256_SHA256"
     user.auth_key_version = 1
-    _store_auth_wrap(user, body.auth)
+    store_auth_wrap(user, body.auth)
     user.passwordless_enrolled_at = utc_now_naive()
     vault_store.create_vault(
         db,
@@ -265,7 +260,7 @@ def passwordless_signup(
     user.auth_public_key_b64 = body.public_key_b64
     user.auth_algorithm = "ECDSA_P256_SHA256"
     user.auth_key_version = 1
-    _store_auth_wrap(user, body.auth)
+    store_auth_wrap(user, body.auth)
     user.passwordless_enrolled_at = utc_now_naive()
     vault_store.create_vault(db, user.id, **body.vault.model_dump())
     audit_event(db, "passwordless_signup", actor_user_id=user.id, target_user_id=user.id)
@@ -329,7 +324,8 @@ def update_passwordless_wraps(
 ):
     # Session cookie plus CSRF. Not counted against the login IP or account budgets.
     previous = current_user.auth_kdf_iterations
-    _store_auth_wrap(current_user, body)
+    advance_wrap_revision(db, current_user.id, current_user.credential_wrap_revision)
+    store_auth_wrap(current_user, body)
     if previous is not None and body.kdf_iterations > previous:
         logger.info(
             "signing-key wrap KDF iterations raised user_id=%s from=%s to=%s",
@@ -339,6 +335,30 @@ def update_passwordless_wraps(
         )
     db.commit()
     return {"ok": True}
+
+
+@router.get("/auth/passwordless/credentials", response_model=CredentialWrapsResponse)
+def credential_wraps(
+    db: Session = Depends(get_db, scope="function"),
+    current_user: User = Depends(get_current_user),
+):
+    return _credential_wraps(db, current_user)
+
+
+@router.post("/auth/passwordless/credentials", response_model=CredentialWrapsResponse)
+def rotate_credentials(
+    body: CredentialRotationRequest,
+    request: Request,
+    db: Session = Depends(get_db, scope="function"),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        result = _rotate_credentials(db, current_user, body, request)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.post("/auth/passwordless/verify", response_model=LoginResponse)
@@ -419,7 +439,7 @@ def enroll_invitation(
     user.auth_public_key_b64 = body.public_key_b64
     user.auth_algorithm = "ECDSA_P256_SHA256"
     user.auth_key_version = 1
-    _store_auth_wrap(user, body.auth)
+    store_auth_wrap(user, body.auth)
     user.passwordless_enrolled_at = utc_now_naive()
     audit_event(db, "passwordless_enrolled", actor_user_id=user.id, target_user_id=user.id)
     csrf = create_session(db, user, request, response)
@@ -695,3 +715,78 @@ def get_admin_metrics(
     db: Session = Depends(get_db, scope="function"), _: User = Depends(get_current_admin)
 ):
     return admin_metrics(db)
+
+
+def _credential_wraps(db: Session, user: User) -> CredentialWrapsResponse:
+    # One joined read binds both wraps to the same revision, including when the
+    # authentication dependency loaded the user before another rotation committed.
+    pair = (
+        db.query(User, vault_store.UserVault)
+        .join(vault_store.UserVault, vault_store.UserVault.user_id == User.id)
+        .filter(User.id == user.id)
+        .populate_existing()
+        .first()
+    )
+    if pair is None or not all(
+        (
+            pair[0].auth_wrapped_private_key_b64,
+            pair[0].auth_kdf_salt_b64,
+            pair[0].auth_kdf_iterations,
+        )
+    ):
+        raise HTTPException(404, "Credential wraps are not enrolled")
+    owner, vault = pair
+    return CredentialWrapsResponse(
+        wrap_revision=owner.credential_wrap_revision,
+        auth=StoredAuthPrivateKeyWrap(
+            kdf_salt_b64=owner.auth_kdf_salt_b64,
+            kdf_iterations=owner.auth_kdf_iterations,
+            wrapped_private_key_b64=owner.auth_wrapped_private_key_b64,
+            recovery_wrapped_private_key_b64="",
+        ),
+        vault=VaultResponse(
+            exists=True,
+            kdf_algorithm=vault.kdf_algorithm,
+            kdf_salt_b64=vault.kdf_salt_b64,
+            kdf_iterations=vault.kdf_iterations,
+            wrapped_dek_b64=vault.wrapped_dek_b64,
+            recovery_wrapped_dek_b64=vault.recovery_wrapped_dek_b64,
+            key_version=vault.key_version,
+        ),
+    )
+
+
+def _rotate_credentials(
+    db: Session, user: User, body: CredentialRotationRequest, request: Request
+) -> CredentialWrapsResponse:
+    origin = bound_challenge_origin(request, PURPOSE_CREDENTIAL_ROTATION)
+    keep = current_session_id(db, request)
+    if keep is None:
+        raise HTTPException(401, "Login required")
+    # Validate both payloads before spending the proof. Stored KDF bounds also
+    # apply to rotations; no record key version or recovery wrap is client mutable.
+    if vault_store._b64_len(body.auth.kdf_salt_b64) < 16:
+        raise HTTPException(400, "KDF salt too short")
+    if vault_store._b64_len(body.auth.wrapped_private_key_b64) < 32:
+        raise HTTPException(400, "Wrapped signing key too short")
+    if body.auth.recovery_wrapped_private_key_b64:
+        raise HTTPException(400, "Recovery key changes are not supported")
+    if not verify_challenge(
+        db,
+        user,
+        body.challenge_id,
+        body.challenge,
+        body.message,
+        body.signature_b64,
+        origin,
+        PURPOSE_CREDENTIAL_ROTATION,
+    ):
+        raise HTTPException(401, CHALLENGE_FAILURE_DETAIL)
+    advance_wrap_revision(db, user.id, body.expected_wrap_revision)
+    store_auth_wrap(user, body.auth)
+    # The second write and revocations belong to the caller's same transaction.
+    vault_store.update_vault_wraps(db, user.id, **body.vault.model_dump())
+    revoke_user_sessions(db, user.id, keep_session_id=keep)
+    audit_event(db, "credential_wraps_rotated", actor_user_id=user.id, target_user_id=user.id)
+    db.flush()
+    return _credential_wraps(db, user)
