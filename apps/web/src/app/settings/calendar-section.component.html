@@ -1,0 +1,35 @@
+<h1>Calendars</h1>
+<ui-card>
+  <h2>Subscribe to a calendar</h2>
+  <p>Anyone with the URL can read the selected feed. Treat it like a password. Finance and Health are excluded.</p>
+  <p>Choose Travel trip dates, departures and open reminders, or saved Media releases and unwatched episodes with known dates. Feeds cover the past week and next five weeks.</p>
+  <p>Times use the selected timezone unless a transport has its own departure zone. All-day dates stay all-day. Your calendar app controls refreshes and may keep downloaded events after revocation.</p>
+  <form (ngSubmit)="create()">
+    <label for="calendar-feed-scope">Calendar</label><select #scopeField id="calendar-feed-scope" name="scope" [(ngModel)]="scope" [disabled]="busy()"><option value="travel">Travel</option><option value="media">Media</option></select>
+    <label>Timezone <input name="timezone" [(ngModel)]="timezone" [disabled]="busy()" maxlength="100" required autocomplete="off" /></label>
+    <ui-button type="submit" [disabled]="busy() || hasScope()" [busy]="busy()">Create subscription</ui-button>
+    @if (hasScope()) { <p>This calendar already has a subscription. Rotate its URL below.</p> }
+  </form>
+  <p #errorText class="error" role="status" tabindex="-1">{{ error() }}</p>
+  @if (error()) { <ui-button variant="secondary" [disabled]="busy()" (clicked)="load()">Reload subscriptions</ui-button> }
+  <p role="status">{{ notice() }}</p>
+  @if (revealed(); as row) {
+    <div class="revealed">
+      <label>One-time calendar URL <input #urlField readonly [value]="row.url" autocomplete="off" spellcheck="false" /></label>
+      <ui-button variant="secondary" (clicked)="copy()">Copy URL</ui-button>
+      <ui-button variant="ghost" (clicked)="hide()">Hide URL</ui-button>
+    </div>
+  }
+</ui-card>
+<ui-card>
+  <h2>Your subscriptions</h2>
+  @if (!feeds().length && !busy()) { <p>No calendar subscriptions.</p> }
+  <ul>
+    @for (feed of feeds(); track feed.id) {
+      <li><div><strong>{{ feed.scope === 'travel' ? 'Travel' : 'Media' }}</strong><p>{{ feed.timezone }}</p></div>
+        <div class="actions"><ui-button variant="secondary" [disabled]="busy()" [ariaLabel]="'Rotate URL for ' + feed.scope" (clicked)="rotate(feed)">Rotate URL</ui-button>
+        <ui-button variant="danger-ghost" [disabled]="busy()" [ariaLabel]="'Revoke URL for ' + feed.scope" (clicked)="revoke(feed)">Revoke URL</ui-button></div>
+      </li>
+    }
+  </ul>
+</ui-card>

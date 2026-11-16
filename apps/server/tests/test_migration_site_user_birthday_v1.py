@@ -23,6 +23,7 @@ INDEX = "ix_episode_progress_user_watched_on"
 # model_diff against current models. These tests stop at this revision, so the
 # explicitly named later objects are the whole drift. Head tests still require [].
 LATER_THAN_BIRTHDAY = {
+    "add_table:calendar_feeds",
     "add_column:users.credential_wrap_revision",
     "add_table:vault_restore_stages",
     "add_index:ix_vault_restore_stages_user_id",

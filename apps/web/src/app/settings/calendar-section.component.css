@@ -1,0 +1,9 @@
+:host { display: grid; gap: var(--space-5); min-width: 0; }
+form, label, .revealed { display: grid; gap: var(--space-2); }
+form, .revealed { margin-block: var(--space-4); }
+input, select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: var(--space-2); background: var(--input-bg, var(--card-bg)); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-md); font: inherit; }
+p { overflow-wrap: anywhere; }
+.error { color: var(--danger); }
+ul { list-style: none; padding: 0; margin: 0; }
+li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-3); padding-block: var(--space-3); border-bottom: 1px solid var(--border-subtle); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }

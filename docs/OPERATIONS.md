@@ -276,3 +276,28 @@ Local Python development uses .local/data/site.db. Docker development uses a
 separate project, subnet, port and named volumes. make test runs domain tests in
 separate processes and browser/unit checks. make test-suite-routes exercises the
 assembled image. scripts/test-site-browser.mjs accepts SITE_TEST_URL and CHROME_BIN.
+
+
+## Calendar subscriptions
+
+Settings → Calendars manages separate Travel and Media read-only feeds. Management
+requires the existing signed-in session and CSRF protection. Creation/rotation
+requires a request origin listed in `CORS_ORIGINS` with HTTPS; forwarded scheme
+handling retains the existing trusted-proxy configuration. The public reader at
+`/calendar/feed.ics` uses a random capability in the `token` query parameter instead
+of session cookies. Only hashes are stored. Rotation invalidates the old capability;
+revocation deletes it. Disabled/deleted owners cannot serve feeds.
+
+Treat a feed URL as a password. Settings shows it once and offers copy/hide; losing
+it requires rotation. Do not paste real URLs into issues, logs, screenshots or probes.
+The application redacts token queries in log messages and exception traces. The
+reviewed edge access format records `$uri` without query strings. Reconfirm that
+format if changing edge logging; deployment does not install a changed vhost.
+
+The saved-calendar projection covers the past seven days through 34 days ahead,
+never calls providers, and excludes Finance/Health. More than 1,000 dated events
+returns an explicit error rather than silently dropping rows. Clients control their
+refresh schedule and may retain events already downloaded after revocation. Private
+ETags reauthorize every request, including 304 responses. Apply the additive
+`site_calendar_feeds_v1` migration through the existing deployment workflow; a PR
+or local synthetic rehearsal is not production activation evidence.

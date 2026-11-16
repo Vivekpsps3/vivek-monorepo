@@ -80,6 +80,7 @@ SERVER_COMPOSITION = {
     "apps/server/main.py": "server factory composes domain routers",
     "apps/server/schema.py": "schema assembly composes domain models",
     "apps/server/search.py": "search aggregation reads travel and media models",
+    "apps/server/calendar.py": "calendar feed composes existing Travel and Media dated projections",
     "apps/server/world/read.py": "world read model reads media, travel, and town tables",
     "apps/server/migrate.py": "offline migrate dynamically loads finance, travel, and media models",
     "apps/server/alembic/versions/site_media_membership_v1.py": (

@@ -143,7 +143,9 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
             exc.status_code,
             detail,
         )
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        return JSONResponse(
+            status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers
+        )
 
     @application.exception_handler(APIError)
     async def api_error_handler(request: Request, exc: APIError):
@@ -255,10 +257,14 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
             )
         return {"status": "ok", "release": release}
 
-    from apps.server.identity import account, birthday
+    from apps.server import calendar
+    from apps.server.identity import account, birthday, calendar_feeds
     from apps.server.identity import routes as identity_routes
     from apps.server.search import router as search_router
 
+    calendar_feeds.redact_capability_logs()
+    application.include_router(calendar_feeds.router)
+    application.include_router(calendar.router)
     application.include_router(identity_routes.router, prefix="/api")
     application.include_router(account.router, prefix="/api")
     application.include_router(birthday.router, prefix="/api")

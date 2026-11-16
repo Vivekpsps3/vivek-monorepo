@@ -18,7 +18,7 @@ from apps.travel.backend.services.leave_math import Bucket, walk_bucket
 
 PARENT = "site_leave_carry_v1"
 REVISION = "site_leave_accrual_v1"
-HEAD = "site_credential_wrap_revision_v1"
+HEAD = "site_calendar_feeds_v1"
 COMPATIBLE = {
     "site_schema_v1",
     "site_auth_challenge_purpose_v2",
@@ -92,10 +92,11 @@ def test_upgrade_preserves_rows_and_keeps_one_daily_head(tmp_path):
     assert current_revision(database) == REVISION
     assert ScriptDirectory.from_config(_cfg(database)).get_heads() == [head_revision()]
     assert head_revision() == HEAD
-    # This historical revision predates restore staging and the credential revision.
+    # This historical revision predates restore staging, credentials and calendar capabilities.
     drift = model_diff(database)
-    assert len(drift) == 4
+    assert len(drift) == 5
     assert {(item[0], item[1].name) for item in drift if item[0] != "add_column"} == {
+        ("add_table", "calendar_feeds"),
         ("add_table", "vault_restore_stages"),
         ("add_index", "ix_vault_restore_stages_user_id"),
         ("add_table", "vault_restore_batches"),

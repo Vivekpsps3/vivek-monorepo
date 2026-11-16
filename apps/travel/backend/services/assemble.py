@@ -653,6 +653,7 @@ def build_summary(
     user_id: int,
     start: date | None = None,
     end: date | None = None,
+    limit: int | None = 50,
 ) -> dict:
     """One owner-scoped response for the next-trip card and the Hub's dated rows."""
     today = today or date.today()
@@ -755,7 +756,7 @@ def build_summary(
             row["id"],
         )
     )
-    return {"today": today, "next_trip": card, "up_next": rows[:50]}
+    return {"today": today, "next_trip": card, "up_next": rows[:limit]}
 
 
 def build_calendar(db, start: date, end: date, today: date | None = None, *, user_id: int) -> dict:

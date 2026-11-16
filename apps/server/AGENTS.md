@@ -2,6 +2,9 @@
 
 [main.py](main.py) composes domains; [database.py](database.py) owns the single
 engine/session lifecycle; [identity](identity/) owns auth/session/credentials.
+[Calendar feeds](calendar.py) compose saved Travel/Media projections; identity
+owns hash-only capabilities and owner-scoped management. URL query tokens must be
+redacted, including exception messages. Reauthorize conditional reads after revocation.
 Town, Pixels and search are server projections. Finance, Travel and Media rules
 remain in their own app directories.
 

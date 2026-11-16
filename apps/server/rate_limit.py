@@ -39,6 +39,8 @@ _auth_ip_buckets: OrderedDict[str, tuple[int, float]] = OrderedDict()
 _auth_account_buckets: OrderedDict[str, tuple[int, float]] = OrderedDict()
 _auth_pair_buckets: OrderedDict[str, tuple[int, float]] = OrderedDict()
 _auth_failed_verify_buckets: OrderedDict[str, tuple[int, float]] = OrderedDict()
+_calendar_ip_buckets: OrderedDict[str, tuple[int, float]] = OrderedDict()
+_calendar_token_buckets: OrderedDict[str, tuple[int, float]] = OrderedDict()
 
 _MAX_BUCKETS = 10_000
 # A missing bucket has no window yet. 0 would mean "since boot", so a host
@@ -65,6 +67,8 @@ def clear_limits() -> None:
         _auth_account_buckets.clear()
         _auth_pair_buckets.clear()
         _auth_failed_verify_buckets.clear()
+        _calendar_ip_buckets.clear()
+        _calendar_token_buckets.clear()
 
 
 def _positive_int(name: str, default: int) -> int:
@@ -230,3 +234,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ):
             return JSONResponse(status_code=429, content={"detail": _RATE_DETAIL})
         return await call_next(request)
+
+
+def enforce_calendar_feed_limit(request: Request, token_hash: str) -> None:
+    """Bound both invalid-capability probing and valid client refreshes. No raw tokens."""
+    if not _consume(_calendar_ip_buckets, _client_key(request), 120) or not _consume(
+        _calendar_token_buckets, token_hash, 30
+    ):
+        raise HTTPException(status_code=429, detail=_RATE_DETAIL, headers={"Retry-After": "60"})

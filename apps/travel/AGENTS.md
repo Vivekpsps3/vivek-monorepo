@@ -9,6 +9,8 @@
 
 Hub summary date windows require both start/end, in order, at most 42 days.
 Omitted dates retain the 14-day/overdue projection and the current next-trip card.
+The calendar feed shares this dated assembly with no 50-row summary display cap;
+its fixed date window and response-size bound belong to server composition.
 
 Preserve currencies as separate Travel amounts: a multi-currency trip total is not
 Finance's USD total. Keep day boundaries, carry/cap/reset/history and hours-per-workday
