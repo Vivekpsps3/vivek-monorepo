@@ -42,4 +42,13 @@ describe('auth-crypto', () => {
     expect(await signChallenge(passphrase, upgraded, message)).toBeTruthy();
     expect(await signChallenge(passphrase, material.wrapped, message)).toBeTruthy();
   });
+  it('rewraps the same signing key under a new passphrase without retaining the old passphrase', async () => {
+    const original = await createSigningKey('current synthetic passphrase', 1_000);
+    const changed = await rewrapSigningKey('current synthetic passphrase', original.wrapped, 2_000, 'next synthetic passphrase');
+    const publicKey = await crypto.subtle.importKey('spki', decodeBase64(original.publicKeyB64).buffer as ArrayBuffer, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    const signature = await signChallenge('next synthetic passphrase', changed, 'synthetic proof');
+    expect(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, publicKey, decodeBase64(signature).buffer as ArrayBuffer, new TextEncoder().encode('synthetic proof'))).toBeTrue();
+    await expectAsync(signChallenge('current synthetic passphrase', changed, 'synthetic proof')).toBeRejected();
+  });
+
 });

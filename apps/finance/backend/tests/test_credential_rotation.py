@@ -206,8 +206,8 @@ def test_stale_revision_rejects_both_writes_and_preserves_sessions(monkeypatch):
     _open_signup(monkeypatch)
     client, key, _a, _v, _d = _signup("owner.name")
     stale = _rotation(client, key)
-    # A legacy KDF writer also participates in the shared revision.
-    assert client.put("/api/auth/passwordless/wraps", json=stale["auth"]).status_code == 200
+    # Another complete atomic rotation wins before this request.
+    assert client.post(ENDPOINT, json=_rotation(client, key)).status_code == 200
     other = _another_session(client, key)
     before = client.get(ENDPOINT).json()
     sessions = _sessions()
@@ -215,8 +215,16 @@ def test_stale_revision_rejects_both_writes_and_preserves_sessions(monkeypatch):
     assert client.get(ENDPOINT).json() == before
     assert _sessions() == sessions
     assert other.get("/api/auth/me").status_code == 200
-    assert client.put("/api/vault/wraps", json=stale["vault"]).status_code == 200
-    assert client.get(ENDPOINT).json()["wrap_revision"] == before["wrap_revision"] + 1
+    # Even a delayed old-release KDF writer cannot overwrite the committed winner.
+    for path, payload in (
+        ("/api/auth/passwordless/wraps", stale["auth"]),
+        ("/api/vault/wraps", stale["vault"]),
+    ):
+        retired = client.put(path, json=payload)
+        assert retired.status_code == 410
+        assert "Reload the app" in retired.json()["detail"]
+        assert client.get(ENDPOINT).json() == before
+        assert _sessions() == sessions
 
 
 @pytest.mark.parametrize(

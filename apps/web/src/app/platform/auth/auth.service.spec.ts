@@ -581,7 +581,8 @@ describe('AuthService passwordless login', () => {
     status.flush({ exists: true, kdf_salt_b64: wraps.kdf_salt_b64, kdf_iterations: wraps.kdf_iterations, wrapped_dek_b64: wraps.wrapped_dek_b64 });
     await pending; expect(await unlock.calls.mostRecent().returnValue).toBeFalse();
     expect([localStorage.getItem('finance-dek'), hasDek(), vault.isUnlocked]).toEqual([null, false, false]);
-    (await nextRequest(http, '/api/auth/passwordless/wraps')).flush({}); localStorage.removeItem('suite-session-ended'); http.verify();
+    http.expectNone('/api/auth/passwordless/wraps'); http.expectNone('/api/auth/passwordless/credentials');
+    localStorage.removeItem('suite-session-ended'); http.verify();
   });
 
   const enrolled = {

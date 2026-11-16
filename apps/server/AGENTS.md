@@ -12,8 +12,8 @@ repository or unit-of-work hierarchy.
 Preserve owner scoping, atomic challenge consumption, canonical origin/purpose,
 commit-before-cookie/response and no sensitive SQL parameters in logs. Credential
 rotation consumes its purpose proof, advances the shared wrap revision, updates both
-wraps and revokes other sessions in one transaction; legacy KDF writers advance
-the same revision. Runtime state
+wraps and revokes other sessions in one transaction. Independent wrap writes are
+retired (410); legacy KDF wraps remain readable and upgrade through rotation. Runtime state
 and a response cookie must describe the same committed winner. Provider I/O releases
 database transaction ownership before waiting.
 

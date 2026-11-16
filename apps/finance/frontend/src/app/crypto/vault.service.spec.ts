@@ -2,13 +2,13 @@ import { HttpClientTestingModule, HttpTestingController, type TestRequest } from
 import { EMPTY, firstValueFrom, Observable, Subject } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { encodeBase64 } from '@vivek/browser';
-import { WrappedSigningKey } from '@vivek/auth';
+import { createSigningKey, signChallenge, WrappedSigningKey } from '@vivek/auth';
 import { apiUrl } from '../core/api-url';
 import { SESSION_CONTEXT, SILENT_ERROR_TOAST, ToastService, type SessionPort } from '@vivek/ui';
 import { hasDek, holdDek } from './dek-holder';
 import { LOCK_SIGNAL, VAULT_KEY_ID, VAULT_PRESENCE, deleteFinanceVaultDb, financeVaultPresent, withVaultStore } from './dek-store';
-import { createVaultMaterial, decryptJson, encryptJson, hmacBlindIndex, importVaultKeys, indexedDbHoldsDek, legacyDekBlindIndex, recordAad, restoreVaultKeys } from './vault-crypto';
-import { VaultService, type EncryptedRecordDto } from './vault.service';
+import { createVaultMaterial, decryptJson, encryptJson, hmacBlindIndex, importVaultKeys, indexedDbHoldsDek, legacyDekBlindIndex, recordAad, restoreVaultKeys, unlockWithPassphrase } from './vault-crypto';
+import { VaultService, type EncryptedRecordDto, type VaultStatus } from './vault.service';
 
 function pauseNextOpen(): { ready: Promise<void>; release: () => void; restore: () => void } {
   const realOpen = indexedDB.open.bind(indexedDB);
@@ -50,84 +50,137 @@ function sessionProvider(id = 1) {
   return { provide: SESSION_CONTEXT, useValue: session };
 }
 
-describe('VaultService KDF upgrade', () => {
-  let service: VaultService;
-  let http: HttpTestingController;
+describe('VaultService atomic credential changes', () => {
+  const current = 'current synthetic passphrase', next = 'next synthetic passphrase';
+  const endpoint = apiUrl('/auth/passwordless/credentials');
+  let service: VaultService, http: HttpTestingController;
+  let stored: { wrap_revision: number; auth: WrappedSigningKey; vault: VaultStatus };
+  let owner: { id: number; username: string };
+  let toast: jasmine.Spy;
 
-  const legacyAuth: WrappedSigningKey = {
-    kdf_salt_b64: 'MTIzNDU2Nzg5MDEyMzQ1Ng==',
-    kdf_iterations: 310000,
-    wrapped_private_key_b64: 'bGVnYWN5LWF1dGgtd3JhcA==',
-    recovery_wrapped_private_key_b64: '',
-  };
-  const upgradedAuth: WrappedSigningKey = {
-    ...legacyAuth,
-    kdf_salt_b64: 'bmV3LXNhbHQtMTIzNDU2Nzg==',
-    kdf_iterations: 600000,
-  };
+  beforeEach(async () => {
+    owner = { id: 1, username: 'synthetic' };
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [
+      { provide: SESSION_CONTEXT, useValue: { get currentUser() { return owner; }, revision: 1, user$: EMPTY, cleared$: EMPTY } },
+    ] });
+    service = TestBed.inject(VaultService); http = TestBed.inject(HttpTestingController);
+    await service.whenReady();
+    const material = await createVaultMaterial(current, 1_000);
+    const signing = await createSigningKey(current, 1_000);
+    stored = { wrap_revision: 7, auth: signing.wrapped, vault: { exists: true, ...material.setupPayload } };
+    holdDek(material.dek); service['unlockedSubject'].next(true);
+    service.loadPublicStatus(stored.vault); service.loadAuthWrap(stored.auth);
+    toast = spyOn(TestBed.inject(ToastService), 'error');
+  });
+  afterEach(async () => { http.verify(); await service.lock(); });
 
-  beforeEach(() => {
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
-    service = TestBed.inject(VaultService);
-    http = TestBed.inject(HttpTestingController);
+  async function request(method: string, url: string): Promise<TestRequest> {
+    for (let attempt = 0; attempt < 300; attempt++) {
+      const matches = http.match(req => req.method === method && req.url === url);
+      if (matches.length) { expect(matches.length).toBe(1); return matches[0]; }
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    return http.expectOne(req => req.method === method && req.url === url);
+  }
+  async function prepare() {
+    (await request('GET', endpoint)).flush(stored);
+    const challenge = await request('POST', apiUrl('/auth/passwordless/challenge'));
+    expect(challenge.request.body).toEqual({ username: 'synthetic', purpose: 'credential_rotation' });
+    challenge.flush({ challenge_id: 'synthetic-challenge', challenge: 'synthetic random challenge', message: 'synthetic credential proof', expires_at: 'ignored' });
+    const write = await request('POST', endpoint);
+    expect(write.request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
+    expect(write.request.body.expected_wrap_revision).toBe(7);
+    expect(write.request.body.expires_at).toBeUndefined();
+    expect(JSON.stringify(write.request.body)).not.toContain(current);
+    expect(JSON.stringify(write.request.body)).not.toContain(next);
+    return write;
+  }
+
+  it('rewraps the same signing key and non-extractable DEK in one write, preserving ciphertext and blind indexes', async () => {
+    const key = service.requireDek(), ciphertext = await encryptJson(key, { marker: 'private synthetic' });
+    const index = await service.blindIndex('synthetic index');
+    const pending = service.changePassphrase(current, next, new AbortController().signal);
+    const write = await prepare(), body = write.request.body;
+    expect(body.auth.kdf_iterations).toBe(600_000); expect(body.vault.kdf_iterations).toBe(600_000);
+    expect(body.auth.kdf_salt_b64).not.toBe(stored.auth.kdf_salt_b64);
+    expect(body.vault.kdf_salt_b64).not.toBe(stored.vault.kdf_salt_b64);
+    const verified = await unlockWithPassphrase(next, body.vault.kdf_salt_b64, body.vault.kdf_iterations, body.vault.wrapped_dek_b64);
+    expect(await decryptJson(verified, ciphertext)).toEqual({ marker: 'private synthetic' });
+    expect(await hmacBlindIndex(verified, 'synthetic index')).toBe(index);
+    expect(await signChallenge(next, body.auth, 'proof')).toBeTruthy();
+    await expectAsync(signChallenge(current, body.auth, 'proof')).toBeRejected();
+    write.flush({ auth: body.auth, vault: { ...stored.vault, ...body.vault } }); await pending;
+    expect(service.requireDek()).toBe(key); expect(key.extractable).toBeFalse();
+    http.expectNone(req => req.url.endsWith('/wraps') || req.url.includes('/records'));
   });
 
-  afterEach(() => http.verify());
-
-  it('keeps the new auth wrap when the vault wrap update fails', async () => {
-    service.loadAuthWrap(legacyAuth);
-    (service as unknown as { dek: CryptoKey }).dek = {} as CryptoKey;
-    (service as unknown as { statusSubject: { next(value: unknown): void } }).statusSubject.next({
-      exists: true,
-      kdf_iterations: 310000,
-      kdf_salt_b64: 'c2FsdA==',
-      wrapped_dek_b64: 'd3JhcA==',
-      key_version: 1,
+  for (const status of [409, 503]) {
+    it(`keeps both old wraps and the held key usable on atomic ${status}, then retries with fresh metadata/proof`, async () => {
+      const key = service.requireDek();
+      const pending = service.changePassphrase(current, next, new AbortController().signal).catch(error => error);
+      (await prepare()).flush({ detail: 'synthetic failure' }, { status, statusText: 'Failure' });
+      expect((await pending).status).toBe(status);
+      expect(service.currentStatus).toEqual(stored.vault); expect(service['authWrap']).toEqual(stored.auth);
+      expect(service.requireDek()).toBe(key);
+      const retry = service.changePassphrase(current, next, new AbortController().signal);
+      const write = await prepare(); write.flush({ auth: write.request.body.auth, vault: { ...stored.vault, ...write.request.body.vault } });
+      await retry;
     });
-    spyOn(service as unknown as { rewrapAuthWrap(): Promise<WrappedSigningKey> }, 'rewrapAuthWrap').and.resolveTo(upgradedAuth);
-    spyOn(service as unknown as { rewrapVaultDek(): Promise<unknown> }, 'rewrapVaultDek').and.resolveTo({
-      kdf_salt_b64: 'dmF1bHQtc2FsdA==',
-      kdf_iterations: 600000,
-      wrapped_dek_b64: 'dmF1bHQtd3JhcA==',
-    });
-    const toast = TestBed.inject(ToastService);
-    spyOn(toast, 'error');
+  }
 
-    const pending = service.upgradeKdfIfNeeded('vault-passphrase');
-    await Promise.resolve();
-    await Promise.resolve();
-    const authReq = http.expectOne(apiUrl('/auth/passwordless/wraps'));
-    expect(authReq.request.method).toBe('PUT');
-    authReq.flush({ ok: true });
-    await Promise.resolve();
-    await Promise.resolve();
-    const vaultReq = http.expectOne(apiUrl('/vault/wraps'));
-    expect(vaultReq.request.method).toBe('PUT');
-    vaultReq.flush({ detail: 'unavailable' }, { status: 500, statusText: 'Error' });
-    await pending;
-
-    expect(service['authWrap']).toEqual(upgradedAuth);
-    expect(service.kdfUpgradeFailures).toBe(1);
-    expect(toast.error).toHaveBeenCalled();
+  it('rejects a wrong current passphrase locally without a challenge or mutation', async () => {
+    const pending = service.changePassphrase('wrong synthetic passphrase', next, new AbortController().signal).catch(error => error);
+    (await request('GET', endpoint)).flush(stored);
+    expect((await pending).message).toBe('Current vault passphrase could not be verified.');
+    http.expectNone(req => req.method !== 'GET');
   });
 
-  it('loads the signing wrap for a session that never cached one', async () => {
-    (service as unknown as { statusSubject: { next(value: unknown): void } }).statusSubject.next({
-      exists: true,
-      kdf_iterations: 600000,
-      kdf_salt_b64: 'c2FsdA==',
-      wrapped_dek_b64: 'd3JhcA==',
-      key_version: 1,
+  for (const interruption of ['lock', 'owner change']) {
+    it(`does not publish a held atomic response after ${interruption}`, async () => {
+      const pending = service.changePassphrase(current, next, new AbortController().signal).catch(error => error);
+      const write = await prepare();
+      if (interruption === 'lock') await service.lock(); else owner = { id: 2, username: 'other' };
+      if (interruption === 'lock') expect(write.cancelled).toBeTrue();
+      else write.flush({ auth: write.request.body.auth, vault: { ...stored.vault, ...write.request.body.vault } });
+      expect((await pending).name).toBe('AbortError'); expect(service.currentStatus).toEqual(stored.vault);
+      expect(service['authWrap']).toEqual(interruption === 'lock' ? null : stored.auth);
     });
+  }
 
-    const pending = service.upgradeKdfIfNeeded('vault-passphrase');
-    const read = http.expectOne(apiUrl('/auth/passwordless/wraps'));
-    expect(read.request.method).toBe('GET');
-    read.flush({ auth: { ...legacyAuth, kdf_iterations: 600000 } });
+  it('upgrades both legacy wraps atomically and keeps both old wraps after a failed second-write transaction', async () => {
+    const pending = service.upgradeKdfIfNeeded(current);
+    (await prepare()).flush({ detail: 'second write failed' }, { status: 500, statusText: 'Error' });
     await pending;
+    expect(service.currentStatus).toEqual(stored.vault); expect(service['authWrap']).toEqual(stored.auth);
+    expect(service.kdfUpgradeFailures).toBe(1); expect(toast).toHaveBeenCalled();
+    const retry = service.upgradeKdfIfNeeded(current), write = await prepare();
+    write.flush({ auth: write.request.body.auth, vault: { ...stored.vault, ...write.request.body.vault } }); await retry;
+    expect(service.currentStatus?.kdf_iterations).toBe(600_000);
+    expect(await signChallenge(current, service['authWrap']!, 'proof')).toBeTruthy();
+  });
 
-    expect(service['authWrap']?.kdf_iterations).toBe(600000);
-    expect(service.kdfUpgradeFailures).toBe(0);
+  it('drops a stale background upgrade after a manual rotation starts, without independent saves or a stale toast', async () => {
+    const background = service.upgradeKdfIfNeeded(current), oldRead = await request('GET', endpoint);
+    const manual = service.changePassphrase(current, next, new AbortController().signal), write = await prepare();
+    await service.upgradeKdfIfNeeded(current); expect(write.cancelled).toBeFalse();
+    write.flush({ auth: write.request.body.auth, vault: { ...stored.vault, ...write.request.body.vault } }); await manual;
+    expect(oldRead.cancelled).toBeTrue(); await background;
+    expect(service.currentStatus?.wrapped_dek_b64).toBe(write.request.body.vault.wrapped_dek_b64);
+    expect(toast).not.toHaveBeenCalled(); http.expectNone(req => req.method !== 'GET');
+  });
+
+  it('cancels a held background metadata read immediately on lock', async () => {
+    const pending = service.upgradeKdfIfNeeded(current), held = await request('GET', endpoint);
+    await service.lock(); await pending;
+    expect(held.cancelled).toBeTrue(); expect(service['credentialAction']).toBeUndefined();
+    expect(toast).not.toHaveBeenCalled(); http.expectNone(req => req.method !== 'GET');
+  });
+
+  it('uses coherent fresh wraps for an uncached session and skips a current-floor upgrade', async () => {
+    service['authWrap'] = null;
+    const pending = service.upgradeKdfIfNeeded(current);
+    (await request('GET', endpoint)).flush({ ...stored, auth: { ...stored.auth, kdf_iterations: 600_000 }, vault: { ...stored.vault, kdf_iterations: 600_000 } });
+    await pending; http.expectNone(req => req.method !== 'GET'); expect(toast).not.toHaveBeenCalled();
   });
 });
 
