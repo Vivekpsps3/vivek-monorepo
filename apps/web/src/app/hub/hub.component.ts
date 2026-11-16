@@ -1,5 +1,5 @@
 import type { PortfolioAccount, PositionHighlight } from '../../../../finance/frontend/src/public-api';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, Injector, OnInit, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, Injector, OnInit, ViewChild, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/router';
 import { UiStateComponent } from '@vivek/ui';
@@ -42,6 +42,7 @@ import {
   journalKindLabel,
   mediaReleaseLabel,
 } from './hub-summary';
+import { QuickAddComponent } from './quick-add.component';
 import { UpNextComponent } from './up-next/up-next.component';
 import { hubGreeting, shiftDay, upNextRows, type AgendaSource } from './up-next/up-next';
 import { NextEpisodeButtonComponent, NextEpisodeUndoService, type NextResult } from '../../../../media/frontend/src/public-api';
@@ -66,6 +67,7 @@ interface FinanceView {
     MoneyPipe,
     UiButtonComponent,
     UpNextComponent,
+    QuickAddComponent,
     NextEpisodeButtonComponent,
     RouterLink,
     UiPageHeaderComponent,
@@ -76,6 +78,9 @@ interface FinanceView {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HubComponent implements OnInit {
+  @ViewChild(QuickAddComponent) private quickAdd?: QuickAddComponent;
+  onWorkspaceShortcut(event: KeyboardEvent): void { this.quickAdd?.onWorkspaceShortcut(event); }
+
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);

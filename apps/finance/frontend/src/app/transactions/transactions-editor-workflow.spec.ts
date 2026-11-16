@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { ChangeDetectorRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute,Router } from '@angular/router';
+import { todayIsoDate } from '@vivek/browser';
 import { ToastService } from '@vivek/ui';
 import { of,throwError } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
@@ -39,6 +40,18 @@ function home() {
 }
 
 describe('TransactionsEditorWorkflow', () => {
+  it('saves the chosen manual date and defaults an unselected date to browser today', () => {
+    const { workflow, finance } = editor();
+    for (const date of ['2026-12-31', todayIsoDate()]) {
+      workflow.openAddModal(date === '2026-12-31' ? date : null);
+      expect(workflow.newTx.date).toBe(date);
+      workflow.newTx.category = 'Food';
+      workflow.newTx.amount = 12;
+      workflow.saveTransaction();
+      expect(finance.addTransaction.calls.mostRecent().args[0].date).toBe(date);
+    }
+  });
+
 
   it('adds, clears, and reopens a trip tag, and saves without one when the trip list fails', () => {
     const http = { get: jasmine.createSpy('get').and.returnValue(of(home())) };

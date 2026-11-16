@@ -1,3 +1,4 @@
+import { By } from '@angular/platform-browser';
 import { Component } from '@angular/core';
 import { TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
 import { NavigationEnd,Router,provideRouter } from '@angular/router';
@@ -5,6 +6,11 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { BehaviorSubject,Subject,of } from 'rxjs';
 import { SessionService } from './platform/session.service';
 import { PrivateLayoutComponent } from './private-layout.component';
+
+@Component({standalone: true, template: '<input aria-label="Shortcut typing"><div contenteditable="true" aria-label="Editable note"></div>'})
+class ShortcutPageComponent {
+  onWorkspaceShortcut = jasmine.createSpy('onWorkspaceShortcut');
+}
 
 @Component({standalone: true, template: '<input aria-label="Private draft" value="">'})
 class PrivateDraftComponent {}
@@ -45,6 +51,29 @@ describe('Shared private shell', () => {
     fixture.detectChanges();
     return { fixture, session };
   }
+
+  it('delegates page shortcuts once and guards typing, modifiers, repeats and open dialogs', async () => {
+    const users = new BehaviorSubject({id: 1});
+    TestBed.configureTestingModule({providers: [
+      provideRouter([{path: '', component: PrivateLayoutComponent, children: [{path: 'hub', component: ShortcutPageComponent}]}]),
+      {provide: SessionService, useValue: {currentUser: users.value, user$: users, isAdmin: () => false}},
+    ]});
+    const harness = await RouterTestingHarness.create('/hub');
+    const shell = harness.routeDebugElement!.componentInstance as PrivateLayoutComponent;
+    const command = harness.routeDebugElement!.query(By.directive(ShortcutPageComponent)).componentInstance as ShortcutPageComponent;
+    const send = (target: Element | Document, options: KeyboardEventInit = {}) => target.dispatchEvent(new KeyboardEvent('keydown', {key: 'n', bubbles: true, ...options}));
+    send(document);
+    expect(command.onWorkspaceShortcut).toHaveBeenCalledTimes(1);
+    send(harness.routeNativeElement!.querySelector('input')!);
+    send(harness.routeNativeElement!.querySelector('[contenteditable]')!);
+    for (const options of [{ctrlKey: true}, {metaKey: true}, {altKey: true}, {repeat: true}]) send(document, options);
+    const modal = document.createElement('div'); modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); document.body.append(modal);
+    send(document); modal.remove();
+    expect(command.onWorkspaceShortcut).toHaveBeenCalledTimes(1);
+    const open = spyOn(shell, 'openSearch');
+    send(harness.routeNativeElement!.querySelector('input')!, {key: 'k', ctrlKey: true});
+    expect(open).toHaveBeenCalledTimes(1);
+  });
 
   it('cancels pending heading focus when the shell is destroyed', fakeAsync(() => {
     const events = new Subject<NavigationEnd>();

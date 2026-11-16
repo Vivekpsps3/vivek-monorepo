@@ -1,6 +1,6 @@
 <div class="hub">
   <main id="hub-main">
-    <ui-page-header [title]="name" [eyebrow]="today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })" />
+    <ui-page-header [title]="name" [eyebrow]="today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })"><app-quick-add uiPageActions [locked]="financeState === 'locked'" /></ui-page-header>
 
     <app-up-next
       [ownerId]="userId ?? null" [today]="today"

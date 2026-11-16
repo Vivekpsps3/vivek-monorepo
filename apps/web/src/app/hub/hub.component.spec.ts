@@ -296,7 +296,7 @@ describe('HubComponent', () => {
     expect(text).toContain('Your session ended. Sign in again to see trips.');
     expect(text).toContain('The Wire');
     expect(auth.logout).not.toHaveBeenCalled();
-    expect(fixture.nativeElement.querySelector('[role="menu"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="menu"]:not([hidden])')).toBeNull();
   });
 
   it('keeps a stale snapshot when a retry fails and clears it on sign-out', async () => {

@@ -7,7 +7,7 @@ it must not become a second Finance, Travel or Media store. Private layout start
 Finance trip spend from the Finance public API when a vault is present and stops
 it on lock, sign-out, and owner change.
 
-Read the narrower guidance for [Town/Health](src/app/town/AGENTS.md),
+Read guidance for [Town/Health](src/app/town/AGENTS.md),
 [World](src/app/world/AGENTS.md) or [Pixels](src/app/pixels/AGENTS.md) when editing them.
 
 A source can be locked, empty, stale, expired or unavailable. Keep those states
@@ -27,11 +27,12 @@ every ReminderIn field.
 Account forms share `platform/auth/account-error.ts` for safe copy and Retry-After;
 keep username validation with `@vivek/auth`.
 
-Use existing Hub load/state mechanics and shared controls before adding another
-loader, dialog or event bus. Keep summary responses reusable between views and test
-request counts. Reuse a bounded mechanism only where its result semantics match.
+Use existing Hub loaders and controls. The shell owns global shortcuts; mounted Hub
+commands route Quick add to app editors with a browser-local transaction date.
+Health checks are admin-only, owner-bound and visibility-throttled. Share source
+responses and test request counts; bounded reuse must preserve result semantics.
 
-Direct navigation, refresh, back/forward and keyboard/focus are part of a route change.
+Verify navigation, refresh, history and keyboard/focus.
 Use [FRONTEND](../../docs/FRONTEND.md) for shell/UI ownership and root gates for root
 Karma plus affected browser journeys. [e2e](e2e/) includes Town, Pixels and World;
 listing tests alone does not prove execution.
