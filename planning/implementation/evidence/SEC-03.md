@@ -71,4 +71,4 @@ exact preserving expectations, not weakened gates.
 - PR URL: https://github.com/Vivekpsps3/vivek-monorepo/pull/376; closes #268 only, references #121.
 - Roadmap #134 scoped status note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6905474160.
 - Actual state: merged as `7c3b0117426ddc304fc5e90ad63e4bb8254b2e2e` in #376 after all four exact-head CI jobs passed (run 43794179763); #268 closed completed. SEC-04 started from this verified prerequisite. No deployment claim.
-- Next actor: finish SEC-04 from fresh main and reconcile the security parent only after its acceptance passes. Root checkout's existing World changes remain untouched.
+- Next actor: SEC-04 is now merged as #377, `2af4f04c4a47ea6831504f5431ce5c316a6e6b98`, with complete acceptance and CI proof in its evidence file; integration owner finalizes security parent/roadmap reconciliation. Root checkout's existing World changes remain untouched.
