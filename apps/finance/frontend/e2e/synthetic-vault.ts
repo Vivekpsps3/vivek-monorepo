@@ -211,6 +211,12 @@ export async function syntheticVault(
     if (path === '/api/admin/metrics') return respond({ totals: {}, finance_rows: {}, per_user: [], tables: [], recent: [] });
     if (path === '/api/vault/status') return respond({ exists: true, key_version: 1,
       kdf_algorithm: 'PBKDF2', kdf_salt_b64: salt.toString('base64'), kdf_iterations: DEFAULT_PBKDF2_ITERATIONS, wrapped_dek_b64: wrappedKey });
+    if (path === '/api/auth/passwordless/credentials' && request.method() === 'GET') {
+      return respond({ wrap_revision: 1,
+        auth: { kdf_salt_b64: salt.toString('base64'), kdf_iterations: DEFAULT_PBKDF2_ITERATIONS, wrapped_private_key_b64: wrappedKey, recovery_wrapped_private_key_b64: '' },
+        vault: { exists: true, key_version: 1, kdf_salt_b64: salt.toString('base64'), kdf_iterations: DEFAULT_PBKDF2_ITERATIONS, wrapped_dek_b64: wrappedKey },
+      });
+    }
     if (path === '/api/auth/passwordless/wraps' && request.method() === 'GET') {
       return respond({
         auth: {

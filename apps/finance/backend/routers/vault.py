@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -18,14 +16,12 @@ from apps.finance.backend.schemas_vault import (
     RestoreCreateRequest,
     VaultCreateRequest,
     VaultResponse,
-    VaultUpdateRequest,
 )
 from apps.finance.backend.services import encrypted_storage as store
 from apps.server.identity.models import User
 from apps.server.identity.session import get_current_user
 
 router = APIRouter(prefix="/vault", tags=["vault"])
-logger = logging.getLogger("finance.auth")
 
 
 def _user_id(user: User) -> int:
@@ -81,40 +77,9 @@ def vault_setup(
     return _vault_response(db, current_user.id)
 
 
-@router.put("/wraps", response_model=VaultResponse)
-def vault_update_wraps(
-    body: VaultUpdateRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db, scope="function"),
-):
-    # Session cookie plus CSRF. Not counted against the login IP or account budgets.
-    from apps.server.identity.credential_rotation import advance_wrap_revision
-
-    advance_wrap_revision(db, current_user.id, current_user.credential_wrap_revision)
-    previous = store.get_vault(db, _user_id(current_user))
-    previous_iterations = previous.kdf_iterations if previous else None
-    store.update_vault_wraps(
-        db,
-        current_user.id,
-        kdf_salt_b64=body.kdf_salt_b64,
-        kdf_iterations=body.kdf_iterations,
-        wrapped_dek_b64=body.wrapped_dek_b64,
-        recovery_wrapped_dek_b64=body.recovery_wrapped_dek_b64,
-        key_version=body.key_version,
-    )
-    if (
-        previous_iterations is not None
-        and body.kdf_iterations is not None
-        and body.kdf_iterations > previous_iterations
-    ):
-        logger.info(
-            "vault wrap KDF iterations raised user_id=%s from=%s to=%s",
-            current_user.id,
-            previous_iterations,
-            body.kdf_iterations,
-        )
-    db.commit()
-    return _vault_response(db, current_user.id)
+@router.put("/wraps")
+def retired_vault_wrap_update(_user: User = Depends(get_current_user)):
+    raise HTTPException(410, "Reload the app to update both credential wraps atomically.")
 
 
 @router.get("/records", response_model=list[EncryptedRecordResponse])

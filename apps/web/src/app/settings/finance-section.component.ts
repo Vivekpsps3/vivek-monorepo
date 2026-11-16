@@ -37,6 +37,66 @@ export class FinanceSectionComponent implements OnInit {
   private backupAction?: AbortController;
   @ViewChild('backupAlert') private backupAlert?: ElementRef<HTMLElement>;
 
+  changeCurrent = '';
+  changeNext = '';
+  changeConfirm = '';
+  changeBusy = false;
+  changeError = '';
+  changeInvalid: 'current' | 'next' | 'confirm' | null = null;
+  private changeAction?: AbortController;
+  @ViewChild('changeCurrentControl') private changeCurrentControl?: UiInputComponent;
+  @ViewChild('changeNextControl') private changeNextControl?: UiInputComponent;
+  @ViewChild('changeConfirmControl') private changeConfirmControl?: UiInputComponent;
+  @ViewChild('changeAlert') private changeAlert?: ElementRef<HTMLElement>;
+
+  async changePassphrase(): Promise<void> {
+    if (this.changeBusy || this.backupBusy || this.restoreBusy || this.locked !== false || !this.vault || !this.lockService) return;
+    this.changeError = ''; this.changeInvalid = null;
+    if (!this.changeCurrent) { this.showChangeError('Enter your current vault passphrase.', 'current'); return; }
+    if (this.changeNext.length < 12 || this.changeNext.length > 1024) { this.showChangeError('Use a new passphrase of 12–1,024 characters.', 'next'); return; }
+    if (this.changeNext === this.changeCurrent) { this.showChangeError('Choose a different passphrase.', 'next'); return; }
+    if (this.changeConfirm !== this.changeNext) { this.showChangeError('New passphrases do not match.', 'confirm'); return; }
+    const action = new AbortController();
+    const owner = this.session?.currentUser?.id, revision = this.session?.revision;
+    this.changeAction = action; this.changeBusy = true;
+    try {
+      await this.vault.changePassphrase(this.changeCurrent, this.changeNext, action.signal);
+      if (action.signal.aborted || this.destroyRef.destroyed || this.session?.currentUser?.id !== owner || this.session?.revision !== revision) return;
+      this.cancelPassphraseChange();
+      await this.lockService.lockNow({ navigate: false });
+      if (!this.destroyRef.destroyed && this.session?.currentUser?.id === owner && this.session?.revision === revision) {
+        this.toast.success('Passphrase changed. Unlock Finance with your new passphrase. Other browser sessions have been signed out.');
+      }
+    } catch (error) {
+      if (action.signal.aborted || this.destroyRef.destroyed) return;
+      if (error instanceof DOMException && error.name === 'AbortError') { this.cancelPassphraseChange(); return; }
+      this.changeBusy = false;
+      const status = typeof error === 'object' && error && 'status' in error ? Number(error.status) : 0;
+      if (error instanceof Error && error.message === 'Current vault passphrase could not be verified.') this.showChangeError(error.message, 'current');
+      else this.showChangeError(status === 409 ? 'Credentials changed while you were working. Retry to verify the current passphrase again.' :
+        status === 401 || status === 403 ? 'Your session or proof expired. Sign in again before changing your passphrase.' :
+        'Could not confirm the change. Check your connection. If submission was interrupted, try the new passphrase before retrying.');
+    } finally {
+      if (this.changeAction === action) { this.changeAction = undefined; this.changeBusy = false; }
+      if (!this.destroyRef.destroyed) this.cdr.markForCheck();
+    }
+  }
+
+  cancelPassphraseChange(): void {
+    this.changeAction?.abort(); this.changeAction = undefined;
+    this.changeCurrent = ''; this.changeNext = ''; this.changeConfirm = '';
+    this.changeBusy = false; this.changeError = ''; this.changeInvalid = null;
+  }
+
+  private showChangeError(message: string, field: 'current' | 'next' | 'confirm' | null = null): void {
+    this.changeError = message; this.changeInvalid = field;
+    this.cdr.detectChanges();
+    if (field === 'current') this.changeCurrentControl?.focus();
+    else if (field === 'next') this.changeNextControl?.focus();
+    else if (field === 'confirm') this.changeConfirmControl?.focus();
+    else this.changeAlert?.nativeElement.focus();
+  }
+
   restoreFile: File | null = null;
   restorePassword = '';
   restoreMode: RestoreMode = 'merge';
@@ -58,7 +118,7 @@ export class FinanceSectionComponent implements OnInit {
   }
 
   async previewRestore(): Promise<void> {
-    if (this.restoreBusy || this.backupBusy || this.locked !== false) return;
+    if (this.restoreBusy || this.backupBusy || this.changeBusy || this.locked !== false) return;
     const file = this.restoreFile;
     const password = this.restorePassword;
     this.cancelRestore(false);
@@ -82,7 +142,7 @@ export class FinanceSectionComponent implements OnInit {
 
   async stageRestore(): Promise<void> {
     const plan = this.restorePlan;
-    if (!plan || this.restoreBusy || this.backupBusy) return;
+    if (!plan || this.restoreBusy || this.backupBusy || this.changeBusy) return;
     this.restoreBusy = true; this.restoreError = ''; this.restoreStatus = 'Staging encrypted records. Active data is unchanged…';
     try {
       await plan.stage();
@@ -94,7 +154,7 @@ export class FinanceSectionComponent implements OnInit {
 
   async activateRestore(): Promise<void> {
     const plan = this.restorePlan;
-    if (!plan || this.restoreBusy || this.backupBusy) return;
+    if (!plan || this.restoreBusy || this.backupBusy || this.changeBusy) return;
     if (plan.mode === 'replace' && (this.restoreConfirmation !== 'REPLACE' || !this.restoreAcknowledged)) {
       this.showRestoreError('Review the backup offer, acknowledge replacement and type REPLACE.'); return;
     }
@@ -137,15 +197,15 @@ export class FinanceSectionComponent implements OnInit {
 
   constructor() {
     const unbindSnapshots = bindLockSnapshots(() => {
-      this.cancelBackup(); this.cancelRestore();
+      this.cancelPassphraseChange(); this.cancelBackup(); this.cancelRestore();
       this.locked = true; this.cdr.markForCheck();
     });
     this.destroyRef.onDestroy(unbindSnapshots);
-    this.destroyRef.onDestroy(() => { this.cancelBackup(); this.cancelRestore(); });
+    this.destroyRef.onDestroy(() => { this.cancelPassphraseChange(); this.cancelBackup(); this.cancelRestore(); });
   }
 
   async createBackup(): Promise<void> {
-    if (this.backupBusy || this.restoreBusy || this.locked !== false) return;
+    if (this.backupBusy || this.restoreBusy || this.changeBusy || this.locked !== false) return;
     this.backupError = '';
     this.backupStatus = '';
     if (!this.currentPassphrase) this.backupError = 'Enter your current vault passphrase.';
@@ -207,8 +267,10 @@ export class FinanceSectionComponent implements OnInit {
 
   ngOnInit(): void {
     let owner = this.session?.currentUser?.id;
+    let revision = this.session?.revision;
     this.session?.user$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(user => {
-      if (user?.id !== owner) { owner = user?.id; this.cancelBackup(); this.cancelRestore(); this.restoreFile = null; this.cdr.markForCheck(); }
+      if (revision !== this.session?.revision) { revision = this.session?.revision; this.cancelPassphraseChange(); }
+      if (user?.id !== owner) { owner = user?.id; this.cancelPassphraseChange(); this.cancelBackup(); this.cancelRestore(); this.restoreFile = null; this.cdr.markForCheck(); }
     });
     try {
       this.lockService = this.injector.get(FinanceLockService);
@@ -248,7 +310,7 @@ export class FinanceSectionComponent implements OnInit {
     const vault = this.vault;
     if (!vault) return;
     this.locked = !vault.isUnlocked;
-    if (this.locked) { this.cancelBackup(); this.cancelRestore(); this.restoreFile = null; }
+    if (this.locked) { this.cancelPassphraseChange(); this.cancelBackup(); this.cancelRestore(); this.restoreFile = null; }
     this.cdr.markForCheck();
   }
 }

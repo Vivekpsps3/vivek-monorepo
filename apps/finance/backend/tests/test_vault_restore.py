@@ -324,12 +324,19 @@ def test_real_commit_failure_returns_error_and_preserves_active_data(monkeypatch
         assert saved.status == "pending"
 
 
-def test_reset_or_rewrapped_vault_cannot_activate_an_old_stage():
-    c = client()
+def test_reset_or_rewrapped_vault_cannot_activate_an_old_stage(monkeypatch):
+    from apps.finance.backend.tests.test_change_username import _open_signup, _signup
+    from apps.finance.backend.tests.test_credential_rotation import ENDPOINT, _rotation
+
+    _open_signup(monkeypatch)
+    c, key, _auth, _vault, _dek = _signup("owner.name")
     records = [wire("health_stats")]
     stage, _ = create(c, records)
     upload(c, stage, 0, records)
-    c.put("/api/vault/wraps", json={"wrapped_dek_b64": b64(b"new wrapped vault" * 4)})
+    rotation = _rotation(c, key)
+    rotation["vault"]["wrapped_dek_b64"] = b64(b"new wrapped vault" * 4)
+    changed = c.post(ENDPOINT, json=rotation)
+    assert changed.status_code == 200, changed.text
     before = snapshot(c)
     assert activate(c, stage).status_code == 409
     assert snapshot(c) == before

@@ -522,10 +522,27 @@ and revocations. A retry after rollback still needs an unexpired proof; a commit
 proof cannot be replayed. Record ciphertext, blind indexes, key versions, signing
 public key and legacy recovery columns are unchanged.
 
-The separate signing/DEK wrap endpoints remain for automatic KDF upgrades until
-the passphrase UI adopts this contract. Both writers advance the shared revision;
-their two calls are not a passphrase-change protocol. Revoking a server session
-cannot erase keys or plaintext already held in a remote browser. Participating
-same-origin tabs must clear local keys through the existing lock lifecycle when
-the passphrase UI completes; cross-origin/offline clients are bounded by their
-next authenticated request and cannot be remotely erased.
+Finance Settings provides current/new/confirm passphrase controls under its existing
+Finance route; Account's data/security link opens that route. Both passphrase changes
+and nonblocking same-passphrase KDF upgrades use this atomic operation. Each wrap
+keeps at least its stored work factor and the current floor. The independent signing
+and DEK PUT endpoints are retired with 410 and reload guidance, so a delayed old-tab
+upgrade cannot revert a successful rotation. Historical low-iteration reads/unlock,
+legacy recovery columns and applied migrations remain supported.
+
+On passphrase-change success the requesting session deliberately keeps its cookie
+and CSRF, while the existing Finance lock lifecycle clears its local key, persisted
+key, cached projections and form drafts, and locks participating same-origin tabs.
+Unlock with the new passphrase to continue. Automatic KDF upgrades retain the
+requesting unlocked state and use the endpoint's same other-session revocation
+policy. No new key, ciphertext rewrite, record-store or lock listener is introduced.
+
+Every operation has a 120-second deadline, cancellable HTTP reads/writes and
+owner/session/lock guards after async work. Lock, logout, owner/session revision
+change, disposal and manual supersession clear owned passphrase/key references;
+late WebCrypto results cannot publish. Strings/internal browser crypto copies cannot
+be promised secure erasure. Same-session conflicts/network failures retain the form
+draft for deliberate retry with fresh metadata and proof. A lost response after the
+server accepted a POST cannot undo the committed change: try the new passphrase
+before retrying. Revoking a session cannot erase keys/plaintext already held in a
+remote browser; offline/other-origin clients are bounded by their next request.

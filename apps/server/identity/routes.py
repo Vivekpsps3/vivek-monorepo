@@ -35,7 +35,6 @@ from apps.server.identity.schemas import (
     AdminUserContentReset,
     AdminUserCreate,
     AdminUserUpdate,
-    AuthPrivateKeyWrap,
     BootstrapStatusResponse,
     CredentialRotationRequest,
     CredentialWrapsResponse,
@@ -317,24 +316,8 @@ def read_passwordless_wraps(current_user: User = Depends(get_current_user)):
 
 
 @router.put("/auth/passwordless/wraps")
-def update_passwordless_wraps(
-    body: AuthPrivateKeyWrap,
-    db: Session = Depends(get_db, scope="function"),
-    current_user: User = Depends(get_current_user),
-):
-    # Session cookie plus CSRF. Not counted against the login IP or account budgets.
-    previous = current_user.auth_kdf_iterations
-    advance_wrap_revision(db, current_user.id, current_user.credential_wrap_revision)
-    store_auth_wrap(current_user, body)
-    if previous is not None and body.kdf_iterations > previous:
-        logger.info(
-            "signing-key wrap KDF iterations raised user_id=%s from=%s to=%s",
-            current_user.id,
-            previous,
-            body.kdf_iterations,
-        )
-    db.commit()
-    return {"ok": True}
+def retired_signing_wrap_update(_user: User = Depends(get_current_user)):
+    raise HTTPException(410, "Reload the app to update both credential wraps atomically.")
 
 
 @router.get("/auth/passwordless/credentials", response_model=CredentialWrapsResponse)
@@ -783,9 +766,24 @@ def _rotate_credentials(
     ):
         raise HTTPException(401, CHALLENGE_FAILURE_DETAIL)
     advance_wrap_revision(db, user.id, body.expected_wrap_revision)
+    previous_auth_iterations = user.auth_kdf_iterations
+    previous_vault = vault_store.get_vault(db, user.id)
+    previous_vault_iterations = previous_vault.kdf_iterations if previous_vault else None
     store_auth_wrap(user, body.auth)
     # The second write and revocations belong to the caller's same transaction.
     vault_store.update_vault_wraps(db, user.id, **body.vault.model_dump())
+    for label, previous, updated in (
+        ("signing-key", previous_auth_iterations, body.auth.kdf_iterations),
+        ("vault", previous_vault_iterations, body.vault.kdf_iterations),
+    ):
+        if previous is not None and updated > previous:
+            logger.info(
+                "%s wrap KDF iterations raised user_id=%s from=%s to=%s",
+                label,
+                user.id,
+                previous,
+                updated,
+            )
     revoke_user_sessions(db, user.id, keep_session_id=keep)
     audit_event(db, "credential_wraps_rotated", actor_user_id=user.id, target_user_id=user.id)
     db.flush()
