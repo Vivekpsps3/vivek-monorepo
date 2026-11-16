@@ -1,6 +1,6 @@
 {
-  "base_sha": "559d4eff908df8262f64012d63d445cfce60af91",
-  "validated_on": "2026-11-15",
+  "base_sha": "7c3b0117426ddc304fc5e90ad63e4bb8254b2e2e",
+  "validated_on": "2026-11-16",
   "roadmap_issue": 134,
   "parents": [
     {
@@ -33,30 +33,6 @@
     }
   ],
   "tasks": [
-    {
-      "id": "SEC-03",
-      "title": "Persist both credential wraps atomically with proof and revision",
-      "parent_issues": [
-        121
-      ],
-      "kind": "implementation",
-      "issue": 268,
-      "dependencies": [
-        "SEC-01",
-        "SEC-02",
-        "CON-03"
-      ],
-      "conflict_groups": [
-        "schema-head",
-        "identity-session",
-        "finance-vault-lifecycle"
-      ],
-      "verification_profiles": [
-        "finance_back",
-        "server_back",
-        "schema"
-      ]
-    },
     {
       "id": "SEC-04",
       "title": "Ship passphrase change UI through the atomic rotation contract",
