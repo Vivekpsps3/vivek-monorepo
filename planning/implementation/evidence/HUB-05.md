@@ -45,3 +45,29 @@ Initial failures were fixed: health import crossed the platform boundary (now st
 - Merge/deployment: not merged or deployed.
 - Remaining parent scope: HUB-06 and Town-owned TOWN-06; TOWN-05 is still open and required by TOWN-06.
 - Next actor: review/merge this leaf with owner authorization; Codex continues HUB-06 in its own worktree.
+
+
+## CI follow-up — immediate menu closure and fixture isolation
+
+The first CI matrix failed a rapid Escape→? sequence and a following search fixture.
+The closed menu's signal changed before its hidden DOM/expanded attribute, so the
+next shortcut could see the previous frame. The existing shared menu now paints
+closure synchronously before returning focus, with a unit regression that checks
+DOM state before another fixture render. No new listener or wrapper was added.
+The new Hub browser fixture now restores the domain's default data; the existing
+search story explicitly resets its own expected library instead of depending on
+which file ran before it.
+
+Additional actual closure: shared menu +5/−0 production lines, its regression
++9/−0 test lines, and fixture changes in `hub-shortcuts.spec.ts` / `search.spec.ts`.
+No assertion, retry setting or gate was weakened. Shared UI validation broadened
+to all three Karma suites (Finance 503, site 9, web 400), shared browser/UI Node
+suites, and the complete cross-app Playwright matrix. Logs:
+`/tmp/hub05-shared-{unit,node}.log`, `/tmp/hub05-all-e2e-final.log`.
+
+One complete matrix first reported 600 passed with a single Travel bootstrap
+failure: trace shows `main-YCRJWZ7Z.js` failed with `ERR_NETWORK_CHANGED` while a
+separate Docker schema rehearsal created/deleted networks. No PTO app code ran.
+Both isolated chart-retry cases pass. The final full matrix ran after those
+network rehearsals ended: **601 passed, 5 existing platform/layout skips**, no
+new retries or skips. All Finance, Travel, Media, Town and suite projects executed.

@@ -95,6 +95,15 @@ describe("ui-menu", () => {
     fixture.detectChanges();
   }
 
+  it("hides the panel before Escape returns so the next shortcut sees a closed menu", async () => {
+    await openAndSettle();
+    expect(panel(0).hidden).toBeFalse();
+    items(0)[0].dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true, cancelable: true}));
+    expect(panel(0).hidden).toBeTrue();
+    expect(trigger(0).getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(trigger(0));
+  });
+
   it("aria-haspopup, aria-expanded and aria-controls are correct; panel has role=menu and items role=menuitem", async () => {
     const t = trigger(0);
     expect(t.getAttribute("aria-haspopup")).toBe("menu");

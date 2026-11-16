@@ -3,7 +3,7 @@ import { expect, test } from './fixtures';
 
 for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const) {
   test(`Quick add routes, keyboard guards, help and focus at ${width} ${theme}`, async ({page, request}, info) => {
-    await request.post('/e2e/reset?seed=pixels');
+    expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
     await page.setViewportSize({width, height: 900});
     await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
     await page.goto('/hub');
@@ -50,7 +50,7 @@ for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const)
 }
 
 test('health chip is admin-only and its outage does not disable the Hub', async ({page, request}) => {
-  await request.post('/e2e/reset?seed=pixels');
+  expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
   let healthReads = 0;
   await page.route('**/{travel,media}/api/health', route => { healthReads++; return route.fulfill({status: 503, json: {status: 'down'}}); });
   await page.goto('/hub');

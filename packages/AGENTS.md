@@ -17,6 +17,8 @@ control utilities separate from component presentation.
 For UI changes, preserve accessible names, linked errors, keyboard/focus return,
 dialog scroll, hit targets and theme tokens. Resolve cascade ownership instead of
 stacking specificity overrides. Migrate consumers and remove their old selectors.
+Menus must hide their panel and update expanded state before focus returns, so
+the next keyboard command sees the closed state.
 A shared selector change requires inspecting actual consuming apps.
 
 Public reexports and discovery adapters can be compatibility boundaries. Verify

@@ -1,5 +1,6 @@
 import {
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   ElementRef,
   HostListener,
@@ -58,6 +59,7 @@ export class UiMenuComponent implements OnDestroy {
 
   private readonly items = contentChildren(UiMenuItemDirective);
   private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly change = inject(ChangeDetectorRef);
   private readonly trigger =
     viewChild.required<ElementRef<HTMLButtonElement>>("trigger");
   private readonly panel =
@@ -169,6 +171,9 @@ export class UiMenuComponent implements OnDestroy {
     if (!this.open()) return;
     this.open.set(false);
     releaseOpenMenu(this);
+    // The next keyboard command can arrive before the coalesced render.
+    // Closed-menu guards must see the hidden panel before focus returns.
+    this.change.detectChanges();
     this.opened.emit(false);
   }
 

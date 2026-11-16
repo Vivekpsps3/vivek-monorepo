@@ -2,7 +2,8 @@ import { expect, test } from './fixtures';
 import { syntheticVault } from '../../apps/finance/frontend/e2e/synthetic-vault';
 import { openUserMenu } from './user-menu.mjs';
 
-test('search debounces, keeps recent ids, and does not call a provider', async ({ page }) => {
+test('search debounces, keeps recent ids, and does not call a provider', async ({ page, request }) => {
+  expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
   const urls: string[] = [];
   page.on('request', request => urls.push(request.url()));
   await page.goto('/hub');
