@@ -16,7 +16,7 @@
 
     <div class="login-panel">
       <ui-card>
-        <form class="login-form" novalidate (ngSubmit)="submit()">
+        <form class="login-form" novalidate (ngSubmit)="submit()" [attr.aria-busy]="loading">
           @if (inviteToken) {
             <p id="signup-invite-identity" class="password-hint">{{ inviteName || 'Your account' }} signs in as <strong>{{ username || '…' }}</strong></p>
           } @else if (!policy) {
@@ -26,56 +26,65 @@
           } @else {
             @if (policy.invite_code_required) {
               <ui-input
+                #inviteField
                 label="Invite code"
+                hint="Use the invite code from your administrator."
+                [invalid]="invalidField === 'invite'"
+                [describedBy]="invalidField === 'invite' ? 'signup-error' : undefined"
+                (valueChange)="clearFieldError('invite')"
                 autocomplete="off"
                 [required]="true"
-                [(value)]="inviteCode" />
+                [(value)]="inviteCode"
+                />
             }
             <ui-input
+              #nameField
               label="Name"
+              [invalid]="invalidField === 'name'"
+              [describedBy]="invalidField === 'name' ? 'signup-error' : undefined"
+              (valueChange)="clearFieldError('name')"
               autocomplete="name"
               [required]="true"
-              [(value)]="displayName" />
+              [(value)]="displayName"
+              />
             <ui-input
+              #usernameField
               label="Username"
+              [hint]="usernameHint"
+              [invalid]="invalidField === 'username'"
+              [describedBy]="invalidField === 'username' ? 'signup-error' : undefined"
+              (valueChange)="clearFieldError('username')"
               autocomplete="username"
               [required]="true"
-              [(value)]="username" />
+              [(value)]="username"
+              />
           }
-          @if (inviteToken || (policy && policy.mode !== 'closed')) {
+          @if (inviteReady || (!inviteToken && policy && policy.mode !== 'closed')) {
             <ui-input
+              #passwordField
               label="Vault passphrase"
+              [hint]="passphraseHint"
+              [invalid]="invalidField === 'password'"
+              [describedBy]="invalidField === 'password' ? 'signup-error' : undefined"
+              (valueChange)="clearFieldError('password')"
               type="password"
               [showPasswordToggle]="true"
               autocomplete="new-password"
               [required]="true"
-              [(value)]="password" />
-            <p class="password-hint">
-              @if (inviteToken) {
-                Passphrase: at least 12 characters. It stays in this browser.
-              } @else if (policy?.invite_code_required) {
-                Use the invite code you were given.                 Name is required. Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
-              } @else {
-                Name is required. Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
-              }
-            </p>
-            @if (error) {
-              <p class="login-error" role="alert">{{ error }}</p>
-            }
-            @if (progressNote) {
-              <p class="password-hint" role="status">{{ progressNote }}</p>
-            }
+              [(value)]="password"
+              />
             <ui-button
               type="submit"
               [disabled]="loading"
-              [ariaDisabled]="!!inviteToken && !username"
-              [describedBy]="inviteToken && !username ? 'signup-invite-identity' : undefined"
               [busy]="loading">
               {{ submitLabel() }}
             </ui-button>
-          } @else if (error) {
-            <p class="login-error" role="alert">{{ error }}</p>
           }
+          @if (inviteToken && error && !inviteReady) {
+            <ui-button type="button" [disabled]="loading" (clicked)="loadInvitation()">Check enrollment link again</ui-button>
+          }
+          <p id="signup-error" class="login-error" aria-live="polite" aria-atomic="true">{{ error }}</p>
+          <p class="password-hint" role="status" aria-atomic="true">{{ loading && inviteReady || loading && !inviteToken ? (progressNote || 'Creating your account. Keep this tab open.') : idleNote }}</p>
         </form>
         <a class="mode-link" [href]="pageHref('login')">Sign in</a>
       </ui-card>

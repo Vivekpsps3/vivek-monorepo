@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { ToastService } from '@vivek/ui';
+import { HttpErrorResponse } from '@angular/common/http';
 import { of } from 'rxjs';
 import { LoginComponent } from './login.component';
 import { AuthService } from './auth.service';
@@ -15,7 +16,7 @@ describe('LoginComponent', () => {
     const auth = jasmine.createSpyObj('AuthService', ['bootstrapPasswordless', 'bootstrapStatus', 'signupPolicy']);
     auth.bootstrapStatus.and.returnValue(of({ needs_setup: false }));
     auth.signupPolicy.and.resolveTo({ mode: 'closed', signup_open: false, invite_code_required: false });
-    auth.bootstrapPasswordless.and.returnValue(Promise.reject(new Error('Setup failed')));
+    auth.bootstrapPasswordless.and.returnValue(Promise.reject(new HttpErrorResponse({ status: 503, error: { detail: 'private setup internals' } })));
     TestBed.configureTestingModule({
       imports: [LoginComponent],
       providers: [
@@ -38,7 +39,7 @@ describe('LoginComponent', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(component.error).toBe('Setup failed');
+    expect(component.error).toBe('A server or network error prevented the request. Try again.');
     expect(cdr.markForCheck).toHaveBeenCalled();
   });
 

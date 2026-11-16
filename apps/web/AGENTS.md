@@ -24,6 +24,9 @@ uses bounded summary windows and authoritative saved dates. Reminder PATCH uses
 every ReminderIn field.
 `hub-up-next.spec.ts` executes with the web browser suite.
 
+Account forms share `platform/auth/account-error.ts` for safe copy and Retry-After;
+keep username validation with `@vivek/auth`.
+
 Use existing Hub load/state mechanics and shared controls before adding another
 loader, dialog or event bus. Keep summary responses reusable between views and test
 request counts. Reuse a bounded mechanism only where its result semantics match.

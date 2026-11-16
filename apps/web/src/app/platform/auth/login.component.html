@@ -5,24 +5,50 @@
       <h1 id="login-title">{{ setupMode ? 'Create the first account' : 'Sign in' }}</h1>
       <p class="privacy-note">Sign in with your username and passphrase. This session opens your Hub, Finance, Travel, and Media. Finance records are encrypted in this browser before they reach the server. A lost passphrase cannot be reset.</p>
     </div>
-
     <div class="login-panel">
       <ui-card>
-        <form class="login-form" (ngSubmit)="submit()">
-          <ui-input label="Username" autocomplete="username" [required]="true" [(value)]="username" />
+        <form class="login-form" novalidate (ngSubmit)="submit()" [attr.aria-busy]="loading">
+          <ui-input
+            #usernameField
+            label="Username"
+            autocomplete="username"
+            [required]="true"
+            [hint]="setupMode ? usernameHint : 'Use your enrolled username, not your email.'"
+            [invalid]="invalidField === 'username'"
+            [describedBy]="invalidField === 'username' ? 'login-error' : undefined"
+            [(value)]="username"
+            (valueChange)="clearFieldError('username')"
+            />
           @if (needsDisplayName) {
-            <ui-input label="Display name" autocomplete="name" [required]="true" [(value)]="displayName" />
+            <ui-input
+              #nameField
+              label="Display name"
+              autocomplete="name"
+              [required]="true"
+              [invalid]="invalidField === 'name'"
+              [describedBy]="invalidField === 'name' ? 'login-error' : undefined"
+              [(value)]="displayName"
+              (valueChange)="clearFieldError('name')"
+              />
           }
-          <ui-input label="Vault passphrase" type="password" [showPasswordToggle]="true" [autocomplete]="needsDisplayName ? 'new-password' : 'current-password'" [required]="true" [(value)]="password" />
-          @if (passwordHint) { <p class="password-hint">{{ passwordHint }}</p> }
-          @if (error) { <p class="login-error" role="alert">{{ error }}</p> }
-          <ui-button type="submit" [disabled]="loading">
-            {{ loading ? (needsDisplayName ? 'Creating account' : 'Signing in') : (setupMode ? 'Create admin account' : 'Sign in') }}
-          </ui-button>
+          <ui-input
+            #passwordField
+            label="Vault passphrase"
+            type="password"
+            [showPasswordToggle]="true"
+            [autocomplete]="needsDisplayName ? 'new-password' : 'current-password'"
+            [required]="true"
+            [hint]="needsDisplayName ? passwordHint : undefined"
+            [invalid]="invalidField === 'password'"
+            [describedBy]="invalidField === 'password' ? 'login-error' : undefined"
+            [(value)]="password"
+            (valueChange)="clearFieldError('password')"
+            />
+          <p id="login-error" class="login-error" aria-live="polite" aria-atomic="true">{{ error }}</p>
+          <p class="password-hint" role="status">{{ loading ? (needsDisplayName ? 'Creating your account. Keep this tab open.' : 'Signing in…') : '' }}</p>
+          <ui-button type="submit" [disabled]="loading" [busy]="loading">{{ loading ? (needsDisplayName ? 'Creating account' : 'Signing in') : (setupMode ? 'Create admin account' : 'Sign in') }}</ui-button>
         </form>
-        @if (!setupMode && showSignup) {
-          <a class="mode-link" [href]="pageHref('signup')">Create an account</a>
-        }
+        @if (!setupMode && showSignup) { <a class="mode-link" [href]="pageHref('signup')">Create an account</a> }
       </ui-card>
     </div>
   </section>

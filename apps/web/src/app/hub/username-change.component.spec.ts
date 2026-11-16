@@ -54,4 +54,27 @@ describe('UsernameChangeComponent', () => {
     }
   });
 
+  it('focuses invalid username before passphrase and clears linked local errors on correction', async () => {
+    await fixture.componentInstance.save(); fixture.detectChanges();
+    const inputs = fixture.nativeElement.querySelectorAll('input') as NodeListOf<HTMLInputElement>;
+    expect(document.activeElement).toBe(inputs[0]);
+    expect(inputs[0].getAttribute('aria-invalid')).toBe('true');
+    expect(inputs[0].getAttribute('aria-describedby')).toContain('username-change-error');
+    inputs[0].value = 'next.name'; inputs[0].dispatchEvent(new Event('input')); fixture.detectChanges();
+    expect(inputs[0].hasAttribute('aria-invalid')).toBeFalse();
+    await fixture.componentInstance.save(); fixture.detectChanges();
+    expect(document.activeElement).toBe(inputs[1]);
+    expect(inputs[1].getAttribute('autocomplete')).toBe('current-password');
+    expect(auth.changeUsername).not.toHaveBeenCalled();
+  });
+
+  it('preserves Retry-After from the session error and announces it politely', async () => {
+    auth.changeUsername.and.rejectWith(new UsernameChangeError(429, undefined, undefined, '75'));
+    fixture.componentInstance.nextName = 'next.name'; fixture.componentInstance.passphrase = 'Synthetic passphrase';
+    await fixture.componentInstance.save(); fixture.detectChanges();
+    expect(errorRegion().textContent).toContain('75 seconds');
+    expect(errorRegion().getAttribute('aria-live')).toBe('polite');
+    expect(fixture.componentInstance.passphrase).toBe('');
+  });
+
 });

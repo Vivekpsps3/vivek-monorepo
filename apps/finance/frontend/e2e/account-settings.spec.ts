@@ -1,0 +1,49 @@
+import { createHash } from 'node:crypto';
+import { expect, test } from './frozen-clock';
+import AxeBuilder from '@axe-core/playwright';
+
+test('Settings reaches real CSV/security flows and signs out this browser once', async ({ page, context }) => {
+  test.setTimeout(120_000);
+  const username = `account.${createHash('sha256').update(test.info().title).digest('hex').slice(0, 12)}`;
+  await page.goto('/auth/login');
+  const bootstrap = await page.request.get('/api/auth/bootstrap-status').then(r => r.json());
+  if (!bootstrap.needs_setup) await page.goto('/auth/signup');
+  await page.getByLabel('Username', { exact: true }).fill(username);
+  await page.getByLabel(bootstrap.needs_setup ? 'Display name' : 'Name', { exact: true }).fill('Synthetic account');
+  await page.getByLabel('Vault passphrase', { exact: true }).fill('Synthetic account settings passphrase');
+  await page.getByRole('button', { name: bootstrap.needs_setup ? 'Create admin account' : 'Sign up', exact: true }).click();
+  await page.waitForURL(/\/hub$/);
+  await page.goto('/settings/account');
+  const name = page.getByLabel('Name', { exact: true });
+  await name.fill('');
+  await page.getByRole('button', { name: 'Save name', exact: true }).press('Enter');
+  await expect(name).toBeFocused();
+  await expect(name).toHaveAttribute('aria-describedby', /account-name-error/);
+  await name.fill('Updated synthetic account');
+  const saved = page.waitForResponse(r => r.url().endsWith('/api/account/name') && r.request().method() === 'PATCH');
+  await page.getByRole('button', { name: 'Save name', exact: true }).press('Enter');
+  expect((await saved).ok()).toBe(true);
+  for (const [label, filename] of [['Export transaction CSV', 'transactions.csv'], ['Export portfolio CSV', 'holdings.csv']]) {
+    await page.getByRole('link', { name: label, exact: true }).press('Enter');
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
+    expect((await download).suggestedFilename()).toBe(filename);
+    await page.goBack();
+    await expect(page.getByRole('heading', { name: 'Your data', exact: true })).toBeVisible();
+  }
+  await page.getByRole('link', { name: 'Change your vault passphrase, manage locks, or back up and restore encrypted data' }).click();
+  for (const name of ['Change vault passphrase', 'Encrypted recovery backup', 'Restore encrypted backup']) await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  await page.goBack();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  const otherTab = await context.newPage();
+  await otherTab.goto('/settings/account');
+  let logouts = 0;
+  page.on('request', request => { if (request.url().endsWith('/api/auth/logout')) logouts++; });
+  await page.getByRole('button', { name: 'Sign out of this browser', exact: true }).press('Enter');
+  await page.waitForURL(/\/auth\/login/);
+  await otherTab.waitForURL(/\/auth\/login/);
+  expect(logouts).toBe(1);
+  expect((await page.request.get('/api/auth/me')).status()).toBe(401);
+  await page.goto('/settings/account');
+  await expect(page).toHaveURL(/\/auth\/login/);
+});
