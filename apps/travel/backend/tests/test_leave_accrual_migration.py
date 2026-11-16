@@ -18,7 +18,7 @@ from apps.travel.backend.services.leave_math import Bucket, walk_bucket
 
 PARENT = "site_leave_carry_v1"
 REVISION = "site_leave_accrual_v1"
-HEAD = "site_vault_restore_v1"
+HEAD = "site_credential_wrap_revision_v1"
 COMPATIBLE = {
     "site_schema_v1",
     "site_auth_challenge_purpose_v2",
@@ -92,14 +92,17 @@ def test_upgrade_preserves_rows_and_keeps_one_daily_head(tmp_path):
     assert current_revision(database) == REVISION
     assert ScriptDirectory.from_config(_cfg(database)).get_heads() == [head_revision()]
     assert head_revision() == HEAD
-    # At this historical revision only the later restore expansion is absent.
+    # This historical revision predates restore staging and the credential revision.
     drift = model_diff(database)
-    assert len(drift) == 3
-    assert {(item[0], item[1].name) for item in drift} == {
+    assert len(drift) == 4
+    assert {(item[0], item[1].name) for item in drift if item[0] != "add_column"} == {
         ("add_table", "vault_restore_stages"),
         ("add_index", "ix_vault_restore_stages_user_id"),
         ("add_table", "vault_restore_batches"),
     }
+    assert [(item[2], item[3].name) for item in drift if item[0] == "add_column"] == [
+        ("users", "credential_wrap_revision")
+    ]
     with sqlite3.connect(database) as db:
         assert (
             _rows(db, f"SELECT {POLICIES} FROM leave_policies ORDER BY bucket") == before_policies

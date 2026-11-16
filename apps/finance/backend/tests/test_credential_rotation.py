@@ -299,10 +299,9 @@ def test_legacy_wrap_reads_preserve_lower_iterations_and_recovery_material():
     with SessionLocal() as db:
         user = db.query(User).filter_by(username="legacy.user").one()
         assert user.auth_recovery_wrapped_private_key_b64 == "legacy-auth-recovery-not-served"
-        assert (
-            encrypted_storage.get_vault(db, user.id).recovery_wrapped_dek_b64
-            == "legacy-dek-recovery-not-served"
-        )
+        vault = encrypted_storage.get_vault(db, user.id)
+        assert vault is not None
+        assert vault.recovery_wrapped_dek_b64 == "legacy-dek-recovery-not-served"
     assert TestClient(app).get(ENDPOINT).status_code == 401
 
 
