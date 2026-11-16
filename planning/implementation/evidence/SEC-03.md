@@ -3,7 +3,7 @@
 - Leaf: #268; parent: #121. Safety repair, not a simplification claim.
 - Context: Codex, branch `agent/sec-03`, isolated worktree `/tmp/vivek-sec-03`.
 - Base main: `f01716ac17633250b186f06956d5537f3e135a10`.
-- Tested implementation: `fc25cb8ee91b722385b2eccbe43d7748af8d0746` (subsequent commits update this evidence only).
+- Tested implementation: `fc25cb8ee91b722385b2eccbe43d7748af8d0746` (production implementation; later test repairs are recorded below).
 - Fresh-main/claims: fetched origin/main; no open PRs or leaf claims before starting. Claimed #268 with branch/worktree/base. Verified merged SEC-01 (#324, `939984de389b9e33510aecb12a80eb50ff3ef06b`), SEC-02 (#334, `1c3ae26cb15f8bf149da0e70d22efeaed3f30f81`) and CON-03 (#350, `04a5dac19356b3a6e6871a920b34fce0b843d08d`) ancestry and current origin/purpose, CSRF, and collection-policy implementations.
 
 ## Acceptance
@@ -49,6 +49,22 @@ All commands ran locally against the implementation above. The worktree uses unc
 Earlier failures were corrected and rerun: the sandbox could not start commands (used approved escalation); fast checks needed the virtualenv on PATH; the first rehearsal lacked a local image (built it); ownership check caught an unreviewed app import (kept composition in the existing route seam); full checks caught exact schema expectations and an accidentally duplicated login argument (fixed code/assertions); focused failure tests were corrected to assert the server's generic 500 and subsequent rollback. Those attempts were not counted as passes.
 
 Rehearsal artifact: `/tmp/seed-validation-report.json` contains synthetic fixtures only. Adopt preserved 2,527 original rows; upgrade preserved 2,855 application rows with 1,200 encrypted records and 300 blind indexes. No real data, credentials or artifacts are committed.
+
+## CI follow-up
+
+CI run 43791339402 passed release, frontend and Playwright, but Travel's historical
+migration test still named the previous single head and only three later schema
+objects. Updated that exact expectation to the new head plus the credential column;
+kept all original row-preservation assertions. Also added an explicit non-null
+assertion for the legacy-vault test before reading its recovery column, fixing a
+mypy error exposed after that final fixture addition. No production code changed.
+Follow-up test commit: `a08fd29f8f1318d7874d1efa62afbcc65bf5c826`.
+
+Additional local verification: Travel coverage PASS (190 tests, 86.05%, floor
+80.41%); Travel static Node tests PASS (49); Media coverage PASS (91 tests, 69.70%,
+floor 68.70%); Finance coverage PASS again (159, 82.32%); Python lint and types PASS.
+Post-CI test repair delta is +10/-8 in addition to the initial ledger. These are
+exact preserving expectations, not weakened gates.
 
 ## Handoff
 
