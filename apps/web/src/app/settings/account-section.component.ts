@@ -1,14 +1,16 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ToastService, UiButtonComponent, UiCardComponent, UiInputComponent } from '@vivek/ui';
+import { accountErrorMessage } from '../platform/auth/account-error';
 import { UsernameChangeComponent } from '../hub/username-change.component';
 import { SessionService } from '../platform/session.service';
 
 @Component({
   selector: 'app-account-section',
   standalone: true,
-  imports: [RouterLink, UiButtonComponent, UiCardComponent, UiInputComponent, UsernameChangeComponent],
+  imports: [FormsModule, RouterLink, UiButtonComponent, UiCardComponent, UiInputComponent, UsernameChangeComponent],
   templateUrl: './account-section.component.html',
   styleUrl: './account-section.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -23,6 +25,19 @@ export class AccountSectionComponent implements OnInit {
   savingName = false;
   nameError = '';
   nameInvalid = false;
+  signingOut = false;
+
+  signOut(): void {
+    if (this.signingOut) return;
+    this.signingOut = true;
+    void this.session.logout().catch(() => {
+      if (this.destroyRef.destroyed) return;
+      this.signingOut = false;
+      this.toast.error('Could not finish signing out. Try again.');
+      this.cdr.markForCheck();
+    });
+  }
+
 
   @ViewChild(UiInputComponent) private nameField?: UiInputComponent;
   @ViewChild('nameAlert') private nameAlert?: ElementRef<HTMLElement>;
@@ -53,7 +68,7 @@ export class AccountSectionComponent implements OnInit {
       await this.session.updateDisplayName(name);
       this.toast.success('Saved');
     } catch (err) {
-      this.showNameError(err instanceof Error ? err.message : 'The name could not be saved.', false);
+      this.showNameError(accountErrorMessage(err, 'name'), false);
     } finally {
       this.savingName = false;
       this.cdr.markForCheck();

@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { createSigningKey } from '@vivek/auth';
 import { SESSION_CONTEXT, authNavigation } from '@vivek/ui';
 import { AuthService } from './auth.service';
+import { accountErrorMessage } from './account-error';
 import { UsernameChangeError } from './username-change';
 import { SessionService } from '../session.service';
 import { createVaultMaterial, hasDek, VaultService } from '../../../../../finance/frontend/src/testing';
@@ -89,6 +90,21 @@ describe('AuthService passwordless login', () => {
       message: 'vault-auth-v1\nhttp://localhost\n2099-01-01T00:00:00',
     });
     await expectAsync(loginPromise).toBeRejected();
+  });
+
+  it('retains the verify response status and Retry-After header for safe form copy', async () => {
+    const material = await createSigningKey('Synthetic passphrase', 1_000);
+    for (const status of [429, 503]) {
+      const pending = service.loginWithVault('synthetic', 'Synthetic passphrase').catch((error: unknown) => error);
+      http.expectOne(`${api}/auth/passwordless/lookup`).flush({ auth: material.wrapped });
+      const challenge = await nextRequest(http, `${api}/auth/passwordless/challenge`);
+      challenge.flush({ challenge_id: 'synthetic-challenge', challenge: 'raw-challenge', message: 'vault-auth-v1\nhttp://localhost\n2099-01-01T00:00:00' });
+      const verify = await nextRequest(http, `${api}/auth/passwordless/verify`);
+      verify.flush({ detail: 'PRIVATE_VERIFY_INTERNALS' }, { status, statusText: 'Rejected', headers: { 'Retry-After': '37' } });
+      const error = await pending;
+      expect(accountErrorMessage(error, 'login')).toBe(status === 429 ? 'Too many attempts. Try again in 37 seconds.' : 'A server or network error prevented the request. Try again.');
+      expect(vault.unlock).not.toHaveBeenCalled();
+    }
   });
 
   it('does not call /auth/me when the browser has no session cookie', async () => {
@@ -545,6 +561,16 @@ describe('AuthService passwordless login', () => {
     expect(service.currentUser?.id).toBe(4);
     expect(service.currentUser?.username).toBe('legacy.user@example.com');
     expect(localStorage.getItem('finance-dek')).toBe('synthetic-key');
+  });
+
+  it('preserves Retry-After on a username lookup without starting a challenge or refresh', async () => {
+    await signInAs('synthetic');
+    const pending = service.changeUsername('next.name', 'Synthetic passphrase').catch((error: unknown) => error);
+    const lookup = await nextRequest(http, `${api}/auth/passwordless/lookup`);
+    lookup.flush({ detail: 'Rate limited' }, { status: 429, statusText: 'Limited', headers: { 'Retry-After': '28' } });
+    expect(await pending).toEqual(jasmine.objectContaining({ status: 429, message: 'Too many attempts. Try again in 28 seconds.' }));
+    http.expectNone(`${api}/auth/passwordless/challenge`);
+    http.expectNone(`${api}/auth/me`);
   });
 
   it('shows the generic copy for a 5xx mutation and does not refresh', async () => {

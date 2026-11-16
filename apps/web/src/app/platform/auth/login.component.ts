@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, inject, OnInit, ViewChild } from '@angular/core';
+import { usernameForStorage } from '@vivek/auth';
+import { accountErrorField, accountErrorMessage, PASSPHRASE_HINT, USERNAME_HINT } from './account-error';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { authPath, continueAfterAuth } from '@vivek/ui';
@@ -18,6 +20,7 @@ export class LoginComponent implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
   private cdr = inject(ChangeDetectorRef);
+  private readonly destroyRef = inject(DestroyRef);
   private toast = inject(ToastService);
 
   username = '';
@@ -27,6 +30,25 @@ export class LoginComponent implements OnInit {
   showSignup = false;
   loading = false;
   error = '';
+  invalidField = '';
+  readonly usernameHint = USERNAME_HINT;
+  @ViewChild('usernameField') private usernameField?: UiInputComponent;
+  @ViewChild('nameField') private nameField?: UiInputComponent;
+  @ViewChild('passwordField') private passwordField?: UiInputComponent;
+
+  clearFieldError(field: string): void {
+    if (this.invalidField === field) { this.error = ''; this.invalidField = ''; }
+  }
+
+  private showError(message: string, field = ''): void {
+    if (this.destroyRef.destroyed) return;
+    this.error = message;
+    this.invalidField = field;
+    this.cdr.detectChanges();
+    if (field === 'username') this.usernameField?.focus();
+    if (field === 'name') this.nameField?.focus();
+    if (field === 'password') this.passwordField?.focus();
+  }
 
   pageHref(page: 'login' | 'signup'): string {
     return authPath(page);
@@ -59,38 +81,38 @@ export class LoginComponent implements OnInit {
 
   submit(): void {
     if (this.loading) return;
-    if (!this.canSubmit) {
-      this.error = 'Enter the required account details.';
-      this.cdr.markForCheck();
+    if (!this.username.trim()) {
+      this.showError('Enter your username, not your email.', 'username');
       return;
     }
+    if (this.setupMode && !usernameForStorage(this.username.trim())) {
+      this.showError(`Username must be ${USERNAME_HINT}`, 'username');
+      return;
+    }
+    if (this.setupMode && (!this.displayName.trim() || this.displayName.trim().length > 160)) {
+      this.showError('Enter a display name of 1–160 characters.', 'name');
+      return;
+    }
+    if (!this.password || (this.setupMode && this.password.length < 12)) {
+      this.showError(this.setupMode ? PASSPHRASE_HINT : 'Enter your vault passphrase.', 'password');
+      return;
+    }
+    this.invalidField = '';
     this.loading = true;
     this.error = '';
     this.cdr.markForCheck();
-    if (this.setupMode) {
-      this.auth.bootstrapPasswordless(this.username, this.displayName, this.password).then(
-        () => {
-          this.loading = false;
-          this.cdr.markForCheck();
-          return continueAfterAuth(this.router);
-        },
-        err => {
-          this.error = this.errorMessage(err);
-          this.loading = false;
-          this.cdr.markForCheck();
-        }
-      );
-      return;
-    }
-    this.auth.loginWithVault(this.username, this.password).then(
+    const pending = this.setupMode
+      ? this.auth.bootstrapPasswordless(this.username, this.displayName, this.password)
+      : this.auth.loginWithVault(this.username, this.password);
+    pending.then(
       () => {
         this.loading = false;
         this.cdr.markForCheck();
         return continueAfterAuth(this.router);
       },
       err => {
-        this.error = this.errorMessage(err);
         this.loading = false;
+        this.showError(accountErrorMessage(err, 'login'), accountErrorField(err));
         this.cdr.markForCheck();
       }
     );
@@ -100,35 +122,11 @@ export class LoginComponent implements OnInit {
     return this.setupMode;
   }
 
-  get canSubmit(): boolean {
-    if (this.loading || !this.username.trim() || !this.password) {
-      return false;
-    }
-    if (this.needsDisplayName && !this.displayName.trim()) return false;
-    if (this.needsDisplayName && this.password.length < 12) return false;
-    return true;
-  }
-
   get passwordHint(): string {
     if (this.needsDisplayName) {
-      return 'Use at least 12 characters. Your passphrase signs in and unlocks your vault.';
+      return PASSPHRASE_HINT;
     }
     return 'Use your enrolled username.';
   }
 
-  private errorMessage(err: any): string {
-    if (err instanceof Error && err.message) return err.message;
-    const detail = err?.error?.detail;
-    if (typeof detail === 'string') return detail;
-    if (Array.isArray(detail) && detail.length) {
-      return detail
-        .map(item => {
-          const field = Array.isArray(item?.loc) ? item.loc[item.loc.length - 1] : null;
-          const message = item?.msg || 'Invalid value';
-          return field ? `${field}: ${message}` : message;
-        })
-        .join('; ');
-    }
-    return this.setupMode ? 'Setup failed' : 'Vault authentication failed';
-  }
 }

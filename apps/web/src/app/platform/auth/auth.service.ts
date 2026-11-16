@@ -9,6 +9,7 @@ const apiUrl = (path: string) => `/api${path}`;
 import { AuthUser, LoginResponse, SignupPolicy } from './auth.models';
 import { createSigningKey, signChallenge, WrappedSigningKey } from '@vivek/auth';
 import { silentErrorToast } from '@vivek/ui';
+import { AccountFormError, SIGN_IN_FAILED } from './account-error';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -169,30 +170,21 @@ export class AuthService {
       signature_b64 = await signChallenge(vaultPassphrase, lookup.auth, challenge.message);
     } catch {
       // Same failure shape for wrong passphrase and unknown username (decoy wraps).
-      throw new Error(
-        'Sign-in failed. Check your username, not your email, and your vault passphrase. ' +
-          'A browser that is already signed in only needs the passphrase on Unlock vault—use that username on new browsers.'
-      );
+      throw new AccountFormError(SIGN_IN_FAILED);
     }
-    let response: LoginResponse;
-    try {
-      response = await firstValueFrom(
-        this.http.post<LoginResponse>(
-          apiUrl('/auth/passwordless/verify'),
-          {
-            username: handle,
-            challenge_id: challenge.challenge_id,
-            challenge: challenge.challenge,
-            message: challenge.message,
-            signature_b64,
-          },
-          { withCredentials: true }
-        )
-      );
-    } catch (err: any) {
-      const detail = err?.error?.detail;
-      throw new Error(typeof detail === 'string' ? detail : 'Vault authentication failed');
-    }
+    const response = await firstValueFrom(
+      this.http.post<LoginResponse>(
+        apiUrl('/auth/passwordless/verify'),
+        {
+          username: handle,
+          challenge_id: challenge.challenge_id,
+          challenge: challenge.challenge,
+          message: challenge.message,
+          signature_b64,
+        },
+        { withCredentials: true }
+      )
+    );
     this.checkedSession = true;
     this.session.resetDomainState();
     this.session.acceptUser(response.user);
@@ -201,7 +193,7 @@ export class AuthService {
       await (await this.financeVault()).unlock(vaultPassphrase, true);
     } catch {
       this.clearLocalSession();
-      throw new Error('Vault authentication succeeded, but this passphrase cannot unlock the vault.');
+      throw new AccountFormError('Vault authentication succeeded, but this passphrase cannot unlock the vault.');
     }
     // Another PBKDF2 pass. It must not delay navigation, and a failed upgrade must not log the user out.
     void (await this.financeVault()).upgradeKdfIfNeeded(vaultPassphrase);

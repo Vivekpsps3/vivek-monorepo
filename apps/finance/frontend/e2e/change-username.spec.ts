@@ -96,7 +96,10 @@ test('old account URLs open settings account', async ({ page }) => {
   await page.waitForURL(/\/settings\/account$/, { timeout: 30_000 });
   await expect(page.getByRole('heading', { level: 1, name: 'Account' })).toBeVisible();
   await expect(page.getByLabel('New username', { exact: true })).toBeVisible();
-  const hint = page.getByText('3–64 characters: a–z, 0–9, . _ -');
+  const username = page.getByLabel('New username', { exact: true });
+  await expect(username).toHaveAttribute('autocomplete', 'username');
+  await expect(username).toHaveAttribute('aria-describedby', /-hint/);
+  const hint = page.getByText('3–64 letters, numbers, dots, underscores, or hyphens.', { exact: true });
   await expect(hint).toBeVisible();
 });
 

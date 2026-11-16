@@ -1,5 +1,6 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AuthUser } from './auth.models';
 import { SignupComponent } from './signup.component';
 import { AuthService } from './auth.service';
@@ -47,28 +48,28 @@ describe('SignupComponent', () => {
     enter(fields()[1], 'ab');
     submitButton().click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('Enter a name.');
+    expect(fixture.nativeElement.querySelector('#signup-error').textContent).toContain('Enter a name.');
     expect(auth.signupPasswordless).not.toHaveBeenCalled();
 
     enter(fields()[0], 'Vivek');
     enter(fields()[1], 'ab');
     submitButton().click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('Username must be');
+    expect(fixture.nativeElement.querySelector('#signup-error').textContent).toContain('Username must be');
     expect(auth.signupPasswordless).not.toHaveBeenCalled();
 
     enter(fields()[1], 'valid.user');
     enter(fields()[2], 'short');
     submitButton().click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('at least 12 characters');
+    expect(fixture.nativeElement.querySelector('#signup-error').textContent).toContain('at least 12 characters');
     expect(submitButton().disabled).toBeFalse();
     expect(auth.signupPasswordless).not.toHaveBeenCalled();
   });
 
   it('submits values from shared inputs, shows request errors, and allows retry', async () => {
     auth.signupPasswordless.and.returnValues(
-      Promise.reject(new Error('Username is already registered')),
+      Promise.reject(new HttpErrorResponse({ status: 409 })),
       Promise.resolve({} as AuthUser)
     );
     enter(fields()[0], 'Vivek User');
@@ -82,7 +83,7 @@ describe('SignupComponent', () => {
 
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('already registered');
+    expect(fixture.nativeElement.querySelector('#signup-error').textContent).toContain('already registered');
     expect(submitButton().disabled).toBeFalse();
 
     submitButton().click();
@@ -103,4 +104,39 @@ describe('SignupComponent', () => {
     expect(closed.nativeElement.querySelector('button[type="submit"]')).toBeNull();
     expect(auth.signupPasswordless).not.toHaveBeenCalled();
   });
+  it('focuses the first invalid field, links the error and clears it when corrected', () => {
+    submitButton().click(); fixture.detectChanges();
+    const input = fields()[0];
+    expect(document.activeElement).toBe(input);
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('aria-describedby')).toContain('signup-error');
+    expect(fixture.nativeElement.querySelector('#signup-error').getAttribute('aria-live')).toBe('polite');
+    enter(input, 'Synthetic user');
+    expect(input.hasAttribute('aria-invalid')).toBeFalse();
+    expect(fixture.nativeElement.querySelector('#signup-error').textContent.trim()).toBe('');
+    submitButton().click(); fixture.detectChanges();
+    expect(document.activeElement).toBe(fields()[1]);
+    expect(fields()[1].getAttribute('aria-describedby')).toContain('-hint');
+  });
+
+  it('keeps the status region mounted while idle and while a signup is held', () => {
+    expect(fixture.nativeElement.querySelector('[role="status"]').textContent).toContain('then sign up');
+    auth.signupPasswordless.and.returnValue(new Promise(() => undefined));
+    enter(fields()[0], 'Synthetic'); enter(fields()[1], 'synthetic.user'); enter(fields()[2], 'Synthetic passphrase');
+    submitButton().click(); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="status"]').textContent).toContain('Creating your account');
+    expect(fixture.nativeElement.querySelector('form').getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('announces slow local setup at 30 seconds and disposes its timers on destruction', fakeAsync(() => {
+    auth.signupPasswordless.and.returnValue(new Promise(() => undefined));
+    fixture.componentInstance.displayName = 'Synthetic'; fixture.componentInstance.username = 'synthetic.user'; fixture.componentInstance.password = 'Synthetic passphrase';
+    fixture.componentInstance.submit();
+    tick(5_000); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="status"]').textContent).toContain('Setting up encryption');
+    tick(25_000); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="status"]').textContent).toContain("Don't close this tab");
+    fixture.destroy();
+  }));
+
 });

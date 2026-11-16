@@ -134,7 +134,7 @@ export class SessionService {
     if (err instanceof UsernameChangeError) return err;
     if (err instanceof HttpErrorResponse) {
       const detail = err.error && typeof err.error === 'object' ? err.error.detail : undefined;
-      return new UsernameChangeError(err.status, detail);
+      return new UsernameChangeError(err.status, detail, undefined, err.headers.get('Retry-After'));
     }
     return new UsernameChangeError(0);
   }

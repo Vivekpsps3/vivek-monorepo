@@ -1,7 +1,7 @@
 <h1>Account</h1>
 <ui-card>
   <h2>Account settings</h2>
-  <form class="account-name" (ngSubmit)="saveName()">
+  <form class="account-name" novalidate (ngSubmit)="saveName()">
     <ui-input
       label="Name"
       autocomplete="name"
@@ -18,6 +18,15 @@
   <app-username-change />
 </ui-card>
 <ui-card>
-  <h2>Data and security</h2>
+  <h2>Your data</h2>
+  <p>CSV exports are available in Finance. Unlock your vault to download them.</p>
+  <p><a routerLink="/finance/spending">Export transaction CSV</a></p>
+  <p><a routerLink="/finance/portfolio">Export portfolio CSV</a></p>
+  <h3>Security and encrypted backups</h3>
   <a routerLink="/settings/finance">Change your vault passphrase, manage locks, or back up and restore encrypted data</a>
+</ui-card>
+<ui-card>
+  <h2>Sessions</h2>
+  <p>Sign out of this browser, including its other open tabs, and clear its local vault keys. Other browsers stay signed in.</p>
+  <ui-button type="button" variant="secondary" [disabled]="signingOut" [busy]="signingOut" (clicked)="signOut()">Sign out of this browser</ui-button>
 </ui-card>
