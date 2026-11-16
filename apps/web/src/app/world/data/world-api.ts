@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, firstValueFrom, takeUntil } from 'rxjs';
+import { Observable, firstValueFrom, takeUntil, timeout } from 'rxjs';
 import { silentErrorToast } from '@vivek/ui';
 import type { TownResponse } from '../../town/town.types';
 import type { ConceptFieldErrors, ConceptRecord, WorldResponse } from '../world.types';
@@ -155,7 +155,7 @@ export class WorldApi {
   private async send<T>(work: () => Observable<T>, signal: AbortSignal): Promise<T> {
     if (signal.aborted) throw new WorldRequestAborted();
     try {
-      return await firstValueFrom(work().pipe(takeUntil(abort$(signal))));
+      return await firstValueFrom(work().pipe(timeout(12_000), takeUntil(abort$(signal))));
     } catch (error) {
       if (signal.aborted || error instanceof WorldRequestAborted) throw new WorldRequestAborted();
       throw mapWorldHttpError(error);

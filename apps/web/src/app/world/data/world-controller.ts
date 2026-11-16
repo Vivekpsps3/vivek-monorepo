@@ -246,8 +246,42 @@ export class WorldController {
     } catch (error) {
       this.fail(gen, linked.signal, error);
     } finally {
-      linked.done();
       await townTask;
+      linked.done();
+      this.end(gen);
+    }
+  }
+
+  /** Fill the contiguous gap to a dated visit, within the API's 26-week cap. */
+  async ensureWeek(iso: string, signal: AbortSignal): Promise<void> {
+    if (!this.meta) return;
+    const target = this.mondayOf(iso);
+    if (this.weeks.has(target)) return;
+    const gen = this.begin();
+    const work = openBoundedWork({ parents: [signal, this.worldAbort.signal], deadlineMs: 15_000 });
+    try {
+      while (this.alive(gen, work.signal) && !this.weeks.has(target)) {
+        const oldest = this.oldest();
+        if (!oldest) break;
+        const range = nextOlderRange(oldest, this.meta.start_week);
+        if (!range) break;
+        const result = await work.run(() => this.deps.api.getWorld(range.from, range.to, work.signal));
+        if (result.status !== 'ok') {
+          if (result.status === 'failed') throw result.error;
+          if (result.status === 'deadline' && gen === this.generation) this.error = 'Loading this date took too long. Try again.';
+          return;
+        }
+        if (!this.alive(gen, work.signal)) return;
+        this.install(result.value, normalizeMeta(result.value.meta), range.from, range.to, 'merge');
+      }
+      if (this.alive(gen, work.signal)) {
+        this.error = null;
+        await this.refreshBudget(work.signal);
+      }
+    } catch (error) {
+      this.fail(gen, work.signal, error);
+    } finally {
+      work.dispose();
       this.end(gen);
     }
   }
@@ -407,17 +441,23 @@ export class WorldController {
     const ctrl = new AbortController();
     this.budgetAbort = ctrl;
     const epoch = this.budgetEpoch;
-    const work = openBoundedWork({ controller: ctrl, parents: [signal] });
+    const work = openBoundedWork({ controller: ctrl, parents: [signal], deadlineMs: 12_000 });
     const today = this.meta.today;
     this.budgetView = { status: 'loading' };
     this.publishChests(true);
     let result: BudgetLoadResult;
     try {
-      result = await this.deps.loadBudget(work.signal, { today, weeks, includeCurrentWeek: false });
+      const step = await work.run(() => this.deps.loadBudget(work.signal, { today, weeks, includeCurrentWeek: false }));
+      result = step.status === 'ok' ? step.value : { status: step.status === 'cancelled' ? 'cancelled' : 'unavailable' };
     } catch {
       result = work.signal.aborted ? { status: 'cancelled' } : { status: 'unavailable' };
     } finally {
       work.dispose();
+    }
+    if (work.timedOut() && epoch === this.budgetEpoch && !signal.aborted) {
+      this.budgetView = { status: 'unavailable' };
+      this.publishChests(false);
+      return;
     }
     if (!mayPublish(work, epoch === this.budgetEpoch) || !this.meta) return;
     const view = toBudgetView(result);

@@ -1,3 +1,5 @@
+import { generateChunk, normalizeWeek, worldSeed } from '../src/app/world/engine';
+import { engineWeek } from '../src/app/world/logic/engine-week';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '../../../tests/e2e/fixtures';
 
@@ -56,11 +58,14 @@ test.describe('World explorer', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'World' })).toBeVisible();
     const region = page.locator('[role="region"][aria-label="World"]');
     const live = page.locator('.world-live');
+    await expect(page.getByRole('button', { name: 'Previous week', exact: true })).toBeEnabled();
     await region.focus();
     await region.press('End');
     await expect(live).toHaveText('Town');
     await region.press('Home');
     await expect(live).not.toHaveText('Town');
+    await page.goBack();
+    await expect(page.locator('app-world')).toHaveCount(1);
     await page.goBack();
     await expect(page.locator('app-world')).toHaveCount(0);
     await page.goForward();
@@ -86,11 +91,12 @@ test.describe('World explorer', () => {
     const world = page.locator('app-world');
     await expect(world).toHaveAttribute('data-view', 'list');
     await expect(page.getByText('Reduced motion is on, so World opens on the list.')).toBeVisible();
-    // The list collapses the map, and change detection paints the live region
-    // on the next frame. Press the region itself so End and Home still move it.
+    // The list offers a visible keyboard explorer as the canvas alternative.
+    // Wait for loading to finish before sending navigation keys.
     const region = page.locator('[role="region"][aria-label="World"]');
     const live = page.locator('.world-live');
     await expect(live).toHaveText(/2026-10-12/);
+    await expect(page.getByRole('button', { name: 'Previous week', exact: true })).toBeEnabled();
     await region.focus();
     await region.press('End');
     await expect(live).toHaveText('Town');
@@ -112,6 +118,7 @@ test.describe('World explorer', () => {
         await expect(next).toHaveText('Next week');
         await expect(previous).toBeVisible();
         await expect(next).toBeVisible();
+        await expect(previous).toBeEnabled();
         await previous.focus();
         await page.keyboard.press('Enter');
         await expect(page).toHaveURL(/week=2026-10-05$/);
@@ -308,3 +315,182 @@ function allowedPath(pathname: string): boolean {
   if (/^\/world\/[^/]+\.svg$/.test(pathname)) return true;
   return false;
 }
+
+test.describe('World dated landscape and inspection', () => {
+  const meta = { today: '2026-11-04', current_week: '2026-11-02', start_week: '2025-12-29', version: 1 };
+  const week = {
+    week: '2026-10-19',
+    trips: [{ id: 15, title: 'Coastal trail', start: '2026-10-19', end: '2026-10-22', place: { label: 'Oregon', lat_e2: 4400 } }],
+    finished: [{ entry_id: 21, kind: 'book' as const, title: 'Tide Almanac', on: '2026-10-21' }],
+    habits: [{ habit_id: 31, name: 'Morning walk', style: 'garden' as const, archived: false, days: ['2026-10-21', '2026-10-23'] }],
+    concepts: [{ id: 41, name: 'Reading the tides', on: '2026-10-21' }, { id: 42, name: 'Moon phases', on: '2026-10-21' }],
+  };
+  test.beforeEach(async ({ request, page }) => {
+    expect((await request.post('/e2e/reset?seed=pixels')).ok()).toBeTruthy();
+    await page.route(url => url.pathname === '/api/world', async route => {
+      const from = new URL(route.request().url()).searchParams.get('from');
+      const to = new URL(route.request().url()).searchParams.get('to');
+      const weeks = (!from || week.week >= from) && (!to || week.week <= to) ? [week] : [];
+      await route.fulfill({ json: { meta, weeks } });
+    });
+  });
+
+  for (const width of [320, 390, 1280]) {
+    for (const theme of ['light', 'dark'] as const) {
+      test(`World map and inspector reflow accessibly at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+        await page.goto('/town/world?week=2026-10-19&day=2026-10-21');
+        await expect(page.getByRole('button', { name: 'Previous week', exact: true })).toBeEnabled();
+        await page.getByRole('button', { name: 'Map', exact: true }).click();
+        await page.getByRole('list', { name: 'Recorded items for this day' }).getByRole('button', { name: /Tide Almanac/ }).click();
+        await expect(page.getByRole('article', { name: 'Selected object' })).toContainText('Tide Almanac');
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+        expect((await new AxeBuilder({ page }).include('app-world').analyze()).violations).toEqual([]);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.screenshot({ path: testInfo.outputPath(`world-${width}-${theme}.png`), fullPage: true });
+        await page.setViewportSize({ width: width === 1280 ? 390 : 1280, height: 900 });
+        await expect(page.getByLabel('Jump to date')).toHaveValue('2026-10-21');
+        await expect(page.getByRole('article', { name: 'Selected object' })).toContainText('Tide Almanac');
+      });
+    }
+  }
+
+  test('restores an exact older civil date, reloads it, and follows selection history', async ({ page }) => {
+    const ranges: URL[] = [];
+    page.on('request', request => {
+      const url = new URL(request.url());
+      if (url.pathname === '/api/world') ranges.push(url);
+    });
+    await page.goto('/town/world?week=2025-12-29&day=2025-12-31');
+    await expect(page.getByLabel('Jump to date')).toHaveValue('2025-12-31');
+    await expect(page.locator('.world-panel h2')).toHaveText('Wednesday, December 31, 2025');
+    expect(ranges.length).toBeGreaterThan(1);
+    for (const range of ranges.filter(url => url.searchParams.has('from'))) {
+      expect((Date.parse(range.searchParams.get('to')!) - Date.parse(range.searchParams.get('from')!)) / 86_400_000).toBeLessThanOrEqual(175);
+    }
+    await page.getByLabel('Jump to date').fill('2026-10-21');
+    await page.getByLabel('Jump to date').dispatchEvent('change');
+    await expect(page.locator('.world-panel h2')).toHaveText('Wednesday, October 21, 2026');
+    await page.goBack();
+    await expect(page.getByLabel('Jump to date')).toHaveValue('2025-12-31');
+    await page.goForward();
+    await expect(page.getByLabel('Jump to date')).toHaveValue('2026-10-21');
+    await page.reload();
+    await expect(page.locator('.world-panel h2')).toHaveText('Wednesday, October 21, 2026');
+    await expect(page.getByRole('link', { name: 'See this day in Pixels' })).toHaveAttribute('href', '/pixels?year=2026&day=2026-10-21');
+  });
+
+  test('shows dated facts, source explanations and exact supported source links by keyboard', async ({ page }) => {
+    await page.goto('/town/world?week=2026-10-19&day=2026-10-21');
+    const items = page.getByRole('list', { name: 'Recorded items for this day' });
+    await expect(items.getByRole('listitem')).toHaveCount(5);
+    const book = items.getByRole('button', { name: /Tide Almanac/ });
+    await book.focus();
+    await book.press('Enter');
+    const inspector = page.getByRole('article', { name: 'Selected object' });
+    await expect(inspector).toContainText('recorded completion in Media');
+    await expect(inspector.getByRole('link', { name: 'Open in Media' })).toHaveAttribute('href', '/media/item/21');
+    await expect(page.locator('.world-panel')).toBeFocused();
+    await items.getByRole('button', { name: /Coastal trail/ }).click();
+    await expect(inspector).toContainText('Oregon');
+    await expect(inspector.getByRole('link', { name: 'Open in Travel' })).toHaveAttribute('href', '/travel/trips/15?day=2026-10-21');
+    await page.getByRole('button', { name: /Friday, October 23, 2026. 1 recorded item$/ }).click();
+    await expect(items.getByRole('listitem')).toHaveCount(1);
+    await expect(items).toContainText('Morning walk');
+  });
+
+  for (const width of [390, 1280]) {
+    test(`picks overlapping painted objects at ${width}px, and a drag or cancelled touch never activates`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto('/town/world?week=2026-10-19&day=2026-10-21');
+      await expect(page.getByRole('button', { name: 'Previous week', exact: true })).toBeEnabled();
+      await page.getByRole('button', { name: 'Map', exact: true }).click();
+      const user = await (await page.request.get('/api/auth/me')).json();
+      const chunk = generateChunk(worldSeed(user.user.id), normalizeWeek(engineWeek(week)));
+      const structure = chunk.structures[0];
+      const stage = page.locator('.world-stage');
+      const box = (await stage.boundingBox())!;
+      const scale = Math.max(10, Math.min(18, Math.floor(box.width / 56)));
+      // The selected Wednesday is centered; the garden and second prop overlap.
+      const x = box.x + box.width / 2 + (structure.x + 1 - 20) * scale;
+      const y = box.y + (chunk.heights[structure.x] - 1) * scale;
+      await page.mouse.click(x, y);
+      const chooser = page.getByRole('group', { name: 'Choose an object' });
+      await expect(chooser).toBeVisible();
+      await chooser.getByRole('button', { name: /Morning walk/ }).click();
+      await expect(page.getByRole('article', { name: 'Selected object' })).toContainText('recorded habit check-ins');
+      await page.getByRole('button', { name: /Wednesday, October 21, 2026. 5 recorded items$/ }).click();
+      await expect(page.getByRole('article', { name: 'Selected object' })).toHaveCount(0);
+      await stage.scrollIntoViewIfNeeded();
+      const dragBox = (await stage.boundingBox())!;
+      const dragX = dragBox.x + dragBox.width / 2;
+      const dragY = dragBox.y + dragBox.height / 2;
+      await page.mouse.move(dragX, dragY);
+      await page.mouse.down();
+      await page.mouse.move(dragX + 70, dragY, { steps: 5 });
+      await page.mouse.up();
+      await expect(page.getByRole('article', { name: 'Selected object' })).toHaveCount(0);
+      await expect(chooser).toHaveCount(0);
+      await stage.dispatchEvent('pointerdown', { pointerId: 7, pointerType: 'touch', button: 0, clientX: x, clientY: y });
+      await stage.dispatchEvent('pointercancel', { pointerId: 7, pointerType: 'touch', button: 0, clientX: x, clientY: y });
+      await expect(chooser).toHaveCount(0);
+      await expect(page.getByRole('article', { name: 'Selected object' })).toHaveCount(0);
+    });
+  }
+
+  test('keeps quiet terrain, future horizon, overlay and source failure distinct', async ({ page }) => {
+    await page.goto('/town/world?week=2026-11-02&day=2026-11-03');
+    await expect(page.locator('.world-panel')).toContainText('No recorded activity');
+    await expect(page.locator('.world-panel')).toContainText('nothing about how the day was lived');
+    await page.getByRole('button', { name: 'Map', exact: true }).click();
+    await expect(page.locator('canvas')).toBeVisible();
+    await page.getByRole('button', { name: 'Activity markers', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Activity markers', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await page.getByRole('button', { name: /Friday, November 6, 2026/ }).click();
+    await expect(page.locator('.world-panel')).toContainText('On the horizon');
+    await page.route(url => url.pathname === '/api/world', route => route.fulfill({ status: 503, json: {} }));
+    await page.reload();
+    await expect(page.locator('.world-banner[role="alert"]')).toContainText('World is unavailable');
+    await expect(page.locator('.world-quiet')).toHaveCount(0);
+  });
+});
+
+test('World learning saves, renames and undo retract the actual dated beacon', async ({ page, request }) => {
+  expect((await request.post('/e2e/reset?seed=pixels')).ok()).toBeTruthy();
+  const response = await (await request.get('/api/world?tz=America%2FLos_Angeles')).json();
+  const today = response.meta.today as string;
+  await page.goto(`/town/world?day=${today}`);
+  await expect(page.getByRole('button', { name: 'Previous week', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Concepts', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Concepts', exact: true });
+  await dialog.getByRole('button', { name: 'Add a concept', exact: true }).click();
+  await dialog.getByLabel('Name', { exact: true }).fill('A tide worth remembering');
+  await dialog.getByLabel('Note', { exact: true }).fill('A learning note saved through the real source.');
+  await dialog.locator('#concept-understood').fill(today);
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await dialog.getByRole('tab', { name: 'Understood', exact: true }).click();
+  await expect(dialog.getByRole('heading', { name: 'A tide worth remembering', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  const items = page.getByRole('list', { name: 'Recorded items for this day' });
+  await expect(items).toContainText('A tide worth remembering');
+  await items.getByRole('button', { name: /A tide worth remembering/ }).click();
+  await page.getByRole('button', { name: 'Open concept', exact: true }).click();
+  const card = dialog.getByRole('article').filter({ has: page.getByRole('heading', { name: 'A tide worth remembering', exact: true }) });
+  await expect(card).toBeFocused();
+  let worldReads = 0;
+  page.on('request', request => { if (new URL(request.url()).pathname === '/api/world') worldReads++; });
+  await card.getByRole('button', { name: 'Edit', exact: true }).click();
+  await dialog.getByLabel('Name', { exact: true }).fill('Understanding the tide');
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(items).toContainText('Understanding the tide');
+  expect(worldReads).toBe(0);
+  await dialog.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Understanding the tide', exact: true }) }).getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(items.getByRole('button', { name: /Understanding the tide/ })).toHaveCount(0);
+  expect(worldReads).toBe(1);
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await expect(page.getByLabel('Jump to date')).toHaveValue(today);
+  await expect(page.getByRole('button', { name: 'Previous week', exact: true })).toBeEnabled();
+  await expect(items.getByRole('button', { name: /Understanding the tide/ })).toHaveCount(0);
+});

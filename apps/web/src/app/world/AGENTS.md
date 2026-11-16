@@ -12,6 +12,14 @@ must not publish later. Keep public Town content separate from private budget/ch
 
 Preserve deterministic generation/golden vectors, URL reload/back-forward,
 concept invalidation, pointer/keyboard camera, reduced motion and theme redraw.
+The `day=YYYY-MM-DD` query is an exact civil date; legacy `week=` links select
+Monday. Explicit visits create history entries; camera movement replaces only
+its settled selection. Restore browser popstate even when Angular skips the URL.
+Use the renderer's `sceneObjects` bounds for both painting and picking; do not
+copy sprite footprints into interaction code. Media occurrence IDs include date.
+The activity overlay marks recorded ground without hiding unrecorded terrain;
+future and failed reads must remain distinct. Private chest/health overlays clear
+on vault lock; session clearing removes the entire previous view.
 Changing habit semantics into Finance budget semantics is not a cleanup.
 
 Measure the whole World subtree when simplifying the component: moving code to new

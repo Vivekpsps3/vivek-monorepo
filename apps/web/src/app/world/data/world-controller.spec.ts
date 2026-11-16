@@ -88,6 +88,60 @@ describe('WorldController', () => {
     return { controller, requested, loadBudget };
   }
 
+  it('loads a dated visit in contiguous pages within the 26-week API limit', async () => {
+    const { controller: owner, requested } = harness();
+    const signal = new AbortController().signal;
+    await owner.loadInitial(signal);
+    await owner.ensureWeek('2026-02-04', signal);
+    const weeks = owner.snapshot().weeks.map(item => item.week);
+    expect(weeks).toContain('2026-02-02');
+    expect(weeks.at(-1)).toBe(META.current_week);
+    for (let i = 1; i < weeks.length; i++) {
+      expect(Date.parse(weeks[i]) - Date.parse(weeks[i - 1])).toBe(7 * 86_400_000);
+    }
+    const pages = requested.filter(call => call.from !== null);
+    expect(pages.length).toBeGreaterThan(0);
+    expect(pages.every(call => (Date.parse(call.to!) - Date.parse(call.from!)) / (7 * 86_400_000) < 26)).toBeTrue();
+    const count = requested.length;
+    await owner.ensureWeek('2026-02-04', signal);
+    expect(requested.length).toBe(count);
+  });
+
+  it('settles a cancelled dated visit even if the source ignores abort, without publishing it later', async () => {
+    const held = deferred<WorldResponse>();
+    const { controller: owner, requested } = harness({ respond: from => from === null ? Promise.resolve(world()) : held.promise });
+    await owner.loadInitial(new AbortController().signal);
+    const before = owner.snapshot().weeks;
+    const visit = new AbortController();
+    const pending = owner.ensureWeek('2026-02-02', visit.signal);
+    await until(() => requested.length === 2);
+    visit.abort();
+    await pending;
+    expect(owner.snapshot().loading).toBeFalse();
+    held.resolve(world([conceptWeek('2026-02-02', 7, 'Late private text')]));
+    await Promise.resolve();
+    expect(owner.snapshot().weeks).toEqual(before);
+  });
+
+  it('turns a non-settling budget provider into a retryable source state', async () => {
+    jasmine.clock().install();
+    try {
+      const held = deferred<BudgetLoadResult>();
+      const { controller: owner, loadBudget } = harness({ budget: () => held.promise });
+      const pending = owner.loadInitial(new AbortController().signal);
+      await until(() => loadBudget.calls.count() === 1);
+      jasmine.clock().tick(12_001);
+      await pending;
+      expect(owner.snapshot().chests.retry).toBeTrue();
+      held.resolve({ status: 'ready', weeks: [{ weekStart: '2026-10-26', kept: true }] });
+      await Promise.resolve();
+      expect(owner.snapshot().chests.retry).toBeTrue();
+      expect(owner.snapshot().chests.weeks.every(item => item.visual === 'none')).toBeTrue();
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
   it('does not issue a second older page while one is in flight', async () => {
     const page = deferred<WorldResponse>();
     const { controller: worldController, requested } = harness({

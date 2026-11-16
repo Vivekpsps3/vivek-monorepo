@@ -4,6 +4,8 @@ import type { Chunk } from '../engine/types';
 import { SpriteAtlas,worldSpriteUrl } from './atlas';
 import {
 districtPaint,
+hitObjects,
+sceneObjects,
 renderChunkBitmap,
 type BitmapCanvas,
 type DistrictSpec,
@@ -134,7 +136,7 @@ describe('renderChunkBitmap', () => {
     return ctx.ops;
   }
 
-  it('sizes the bitmap to the chunk and draws hills, ground, sprites, and the week', async () => {
+  it('sizes the bitmap and draws the landscape and source objects without tiny canvas text', async () => {
     const ctx = new RecordingContext();
     const canvas = canvasOf(ctx, true);
     const source = sample();
@@ -161,8 +163,7 @@ describe('renderChunkBitmap', () => {
     expect(images).not.toContain(worldSpriteUrl('forge-1'));
     expect(images.some(url => url?.includes('chest'))).toBeFalse();
     const texts = ctx.ops.filter(op => op.op === 'text');
-    expect(texts.map(op => op.text)).toEqual(['2026-10-26']);
-    expect(texts[0].font).toContain('sans-serif');
+    expect(texts).toEqual([]); // Dates belong to the readable DOM day selector.
     expect(ctx.ops.filter(op => op.op === 'text' && op.text === '4')).toEqual([]);
   });
 
@@ -186,4 +187,22 @@ describe('districtPaint', () => {
     expect(paint.lots.find(lot => lot.id === 'gym')?.spriteUrl).toBe(townSpriteUrl('gym-locked'));
   });
 
+});
+
+describe('scene object selection', () => {
+  it('uses painted bounds and offers overlapping objects in reverse paint order', () => {
+    const source = chunk({
+      structures: [{ x: 2, sprite: 'garden-1', habit: 4 }],
+      props: [{ x: 2, k: 'concept', id: 9 }, { x: 16, k: 'artifact', kind: 'reel', id: 5 }],
+    });
+    const objects = sceneObjects(source);
+    expect(objects[0]).toEqual(jasmine.objectContaining({ id: 'habit:4', x: 2, y: 12, w: 4, h: 4 }));
+    expect(hitObjects(objects, 3, 15).map(item => item.id)).toEqual(['concept:9', 'habit:4']);
+    expect(hitObjects(objects, 3, 11)).toEqual([]);
+    expect(hitObjects(objects, 17, 15).map(item => item.id)).toEqual(['finished:5:2026-10-28']);
+    // Camera conversion is in tiles, so DPR and CSS resize never enter picking.
+    const cameraX = 10, scale = 18, origin = 56;
+    const screenX = (origin + 3 - cameraX) * scale;
+    expect(hitObjects(objects, cameraX + screenX / scale - origin, 15).map(item => item.id)).toEqual(['concept:9', 'habit:4']);
+  });
 });

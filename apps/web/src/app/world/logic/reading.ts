@@ -33,7 +33,7 @@ function itemsFor(week: WorldWeek, chest: WeekChest | null): { items: ReadingIte
   for (const finished of week.finished) {
     items.push({
       kind: 'finished',
-      id: `finished:${finished.entry_id}`,
+      id: `finished:${finished.entry_id}:${finished.on}`,
       title: finished.title,
       detail: finished.kind,
       date: finished.on,
@@ -94,6 +94,19 @@ export function readingWeek(week: WorldWeek, chest?: WeekChest | null): ReadingW
     items: reading.items,
     budgetLine: reading.budgetLine,
   };
+}
+
+/** Exact civil-date facts. Weekly summaries and overflow never invent a date. */
+export function readingDay(week: WorldWeek, date: string): ReadingItem[] {
+  const day: WorldWeek = {
+    week: week.week,
+    trips: week.trips.filter(item => item.start <= date && date <= item.end),
+    finished: week.finished.filter(item => item.on === date),
+    concepts: week.concepts.filter(item => item.on === date),
+    habits: week.habits.filter(item => item.days.includes(date)).map(item => ({ ...item, days: [date] })),
+  };
+  return itemsFor(day, null).items.filter(item => item.kind !== 'lit').map(item =>
+    item.kind === 'habit' ? { ...item, date, detail: `${item.detail.split(',')[0]} · checked in` } : item);
 }
 
 function chestFor(chests: readonly WeekChest[], week: string): WeekChest | null {
