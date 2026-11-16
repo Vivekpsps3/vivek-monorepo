@@ -70,8 +70,8 @@ Earlier failures are not counted as passes: new status selectors initially also 
 
 ## Handoff
 
-- PR: pending; will use `Closes #243` and `Refs #93`, without closing the parent.
-- Roadmap #134 append-only note: pending PR creation.
-- Actual state: implementation complete and all required local checks passed; current main integrated; PR delivery in progress. Not merged or deployed.
+- PR: [#379](https://github.com/Vivekpsps3/vivek-monorepo/pull/379), opened after local checks passed; uses `Closes #243` and `Refs #93` only.
+- Roadmap #134 [scoped note](https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6923571646); leaf [delivery note](https://github.com/Vivekpsps3/vivek-monorepo/issues/243#issuecomment-6923571115).
+- Actual state: implementation complete and all required local checks passed; PR open and mergeable, CI pending. Current main integrated. Not merged or deployed.
 - Owned conflict groups: `account-settings`, `auth-forms`, `private-shell`; no competing PR at latest fresh check. No global queue or parent body regenerated.
-- Next action: commit this evidence, open the leaf PR, append scoped notes to #243/#134, and update these URLs. No external prerequisite or scope decision remains.
+- Next actor/action: review PR #379 and its CI. Merge/deployment requires user authorization. No external prerequisite, scope decision or implementation work remains. This final handoff update changes evidence only; tested application/test source remains `082adf5`.
