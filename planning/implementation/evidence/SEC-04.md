@@ -60,8 +60,8 @@ Synthetic phone screenshots/traces live under `test-results/finance` only and ar
 
 ## Handoff
 
-- PR: pending creation after every required final local gate passes; closure keyword targets #269 only, reference #121.
-- Roadmap #134: scoped append-only status note follows PR creation; root integration owner separately reconciles parent/queue/archive after merge.
-- Actual state: implementation committed and required local verification complete; PR creation follows this evidence. No merge/deployment claim.
+- PR: https://github.com/Vivekpsps3/vivek-monorepo/pull/377; `Closes #269`, `Refs #121`. Opened only after all required local gates passed.
+- Roadmap #134 scoped note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6906371387. Root integration owner separately reconciles parent/queue/archive after merge.
+- State at this evidence commit: PR open with complete required local verification; exact-head CI and merge pending. The PR and completion registry supply subsequent merged proof. No deployment/activation claim.
 - Remaining external prerequisites: none for this leaf; all dependency contracts merged and verified. No deployment authorized.
-- Next actor: SEC-04 worker opens PR, verifies exact-head CI and merges under the user's authorization; root integration owner updates parent/roadmap/archive afterward.
+- Next actor: SEC-04 worker verifies exact-head CI and merges under the user's authorization, explicitly verifies #269 closure, and sends proof to the root integration owner for parent/roadmap/archive reconciliation.
