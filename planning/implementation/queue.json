@@ -1,6 +1,6 @@
 {
-  "base_sha": "559d4eff908df8262f64012d63d445cfce60af91",
-  "validated_on": "2026-11-15",
+  "base_sha": "2af4f04c4a47ea6831504f5431ce5c316a6e6b98",
+  "validated_on": "2026-11-16",
   "roadmap_issue": 134,
   "parents": [
     {
@@ -16,10 +16,6 @@
       "title": "Health: deliver private Clinic, Gym, entry editing and Town integration"
     },
     {
-      "number": 121,
-      "title": "Account security: harden sessions and deliver passphrase change plus encrypted vault recovery"
-    },
-    {
       "number": 125,
       "title": "Operations: prove CI isolation, release verification, encrypted backups and recovery"
     },
@@ -33,56 +29,6 @@
     }
   ],
   "tasks": [
-    {
-      "id": "SEC-03",
-      "title": "Persist both credential wraps atomically with proof and revision",
-      "parent_issues": [
-        121
-      ],
-      "kind": "implementation",
-      "issue": 268,
-      "dependencies": [
-        "SEC-01",
-        "SEC-02",
-        "CON-03"
-      ],
-      "conflict_groups": [
-        "schema-head",
-        "identity-session",
-        "finance-vault-lifecycle"
-      ],
-      "verification_profiles": [
-        "finance_back",
-        "server_back",
-        "schema"
-      ]
-    },
-    {
-      "id": "SEC-04",
-      "title": "Ship passphrase change UI through the atomic rotation contract",
-      "parent_issues": [
-        121
-      ],
-      "kind": "implementation",
-      "issue": 269,
-      "dependencies": [
-        "SEC-03",
-        "SAFE-03",
-        "SAFE-04"
-      ],
-      "conflict_groups": [
-        "finance-vault-lifecycle",
-        "finance-settings",
-        "web-session",
-        "account-ux"
-      ],
-      "verification_profiles": [
-        "finance_front",
-        "web_front",
-        "finance_back",
-        "server_back"
-      ]
-    },
     {
       "id": "HUB-01",
       "title": "Finish coherent account/sign-in/invite/settings UX with real data links",

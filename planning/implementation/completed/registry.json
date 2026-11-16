@@ -1,6 +1,6 @@
 {
-  "validated_on": "2026-11-15",
-  "base_sha": "559d4eff908df8262f64012d63d445cfce60af91",
+  "validated_on": "2026-11-16",
+  "base_sha": "2af4f04c4a47ea6831504f5431ce5c316a6e6b98",
   "tasks": [
     {
       "id": "MED-11",
@@ -1530,6 +1530,60 @@
       ],
       "merged_pr": 359,
       "merge_sha": "b141dc3bc310c1cf4c878a2534f0cc1606abbbe5"
+    },
+    {
+      "id": "SEC-03",
+      "title": "Persist both credential wraps atomically with proof and revision",
+      "parent_issues": [
+        121
+      ],
+      "kind": "implementation",
+      "issue": 268,
+      "dependencies": [
+        "SEC-01",
+        "SEC-02",
+        "CON-03"
+      ],
+      "conflict_groups": [
+        "schema-head",
+        "identity-session",
+        "finance-vault-lifecycle"
+      ],
+      "verification_profiles": [
+        "finance_back",
+        "server_back",
+        "schema"
+      ],
+      "merged_pr": 376,
+      "merge_sha": "7c3b0117426ddc304fc5e90ad63e4bb8254b2e2e"
+    },
+    {
+      "id": "SEC-04",
+      "title": "Ship passphrase change UI through the atomic rotation contract",
+      "parent_issues": [
+        121
+      ],
+      "kind": "implementation",
+      "issue": 269,
+      "dependencies": [
+        "SEC-03",
+        "SAFE-03",
+        "SAFE-04"
+      ],
+      "conflict_groups": [
+        "finance-vault-lifecycle",
+        "finance-settings",
+        "web-session",
+        "account-ux"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "web_front",
+        "finance_back",
+        "server_back"
+      ],
+      "merged_pr": 377,
+      "merge_sha": "2af4f04c4a47ea6831504f5431ce5c316a6e6b98"
     }
   ],
   "td_coverage": {
