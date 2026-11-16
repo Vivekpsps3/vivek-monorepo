@@ -1,0 +1,1685 @@
+{
+  "validated_on": "2026-11-15",
+  "base_sha": "559d4eff908df8262f64012d63d445cfce60af91",
+  "tasks": [
+    {
+      "id": "MED-11",
+      "title": "Remove verified no-caller Media helpers and artist portrait pipeline",
+      "parent_issues": [
+        200,
+        85
+      ],
+      "kind": "implementation",
+      "issue": 296,
+      "dependencies": [],
+      "conflict_groups": [
+        "media-records",
+        "media-provider-transport",
+        "media-provider-family"
+      ],
+      "verification_profiles": [
+        "media_back",
+        "server_back"
+      ],
+      "merged_pr": 299,
+      "merge_sha": "3f0304381486682169fb94f4c42875e63452393d"
+    },
+    {
+      "id": "MED-01",
+      "title": "Keep saved Media reads database-only and move repair to explicit bounded work",
+      "parent_issues": [
+        85,
+        200
+      ],
+      "kind": "implementation",
+      "issue": 235,
+      "dependencies": [],
+      "conflict_groups": [
+        "media-records",
+        "media-library-api",
+        "media-provider-transport"
+      ],
+      "verification_profiles": [
+        "media_back",
+        "server_back",
+        "media_front"
+      ],
+      "merged_pr": 282,
+      "merge_sha": "29e131821d138bba224e02d5d61b77e23247e08a"
+    },
+    {
+      "id": "MED-08",
+      "title": "Collapse competing Media catalog/entry/progress/query implementations",
+      "parent_issues": [
+        200,
+        85
+      ],
+      "kind": "implementation",
+      "issue": 242,
+      "dependencies": [
+        "MED-01"
+      ],
+      "conflict_groups": [
+        "media-records",
+        "media-membership",
+        "media-library-api"
+      ],
+      "verification_profiles": [
+        "media_back",
+        "server_back",
+        "media_front"
+      ],
+      "merged_pr": 328,
+      "merge_sha": "d858f3d168b0adbfe64708edf17c9150223d7483"
+    },
+    {
+      "id": "DEL-04",
+      "title": "Remove redundant Finance orchestration while preserving one store",
+      "parent_issues": [
+        200,
+        65
+      ],
+      "kind": "implementation",
+      "issue": 216,
+      "dependencies": [],
+      "conflict_groups": [
+        "finance-service",
+        "finance-public-api",
+        "finance-persistence",
+        "finance-imports"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "web_front"
+      ],
+      "merged_pr": 342,
+      "merge_sha": "b8d905f9dfcb5b76894f9b7f008bda98321d9cd8"
+    },
+    {
+      "id": "SAFE-01",
+      "title": "Fix colliding lock cleanup registrations with owned fan-out",
+      "parent_issues": [
+        198
+      ],
+      "kind": "implementation",
+      "issue": 201,
+      "dependencies": [],
+      "conflict_groups": [
+        "finance-vault-lifecycle",
+        "pixels-data"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "web_front"
+      ],
+      "merged_pr": 279,
+      "merge_sha": "7347d1b8279c48107de10bb5f69692c1ea6796b5"
+    },
+    {
+      "id": "SAFE-02",
+      "title": "Prevent Health data publication after lock, cancellation or owner change",
+      "parent_issues": [
+        198,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 202,
+      "dependencies": [
+        "SAFE-01"
+      ],
+      "conflict_groups": [
+        "finance-vault-lifecycle",
+        "health-store"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "web_front"
+      ],
+      "merged_pr": 290,
+      "merge_sha": "08be484ba3b3535dbcb500749245f2e75ee1f2e4"
+    },
+    {
+      "id": "SAFE-03",
+      "title": "Expose only the vault capabilities Health consumes and migrate it",
+      "parent_issues": [
+        198,
+        197
+      ],
+      "kind": "implementation",
+      "issue": 203,
+      "dependencies": [
+        "SAFE-02"
+      ],
+      "conflict_groups": [
+        "finance-public-api",
+        "finance-vault-lifecycle",
+        "health-store"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "web_front"
+      ],
+      "merged_pr": 294,
+      "merge_sha": "451297726db7807e5aa68d5040d924ced946952b"
+    },
+    {
+      "id": "SAFE-04",
+      "title": "Replace duplicated lock/session transport handling in real consumers",
+      "parent_issues": [
+        198
+      ],
+      "kind": "implementation",
+      "issue": 204,
+      "dependencies": [
+        "SAFE-01",
+        "SAFE-03"
+      ],
+      "conflict_groups": [
+        "finance-vault-lifecycle",
+        "private-shell",
+        "pixels-data",
+        "world-ui"
+      ],
+      "verification_profiles": [
+        "shared_front"
+      ],
+      "merged_pr": 301,
+      "merge_sha": "0ab6221023b1557d2dda1ff4038b08c1107a0366"
+    },
+    {
+      "id": "SAFE-05",
+      "title": "Bound Pixels and Health work and delete ad hoc timeout ownership",
+      "parent_issues": [
+        198
+      ],
+      "kind": "implementation",
+      "issue": 205,
+      "dependencies": [
+        "SAFE-02",
+        "SAFE-04"
+      ],
+      "conflict_groups": [
+        "hub-load",
+        "pixels-data",
+        "health-store",
+        "world-controller"
+      ],
+      "verification_profiles": [
+        "shared_front"
+      ],
+      "merged_pr": 335,
+      "merge_sha": "a7e16c6fa5bd5543514081e0834022fe38dcd1d1"
+    },
+    {
+      "id": "CON-01",
+      "title": "Enforce actual feature boundaries with resolved import fixtures",
+      "parent_issues": [
+        197
+      ],
+      "kind": "implementation",
+      "issue": 206,
+      "dependencies": [],
+      "conflict_groups": [
+        "architecture-checker",
+        "root-typescript-config",
+        "server-composition"
+      ],
+      "verification_profiles": [
+        "docs",
+        "server_back"
+      ],
+      "merged_pr": 300,
+      "merge_sha": "9d39d3c1e21948da3fe2f3facbf9adad21efceb9"
+    },
+    {
+      "id": "UX-01",
+      "title": "Repair Profile direct loads and the obsolete404 assertion",
+      "parent_issues": [
+        196
+      ],
+      "kind": "implementation",
+      "issue": 259,
+      "dependencies": [],
+      "conflict_groups": [
+        "private-routes",
+        "server-composition",
+        "pixels-settings"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "merged_pr": 280,
+      "merge_sha": "98c8d90a7a2738e1f34045e01f92b7bfb55f560c"
+    },
+    {
+      "id": "CON-02",
+      "title": "Catch server/Angular route drift with explicit route examples",
+      "parent_issues": [
+        197,
+        196
+      ],
+      "kind": "implementation",
+      "issue": 207,
+      "dependencies": [
+        "UX-01"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "server-composition"
+      ],
+      "verification_profiles": [
+        "server_back",
+        "web_front"
+      ],
+      "merged_pr": 367,
+      "merge_sha": "ad806f31c5813f93a3b29afa4200fc46a4fb794b"
+    },
+    {
+      "id": "CON-03",
+      "title": "Check encrypted collection policy once and remove unowned membership copies",
+      "parent_issues": [
+        197,
+        121
+      ],
+      "kind": "implementation",
+      "issue": 208,
+      "dependencies": [
+        "SAFE-03"
+      ],
+      "conflict_groups": [
+        "vault-collection-policy",
+        "finance-persistence",
+        "health-store",
+        "server-vault"
+      ],
+      "verification_profiles": [
+        "finance_back",
+        "server_back",
+        "finance_front",
+        "web_front"
+      ],
+      "merged_pr": 350,
+      "merge_sha": "04a5dac19356b3a6e6871a920b34fce0b843d08d"
+    },
+    {
+      "id": "VER-01",
+      "title": "Make shipped-source lint and type ownership explicit",
+      "parent_issues": [
+        199
+      ],
+      "kind": "implementation",
+      "issue": 209,
+      "dependencies": [],
+      "conflict_groups": [
+        "quality-tools",
+        "root-typescript-config",
+        "eslint-config",
+        "quality-docs"
+      ],
+      "verification_profiles": [
+        "docs",
+        "server_back"
+      ],
+      "merged_pr": 344,
+      "merge_sha": "9aa01242fbb6dc6cd5040a4e39babff2c0c187b1"
+    },
+    {
+      "id": "VER-02",
+      "title": "Detect orphan test files and prove intended project discovery",
+      "parent_issues": [
+        199,
+        125
+      ],
+      "kind": "implementation",
+      "issue": 210,
+      "dependencies": [],
+      "conflict_groups": [
+        "browser-config",
+        "ci-workflow",
+        "test-discovery",
+        "quality-docs"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ],
+      "merged_pr": 281,
+      "merge_sha": "ab365b629ec9bd0d4969b76908bd542f36467a81"
+    },
+    {
+      "id": "VER-03",
+      "title": "Replace obsolete behavior expectations and document honest coverage ownership",
+      "parent_issues": [
+        199,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 211,
+      "dependencies": [],
+      "conflict_groups": [
+        "town-api-tests",
+        "coverage-tools",
+        "quality-docs"
+      ],
+      "verification_profiles": [
+        "server_back",
+        "docs"
+      ],
+      "merged_pr": 348,
+      "merge_sha": "71d293aa6b9323b4bf9007c4db28b90540b6acd5"
+    },
+    {
+      "id": "VER-04",
+      "title": "Remove duplicate verification work and include forgotten canonical checks",
+      "parent_issues": [
+        199,
+        125
+      ],
+      "kind": "implementation",
+      "issue": 212,
+      "dependencies": [
+        "VER-01",
+        "VER-02"
+      ],
+      "conflict_groups": [
+        "ci-workflow",
+        "makefile",
+        "browser-config",
+        "quality-tools"
+      ],
+      "verification_profiles": [
+        "ops",
+        "docs"
+      ],
+      "merged_pr": 355,
+      "merge_sha": "89a1515a3516524f18f482e0849b8f661f6b127d"
+    },
+    {
+      "id": "DEL-01",
+      "title": "Delete verified dead code and stale implementation claims",
+      "parent_issues": [
+        200
+      ],
+      "kind": "implementation",
+      "issue": 213,
+      "dependencies": [],
+      "conflict_groups": [
+        "shared-public-api",
+        "stale-source-cleanup",
+        "quality-docs"
+      ],
+      "verification_profiles": [
+        "shared_front",
+        "docs"
+      ],
+      "merged_pr": 287,
+      "merge_sha": "4289278bb80b03fcddf212318714c8ff41fece26"
+    },
+    {
+      "id": "DEL-02",
+      "title": "Retire only proven unreachable runtime compatibility paths",
+      "parent_issues": [
+        200,
+        121
+      ],
+      "kind": "implementation",
+      "issue": 214,
+      "dependencies": [],
+      "conflict_groups": [
+        "identity-origin",
+        "identity-session",
+        "vault-compatibility",
+        "schema-head"
+      ],
+      "verification_profiles": [
+        "finance_back",
+        "server_back",
+        "finance_front"
+      ],
+      "merged_pr": 372,
+      "merge_sha": "559d4eff908df8262f64012d63d445cfce60af91"
+    },
+    {
+      "id": "DEL-03",
+      "title": "Delete competing World setup and reduce component orchestration",
+      "parent_issues": [
+        200,
+        198
+      ],
+      "kind": "implementation",
+      "issue": 215,
+      "dependencies": [],
+      "conflict_groups": [
+        "world-ui",
+        "world-controller",
+        "world-engine"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ],
+      "merged_pr": 292,
+      "merge_sha": "8c37ce24ee22b8a6e7d0efa96d5ad178613a6de3"
+    },
+    {
+      "id": "DEL-05",
+      "title": "Delete duplicate control/form styling and reuse real interaction behavior",
+      "parent_issues": [
+        200,
+        196
+      ],
+      "kind": "implementation",
+      "issue": 217,
+      "dependencies": [],
+      "conflict_groups": [
+        "shared-controls",
+        "root-styles",
+        "finance-recurring-editors"
+      ],
+      "verification_profiles": [
+        "shared_front"
+      ],
+      "merged_pr": 289,
+      "merge_sha": "f143d2ecb5bffb60784585f95f65b990fa4c19bb"
+    },
+    {
+      "id": "TYPE-01",
+      "title": "Replace unsafe boundary casts with small owned decoders",
+      "parent_issues": [
+        200,
+        199
+      ],
+      "kind": "implementation",
+      "issue": 218,
+      "dependencies": [
+        "SAFE-05"
+      ],
+      "conflict_groups": [
+        "hub-load",
+        "pixels-data",
+        "typed-read-contracts",
+        "quality-baselines"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ],
+      "merged_pr": 338,
+      "merge_sha": "e3ff785e1e65315425fd24fc733b88bdf0337857"
+    },
+    {
+      "id": "REF-01",
+      "title": "Prove a lean feature workflow and publish measured deletion guidance",
+      "parent_issues": [
+        197,
+        199,
+        200
+      ],
+      "kind": "implementation",
+      "issue": 219,
+      "dependencies": [
+        "CON-01",
+        "CON-02",
+        "CON-03",
+        "SAFE-03",
+        "SAFE-04",
+        "VER-01",
+        "VER-02"
+      ],
+      "conflict_groups": [
+        "planning-guidance",
+        "architecture-docs",
+        "deletion-scorecard"
+      ],
+      "verification_profiles": [
+        "docs"
+      ],
+      "merged_pr": 370,
+      "merge_sha": "d96c34508ce49ecadfc73c3caa6242b04c091976"
+    },
+    {
+      "id": "FIN-01",
+      "title": "Complete automatic price controls through the existing preference and refresh coordinator",
+      "parent_issues": [
+        65
+      ],
+      "kind": "implementation",
+      "issue": 220,
+      "dependencies": [
+        "SAFE-01"
+      ],
+      "conflict_groups": [
+        "finance-price-shell",
+        "finance-home"
+      ],
+      "verification_profiles": [
+        "finance_front"
+      ],
+      "merged_pr": 322,
+      "merge_sha": "1b4f35a80784a3181da809784fa80b33c13c6e60"
+    },
+    {
+      "id": "FIN-02",
+      "title": "Simplify recurring editors and finish one exact pay schedule",
+      "parent_issues": [
+        65
+      ],
+      "kind": "implementation",
+      "issue": 221,
+      "dependencies": [],
+      "conflict_groups": [
+        "finance-recurring-editors"
+      ],
+      "verification_profiles": [
+        "finance_front"
+      ],
+      "merged_pr": 295,
+      "merge_sha": "7252b2716ac070c409583b6151497de21ecb9acb"
+    },
+    {
+      "id": "FIN-03",
+      "title": "Expose accurate Planning source counts and finish current-facts copy",
+      "parent_issues": [
+        65
+      ],
+      "kind": "implementation",
+      "issue": 222,
+      "dependencies": [],
+      "conflict_groups": [
+        "finance-planning"
+      ],
+      "verification_profiles": [
+        "finance_front"
+      ],
+      "merged_pr": 320,
+      "merge_sha": "aebe5e7997a12634ab171ad3c16b1a68b004939d"
+    },
+    {
+      "id": "FIN-04",
+      "title": "Add custom CSV mapping through the existing encrypted import plan and Undo",
+      "parent_issues": [
+        65
+      ],
+      "kind": "implementation",
+      "issue": 223,
+      "dependencies": [
+        "CON-03",
+        "SAFE-04"
+      ],
+      "conflict_groups": [
+        "finance-imports",
+        "finance-transactions",
+        "vault-collections"
+      ],
+      "verification_profiles": [
+        "finance_front"
+      ],
+      "merged_pr": 357,
+      "merge_sha": "5bc07c2aab4345446f408d6e331cd1bef193f4d6"
+    },
+    {
+      "id": "FIN-05",
+      "title": "Close retained Finance store/import race findings with focused fixes and deletion",
+      "parent_issues": [
+        65
+      ],
+      "kind": "implementation",
+      "issue": 224,
+      "dependencies": [
+        "SAFE-01"
+      ],
+      "conflict_groups": [
+        "finance-vault-lifecycle",
+        "finance-imports",
+        "finance-transactions"
+      ],
+      "verification_profiles": [
+        "finance_front"
+      ],
+      "merged_pr": 356,
+      "merge_sha": "d35181da0c72b9a5bb8a39c15e54989c346193ca"
+    },
+    {
+      "id": "TRIP-01",
+      "title": "Connect encrypted trip tags to the live Finance\u2013Travel spending bridge",
+      "parent_issues": [
+        84
+      ],
+      "kind": "implementation",
+      "issue": 225,
+      "dependencies": [
+        "SAFE-01",
+        "SAFE-03",
+        "SAFE-04"
+      ],
+      "conflict_groups": [
+        "finance-transactions",
+        "finance-public-api",
+        "private-shell",
+        "travel-trip-costs"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "travel_front",
+        "web_front"
+      ],
+      "merged_pr": 333,
+      "merge_sha": "59389d2060ac5f3cdcab9e0c12e95a7f17eb2783"
+    },
+    {
+      "id": "TRIP-02",
+      "title": "Finish one keyboard-accessible trip itinerary and day strip",
+      "parent_issues": [
+        84
+      ],
+      "kind": "implementation",
+      "issue": 226,
+      "dependencies": [],
+      "conflict_groups": [
+        "travel-trip-main",
+        "travel-itinerary"
+      ],
+      "verification_profiles": [
+        "travel_front"
+      ],
+      "merged_pr": 302,
+      "merge_sha": "9e1f582b2f5651a96268b66d779f319ce1744aed"
+    },
+    {
+      "id": "TRIP-03",
+      "title": "Unify trip actions and typed deletion through existing menus/confirmation",
+      "parent_issues": [
+        84
+      ],
+      "kind": "implementation",
+      "issue": 227,
+      "dependencies": [
+        "TRIP-02"
+      ],
+      "conflict_groups": [
+        "travel-trip-main",
+        "travel-trip-actions"
+      ],
+      "verification_profiles": [
+        "travel_front"
+      ],
+      "merged_pr": 346,
+      "merge_sha": "85212152bda3ce6cab5cbfcc9c787b564214fc69"
+    },
+    {
+      "id": "TRIP-04",
+      "title": "Make trip forms submit-to-explain with live field recovery",
+      "parent_issues": [
+        84
+      ],
+      "kind": "implementation",
+      "issue": 228,
+      "dependencies": [
+        "TRIP-03"
+      ],
+      "conflict_groups": [
+        "travel-trip-main",
+        "travel-new-trip",
+        "travel-transport-editor"
+      ],
+      "verification_profiles": [
+        "travel_front"
+      ],
+      "merged_pr": 352,
+      "merge_sha": "942db756036590ca01288c0bb0de856b5e976215"
+    },
+    {
+      "id": "TRIP-05",
+      "title": "Replace both trip PTO pickers with one readable day allocation control",
+      "parent_issues": [
+        84
+      ],
+      "kind": "implementation",
+      "issue": 229,
+      "dependencies": [
+        "TRIP-04"
+      ],
+      "conflict_groups": [
+        "travel-new-trip",
+        "travel-trip-main",
+        "travel-pto-picker"
+      ],
+      "verification_profiles": [
+        "travel_front"
+      ],
+      "merged_pr": 354,
+      "merge_sha": "69ec3fcee479561d1d8f2cba4a8ab28d94d3f593"
+    },
+    {
+      "id": "PTO-01",
+      "title": "Replace separate bucket charts with one accessible combined forecast",
+      "parent_issues": [
+        110
+      ],
+      "kind": "implementation",
+      "issue": 230,
+      "dependencies": [],
+      "conflict_groups": [
+        "travel-pto-main",
+        "travel-pto-chart"
+      ],
+      "verification_profiles": [
+        "travel_front"
+      ],
+      "merged_pr": 326,
+      "merge_sha": "1b5a133aac38220fd9924266db7bb6c46443c424"
+    },
+    {
+      "id": "PTO-02",
+      "title": "Finish policy form decimal/draft behavior and retire duplicate validation",
+      "parent_issues": [
+        110
+      ],
+      "kind": "implementation",
+      "issue": 231,
+      "dependencies": [],
+      "conflict_groups": [
+        "travel-pto-main",
+        "travel-settings"
+      ],
+      "verification_profiles": [
+        "travel_front",
+        "travel_back"
+      ],
+      "merged_pr": 337,
+      "merge_sha": "19c6b51ebdead875fad7f62f0a18a6b7a6288c94"
+    },
+    {
+      "id": "PTO-03",
+      "title": "Show canonical PTO/Sick day-hour balances and next-trip impact on Home",
+      "parent_issues": [
+        110
+      ],
+      "kind": "implementation",
+      "issue": 232,
+      "dependencies": [],
+      "conflict_groups": [
+        "travel-home",
+        "travel-summary"
+      ],
+      "verification_profiles": [
+        "travel_front",
+        "travel_back"
+      ],
+      "merged_pr": 329,
+      "merge_sha": "a8c7d919cc132e4e2f255382ac7ef0e22d43beae"
+    },
+    {
+      "id": "PTO-04",
+      "title": "Implement conflict-safe Remove Sick policy while preserving history",
+      "parent_issues": [
+        110
+      ],
+      "kind": "implementation",
+      "issue": 233,
+      "dependencies": [
+        "PTO-02"
+      ],
+      "conflict_groups": [
+        "travel-pto-main",
+        "travel-leave-api"
+      ],
+      "verification_profiles": [
+        "travel_front",
+        "travel_back"
+      ],
+      "merged_pr": 343,
+      "merge_sha": "0cf2dcf205423d6047328ead6c1bb32edb135350"
+    },
+    {
+      "id": "PTO-05",
+      "title": "Add explicit scheduled accrual without changing daily-prorated defaults",
+      "parent_issues": [
+        110
+      ],
+      "kind": "implementation",
+      "issue": 234,
+      "dependencies": [
+        "PTO-02",
+        "PTO-04"
+      ],
+      "conflict_groups": [
+        "travel-leave-math",
+        "travel-leave-api",
+        "schema-head",
+        "travel-pto-main"
+      ],
+      "verification_profiles": [
+        "travel_front",
+        "travel_back",
+        "server_back",
+        "schema"
+      ],
+      "merged_pr": 351,
+      "merge_sha": "82bef7b9b23fca2c536794ad6cefb79ec450e524"
+    },
+    {
+      "id": "MED-02",
+      "title": "Mount the existing tag editor and preserve unrelated detail drafts",
+      "parent_issues": [
+        85
+      ],
+      "kind": "implementation",
+      "issue": 236,
+      "dependencies": [
+        "MED-01"
+      ],
+      "conflict_groups": [
+        "media-detail-form"
+      ],
+      "verification_profiles": [
+        "media_front",
+        "media_back"
+      ],
+      "merged_pr": 332,
+      "merge_sha": "0c6e6bf3e2e3e4a244efd478fed21766ad81a442"
+    },
+    {
+      "id": "MED-03",
+      "title": "Replace numeric Media rating input with one accessible 0\u201310 editor",
+      "parent_issues": [
+        85
+      ],
+      "kind": "implementation",
+      "issue": 237,
+      "dependencies": [
+        "MED-02"
+      ],
+      "conflict_groups": [
+        "media-detail-form"
+      ],
+      "verification_profiles": [
+        "media_front"
+      ],
+      "merged_pr": 345,
+      "merge_sha": "fdce45e1d792f54315160d4d9b3b15ae15d16812"
+    },
+    {
+      "id": "MED-04",
+      "title": "Render Related only on demand through the existing endpoint",
+      "parent_issues": [
+        85
+      ],
+      "kind": "implementation",
+      "issue": 238,
+      "dependencies": [
+        "MED-03"
+      ],
+      "conflict_groups": [
+        "media-detail-form"
+      ],
+      "verification_profiles": [
+        "media_front",
+        "media_back"
+      ],
+      "merged_pr": 349,
+      "merge_sha": "b7ae697cbac05fe7db5220a8ed7f2752543a854a"
+    },
+    {
+      "id": "MED-05",
+      "title": "Finish explicit Popular discovery through the existing service",
+      "parent_issues": [
+        85
+      ],
+      "kind": "implementation",
+      "issue": 239,
+      "dependencies": [
+        "MED-01"
+      ],
+      "conflict_groups": [
+        "media-discovery",
+        "media-provider-transport"
+      ],
+      "verification_profiles": [
+        "media_front",
+        "media_back"
+      ],
+      "merged_pr": 353,
+      "merge_sha": "40e26ecc065c16057d455c16bdd2cb902c09889f"
+    },
+    {
+      "id": "MED-06",
+      "title": "Finish compact Media detail presentation and preserve progress drafts",
+      "parent_issues": [
+        85
+      ],
+      "kind": "implementation",
+      "issue": 240,
+      "dependencies": [
+        "MED-02",
+        "MED-03",
+        "MED-04"
+      ],
+      "conflict_groups": [
+        "media-detail-form",
+        "media-library",
+        "media-add",
+        "media-runtime"
+      ],
+      "verification_profiles": [
+        "media_front",
+        "media_back",
+        "web_front"
+      ],
+      "merged_pr": 364,
+      "merge_sha": "3d1061fbe3c4d5a5547a1f5d3686172e09d174a9"
+    },
+    {
+      "id": "MED-07",
+      "title": "Delete repeated provider orchestration by consolidating real Media transport/adapters",
+      "parent_issues": [
+        200,
+        85
+      ],
+      "kind": "implementation",
+      "issue": 241,
+      "dependencies": [
+        "MED-01"
+      ],
+      "conflict_groups": [
+        "media-provider-transport",
+        "media-provider-family",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "media_back",
+        "server_back"
+      ],
+      "merged_pr": 291,
+      "merge_sha": "e9cd267b3c047e6e2d5153b5df0378c15ef429e0"
+    },
+    {
+      "id": "SEC-01",
+      "title": "Unify configured-origin challenge binding and prove auth ownership",
+      "parent_issues": [
+        121
+      ],
+      "kind": "implementation",
+      "issue": 266,
+      "dependencies": [],
+      "conflict_groups": [
+        "identity-origin",
+        "schema-head"
+      ],
+      "verification_profiles": [
+        "finance_back",
+        "server_back"
+      ],
+      "merged_pr": 324,
+      "merge_sha": "939984de389b9e33510aecb12a80eb50ff3ef06b"
+    },
+    {
+      "id": "SEC-02",
+      "title": "Make CSRF repair commit/CAS and refresh errors deterministic",
+      "parent_issues": [
+        121
+      ],
+      "kind": "implementation",
+      "issue": 267,
+      "dependencies": [
+        "SEC-01"
+      ],
+      "conflict_groups": [
+        "identity-session",
+        "identity-origin",
+        "web-session",
+        "account-ux"
+      ],
+      "verification_profiles": [
+        "finance_back",
+        "server_back",
+        "web_front"
+      ],
+      "merged_pr": 334,
+      "merge_sha": "1c3ae26cb15f8bf149da0e70d22efeaed3f30f81"
+    },
+    {
+      "id": "SEC-05",
+      "title": "Export every vault collection as one encrypted portable bundle",
+      "parent_issues": [
+        121
+      ],
+      "kind": "implementation",
+      "issue": 270,
+      "dependencies": [
+        "CON-03",
+        "SAFE-03",
+        "SAFE-05"
+      ],
+      "conflict_groups": [
+        "vault-export",
+        "finance-settings",
+        "finance-vault-lifecycle"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "web_front",
+        "finance_back"
+      ],
+      "merged_pr": 362,
+      "merge_sha": "c461fe791251b13e02a05911531246f01f0e8290"
+    },
+    {
+      "id": "SEC-06",
+      "title": "Restore encrypted bundles with validated atomic or resumable staging",
+      "parent_issues": [
+        121
+      ],
+      "kind": "implementation",
+      "issue": 271,
+      "dependencies": [
+        "SEC-05",
+        "SAFE-04"
+      ],
+      "conflict_groups": [
+        "finance-vault-lifecycle",
+        "vault-export",
+        "finance-settings",
+        "schema-head"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "web_front",
+        "finance_back",
+        "server_back"
+      ],
+      "merged_pr": 365,
+      "merge_sha": "a399061782c99e25f349bf193626e7a575ef84c5"
+    },
+    {
+      "id": "UX-03",
+      "title": "Make the Hub miniature compact and equivalent across input modes",
+      "parent_issues": [
+        196
+      ],
+      "kind": "implementation",
+      "issue": 261,
+      "dependencies": [],
+      "conflict_groups": [
+        "hub-main",
+        "pixels-hub-card"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ],
+      "merged_pr": 325,
+      "merge_sha": "71c11f6ee731dc55111dee1cccc8b14cd11e5c1c"
+    },
+    {
+      "id": "HUB-02",
+      "title": "Lead the Hub with one compact Up next projection and shared source responses",
+      "parent_issues": [
+        93
+      ],
+      "kind": "implementation",
+      "issue": 244,
+      "dependencies": [
+        "SAFE-04",
+        "SAFE-05",
+        "UX-03"
+      ],
+      "conflict_groups": [
+        "hub-main",
+        "travel-summary",
+        "media-summary",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "travel_back",
+        "media_back",
+        "finance_front"
+      ],
+      "merged_pr": 369,
+      "merge_sha": "3d02609e82fe487b108066cfaba622ee39a07a40"
+    },
+    {
+      "id": "HUB-03",
+      "title": "Expand the existing Up next read model into the navigable Hub agenda",
+      "parent_issues": [
+        93
+      ],
+      "kind": "implementation",
+      "issue": 245,
+      "dependencies": [
+        "HUB-02",
+        "CON-02"
+      ],
+      "conflict_groups": [
+        "hub-main",
+        "hub-agenda",
+        "private-routes",
+        "travel-summary",
+        "media-summary"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "travel_back",
+        "media_back"
+      ],
+      "merged_pr": 371,
+      "merge_sha": "41f701fb25a92e71f98b88300bb0c5c6f751cdaf"
+    },
+    {
+      "id": "HUB-04",
+      "title": "Finish local unlocked Finance name search through a narrow facade",
+      "parent_issues": [
+        93
+      ],
+      "kind": "implementation",
+      "issue": 246,
+      "dependencies": [
+        "SAFE-03",
+        "SAFE-04",
+        "SAFE-05"
+      ],
+      "conflict_groups": [
+        "suite-search",
+        "finance-public-api",
+        "finance-query-facade"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "finance_front",
+        "server_back"
+      ],
+      "merged_pr": 340,
+      "merge_sha": "779f1679827de7e45f1ce3d3f09fe5d8715c3ceb"
+    },
+    {
+      "id": "UX-02",
+      "title": "Give Town and World one main landmark and reliable arrival focus",
+      "parent_issues": [
+        196
+      ],
+      "kind": "implementation",
+      "issue": 260,
+      "dependencies": [],
+      "conflict_groups": [
+        "town-main",
+        "world-ui",
+        "private-shell-focus"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ],
+      "merged_pr": 288,
+      "merge_sha": "71823ff7b2a1f405bb5e22a5df241779bf2ddf0b"
+    },
+    {
+      "id": "TOWN-01",
+      "title": "Activate the actual Town browser journeys using existing isolated fixtures",
+      "parent_issues": [
+        81
+      ],
+      "kind": "implementation",
+      "issue": 249,
+      "dependencies": [
+        "UX-02",
+        "VER-02"
+      ],
+      "conflict_groups": [
+        "browser-fixture-core",
+        "town-browser",
+        "test-discovery"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "merged_pr": 293,
+      "merge_sha": "6157e6a7cd11c87b45598879fa9c5a12c970cf64"
+    },
+    {
+      "id": "TOWN-02",
+      "title": "Replace passive credit stub with bounded authoritative Media/Travel queries",
+      "parent_issues": [
+        81
+      ],
+      "kind": "implementation",
+      "issue": 250,
+      "dependencies": [
+        "TOWN-01",
+        "MED-01"
+      ],
+      "conflict_groups": [
+        "town-read-service",
+        "media-records",
+        "travel-reminders-api",
+        "town-today"
+      ],
+      "verification_profiles": [
+        "server_back",
+        "media_back",
+        "travel_back",
+        "web_front"
+      ],
+      "merged_pr": 347,
+      "merge_sha": "86d2c60f457e7c595f48e1ee696602831555f326"
+    },
+    {
+      "id": "TOWN-03",
+      "title": "Replace habit-based Treasury with Finance budget weeks and finish the existing Hub card",
+      "parent_issues": [
+        81
+      ],
+      "kind": "implementation",
+      "issue": 251,
+      "dependencies": [
+        "TOWN-02",
+        "SAFE-04",
+        "SAFE-05"
+      ],
+      "conflict_groups": [
+        "town-treasury",
+        "town-main",
+        "hub-main",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "finance_front",
+        "server_back"
+      ],
+      "merged_pr": 368,
+      "merge_sha": "d9629ddde1fe0fe39b4b74f7427a2ab964937346"
+    },
+    {
+      "id": "UX-04",
+      "title": "Make World week navigation visibly directional",
+      "parent_issues": [
+        196
+      ],
+      "kind": "implementation",
+      "issue": 262,
+      "dependencies": [
+        "UX-02"
+      ],
+      "conflict_groups": [
+        "world-ui",
+        "world-copy"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ],
+      "merged_pr": 303,
+      "merge_sha": "0ed83e95a3727acc4f512dd2ac77211d8a622407"
+    },
+    {
+      "id": "UX-05",
+      "title": "Orient the phone Pixels grid with visible date references and discoverable legend",
+      "parent_issues": [
+        196
+      ],
+      "kind": "implementation",
+      "issue": 263,
+      "dependencies": [
+        "UX-03"
+      ],
+      "conflict_groups": [
+        "pixels-grid",
+        "pixels-year"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ],
+      "merged_pr": 331,
+      "merge_sha": "d10ed904e0698f7da8eb48908c1d7eded043f4ba"
+    },
+    {
+      "id": "DISC-01",
+      "title": "Produce a bounded Sidequests design/data-flow PR without building the app",
+      "parent_issues": [
+        194
+      ],
+      "kind": "discovery",
+      "issue": 264,
+      "dependencies": [],
+      "conflict_groups": [
+        "planning-discovery"
+      ],
+      "verification_profiles": [
+        "docs"
+      ],
+      "merged_pr": 363,
+      "merge_sha": "95595439aaf4b90b6702e33b4afd46df57d9d55b"
+    },
+    {
+      "id": "OPS-01",
+      "title": "Prove runner/release routing and simplify the current operations contract",
+      "parent_issues": [
+        125
+      ],
+      "kind": "implementation",
+      "issue": 272,
+      "dependencies": [],
+      "conflict_groups": [
+        "ci-release",
+        "operations-docs",
+        "runner-config"
+      ],
+      "verification_profiles": [
+        "ops",
+        "server_back"
+      ],
+      "merged_pr": 323,
+      "merge_sha": "8b9f0998abecac065887230a8e1a2257f6b2a496"
+    },
+    {
+      "id": "OPS-02",
+      "title": "Reconcile snapshot retention and prove last-good preservation",
+      "parent_issues": [
+        125
+      ],
+      "kind": "implementation",
+      "issue": 273,
+      "dependencies": [
+        "OPS-01"
+      ],
+      "conflict_groups": [
+        "backup-core",
+        "compose",
+        "operations-docs"
+      ],
+      "verification_profiles": [
+        "ops",
+        "server_back"
+      ],
+      "merged_pr": 330,
+      "merge_sha": "fb76cf46ac55a57bf53a2e7092143224b09a62c2"
+    },
+    {
+      "id": "OPS-03",
+      "title": "Add one opt-in encrypted off-host backup adapter with dry-run",
+      "parent_issues": [
+        125
+      ],
+      "kind": "implementation",
+      "issue": 274,
+      "dependencies": [
+        "OPS-02"
+      ],
+      "conflict_groups": [
+        "backup-core",
+        "monitoring",
+        "compose"
+      ],
+      "verification_profiles": [
+        "ops",
+        "server_back"
+      ],
+      "merged_pr": 339,
+      "merge_sha": "9620ebb7a0b31027acb892f90e75d46a02bd6447"
+    },
+    {
+      "id": "OPS-04",
+      "title": "Automate a disposable all-domain restore drill and measure recovery",
+      "parent_issues": [
+        125
+      ],
+      "kind": "implementation",
+      "issue": 275,
+      "dependencies": [
+        "OPS-03"
+      ],
+      "conflict_groups": [
+        "backup-core",
+        "migration-tools",
+        "compose",
+        "operations-docs"
+      ],
+      "verification_profiles": [
+        "ops",
+        "server_back",
+        "schema"
+      ],
+      "merged_pr": 366,
+      "merge_sha": "008cf3c48c4d3c3ece8776062cec34996e8c8c63"
+    },
+    {
+      "id": "MED-09",
+      "title": "Finish retained Media library and Add interaction acceptance",
+      "parent_issues": [
+        85
+      ],
+      "kind": "implementation",
+      "issue": 284,
+      "dependencies": [
+        "MED-01"
+      ],
+      "conflict_groups": [
+        "media-library",
+        "media-add",
+        "media-runtime"
+      ],
+      "verification_profiles": [
+        "media_front",
+        "media_back",
+        "web_front"
+      ],
+      "merged_pr": 321,
+      "merge_sha": "82012961e85eb5d43c05caab0d151d2804b2f3fa"
+    },
+    {
+      "id": "MED-10",
+      "title": "Resolve retained Media runtime race, cache and no-op findings",
+      "parent_issues": [
+        85
+      ],
+      "kind": "implementation",
+      "issue": 285,
+      "dependencies": [
+        "MED-01"
+      ],
+      "conflict_groups": [
+        "media-detail-form",
+        "media-runtime",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "media_front",
+        "media_back",
+        "web_front"
+      ],
+      "merged_pr": 336,
+      "merge_sha": "1268f8d8a61b4b0116fc10eedc6739dfed1f8b78"
+    },
+    {
+      "id": "PLACE-01",
+      "title": "Create the coastal art direction, interaction storyboard and measured baseline",
+      "parent_issues": [
+        304
+      ],
+      "kind": "discovery",
+      "issue": 305,
+      "dependencies": [],
+      "conflict_groups": [
+        "town-main",
+        "world-ui",
+        "pixels-year"
+      ],
+      "verification_profiles": [
+        "docs"
+      ],
+      "merged_pr": 360,
+      "merge_sha": "c48dbea7a2c5bd7d5baa3061b15227c31abe0324"
+    },
+    {
+      "id": "DEL-06",
+      "title": "Remove obsolete UI styling paths and completed planning archives",
+      "parent_issues": [
+        200
+      ],
+      "kind": "implementation",
+      "issue": 358,
+      "dependencies": [],
+      "conflict_groups": [
+        "shared-styles",
+        "finance-presentation",
+        "private-shell",
+        "planning-guidance"
+      ],
+      "verification_profiles": [
+        "shared_front",
+        "server_back",
+        "docs"
+      ],
+      "merged_pr": 359,
+      "merge_sha": "b141dc3bc310c1cf4c878a2534f0cc1606abbbe5"
+    }
+  ],
+  "td_coverage": {
+    "TD-00": "REF-01",
+    "TD-01": "UX-01",
+    "TD-02": "SAFE-01",
+    "TD-03": "SAFE-02",
+    "TD-04": "MED-01",
+    "TD-05": "CON-01",
+    "TD-06": "CON-02",
+    "TD-07": "CON-03",
+    "TD-08": "SAFE-03",
+    "TD-09": "SAFE-04",
+    "TD-10": "SAFE-05",
+    "TD-11": "DEL-03",
+    "TD-12": "TYPE-01",
+    "TD-13": "VER-01",
+    "TD-14": "VER-02",
+    "TD-15": "VER-03",
+    "TD-16": "VER-03",
+    "TD-17": "MED-07",
+    "TD-18": "MED-08",
+    "TD-19": "DEL-04",
+    "TD-20": "FIN-04",
+    "TD-21": "DEL-03",
+    "TD-22": "PTO-01",
+    "TD-23": "TRIP-02",
+    "TD-24": "DEL-05",
+    "TD-25": "DEL-05",
+    "TD-26": "TYPE-01",
+    "TD-27": "TOWN-07",
+    "TD-28": "MED-01",
+    "TD-29": "DEL-01",
+    "TD-30": "REF-01",
+    "TD-31": "REF-01",
+    "TD-32": "VER-04",
+    "TD-33": "OPS-05",
+    "TD-34": "SEC-06",
+    "TD-35": "TYPE-01",
+    "TD-36": "OPS-01",
+    "TD-37": "REF-01",
+    "TD-38": "REF-01",
+    "TD-39": "REF-01"
+  },
+  "td_notes": {
+    "TD-00": {
+      "contributors": [
+        "CON-01",
+        "VER-04"
+      ],
+      "note": "Reference owns change-cost scorecard; graph/timing baselines captured within their own slices. Existing review inventory is initial evidence, not current benchmark."
+    },
+    "TD-14": {
+      "contributors": [
+        "TOWN-01",
+        "UX-01"
+      ],
+      "note": "VER02 owns guard; product packets own real fixtures and behavior activation."
+    },
+    "TD-16": {
+      "contributors": [
+        "UX-01",
+        "UX-03"
+      ]
+    },
+    "TD-20": {
+      "contributors": [
+        "FIN-05"
+      ],
+      "note": "Custom CSV stays an adapter on the existing import plan. FIN-05 owns residual import races, not a second engine."
+    },
+    "TD-22": {
+      "contributors": [
+        "PTO-02"
+      ],
+      "note": "Combined chart is the presentation boundary. Policy forms stay PTO-02; server math stays put."
+    },
+    "TD-23": {
+      "contributors": [
+        "TRIP-01",
+        "TRIP-04"
+      ],
+      "note": "Itinerary/day selection is the orchestration seam. Spending stays TRIP-01; row editors stay later trip leaves."
+    },
+    "TD-26": {
+      "contributors": [
+        "TOWN-03"
+      ],
+      "note": "Typed boundary preserves explicit money/date semantics; Town Finance-budget run normalization belongs actual product Treasury packet. Confirm product TOWN03 ID."
+    },
+    "TD-27": {
+      "contributors": [
+        "OPS-04"
+      ],
+      "note": "Composite ownership migration is this leaf. Query-capacity evidence stays with the feature that adds the query and with #125."
+    },
+    "TD-28": {
+      "contributors": [
+        "MED-08"
+      ],
+      "note": "MED01 fixes read-side IO/UoW; MED08 documents/refactors command transaction owner without dual implementation."
+    },
+    "TD-29": {
+      "contributors": [
+        "DEL-02",
+        "DEL-03"
+      ]
+    },
+    "TD-30": {
+      "contributors": [
+        "DEL-01"
+      ]
+    },
+    "TD-33": {
+      "contributors": [
+        "OPS-01"
+      ],
+      "note": "Independent monitor and redacted failure labels. OPS-01 keeps the current operations contract from growing a second logger."
+    },
+    "TD-34": {
+      "contributors": [
+        "SEC-05",
+        "OPS-04",
+        "OPS-02"
+      ],
+      "note": "Vault export/restore is #121. Measured server restore, retention and off-host activation stay #125."
+    },
+    "TD-35": {
+      "contributors": [
+        "VER-01",
+        "DEL-04"
+      ]
+    },
+    "TD-36": {
+      "note": "Dependency and toolchain cadence stays inside the operations contract. No framework migration."
+    },
+    "TD-38": {
+      "contributors": [
+        "VER-04"
+      ]
+    },
+    "TD-39": {
+      "note": "Lean decision policy; no new framework required."
+    }
+  },
+  "scope_moves": {
+    "MED-06 DET1": "MED-06",
+    "MED-06 LIB1": "MED-09",
+    "MED-06 MQA1": "MED-10",
+    "TD-11 live lifecycle adoption": "SAFE-04 and SAFE-05; orphan deletion stays DEL-03",
+    "2026-11-11 Living World extension": "PLACE-01\u201314 under #304; original #100/#102 stay closed, TOWN/UX/Health/Hub requirements retained; planning/living-world/scope.md"
+  }
+}

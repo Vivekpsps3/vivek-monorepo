@@ -206,7 +206,7 @@ A Health list/editor already saves through `createStat` / `createPr` with `expec
 - Do not add a package, plugin loader, second recovery list, generic repository, or event bus for one feature.
 - Do not leave a toy route, collection, or symbol in production. The `ref01_probe` registration in the table was reverted before this guide was committed.
 - Cards stays discovery [#265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265) (DISC-02). The Sidequests design is [#264](https://github.com/Vivekpsps3/vivek-monorepo/issues/264) (DISC-01) and does not authorize that app. This guide does not approve a bank connection, credential, or provider.
-- Parents [#197](https://github.com/Vivekpsps3/vivek-monorepo/issues/197), [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199), and [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200) stay open. Leaf ownership is `td_coverage` in [queue.json](../implementation/queue.json). This file is the REF-01 slice of TD-00, TD-30, TD-31, TD-37, TD-38, and TD-39 only.
+- Historical leaf ownership is `td_coverage` in the [completion registry](../implementation/completed/registry.json). Only unfinished owners remain in the [active queue](../implementation/queue.json). This file is the REF-01 slice of TD-00, TD-30, TD-31, TD-37, TD-38, and TD-39 only.
 
 Commands, floors, and architecture stay in [Verification](../../docs/VERIFICATION.md), [Quality](../../docs/QUALITY.md), [Architecture](../../docs/ARCHITECTURE.md), [Security](../../docs/SECURITY_MODEL.md), root [AGENTS.md](../../AGENTS.md), the [deletion contract](../implementation/deletion-strategy.md), and the [workflow](../implementation/workflow.md). Bank CSV rules stay in [Adding a bank import](../../docs/ADDING_A_BANK_IMPORT.md).
 

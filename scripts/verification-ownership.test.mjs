@@ -154,14 +154,24 @@ test('LOCAL1: verify-fast owns each gate once and the release manifest is not a 
   assert.equal(verify.includes('test-frontend-quick'), false);
   assert.equal(make.get('test').join('\n').includes('test-frontend-quick'), false);
 
-  const launched = spawnSync('python3', ['planning/implementation/plan.py', 'launch', 'VER-04'], {
+  const launched = spawnSync('python3', ['planning/implementation/plan.py', 'launch', 'OPS-05'], {
     cwd: root,
     encoding: 'utf8',
   });
   assert.equal(launched.status, 0, launched.stderr);
   const commands = launched.stdout.split('\n').filter((line) => line.startsWith('make ') || line.startsWith('node ') || line.startsWith('./') || line.startsWith('npm ') || line.startsWith('npx '));
   assert.equal(commands.filter((line) => line === 'make test-fast').length, 1);
+  assert.equal(commands.filter((line) => line === 'make lint-python').length, 1);
+  assert.equal(commands.filter((line) => line === 'make typecheck-python').length, 1);
   assert.equal(commands.some((line) => line.includes('test-release-manifest')), false);
+
+  const completed = spawnSync('python3', ['planning/implementation/plan.py', 'launch', 'VER-04'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.notEqual(completed.status, 0);
+  assert.match(completed.stderr, /VER-04 is completed/);
+  assert.equal(completed.stdout.includes('Implement VER-04'), false);
 
   const ci = read('.github/workflows/ci.yml');
   assert.equal(ci.split('make test-fast').length - 1, 1);

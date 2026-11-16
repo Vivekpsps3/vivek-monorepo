@@ -20,7 +20,10 @@ prerequisite can have been superseded; closure alone does not prove implementati
 If the first candidate is claimed or externally blocked, record the concrete
 reason and continue down the same list. Do not invent a new backlog or dependency.
 An explicit user-selected domain can narrow the list with `--parent NUMBER`.
-Without `--live`, listing is an offline inventory including completed leaves.
+Without `--live`, listing shows the remaining queue snapshot. Completed packets
+are kept only in the [completion archive](completed/README.md); they are never
+listed or launchable as future work. `--live` also rejects a reopened archived
+issue until the queue is reconciled.
 
 For the owner-selected Living World workstream, read the
 [product specification](../living-world/README.md), then filter this same queue:
@@ -35,16 +38,19 @@ order; the design documents do not introduce a second ready list.
 
 ## 2. Open its exact packet
 
-For example, the current first deletion candidate is MED-11:
+For example, launch the credential-rotation packet:
 
 ```sh
-python3 planning/implementation/plan.py launch MED-11
+python3 planning/implementation/plan.py launch SEC-03
 ```
 
 Substitute the selected key as work progresses. Launch prints the packet path and
 deduplicated verification commands. Read `issues/KEY.md`, applicable app AGENTS,
 and only the parent requirements/prerequisite evidence that packet needs.
-If local packet and live issue scope conflict, reconcile them before editing code.
+Dependencies may reference merged packets in `completed/issues/`; verify their
+registered merge and acceptance evidence on current main. They remain guarantees
+to preserve, not unfinished jobs. If packet and live scope conflict, reconcile
+them before editing code.
 
 ## 3. Claim and implement
 
@@ -75,10 +81,16 @@ exact next action; use [handoff](templates/handoff.md) before evidence exists.
 | --- | --- |
 | What goes next by default? | Ordered tasks in [queue.json](queue.json), filtered by live status and actual prerequisites/claims |
 | What must this task deliver? | `issues/KEY.md`, mirrored to its GitHub leaf |
-| What dependencies/conflicts/profiles apply? | `queue.json` |
+| What dependencies/conflicts/profiles apply? | `queue.json`; merged prerequisite proof in [completion registry](completed/registry.json) |
 | What is its live execution state? | GitHub leaf, PR and current source |
 | How is it performed? | [Workflow](workflow.md), root/app AGENTS and deletion contract |
 | Which commands and results prove it? | [Profiles](verification.json), actual-diff root gates, then `evidence/KEY.md` |
+
+Only unfinished leaves belong in `queue.json` and `issues/`. After verified
+completion, the integration owner moves a packet to `completed/issues/`, registers
+its merged PR/SHA in `completed/registry.json`, and removes tracking parents with
+no remaining leaves. Preserve dependency IDs and issue-specific evidence; keep
+the original forty-item TD ownership ledger in that registry.
 
 Dated reviews and completed packets are supporting evidence. Keep task order out
 of their recommendations and out of additional ready tables. The planner's

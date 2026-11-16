@@ -15,6 +15,11 @@ references this workflow for roadmap implementation outside `planning/`.
 4. Fresh-read the remote leaf, current `main`, open PRs and relevant source. Paths
    and line numbers are starting points. Local/unmerged code is not merged evidence.
 
+Completed packets under `completed/issues/` are prerequisite history and cannot
+be launched. The integration owner archives a newly completed packet and its
+merged PR/SHA, removes it from the active queue, and preserves dependency IDs
+and evidence; live listing rejects an archived issue that has reopened.
+
 Tracking parents are not implementation jobs. Pick one executable leaf. Discovery
 jobs deliver a concrete design/spec PR; they do not authorize app implementation.
 Operational-evidence jobs need their stated real configuration/access/authorization.

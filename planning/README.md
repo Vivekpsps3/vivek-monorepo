@@ -5,7 +5,7 @@ It gives one selection rule, one work packet and one completion path. Follow it
 from task selection through verification and handoff.
 
 [Roadmap #134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) records live
-scope and progress. Parent issues retain product requirements; executable leaves
+remaining scope. Parent issues retain product requirements; executable leaves
 under `implementation/issues/` define the work for one PR. Queue order supplies
 the default priority when the user has not selected a task.
 
@@ -14,8 +14,8 @@ the default priority when the user has not selected a task.
 [Living World](living-world/README.md) / [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304)
 defines the selected Town/World/Pixels expansion: beautiful coastal scenes,
 meaningful interaction and informative dated memories. Read its scope reconciliation
-for retained Town/UX/Health/Hub commitments. PLACE-01–14 packets are in the same
-execution queue; they add future scope without reopening completed #100/#102.
+for retained Town/Health/Hub commitments. PLACE-02–14 are the remaining
+implementation packets in the same queue.
 
 ## Discovery designs
 
@@ -26,6 +26,9 @@ entries, routes, or an app. Implementation stays unselected until the owner
 says otherwise. Cards remain [DISC-02](implementation/issues/DISC-02.md).
 
 ## Supporting guidance and history
+
+Completed deliveries are outside the active roadmap. Their packets, merged PRs
+and prerequisite proof are in the [completion archive](implementation/completed/README.md).
 
 - [Development practices](technical-debt/feature-addition-playbook.md) explains feature recipes.
 - [Technical-debt review](technical-debt/README.md) retains original TD-00–TD-39 rationale.
