@@ -16,7 +16,7 @@
 
 Feature with necessary lifecycle guards, not a negative-LOC simplification. No old Quick-add form/draft or competing listener existed to delete. Extended the shell's existing Ctrl/Meta-K listener to delegate to the mounted Hub; no second global shortcut listener or event bus. Reused `UiMenu`, `UiDialog`, current Finance guards/editor, Travel/Media creation routes and bounded Hub fetch helper. Replaced the inert header health slot. Existing card/agenda loaders and greeting remain the owners.
 
-Against the base: production +142/−6 = +136 physical lines; tests +192/−1 = +191; app guidance +6/−5 separately. No production moves/generated output. Added code is the visible Quick-add/help controls, authorized bounded health lifecycle and input/modal guards. No copied editor, health endpoint, draft store, polling interval or source ledger. Lexical blank-only +11/−0 and comment-prefix +1/−1 lines are included; no formatting reduction is claimed. Follow-up command changes touch QuickAdd plus the existing app-owned editor; health changes touch the sole chip owner plus the existing endpoints.
+Against the base: production +147/−6 = +141 physical lines; tests +203/−2 = +201; app/package guidance +8/−5 separately. No production moves/generated output. Added code is the visible Quick-add/help controls, authorized bounded health lifecycle and input/modal guards. No copied editor, health endpoint, draft store, polling interval or source ledger. Lexical blank-only +11/−0 and comment-prefix +3/−1 lines are included; no formatting reduction is claimed. Follow-up command changes touch QuickAdd plus the existing app-owned editor; health changes touch the sole chip owner plus the existing endpoints.
 
 The old unit assertion forbidding **any** menu node is corrected to forbid an **open** menu after a session rejection; the supported closed Quick-add menu is intentionally mounted. Existing session-rejection, usable-other-card and no-sign-out assertions remain.
 
@@ -58,7 +58,7 @@ The new Hub browser fixture now restores the domain's default data; the existing
 search story explicitly resets its own expected library instead of depending on
 which file ran before it.
 
-Additional actual closure: shared menu +5/−0 production lines, its regression
+The final totals above include this follow-up: shared menu +5/−0 production lines, its regression
 +9/−0 test lines, and fixture changes in `hub-shortcuts.spec.ts` / `search.spec.ts`.
 No assertion, retry setting or gate was weakened. Shared UI validation broadened
 to all three Karma suites (Finance 503, site 9, web 400), shared browser/UI Node
