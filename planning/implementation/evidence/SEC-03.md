@@ -52,7 +52,7 @@ Rehearsal artifact: `/tmp/seed-validation-report.json` contains synthetic fixtur
 
 ## Handoff
 
-- PR URL: pending creation after final documentation check; closes #268 only, references #121.
-- Roadmap #134 scoped status note: pending PR creation.
+- PR URL: https://github.com/Vivekpsps3/vivek-monorepo/pull/376; closes #268 only, references #121.
+- Roadmap #134 scoped status note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6905474160.
 - Actual state: implemented and locally verified; not merged or deployed. SEC-04 still requires this contract merged on current main under the execution workflow.
 - Next actor: review/merge this leaf, then execute SEC-04 from fresh main. Keep root checkout's existing World changes untouched.
