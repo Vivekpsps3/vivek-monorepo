@@ -40,7 +40,8 @@ Initial failures were fixed: health import crossed the platform boundary (now st
 
 ## Handoff
 
-- PR: opened after the required gates passed; see leaf #247 for URL.
+- PR: https://github.com/Vivekpsps3/vivek-monorepo/pull/380; implementation tree `2086d7d`, opened after required gates passed.
+- Roadmap note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6931270885.
 - Merge/deployment: not merged or deployed.
 - Remaining parent scope: HUB-06 and Town-owned TOWN-06; TOWN-05 is still open and required by TOWN-06.
 - Next actor: review/merge this leaf with owner authorization; Codex continues HUB-06 in its own worktree.
