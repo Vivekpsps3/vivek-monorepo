@@ -20,7 +20,9 @@ opaque during motion and use the shared frame-shadow tokens. Resolve cascade
 ownership instead of stacking specificity overrides. Migrate consumers and remove their old selectors.
 Menus must hide their panel and update expanded state before focus returns, so
 the next keyboard command sees the closed state.
-A shared selector change requires inspecting actual consuming apps.
+The compact data table owns dense cell spacing and the narrow row layout. Keep
+column headers and row identity in semantic table markup; let the table attach
+narrow labels. A shared selector change requires inspecting actual consuming apps.
 
 Public reexports and discovery adapters can be compatibility boundaries. Verify
 config, lazy, test and downstream consumers before removing one. In particular,

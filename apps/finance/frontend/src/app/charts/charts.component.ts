@@ -3,6 +3,7 @@ import {
   ChangeDetectorRef,
   Component,
   Input,
+  inject,
   OnDestroy,
   OnInit,
   ElementRef,
@@ -19,7 +20,8 @@ import { CategorySpendTableComponent, type CategorySpendTableRow } from './categ
 import { formatDate, formatPercent } from '@vivek/browser';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
-import { UiCardComponent, UiEmptyStateComponent } from '@vivek/ui';
+import { ThemeService, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '@vivek/ui';
+import { actualQuoteDate, holdingMarketValue, quoteFreshnessLabel, totalPortfolioValue } from '../utils/portfolio.util';
 import {
   chartColorAt,
   chartCartesianScales,
@@ -43,6 +45,16 @@ import {
   writeTablePref,
 } from '../utils/chart-options';
 import { MoneyPipe } from '@vivek/ui';
+interface AllocationRow {
+  id: number;
+  label: string;
+  value: number | null;
+  share: number | null;
+  companyName: string | null;
+  quote: string;
+  quoteDate: string;
+}
+
 type ChartConstructor = new (
   item: ChartItem,
   config: unknown
@@ -52,7 +64,7 @@ type ChartConstructor = new (
   selector: 'app-charts',
   standalone: true,
   imports: [
-    MoneyPipe, CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent, CategorySpendTableComponent],
+    MoneyPipe, CommonModule, RouterLink, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, CategorySpendTableComponent],
   templateUrl: './charts.component.html',
   styleUrl: './charts.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -94,7 +106,15 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   netCashflow = 0;
   monthlyRows: { month: string; label: string; tick: string; income: number; expense: number; net: number }[] = [];
   allCategoryRows: CategorySpendRow[] = [];
-  allocationRows: { label: string; value: number; pct: number; companyName?: string | null }[] = [];
+  allocationRows: AllocationRow[] = [];
+  allocationTotal = 0;
+  allocationIncomplete = false;
+  allocationHasStaleQuotes = false;
+  allocationHasShare = false;
+
+  get hasAllocationChart(): boolean {
+    return this.allocationHasShare && this.allocationRows.length > 1;
+  }
 
   private incomeChart?: ChartInstance;
   private categoryChart?: ChartInstance;
@@ -102,6 +122,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   private render$ = new Subject<void>();
   private destroy$ = new Subject<void>();
   private viewReady = false;
+  private readonly theme = inject(ThemeService);
   private chartCtor: ChartConstructor | null = null;
   chartDimmed = false;
 
@@ -143,7 +164,8 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.render$
       .pipe(debounceTime(120), takeUntil(this.destroy$))
-      .subscribe(() => void this.schedulePaint());
+      .subscribe(() => this.schedulePaint());
+    this.theme.theme$.pipe(takeUntil(this.destroy$)).subscribe(() => this.render$.next());
 
     this.financeService.holdings$.pipe(takeUntil(this.destroy$)).subscribe(data => {
       this.holdings = data;
@@ -196,6 +218,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.viewReady = false;
     this.narrowQuery?.removeEventListener('change', this.onNarrowChange);
     this.destroy$.next();
     this.destroy$.complete();
@@ -256,15 +279,15 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   get allocationSummary(): string {
     const top = this.allocationRows[0];
     if (!top) return '';
-    return `Holdings mix. Largest: ${top.label}, ${this.formatShare(top.pct)}.`;
+    return `Holdings mix. Largest: ${top.label}, ${this.formatShare(top.share)}.`;
   }
 
   get singleCategory(): CategorySpendRow | null {
     return this.categoryRows.length === 1 ? this.categoryRows[0] : null;
   }
 
-  get singleHolding(): { label: string; value: number; pct: number } | null {
-    return this.allocationRows.length === 1 ? this.allocationRows[0] : null;
+  get singleHolding(): AllocationRow | null {
+    return this.allocationHasShare && this.allocationRows.length === 1 ? this.allocationRows[0] : null;
   }
 
   private async ensureChartCtor(): Promise<ChartConstructor> {
@@ -325,9 +348,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   toggleSection(name: keyof ChartsComponent['sectionOpen']): void {
     this.sectionOpen[name] = !this.sectionOpen[name];
     this.cdr.markForCheck();
-    if (this.sectionOpen[name]) {
-      this.render$.next();
-    }
+    this.render$.next();
   }
 
   openMonthlyDrilldown(index: number, datasetIndex = 0): void {
@@ -384,15 +405,25 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     // the chart clamps negatives, the table keeps them signed.
     this.allCategoryRows = categorySpend(txs, '').rows;
 
-    const totalVal = this.holdings.reduce((s, h) => s + (h.value || 0), 0);
-    this.allocationRows = [...this.holdings]
-      .sort((a, b) => (b.value || 0) - (a.value || 0))
-      .map(h => ({
-        label: h.symbol,
-        value: h.value || 0,
-        pct: totalVal ? ((h.value || 0) / totalVal) * 100 : 0,
-        companyName: h.company_name || null,
+    this.allocationTotal = totalPortfolioValue(this.holdings);
+    const holdings = this.holdings.map(holding => ({ holding, value: holdingMarketValue(holding) }));
+    this.allocationIncomplete = holdings.some(row => row.value == null);
+    // Chart.js draws negative doughnut inputs as positive areas. A signed or
+    // incomplete portfolio has no useful share-of-whole visualization.
+    this.allocationHasShare = Number.isFinite(this.allocationTotal) && this.allocationTotal > 0 &&
+      holdings.every(row => row.value != null && row.value >= 0);
+    this.allocationRows = holdings
+      .sort((a, b) => (b.value ?? -Infinity) - (a.value ?? -Infinity))
+      .map(({ holding, value }) => ({
+        id: holding.id,
+        label: holding.symbol,
+        value,
+        share: this.allocationHasShare && value != null ? (value / this.allocationTotal) * 100 : null,
+        companyName: holding.company_name ?? null,
+        quote: value == null ? 'Unavailable' : quoteFreshnessLabel(holding),
+        quoteDate: formatDate(actualQuoteDate(holding), 'table'),
       }));
+    this.allocationHasStaleQuotes = this.allocationRows.some(row => row.quote.startsWith('Stale'));
   }
 
   private async paintCharts() {
@@ -402,6 +433,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.chartDimmed = true;
     this.cdr.markForCheck();
     const Chart = await this.ensureChartCtor();
+    if (!this.viewReady) return;
     this.updateIncomeExpense(Chart);
     this.updateCategorySpending(Chart);
     this.updatePortfolio(Chart);
@@ -590,7 +622,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private updatePortfolio(Chart: ChartConstructor) {
     const canvas = this.portfolioCanvas?.nativeElement;
-    if (!canvas || this.allocationRows.length === 0 || this.tableOpen.allocation || this.singleHolding) {
+    if (!canvas || !this.sectionOpen.allocation || !this.hasAllocationChart || this.tableOpen.allocation) {
       this.portfolioChart?.destroy();
       this.portfolioChart = undefined;
       return;
@@ -617,7 +649,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
             callbacks: {
               label: (item: { dataIndex: number }) => {
                 const row = this.allocationRows[item.dataIndex];
-                return row ? `${row.label} · ${chartMoney(row.value)} · ${this.formatShare(row.pct)}` : '';
+                return row?.value != null ? `${row.label} · ${chartMoney(row.value)} · ${this.formatShare(row.share)}` : '';
               },
             },
           },

@@ -54,6 +54,10 @@ Source of truth: `packages/ui/tokens.css`.
 | `--success` / `--danger` / `--warning` | Status |
 
 Charts: shared palette and Chart.js options live in `@vivek/ui` (`packages/ui/src/chart-theme.ts`; prefer CSS vars for axes). Chart hover tooltips are off. Values sit in the table or readout beside the chart.
+Holdings mix keeps saved stale values labeled and shows the table when a missing
+or signed value makes a doughnut misleading. A genuine zero remains numeric.
+Holdings and the allocation table use the compact table layout. Media cards keep
+their own typography and actions and share the table's coastal material edge.
 
 **Appearance:** `tokens.css` owns the coastal `--ivory`, `--navy`, `--teal`,
 `--coral`, `--brass` and `--wood` palette. Semantic surfaces/text/actions reference

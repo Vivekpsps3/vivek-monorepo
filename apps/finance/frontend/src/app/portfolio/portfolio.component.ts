@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 import { CommonModule, KeyValuePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject, firstValueFrom, takeUntil } from 'rxjs';
+import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import {
   Holding,
@@ -28,7 +28,7 @@ import { dialogSaveAlert, focusDialogAlert, focusFirstInvalid } from '../shared/
 import {
   holdingGain,
   holdingGainPercent,
-  hasUnvaluedPositions,
+  holdingMarketValue,
   actualQuoteDate,
   portfolioDateSummary,
   quoteFreshness,
@@ -206,24 +206,22 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   }
 
   refreshHoldingPrice(h: Holding) {
-    return this.refreshSymbols([h.symbol]);
+    return this.refreshSavedPrice(h.symbol);
   }
 
-  /** Refresh the given held symbols, then re-read holdings so the table shows the shared book. */
-  private async refreshSymbols(symbols: string[]): Promise<void> {
-    const results = await Promise.all(symbols.map(symbol => this.marketRefresh.refreshSymbol(symbol)));
-    const failed = results.filter(result => result.error || result.failedRecords.length);
-    if (failed.length === symbols.length && symbols.length === 1) {
-      this.toastService.error(`${symbols[0]} price could not be refreshed. Its prior price remains available.`);
-    } else if (failed.length) {
-      this.toastService.error(`${failed.map(result => result.symbol).join(', ')} quote could not be fully saved. Its prior price remains available.`);
-    } else if (symbols.length === 1) {
-      this.toastService.success(`${symbols[0]} price refreshed`);
-    } else {
-      this.toastService.success('Prices refreshed');
+  private async refreshSavedPrice(symbol: string): Promise<void> {
+    const session = this.financeService.sessionToken;
+    const failure = symbol + ' price could not be refreshed. Its prior price remains available.';
+    try {
+      const result = await this.marketRefresh.refreshSymbol(symbol);
+      // The coordinator publishes eligible results to holdings$ itself.
+      if (this.destroyed || session !== this.financeService.sessionToken) return;
+      if (result.error) this.toastService.error(failure);
+      else if (result.failedRecords.length) this.toastService.error(symbol + ' quote could not be fully saved. Its prior price remains available.');
+      else this.toastService.success(symbol + ' price refreshed');
+    } catch {
+      if (!this.destroyed && session === this.financeService.sessionToken) this.toastService.error(failure);
     }
-    await firstValueFrom(this.financeService.getHoldings());
-    this.cdr.markForCheck();
   }
 
   retryLoadHoldings(): void {
@@ -274,7 +272,8 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       // coordinator so the book, the table and this line stay in agreement.
       this.checkingPrice = true;
       this.priceCheckError = '';
-      void this.refreshSymbols([symbol]).finally(() => {
+      void this.refreshSavedPrice(symbol).finally(() => {
+        if (this.destroyed) return;
         this.checkingPrice = false;
         this.cdr.markForCheck();
       });
@@ -531,11 +530,11 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   }
 
   get hasMissingValues(): boolean {
-    return hasUnvaluedPositions(this.holdings);
+    return this.missingValueCount > 0;
   }
 
   get missingValueCount(): number {
-    return this.holdings.filter(h => h.value == null || !Number.isFinite(Number(h.value))).length;
+    return this.holdings.filter(h => holdingMarketValue(h) == null).length;
   }
 
   get provisionalPositionCount(): number {

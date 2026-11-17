@@ -34,8 +34,14 @@ export function holdingGainPercent(h: Holding): number | null {
   return gain == null || !Number.isFinite(cost) || cost <= 0 ? null : (gain / cost) * 100;
 }
 
+export function holdingMarketValue(holding: Holding): number | null {
+  if (holding.value == null) return null;
+  const value = Number(holding.value);
+  return Number.isFinite(value) ? value : null;
+}
+
 export function totalPortfolioValue(holdings: Holding[]): number {
-  return holdings.reduce((sum, h) => sum + (Number.isFinite(Number(h.value)) ? Number(h.value) : 0), 0);
+  return holdings.reduce((sum, holding) => sum + (holdingMarketValue(holding) ?? 0), 0);
 }
 
 export function totalPortfolioGain(holdings: Holding[]): number | null {
@@ -49,7 +55,7 @@ export function totalPortfolioGain(holdings: Holding[]): number | null {
 }
 
 export function hasUnvaluedPositions(holdings: Holding[]): boolean {
-  return holdings.some(row => row.value == null || !Number.isFinite(Number(row.value)));
+  return holdings.some(row => holdingMarketValue(row) == null);
 }
 
 export function quoteFreshness(holding: Holding, asOf = todayDate()): QuoteState {

@@ -8,7 +8,6 @@
 .embed,
 :host ::ng-deep ui-card,
 .account-section,
-.table-scroll,
 .summary-card {
   min-width: 0;
   max-width: 100%;
@@ -179,6 +178,8 @@ h3 {
 
 summary.section-header,
 .account-sub summary {
+  box-sizing: border-box;
+  min-height: var(--control-h);
   cursor: pointer;
   user-select: none;
 }
@@ -262,18 +263,20 @@ details.account-sub[open] > summary::before {
   min-width: 0;
 }
 
-.table-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
 .symbol {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.company-sub {
+.company-sub,
+.holding-details {
+  display: block;
   font-weight: 400;
+}
+
+.holding-details {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .price-cell {
@@ -484,16 +487,6 @@ details.account-sub[open] > summary::before {
   background: transparent;
 }
 
-:host ::ng-deep .ui-data-table__table thead th {
-  white-space: normal;
-}
-
-:host ::ng-deep .ui-data-table__table thead th.num,
-:host ::ng-deep .ui-data-table__table tbody td.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
 :host ::ng-deep .price-cell .ui-badge {
   max-width: 100%;
   height: auto;
@@ -505,17 +498,6 @@ details.account-sub[open] > summary::before {
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--space-2);
-}
-
-@media (min-width: 769px) {
-  :host ::ng-deep .ui-data-table__table tbody td.num {
-    white-space: nowrap;
-  }
-
-  :host ::ng-deep .ui-data-table__table thead th,
-  :host ::ng-deep .ui-data-table__table tbody td {
-    padding: var(--space-2) var(--space-3);
-  }
 }
 
 @media (max-width: 768px) {
@@ -553,7 +535,6 @@ details.account-sub[open] > summary::before {
   .section-header,
   .account-sub summary {
     align-items: flex-start;
-    min-height: 44px;
     padding: var(--space-3) 0;
     background: transparent;
   }
@@ -569,10 +550,6 @@ details.account-sub[open] > summary::before {
 
   .nickname-input {
     width: 100%;
-  }
-
-  .table-scroll {
-    overflow: visible;
   }
 
   .holding-form .form-row,
@@ -646,20 +623,6 @@ details.account-sub[open] > summary::before {
     max-width: 100%;
     min-height: 44px;
   }
-
-  :host ::ng-deep .ui-data-table .ui-data-table__table tbody tr {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  :host ::ng-deep .ui-data-table .ui-data-table__table tbody td {
-    grid-column: 1 / -1;
-    text-align: left;
-  }
-
-  :host ::ng-deep .ui-data-table__table tbody td.num {
-    text-align: left;
-    font-weight: 650;
-  }
 }
 
 .empty-actions {
@@ -689,13 +652,6 @@ details.account-sub[open] > summary::before {
   }
 }
 
-/* F16: holding details row + gain percent */
-.holding-details td {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  padding-top: 0;
-  border-top: 0;
-}
 .gain-pct {
   display: block;
   font-size: var(--text-xs);

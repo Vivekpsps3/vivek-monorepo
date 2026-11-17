@@ -13,6 +13,7 @@ export class UiDataTableComponent implements AfterViewInit, OnDestroy {
   private host = inject(ElementRef<HTMLElement>);
   private observer?: MutationObserver;
 
+  compact = input(false);
   stickyHeader = input(false);
   caption = input<string | undefined>(undefined);
   ariaLabel = input<string | undefined>(undefined);
@@ -37,10 +38,11 @@ export class UiDataTableComponent implements AfterViewInit, OnDestroy {
     table.querySelectorAll('tbody tr').forEach((row: Element) => {
       let index = 0;
       Array.from(row.children).forEach((cell: Element) => {
-        if (!(cell instanceof HTMLTableCellElement) || cell.tagName !== 'TD') return;
-        const spans = cell.colSpan > 1;
-        const label = spans ? '' : headers[index] || '';
-        if (cell.getAttribute('data-label') !== label) cell.setAttribute('data-label', label);
+        if (!(cell instanceof HTMLTableCellElement)) return;
+        if (cell.tagName === 'TD') {
+          const label = cell.colSpan > 1 ? '' : headers[index] || '';
+          if (cell.getAttribute('data-label') !== label) cell.setAttribute('data-label', label);
+        }
         index += cell.colSpan || 1;
       });
     });

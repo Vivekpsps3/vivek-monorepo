@@ -91,47 +91,58 @@
 
     <ui-card>
       <div class="chart-head">
-        <button type="button" class="section-toggle" (click)="toggleSection('allocation')">
+        <button type="button" class="section-toggle" [attr.aria-expanded]="sectionOpen.allocation" aria-controls="allocation-content" (click)="toggleSection('allocation')">
           <span>Holdings mix</span>
           <span>{{ sectionOpen.allocation ? 'Hide' : 'Show' }}</span>
         </button>
-        @if (sectionOpen.allocation && allocationRows.length && !singleHolding) {
-          <button type="button" class="text-link" [attr.aria-expanded]="tableOpen.allocation" aria-controls="allocation-table" (click)="toggleTable('allocation')">
+        @if (sectionOpen.allocation && hasAllocationChart) {
+          <button type="button" class="text-link" [attr.aria-expanded]="tableOpen.allocation" aria-controls="allocation-content" (click)="toggleTable('allocation')">
             {{ tableOpen.allocation ? 'Show as chart' : 'Show as table' }}
           </button>
         }
       </div>
-      @if (sectionOpen.allocation && allocationRows.length) {
-        @if (singleHolding; as only) {
-          <p class="chart-stat">{{ only.label }} · {{ formatShare(only.pct) }} · {{ money(only.value) }}</p>
-        } @else if (!tableOpen.allocation) {
-          <div class="chart-wrap" [class.chart-dim]="chartDimmed">
-            <canvas #portfolioChart role="img" [attr.aria-label]="allocationSummary"></canvas>
-          </div>
-        }
-        @if (tableOpen.allocation) {
-          <div class="chart-fallback">
-            <table id="allocation-table">
-              <caption>Holdings mix</caption>
-              <thead><tr><th scope="col">Symbol</th><th scope="col">Value</th><th scope="col">Share</th></tr></thead>
+      <div id="allocation-content">
+        @if (sectionOpen.allocation && allocationRows.length) {
+          @if (singleHolding; as only) {
+            <p class="chart-stat">{{ only.label }} · {{ formatShare(only.share) }} · {{ only.value | money }}</p>
+          }
+          @if (allocationIncomplete) {
+            <p class="chart-note">Some position values are unavailable. Portfolio shares are unavailable until every position is valued.</p>
+          }
+          @if (allocationHasStaleQuotes) {
+            <p class="chart-note">Includes saved values from stale quotes.</p>
+          }
+          @if (hasAllocationChart && !tableOpen.allocation) {
+            <div class="chart-wrap allocation-chart" [class.chart-dim]="chartDimmed">
+              <canvas #portfolioChart role="img" [attr.aria-label]="allocationSummary"></canvas>
+            </div>
+            <p class="chart-note">Portfolio value <strong>{{ allocationTotal | money }}</strong></p>
+          } @else {
+            <ui-data-table caption="Holdings mix" [compact]="true">
+              <thead><tr><th scope="col">Symbol</th><th scope="col" class="num">Value</th><th scope="col" class="num">Share</th></tr></thead>
               <tbody>
-                @for (row of allocationRows; track row.label) {
+                @for (row of allocationRows; track row.id) {
                   <tr>
                     <th scope="row">
                       {{ row.label }}
                       @if (row.companyName) { <small class="chart-company-name">{{ row.companyName }}</small> }
                     </th>
-                    <td>{{ row.value | money }}</td>
-                    <td>{{ formatShare(row.pct) }}</td>
+                    <td class="num">
+                      {{ row.value === null ? 'Unavailable' : (row.value | money) }}
+                      @if (row.value !== null) {
+                        <small class="chart-company-name">{{ row.quote }} · {{ row.quoteDate }}</small>
+                      }
+                    </td>
+                    <td class="num">{{ row.share === null ? 'Unavailable' : formatShare(row.share) }}</td>
                   </tr>
                 }
               </tbody>
-            </table>
-          </div>
+            </ui-data-table>
+          }
+        } @else if (sectionOpen.allocation && !loading) {
+          <ui-empty-state icon="portfolio" message="Add holdings to see allocation." />
         }
-      } @else if (sectionOpen.allocation) {
-        <ui-empty-state icon="portfolio" message="Add holdings to see allocation." />
-      }
+      </div>
     </ui-card>
   </div>
 </div>
