@@ -15,8 +15,9 @@ do not copy component rules into the global kit. Keep global tokens and native
 control utilities separate from component presentation.
 
 For UI changes, preserve accessible names, linked errors, keyboard/focus return,
-dialog scroll, hit targets and theme tokens. Resolve cascade ownership instead of
-stacking specificity overrides. Migrate consumers and remove their old selectors.
+dialog scroll, 44px targets at every size and theme tokens. Keep overlay labels
+opaque during motion and use the shared frame-shadow tokens. Resolve cascade
+ownership instead of stacking specificity overrides. Migrate consumers and remove their old selectors.
 Menus must hide their panel and update expanded state before focus returns, so
 the next keyboard command sees the closed state.
 A shared selector change requires inspecting actual consuming apps.

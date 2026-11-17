@@ -53,12 +53,10 @@ export interface CommitmentRow {
             <div>
               <h2 id="commitments-title">Bills &amp; subscriptions </h2>
             </div>
-            @if (rows.length) {
-              <div class="commitments__actions">
-                <ui-button variant="secondary" (clicked)="addBill()">Add bill</ui-button>
-                <ui-button variant="primary" (clicked)="addSubscription()">Add subscription</ui-button>
-              </div>
-            }
+            <div class="commitments__actions">
+              <ui-button variant="secondary" (clicked)="addBill()">Add bill</ui-button>
+              <ui-button variant="primary" (clicked)="addSubscription()">Add subscription</ui-button>
+            </div>
           </header>
           @if (rows.length) {
           <div class="commitment-totals" aria-label="Bills and subscriptions totals">
@@ -117,12 +115,7 @@ export interface CommitmentRow {
               <div class="empty-actions"><ui-button variant="secondary" (clicked)="showAllCommitments()">Show all</ui-button></div>
             </ui-empty-state>
           } @else if (!loadError) {
-            <ui-empty-state [title]="'No bills or subscriptions yet'" message="Add rent, utilities, or a streaming plan to see what repeats each month.">
-              <div class="empty-actions">
-                <ui-button variant="primary" (clicked)="addBill()">Add bill</ui-button>
-                <ui-button variant="secondary" (clicked)="addSubscription()">Add subscription</ui-button>
-              </div>
-            </ui-empty-state>
+            <ui-empty-state [title]="'No bills or subscriptions yet'" message="Add rent, utilities, or a streaming plan to see what repeats each month." />
           }
         </section>
         <app-fixed-expenses [embedded]="true" [editorOnly]="true" />

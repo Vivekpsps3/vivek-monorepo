@@ -16,12 +16,13 @@
   left: 0;
   min-width: 12rem;
   max-width: min(20rem, calc(100vw - 32px));
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--card-bg);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-lg);
+  border-top: 3px solid var(--brass);
   z-index: 30;
-  padding: var(--space-1) 0;
+  padding: var(--space-1);
 }
 
 .ui-menu__panel--end {
@@ -52,16 +53,15 @@
   padding: 0 var(--space-4);
   background: none;
   border: 0;
+  border-radius: var(--radius-sm);
   font: inherit;
   color: var(--text);
   text-align: left;
   cursor: pointer;
 }
 
-:host ::ng-deep [uiMenuItem]:hover,
-:host ::ng-deep [uiMenuItem]:focus-visible {
+:host ::ng-deep [uiMenuItem]:hover:not([aria-disabled="true"]) {
   background: var(--surface-hover);
-  outline: none;
 }
 
 :host ::ng-deep [uiMenuItem][aria-disabled="true"] {
@@ -77,4 +77,10 @@
 /* Only the first danger item gets the divider. */
 :host ::ng-deep [uiMenuItem].ui-menu-item--danger ~ [uiMenuItem].ui-menu-item--danger {
   border-top: none;
+}
+
+:host ::ng-deep [uiMenuItem]:focus-visible {
+  background: var(--surface-hover);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
