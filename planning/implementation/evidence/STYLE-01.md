@@ -75,8 +75,8 @@ pass, and no PR is opened with a required local gate pending.
 
 ## Handoff
 
-- PR: pending local gates; will close only #382.
-- Roadmap #134: append-only scoped status note after PR creation.
-- All required local gates pass on the implementation revision; PR/CI and formal pre-merge vetting are next.
-- Next actor: same issue worker completes every local gate, rereads issue/diff, verifies CI, then uses the user's explicit merge/closure authorization and removes only its own worktree/branches.
+- PR: https://github.com/Vivekpsps3/vivek-monorepo/pull/494; closes only #382.
+- Roadmap #134 scoped note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6942287495.
+- All required local gates pass. The original issue and complete published diff were re-reviewed for acceptance, missing behavior, regressions, security, unrelated changes and adequate coverage; no unresolved code findings remain. CI is the remaining merge condition. Actual CI/merge/closure outcomes are authoritative on the linked PR and leaf timeline.
+- Next actor: same issue worker verifies successful CI on the exact PR head, records pre-merge vetting, then uses the user's explicit merge/closure authorization and removes only its own worktree/branches.
 - Owner visual approval and deployed activation remain distinct from these code/test results.
