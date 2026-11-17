@@ -271,6 +271,8 @@ details.account-sub[open] > summary::before {
 @media (min-width: 1024px) {
   .actions--row {
     flex-wrap: nowrap;
+    min-width: max-content;
+    white-space: nowrap;
   }
 }
 
