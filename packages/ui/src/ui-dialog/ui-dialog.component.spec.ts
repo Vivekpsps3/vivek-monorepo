@@ -13,6 +13,45 @@ class DialogHost { first = false; second = false; }
 
 describe('Dialog background isolation', () => {
 
+  it('returns to the original opener when an editor and its confirmation close together', async () => {
+    await TestBed.configureTestingModule({ imports: [DialogHost] }).compileComponents();
+    const fixture = TestBed.createComponent(DialogHost);
+    fixture.detectChanges();
+    const originalOverflow = document.body.style.overflow;
+    const opener = fixture.nativeElement.querySelector('#background') as HTMLButtonElement;
+    opener.focus();
+    fixture.componentInstance.first = true;
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(document.activeElement?.id).toBe('first-field');
+    fixture.componentInstance.second = true;
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(document.activeElement?.id).toBe('second-field');
+    fixture.componentInstance.first = false;
+    fixture.componentInstance.second = false;
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(document.activeElement).toBe(opener);
+    expect(opener.inert).toBeFalse();
+    expect(document.body.style.overflow).toBe(originalOverflow);
+  });
+
+  it('does not return focus outside a newly opened dialog', async () => {
+    await TestBed.configureTestingModule({ imports: [DialogHost] }).compileComponents();
+    const fixture = TestBed.createComponent(DialogHost);
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('#background').focus();
+    fixture.componentInstance.first = true;
+    fixture.detectChanges();
+    await Promise.resolve();
+    fixture.componentInstance.first = false;
+    fixture.componentInstance.second = true;
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(document.activeElement?.id).toBe('second-field');
+  });
+
   it('dismisses an update from the active dialog without closing it or losing its draft', async () => {
     const visible = signal(true);
     await TestBed.configureTestingModule({

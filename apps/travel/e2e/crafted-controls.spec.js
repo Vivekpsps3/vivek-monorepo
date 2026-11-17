@@ -77,6 +77,7 @@ for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
       await discard.getByRole('button', { name: 'Discard changes', exact: true }).click();
       await expect(dialog).toBeHidden();
       await expect(add).toBeFocused();
+      expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
     }
     const stored = await (await request.get(`/travel/api/trips/${id}`)).json();
     expect(stored.stays.map(stay => [stay.city, stay.arrive_on, stay.leave_on])).toEqual([['Kyoto', '2026-12-01', '2026-12-03']]);
