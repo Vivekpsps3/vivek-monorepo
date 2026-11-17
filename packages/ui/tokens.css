@@ -227,9 +227,6 @@
     --text-primary: CanvasText;
     --text-secondary: CanvasText;
     --text-tertiary: CanvasText;
-    --accent: LinkText;
-    --accent-hover: LinkText;
-    --on-accent: Canvas;
     --border: CanvasText;
     --border-subtle: CanvasText;
     --border-control: ButtonText;
