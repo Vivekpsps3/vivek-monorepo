@@ -8,8 +8,6 @@ for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
     expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
     await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
     await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
-    await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
     await page.goto('/travel/trips/new');
     const saveTrip = page.getByRole('button', { name: 'Save trip', exact: true });
     await saveTrip.focus();
