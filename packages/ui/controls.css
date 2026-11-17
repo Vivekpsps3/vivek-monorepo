@@ -32,13 +32,13 @@
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: var(--accent);
   color: var(--on-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
 }
 
 .btn-ghost {
@@ -121,14 +121,5 @@ textarea[aria-invalid="true"] {
   textarea {
     font-size: 1rem;
     scroll-margin-bottom: 40vh;
-  }
-}
-
-@media (forced-colors: active) {
-  .btn-primary,
-  .btn-primary:hover:not(:disabled) {
-    background: ButtonFace;
-    color: ButtonText;
-    border-color: ButtonText;
   }
 }

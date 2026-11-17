@@ -74,12 +74,12 @@ a.ui-btn {
 }
 
 .ui-btn--primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
 }
 
 .ui-btn--primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
 }
 
 .ui-btn--secondary {
@@ -141,18 +141,5 @@ a.ui-btn {
 @media (prefers-reduced-motion: reduce) {
   .ui-btn[aria-busy="true"]::before {
     animation: none;
-  }
-}
-
-/* Filled links need a matching system foreground/background. Canvas text backplates
-   can otherwise cover an authored fill and hide its on-accent label. */
-@media (forced-colors: active) {
-  .ui-btn--primary,
-  .ui-btn--primary:hover:not(:disabled),
-  .ui-btn--danger,
-  .ui-btn--danger:hover:not(:disabled) {
-    background: ButtonFace;
-    color: ButtonText;
-    border-color: ButtonText;
   }
 }

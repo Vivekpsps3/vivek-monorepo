@@ -94,6 +94,8 @@ test('coastal materials are readable accents and semantic roles use the named pa
   for (const theme of ['light', 'dark']) {
     const token = block(theme);
     assert.equal(token('--accent'), token('--teal'));
+    assert.equal(token('--accent-fill'), token('--accent'));
+    assert.equal(token('--accent-fill-hover'), token('--accent-hover'));
     assert.equal(token('--warning'), token('--brass'));
     assert.equal(token('--card-bg'), token(theme === 'light' ? '--ivory' : '--navy'));
     assert.equal(token('--text'), token(theme === 'light' ? '--navy' : '--ivory'));

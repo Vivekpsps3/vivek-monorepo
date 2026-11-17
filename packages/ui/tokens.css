@@ -24,6 +24,8 @@
   --text-tertiary: #555c5d;
   --accent: var(--teal);
   --accent-hover: #0b554f;
+  --accent-fill: var(--accent);
+  --accent-fill-hover: var(--accent-hover);
   --accent-glow: rgba(18, 105, 99, 0.1);
   --border: #d8cbb8;
   --border-subtle: #e4dacb;
@@ -145,6 +147,8 @@
     --text-tertiary: #c4b7a4;
     --accent: var(--teal);
     --accent-hover: #b8e4d9;
+    --accent-fill: var(--accent);
+    --accent-fill-hover: var(--accent-hover);
     --accent-glow: rgba(145, 208, 195, 0.14);
     --border: #425561;
     --border-subtle: #304754;
@@ -227,6 +231,11 @@
     --text-primary: CanvasText;
     --text-secondary: CanvasText;
     --text-tertiary: CanvasText;
+    --accent: LinkText;
+    --accent-hover: LinkText;
+    --accent-fill: ButtonFace;
+    --accent-fill-hover: ButtonFace;
+    --on-accent: ButtonText;
     --border: CanvasText;
     --border-subtle: CanvasText;
     --border-control: ButtonText;

@@ -165,7 +165,7 @@
   font-size: var(--text-sm);
   text-decoration: none;
 }
-.home-empty__primary { background: var(--accent); color: var(--on-accent); }
+.home-empty__primary { background: var(--accent-fill); color: var(--on-accent); }
 .home-empty__secondary {
   background: transparent;
   border: 1px solid var(--border-strong);

@@ -49,6 +49,7 @@ Source of truth: `packages/ui/tokens.css`.
 | `--text` | Primary text |
 | `--text-secondary` | Secondary text |
 | `--accent` | Sea-glass teal `#126963` — links, primary actions |
+| `--accent-fill` / `--on-accent` | Filled actions and their labels; separate from link text for forced colors |
 | `--border` | Borders |
 | `--success` / `--danger` / `--warning` | Status |
 
