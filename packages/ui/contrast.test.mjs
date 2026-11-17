@@ -84,9 +84,8 @@ test('section 1.3 tertiary and warning text clears 4.5 and borders clear 3', () 
   assert.match(css, /--gutter:\s*clamp\(16px,\s*4vw,\s*32px\)/);
   assert.match(css, /--header-h:\s*72px/);
   assert.match(css, /--header-h:\s*64px/);
-  assert.match(css, /--control-h:\s*40px/);
   assert.match(css, /--control-h:\s*44px/);
-  assert.match(css, /--control-h-sm:\s*36px/);
+  assert.match(css, /--control-h-sm:\s*44px/);
 });
 
 

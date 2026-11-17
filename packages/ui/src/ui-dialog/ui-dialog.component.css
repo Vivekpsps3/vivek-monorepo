@@ -7,15 +7,16 @@
   padding: var(--space-8) var(--space-4);
   z-index: 2550;
   overflow-y: auto;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(var(--backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur));
   background: color-mix(in srgb, var(--bg) 55%, transparent);
 }
 
 .ui-dialog-panel {
   box-sizing: border-box;
   background: var(--card-bg);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-control);
+  border-top: 3px solid var(--brass);
   border-radius: var(--radius-xl);
   padding: var(--space-6);
   width: 100%;
@@ -50,11 +51,9 @@
 
 @keyframes ui-dialog-in {
   from {
-    opacity: 0;
     transform: translateY(16px);
   }
   to {
-    opacity: 1;
     transform: translateY(0);
   }
 }
@@ -89,7 +88,6 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
-    animation-name: ui-dialog-sheet-in;
     padding: var(--space-5) max(var(--space-4), env(safe-area-inset-right))
       max(var(--space-6), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
   }
@@ -123,20 +121,15 @@
   }
 }
 
-@keyframes ui-dialog-sheet-in {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .ui-dialog-panel,
   .ui-dialog-panel--wide {
     animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ui-dialog-backdrop {
+    background: var(--bg);
   }
 }

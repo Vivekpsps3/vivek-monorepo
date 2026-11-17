@@ -8,6 +8,7 @@
   gap: var(--space-2);
   box-sizing: border-box;
   min-height: 44px;
+  min-width: 44px;
   padding: var(--space-3) var(--space-5);
   border-radius: var(--radius-md);
   border: 1px solid transparent;
@@ -19,6 +20,7 @@
   line-height: 1.25;
   text-decoration: none;
   cursor: pointer;
+  box-shadow: var(--control-shadow);
 }
 
 .btn:focus-visible {
@@ -27,6 +29,7 @@
 }
 
 .btn:disabled {
+  box-shadow: none;
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -42,6 +45,7 @@
 }
 
 .btn-ghost {
+  box-shadow: none;
   background: transparent;
   color: var(--accent);
 }
@@ -59,7 +63,8 @@ textarea {
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-md);
-  background: var(--surface-2);
+  background: var(--card-bg);
+  box-shadow: var(--field-shadow);
   color: var(--text);
   font: inherit;
   font-size: var(--text-base);
@@ -99,7 +104,7 @@ textarea {
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover:not(:disabled):not([aria-invalid="true"]),
 select:hover:not(:disabled):not([aria-invalid="true"]),
 textarea:hover:not(:disabled):not([aria-invalid="true"]) {
-  border-color: var(--border-strong);
+  border-color: var(--accent);
 }
 
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):disabled,
@@ -122,4 +127,11 @@ textarea[aria-invalid="true"] {
     font-size: 1rem;
     scroll-margin-bottom: 40vh;
   }
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }

@@ -17,6 +17,7 @@ const FOCUSABLE =
 
 const dialogs: HTMLElement[] = [];
 const priorInert = new Map<HTMLElement, boolean>();
+const scrollLocks = new Map<HTMLElement, { count: number; overflow: string }>();
 
 /** Only the top dialog's ancestor branch remains interactive. */
 function updateModalBackground(): void {
@@ -55,7 +56,6 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
   private lastFocused: HTMLElement | null = null;
   private focusedOpen = false;
   private lockedScroll: HTMLElement | null = null;
-  private previousOverflow = '';
   private viewportCleanups: Array<() => void> = [];
 
   ngAfterViewChecked(): void {
@@ -131,7 +131,9 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
     }
     target ??= document.body;
     this.lockedScroll = target;
-    this.previousOverflow = target.style.overflow;
+    const lock = scrollLocks.get(target);
+    if (lock) lock.count++;
+    else scrollLocks.set(target, { count: 1, overflow: target.style.overflow });
     target.style.overflow = 'hidden';
   }
 
@@ -141,7 +143,11 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
     backdrop?.style.removeProperty('--ui-dialog-vv-top');
     backdrop?.style.removeProperty('--ui-dialog-vv-height');
     if (!this.lockedScroll) return;
-    this.lockedScroll.style.overflow = this.previousOverflow;
+    const lock = scrollLocks.get(this.lockedScroll);
+    if (lock && --lock.count === 0) {
+      this.lockedScroll.style.overflow = lock.overflow;
+      scrollLocks.delete(this.lockedScroll);
+    }
     this.lockedScroll = null;
   }
 
@@ -183,7 +189,13 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
   }
 
   private restoreFocus(): void {
-    this.lastFocused?.focus();
+    const target = this.lastFocused;
     this.lastFocused = null;
+    // A confirmation can close together with its editor. Wait until both have
+    // released their inert branches, and never return into a removed dialog.
+    queueMicrotask(() => {
+      const activeDialog = dialogs.at(-1);
+      if (target?.isConnected && (!activeDialog || activeDialog.contains(target))) target.focus();
+    });
   }
 }
