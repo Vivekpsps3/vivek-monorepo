@@ -28,6 +28,7 @@ async function chooseTheme(page: Page, theme: 'light' | 'dark') {
   await expect(radio).toBeChecked();
   await page.goBack();
   await page.goBack();
+  await expect(page.locator('#hub-main h1')).toBeFocused();
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 }
 
