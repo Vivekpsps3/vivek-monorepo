@@ -13,13 +13,13 @@ describe('UiSkeletonComponent', () => {
 
     document.documentElement.dataset['theme'] = 'light';
     const light = getComputedStyle(block!).backgroundImage;
-    expect(light).toContain('rgb(239, 234, 227)');
-    expect(light).toContain('rgb(231, 224, 214)');
+    expect(light).toContain('rgb(238, 229, 214)');
+    expect(light).toContain('rgb(227, 215, 195)');
 
     document.documentElement.dataset['theme'] = 'dark';
     const dark = getComputedStyle(block!).backgroundImage;
-    expect(dark).toContain('rgb(48, 44, 37)');
-    expect(dark).toContain('rgb(61, 55, 45)');
-    expect(dark).not.toContain('rgb(40, 37, 31)');
+    expect(dark).toContain('rgb(43, 70, 80)');
+    expect(dark).toContain('rgb(55, 84, 98)');
+    expect(dark).not.toContain('rgb(29, 50, 61)');
   });
 });

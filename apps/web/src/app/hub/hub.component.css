@@ -56,10 +56,19 @@
   max-width: 100%;
   min-width: 0;
   border: 1px solid var(--border-subtle);
+  border-top: 3px solid var(--wood);
   border-radius: var(--radius-xl);
   background: var(--card-bg);
   box-shadow: var(--shadow-card);
   padding: var(--space-6);
+}
+
+.finance-bar {
+  border-top-color: var(--brass);
+}
+
+.town-bar {
+  border-top-color: var(--coral);
 }
 
 .pixels-bar {
@@ -176,6 +185,8 @@ h3 {
   margin-top: var(--space-2);
   font-size: var(--text-2xl);
   font-weight: 560;
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
 }
 
 .split {

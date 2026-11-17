@@ -19,7 +19,7 @@ test('axe on all native Travel screens in light and dark at phone and desktop wi
       await page.goto(route);await ready;await leave;
       await chooseColorTheme(page, theme);
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-      await expect.poll(()=>page.locator('body').evaluate(node=>getComputedStyle(node).color)).toBe(theme==='dark'?'rgb(246, 241, 234)':'rgb(28, 25, 22)');
+      await expect.poll(()=>page.locator('body').evaluate(node=>getComputedStyle(node).color)).toBe(theme==='dark'?'rgb(255, 240, 212)':'rgb(24, 46, 64)');
       await expect(page.locator('main h1')).toBeVisible();
       await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
       const result = await new AxeBuilder({ page }).analyze();

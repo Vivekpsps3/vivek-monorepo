@@ -7,8 +7,8 @@ import { syntheticVault } from './synthetic-vault';
 
 const dir = process.env.SCREENSHOT_DIR || path.resolve('test-results/finance/screenshots');
 const backgrounds = {
-  light: 'rgb(246, 243, 238)',
-  dark: 'rgb(20, 19, 17)',
+  light: 'rgb(247, 241, 229)',
+  dark: 'rgb(16, 31, 43)',
 } as const;
 
 async function assertTheme(page: Page, theme: 'light' | 'dark') {

@@ -8,9 +8,9 @@ function block(name) {
   const parts = css.split('\n[data-theme="dark"]');
   const source = name === 'light' ? parts[0] : parts[1];
   const read = (token) => {
-    const match = source.match(new RegExp(`${token}:\\s*(#[0-9a-fA-F]{6})`));
+    const match = source.match(new RegExp(`${token}:\\s*(#[0-9a-fA-F]{6}|var\\((--[a-z-]+)\\))`));
     assert.ok(match, token);
-    return match[1].toLowerCase();
+    return match[2] ? read(match[2]) : match[1].toLowerCase();
   };
   return read;
 }
@@ -35,11 +35,11 @@ test('light and dark contrast tokens meet the finance foundation ratios', () => 
   assert.ok(contrast(dark('--danger'), dark('--danger-tint')) >= 6.3);
   assert.ok(Number(contrast(light('--chart-2'), light('--bg')).toFixed(2)) >= 4.04);
   assert.ok(Number(contrast(light('--chart-6'), light('--bg')).toFixed(2)) >= 3.59);
-  assert.equal(light('--chart-2'), '#9a6f35');
-  assert.equal(light('--chart-6'), '#857f74');
+  assert.equal(light('--chart-2'), '#986d33');
+  assert.equal(light('--chart-6'), '#827c71');
   assert.equal(dark('--chart-2'), '#e0b56a');
   assert.equal(dark('--chart-6'), '#7d8794');
-  assert.equal(dark('--on-accent'), '#141311');
+  assert.equal(dark('--on-accent'), '#07131c');
   assert.ok(contrast(dark('--on-accent'), dark('--accent')) >= 10.63);
 });
 
@@ -58,8 +58,8 @@ test('shared content, links and control boundaries retain contrast in both theme
 test('section 1.3 tertiary and warning text clears 4.5 and borders clear 3', () => {
   const light = block('light');
   const dark = block('dark');
-  assert.equal(light('--text-tertiary'), '#655e53');
-  assert.equal(light('--warning'), '#7d5829');
+  assert.equal(light('--text-tertiary'), '#555c5d');
+  assert.equal(light('--warning'), '#765422');
   for (const theme of ['light', 'dark']) {
     const token = block(theme);
     for (const surface of ['--bg', '--surface-2', '--surface-hover']) {
@@ -71,8 +71,8 @@ test('section 1.3 tertiary and warning text clears 4.5 and borders clear 3', () 
     }
     assert.ok(contrast(token('--danger'), token('--card-bg')) >= 4.5, `${theme} danger-soft-text / card`);
   }
-  assert.equal(dark('--text-tertiary'), '#b3a89a');
-  assert.equal(dark('--warning'), '#e3c48a');
+  assert.equal(dark('--text-tertiary'), '#c4b7a4');
+  assert.equal(dark('--warning'), '#e6c37e');
   for (const name of ['--danger-soft-bg', '--success-soft-bg', '--warning-soft-bg', '--info-soft-bg']) {
     assert.match(css, new RegExp(`${name}:\\s*color-mix\\(in srgb, var\\(--[a-z]+\\) 14%, var\\(--card-bg\\)\\)`));
   }
@@ -87,4 +87,18 @@ test('section 1.3 tertiary and warning text clears 4.5 and borders clear 3', () 
   assert.match(css, /--control-h:\s*40px/);
   assert.match(css, /--control-h:\s*44px/);
   assert.match(css, /--control-h-sm:\s*36px/);
+});
+
+
+test('coastal materials are readable accents and semantic roles use the named palette', () => {
+  for (const theme of ['light', 'dark']) {
+    const token = block(theme);
+    assert.equal(token('--accent'), token('--teal'));
+    assert.equal(token('--warning'), token('--brass'));
+    assert.equal(token('--card-bg'), token(theme === 'light' ? '--ivory' : '--navy'));
+    assert.equal(token('--text'), token(theme === 'light' ? '--navy' : '--ivory'));
+    for (const accent of ['--teal', '--coral', '--brass', '--wood']) {
+      assert.ok(contrast(token(accent), token('--card-bg')) >= 4.5, `${theme} ${accent} / card`);
+    }
+  }
 });

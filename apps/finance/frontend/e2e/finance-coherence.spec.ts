@@ -582,7 +582,7 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
   await chooseColorTheme(page, 'dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect.poll(() => page.locator('app-charts ui-card .ui-card').first().evaluate(card => getComputedStyle(card).backgroundColor))
-    .toBe('rgb(30, 28, 25)');
+    .toBe('rgb(25, 47, 60)');
   await holdingsStat.scrollIntoViewIfNeeded();
   await holdingsStat.screenshot({ path: '/tmp/finance-ux-holdings-chart-dark.png' });
   await page.evaluate(() => window.scrollTo(0, 0));

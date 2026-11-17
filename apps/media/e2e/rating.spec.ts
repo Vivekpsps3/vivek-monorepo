@@ -137,7 +137,7 @@ test('arrow keys, width, theme, and cancelling leave keep the unsaved rating', a
       document.documentElement.style.colorScheme = value;
     }, theme);
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    await expect.poll(() => page.locator('body').evaluate((node) => getComputedStyle(node).color)).toBe(theme === 'dark' ? 'rgb(246, 241, 234)' : 'rgb(28, 25, 22)');
+    await expect.poll(() => page.locator('body').evaluate((node) => getComputedStyle(node).color)).toBe(theme === 'dark' ? 'rgb(255, 240, 212)' : 'rgb(24, 46, 64)');
     await expect.poll(() => ratingRowCount(page)).toBe(width === 390 ? 2 : 1);
     const group = await page.getByRole('radiogroup', { name: 'Rating', exact: true }).boundingBox();
     expect(group).toBeTruthy();

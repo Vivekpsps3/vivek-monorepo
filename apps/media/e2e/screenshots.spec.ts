@@ -16,7 +16,7 @@ for (const width of [390, 768, 1280]) for (const theme of ['light', 'dark'] as c
     page.on('pageerror', error => errors.push(error.message));
     const shot = async (name: string) => {
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-      await expect.poll(() => page.locator('body').evaluate(node => getComputedStyle(node).color)).toBe(theme === 'dark' ? 'rgb(246, 241, 234)' : 'rgb(28, 25, 22)');
+      await expect.poll(() => page.locator('body').evaluate(node => getComputedStyle(node).color)).toBe(theme === 'dark' ? 'rgb(255, 240, 212)' : 'rgb(24, 46, 64)');
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.screenshot({ path: path.join(dir, name + '-' + width + '-' + theme + '.png'), fullPage: true });
     };
