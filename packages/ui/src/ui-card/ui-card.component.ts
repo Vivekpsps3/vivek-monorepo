@@ -9,5 +9,6 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 })
 export class UiCardComponent {
   title = input<string | undefined>(undefined);
+  headingLevel = input<2 | 3>(3);
   padding = input<'default' | 'none'>('default');
 }

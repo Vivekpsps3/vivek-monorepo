@@ -20,7 +20,7 @@
     </div>
   </ui-page-header>
   @for (stage of resumableFidelityStages; track stage.id) {
-    <ui-card class="resume-stage" [title]="'Finish your Fidelity import'">
+    <ui-card class="resume-stage" [headingLevel]="2" [title]="'Finish your Fidelity import'">
       <ui-button uiCardActions variant="primary" size="sm" (clicked)="resumeFidelityStage(stage)" [disabled]="fidelityImportCommitting">
         @if (fidelityImportCommitting) { <span class="spinner-inline" aria-hidden="true"></span> }
         Resume Fidelity import
@@ -57,19 +57,12 @@
       </div>
     </div>
     @if (hasMissingValues) {
-      <p class="hint">{{ missingValueCount | plural:'position' }} have no market value; the displayed portfolio value is incomplete.</p>
-    }
-    @if (netWorth?.portfolio_breakdown) {
-      <div class="portfolio-breakdown">
-        @for (entry of (netWorth!.portfolio_breakdown | keyvalue); track entry.key) {
-          <span><span class="breakdown-key">{{ entry.key }}</span><strong>{{ entry.value | money }}</strong></span>
-        }
-      </div>
+      <p class="hint">Market value unavailable for {{ missingValueCount | plural:'position' }}. The portfolio value is incomplete.</p>
     }
   </ui-card>
   }
 
-  <ui-card [title]="'Holdings'">
+  <ui-card [title]="'Holdings'" [headingLevel]="2">
     <div uiCardActions class="table-actions table-actions--toolbar">
         <input name="searchTerm"
           type="search"
@@ -96,11 +89,8 @@
     <!-- Grouped by account with collapsible sub-tables -->
     <div *ngIf="filteredHoldings.length > 0; else empty">
 
-      <!-- Fidelity Section (collapsible) -->
-      <!-- F16: one holdings table for every group; cost basis and the
-           position date move to the details row under each holding. -->
       <ng-template #holdingsTable let-rows="rows" let-label="label">
-        <ui-data-table [ariaLabel]="label">
+        <ui-data-table [ariaLabel]="label" [compact]="true">
           <thead>
             <tr>
               <th scope="col">Symbol</th>
@@ -117,8 +107,9 @@
                 <td class="symbol">
                   <strong>{{ h.symbol }}</strong>
                   @if (h.company_name) {
-                    <br><small class="company-sub">{{ h.company_name }}</small>
+                    <small class="company-sub">{{ h.company_name }}</small>
                   }
+                  <small class="holding-details">Cost basis {{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }} · Position date {{ dateLabel(h.position_as_of) }} · {{ holdingSource(h) }}</small>
                 </td>
                 <td class="num">{{ h.shares }}</td>
                 <td class="num">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
@@ -128,21 +119,20 @@
                 </td>
                 <td class="price-cell">
                   <span>{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }}</span>
-                  @if (hasCurrentPrice(h)) { <span class="as-of-small">{{ asOfText(h) }}</span> }
+                  @if (h.price_as_of) { <span class="as-of-small">{{ asOfText(h) }}</span> }
                   <ui-badge [variant]="priceSourceBadgeVariant(h)">{{ priceFreshness(h) }}</ui-badge>
                   <span class="as-of-small">{{ quoteDateLabel(h) }}</span>
                   @if (priceSourceHint(h); as hint) {
                     <span class="price-hint">{{ hint }}</span>
                   }
                 </td>
-                <td class="actions actions--row">
-                  <ui-button variant="ghost" size="sm" [ariaLabel]="'Refresh price for ' + h.symbol" (clicked)="refreshHoldingPrice(h)">↻</ui-button>
-                  <ui-button variant="ghost" size="sm" [ariaLabel]="'Edit ' + h.symbol" (clicked)="editHolding(h)">Edit</ui-button>
-                  <ui-button variant="danger" size="sm" [ariaLabel]="'Delete ' + h.symbol" (clicked)="deleteHolding(h)">Delete</ui-button>
+                <td class="actions">
+                  <div class="actions--row">
+                    <ui-button variant="ghost" size="sm" [ariaLabel]="'Refresh price for ' + h.symbol" (clicked)="refreshHoldingPrice(h)">↻</ui-button>
+                    <ui-button variant="ghost" size="sm" [ariaLabel]="'Edit ' + h.symbol" (clicked)="editHolding(h)">Edit</ui-button>
+                    <ui-button variant="danger" size="sm" [ariaLabel]="'Delete ' + h.symbol" (clicked)="deleteHolding(h)">Delete</ui-button>
+                  </div>
                 </td>
-              </tr>
-              <tr class="holding-details">
-                <td colspan="6">Cost basis {{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }} · Position date {{ dateLabel(h.position_as_of) }} · {{ holdingSource(h) }}</td>
               </tr>
             }
           </tbody>
@@ -193,7 +183,7 @@
                 <span class="sub-total">{{ group.unvaluedCount ? 'Known ' : '' }}{{ group.totalValue | money }}</span>
               </summary>
 
-              <div class="table-scroll sub-table">
+              <div class="sub-table">
                 <ng-container *ngTemplateOutlet="holdingsTable; context: { rows: group.holdings, label: group.label + ' holdings' }" />
               </div>
             </details>
@@ -209,9 +199,7 @@
             <span class="section-total">{{ accountGroups.manualUnvaluedCount ? 'Known ' : '' }}{{ accountGroups.manualTotal | money }}</span>
           </div>
 
-          <div class="table-scroll">
-            <ng-container *ngTemplateOutlet="holdingsTable; context: { rows: accountGroups.manual, label: 'Manual holdings' }" />
-          </div>
+          <ng-container *ngTemplateOutlet="holdingsTable; context: { rows: accountGroups.manual, label: 'Manual holdings' }" />
         </div>
       }
 
@@ -348,7 +336,7 @@
 
       <div class="replacement-preview" *ngIf="fidelityAccountReplacements.length">
         <h4>Account-level replacement preview</h4>
-        <ui-data-table ariaLabel="Fidelity account replacement values">
+        <ui-data-table [compact]="true" ariaLabel="Fidelity account replacement values">
           <thead><tr><th scope="col">Account</th><th scope="col" class="num">Existing value</th><th scope="col" class="num">Replacement value</th><th scope="col" class="num">Change</th><th scope="col" class="num">Unvalued</th><th scope="col" class="num">Provisional</th></tr></thead>
           <tbody>
             @for (account of fidelityAccountReplacements; track account.account_mask) {
@@ -366,7 +354,7 @@
       </div>
 
       <div class="fidelity-preview-table">
-        <ui-data-table ariaLabel="Fidelity import preview">
+        <ui-data-table [compact]="true" ariaLabel="Fidelity import preview">
           <thead><tr><th scope="col">Account</th><th scope="col">Symbol</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Cost basis</th><th scope="col" class="num">Market value</th><th scope="col">Value source</th><th scope="col">Position date</th></tr></thead>
           <tbody>
             @for (row of fidelityImportPreview.rows; track $index) {

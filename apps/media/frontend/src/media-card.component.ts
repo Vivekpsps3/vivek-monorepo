@@ -6,6 +6,7 @@ import { MediaCard, statusLabel } from "./media.models";
   selector: "media-card",
   standalone: true,
   imports: [RouterLink, UiBadgeComponent],
+  styleUrl: "./media-card.component.css",
   template: `<article class="media-card">
     <a
       class="media-art"

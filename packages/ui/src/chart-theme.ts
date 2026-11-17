@@ -11,26 +11,22 @@ const CHART_VAR_NAMES = [
 ] as const;
 
 const CHART_FALLBACKS = [
-  '#5266eb',
-  '#3d9a6a',
-  '#e05a5a',
-  '#d4a017',
-  '#8b7cf0',
-  '#c3c3cc',
+  '#126963',
+  '#986d33',
+  '#a15c54',
+  '#3d6f8f',
+  '#6e6a5e',
+  '#827c71',
 ] as const;
 
-function chartPalette(): string[] {
-  return CHART_VAR_NAMES.map((name, i) => cssVar(name, CHART_FALLBACKS[i]));
-}
-
 export function chartColorAt(index: number): string {
-  const palette = chartPalette();
-  return palette[index % palette.length];
+  const slot = index % CHART_VAR_NAMES.length;
+  return cssVar(CHART_VAR_NAMES[slot], CHART_FALLBACKS[slot]);
 }
 
 /** CHT-05: 2px slice separator in the card color. Chart.js otherwise uses white. */
 export function chartSliceBorder(): { borderColor: string; borderWidth: number } {
-  return { borderColor: cssVar('--card-bg', '#f6f3ee'), borderWidth: 2 };
+  return { borderColor: cssVar('--card-bg', '#fff9ed'), borderWidth: 2 };
 }
 
 function cssVar(name: string, fallback: string): string {
@@ -40,11 +36,11 @@ function cssVar(name: string, fallback: string): string {
 }
 
 export function chartTextMuted(): string {
-  return cssVar('--text-secondary', '#c3c3cc');
+  return cssVar('--text-secondary', '#4c5b60');
 }
 
 export function chartAccentColor(): string {
-  return cssVar('--accent', '#5266eb');
+  return cssVar('--accent', '#126963');
 }
 
 export function chartSuccessColor(): string {

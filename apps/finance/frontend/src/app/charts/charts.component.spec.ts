@@ -1,6 +1,8 @@
 import { ChangeDetectorRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { of } from 'rxjs';
+import { ThemeService } from '@vivek/ui';
 import { FinanceService } from '../services/finance.service';
 import { ChartsComponent } from './charts.component';
 
@@ -40,6 +42,9 @@ interface ChartsInternals {
   updateIncomeExpense: (chart: unknown) => void;
   updateCategorySpending: (chart: unknown) => void;
   updatePortfolio: (chart: unknown) => void;
+  ensureChartCtor: () => Promise<unknown>;
+  paintCharts: () => Promise<void>;
+  viewReady: boolean;
 }
 
 type ChartCtorLike = new (item: never, config: never) => ChartLike;
@@ -51,15 +56,19 @@ describe('chart behaviour (F11)', () => {
     ChartCtor = (await import('chart.js/auto')).default as unknown as ChartCtorLike;
   });
 
+  beforeEach(() => TestBed.configureTestingModule({
+    providers: [{ provide: ThemeService, useValue: { theme$: of('light') } }],
+  }));
+
   const internals = (component: ChartsComponent) => component as unknown as ChartsInternals;
 
   function makeComponent() {
     const router = jasmine.createSpyObj('Router', ['navigate']);
-    const component = new ChartsComponent(
+    const component = TestBed.runInInjectionContext(() => new ChartsComponent(
       {} as unknown as FinanceService,
       { markForCheck: () => undefined } as unknown as ChangeDetectorRef,
       router as unknown as Router,
-    );
+    ));
     return { component, router };
   }
 
@@ -94,11 +103,11 @@ describe('chart behaviour (F11)', () => {
         holdings$: of([]), jobIncomes$: of([]), fixedExpenses$: of([]), subscriptions$: of([]),
         getAllTransactions: () => of([]),
       };
-      const component = new ChartsComponent(
+      const component = TestBed.runInInjectionContext(() => new ChartsComponent(
         financeService as unknown as FinanceService,
         { markForCheck: () => undefined } as unknown as ChangeDetectorRef,
         { navigate: () => Promise.resolve(true) } as unknown as Router,
-      );
+      ));
       component.embedded = true;
       component.ngOnInit();
       component.ngOnDestroy();
@@ -106,6 +115,21 @@ describe('chart behaviour (F11)', () => {
     } finally {
       window.matchMedia = original;
     }
+  });
+
+  it('does not paint when the chart loader resolves after the view is destroyed', async () => {
+    const { component } = makeComponent();
+    const chart = internals(component);
+    let release!: (value: ChartCtorLike) => void;
+    const held = new Promise<ChartCtorLike>(resolve => { release = resolve; });
+    spyOn(chart, 'ensureChartCtor').and.returnValue(held);
+    const paint = spyOn(chart, 'updatePortfolio');
+    chart.viewReady = true;
+    const painting = chart.paintCharts();
+    component.ngOnDestroy();
+    release(ChartCtor);
+    await painting;
+    expect(paint).not.toHaveBeenCalled();
   });
 
   it('tooltip backgroundColor equals computed --text', () => {
