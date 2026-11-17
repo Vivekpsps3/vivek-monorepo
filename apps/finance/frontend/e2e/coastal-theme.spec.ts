@@ -74,6 +74,26 @@ for (const mode of ['forced-colors', '200% text'] as const) {
     for (const theme of ['light', 'dark'] as const) {
       await chooseTheme(page, theme);
       await expect(page.getByRole('region', { name: 'Net worth', exact: true })).toContainText(/\$\u2060?1,234\.56/);
+      if (mode === 'forced-colors') {
+        const launch = page.getByRole('link', { name: 'Plan a trip', exact: true });
+        for (const hover of [false, true]) {
+          if (hover) await launch.hover();
+          const paint = await launch.evaluate(node => {
+            const probe = document.createElement('button');
+            probe.style.color = 'ButtonText';
+            probe.style.backgroundColor = 'ButtonFace';
+            document.body.append(probe);
+            const read = (element: Element) => {
+              const style = getComputedStyle(element);
+              return [style.color, style.backgroundColor];
+            };
+            const result = { actual: read(node), system: read(probe) };
+            probe.remove();
+            return result;
+          });
+          expect(paint.actual).toEqual(paint.system);
+        }
+      }
       const trigger = page.locator('.user-menu-toggle');
       await trigger.focus();
       await page.keyboard.press('Enter');

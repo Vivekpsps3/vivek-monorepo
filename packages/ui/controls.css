@@ -123,3 +123,12 @@ textarea[aria-invalid="true"] {
     scroll-margin-bottom: 40vh;
   }
 }
+
+@media (forced-colors: active) {
+  .btn-primary,
+  .btn-primary:hover:not(:disabled) {
+    background: ButtonFace;
+    color: ButtonText;
+    border-color: ButtonText;
+  }
+}
