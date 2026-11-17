@@ -1,6 +1,6 @@
 {
-  "validated_on": "2026-11-16",
-  "base_sha": "2af4f04c4a47ea6831504f5431ce5c316a6e6b98",
+  "validated_on": "2026-11-17",
+  "base_sha": "18607fe30175a0b152f2d9fdaadef00828e89720",
   "tasks": [
     {
       "id": "MED-11",
@@ -1584,6 +1584,86 @@
       ],
       "merged_pr": 377,
       "merge_sha": "2af4f04c4a47ea6831504f5431ce5c316a6e6b98"
+    },
+    {
+      "id": "HUB-01",
+      "title": "Finish coherent account/sign-in/invite/settings UX with real data links",
+      "parent_issues": [
+        93
+      ],
+      "kind": "implementation",
+      "issue": 243,
+      "dependencies": [
+        "UX-01",
+        "SEC-04",
+        "SEC-05",
+        "SEC-06"
+      ],
+      "conflict_groups": [
+        "account-settings",
+        "auth-forms",
+        "private-shell"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "merged_pr": 379,
+      "merge_sha": "874c873112b07dcec3787910605326465002018c"
+    },
+    {
+      "id": "HUB-05",
+      "title": "Finish Quick add, shortcut help and owner-appropriate workspace affordances",
+      "parent_issues": [
+        93
+      ],
+      "kind": "implementation",
+      "issue": 247,
+      "dependencies": [
+        "HUB-02",
+        "HUB-04"
+      ],
+      "conflict_groups": [
+        "private-shell",
+        "hub-main",
+        "suite-shortcuts"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back",
+        "finance_front"
+      ],
+      "merged_pr": 380,
+      "merge_sha": "9cc92d45eb366e65c114c8c0099c13d70d1f3750"
+    },
+    {
+      "id": "HUB-06",
+      "title": "Deliver scoped revocable Travel/Media calendar subscriptions",
+      "parent_issues": [
+        93
+      ],
+      "kind": "implementation",
+      "issue": 248,
+      "dependencies": [
+        "HUB-03",
+        "CON-02"
+      ],
+      "conflict_groups": [
+        "account-settings",
+        "calendar-feeds",
+        "schema-head",
+        "travel-summary",
+        "media-summary"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back",
+        "travel_back",
+        "media_back",
+        "schema"
+      ],
+      "merged_pr": 381,
+      "merge_sha": "18607fe30175a0b152f2d9fdaadef00828e89720"
     }
   ],
   "td_coverage": {

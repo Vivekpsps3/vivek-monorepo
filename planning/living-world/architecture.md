@@ -1,5 +1,8 @@
 # Architecture, ownership and compatibility
 
+> Supporting pre-revamp design. The [selected 2026-11-17 design](../product-revamp/design.md) supersedes product composition and cosmetic limits; exact retained requirements are assigned by the current queue and scope ledger.
+
+
 ## Baseline and constraints
 
 Inspected checkout: `0ed83e95a3727acc4f512dd2ac77211d8a622407`, 2026-11-11.

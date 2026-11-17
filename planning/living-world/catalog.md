@@ -1,5 +1,8 @@
 # Initial scene and ornament catalog
 
+> Supporting pre-revamp design. The [selected 2026-11-17 design](../product-revamp/design.md) supersedes product composition and cosmetic limits; exact retained requirements are assigned by the current queue and scope ledger.
+
+
 This is the bounded first catalog for PLACE-01 to render and PLACE-08/09 to
 implement. Art review may amend its visuals before implementation; changing its
 scope or eligibility requires a matching packet/leaf amendment. This is not a

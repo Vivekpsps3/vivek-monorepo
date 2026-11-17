@@ -1,4 +1,6 @@
-# Acceptance, verification and release
+# Retained acceptance, verification and release
+
+The [selected revamp acceptance](../product-revamp/acceptance.md) replaces separate World presentation with dated Town/Pixels visits. These fixtures, safety/date guarantees and budgets remain supporting requirements; former PLACE leaves are scope trackers.
 
 ## Three equal release bars
 
@@ -80,7 +82,7 @@ do not quietly remove assertions, add retries, or substitute a faster empty fixt
 
 ## Exact verification ownership
 
-Run `python3 planning/implementation/plan.py launch PLACE-xx` for the packet's
+Run `python3 planning/implementation/plan.py launch KEY` for the packet's
 expanded commands, plus root/app gates required by the actual diff. All leaves run
 `make test-fast`. Documentation-only PLACE-01 runs the docs profile; if its design
 artifacts introduce executable demo code, the actual-diff frontend gates apply.

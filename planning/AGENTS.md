@@ -4,7 +4,9 @@ For a roadmap implementation, follow the [execution queue](implementation/README
 the exact issue packet, and the [workflow](implementation/workflow.md). These rules
 apply by root reference to roadmap changes outside this directory. Read only the
 relevant parent scope, prerequisite evidence and source; [completed packets](implementation/completed/README.md) and dated reviews are evidence,
-not another backlog. For PLACE work, also read [Living World](living-world/README.md) and its scope reconciliation. General instruction maintenance lives in
+not another backlog. For the suite revamp, read its [design](product-revamp/design.md)
+and [acceptance](product-revamp/acceptance.md). Former large packets under
+`implementation/scopes/` retain requirements, not launchable work. Maintenance lives in
 [AGENT_GUIDANCE.md](../docs/AGENT_GUIDANCE.md).
 
 - One dependency-ready leaf, isolated worktree and complete PR. Use queue order as

@@ -1,0 +1,1384 @@
+{
+  "selected_on": "2026-11-17",
+  "design": "design.md",
+  "scope_rule": "Original full packets including requirements/steps/deletion remain in implementation/scopes. Each original acceptance row has exactly one accountable executable leaf; other mapped children support that leaf. Only listed presentation amendments supersede original shape.",
+  "scopes": [
+    {
+      "id": "TOWN-04",
+      "title": "Close every retained Town interaction finding and mutation survivor",
+      "parent_issues": [
+        81
+      ],
+      "kind": "implementation",
+      "issue": 252,
+      "dependencies": [
+        "TOWN-01",
+        "TOWN-03"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "town-dialogs",
+        "town-today",
+        "town-browser"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "children": [
+        "SCENE-04",
+        "SCENE-05",
+        "QA-01",
+        "QA-02"
+      ]
+    },
+    {
+      "id": "TOWN-05",
+      "title": "Add a small Town Hall using existing progress/rules and bounded appearance settings",
+      "parent_issues": [
+        81
+      ],
+      "kind": "implementation",
+      "issue": 253,
+      "dependencies": [
+        "TOWN-04",
+        "CON-02"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "town-hall",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "children": [
+        "SCENE-06",
+        "SCENE-08"
+      ]
+    },
+    {
+      "id": "TOWN-06",
+      "title": "Deliver encrypted weekly reflection and one Hub link through the existing vault",
+      "parent_issues": [
+        81,
+        93
+      ],
+      "kind": "implementation",
+      "issue": 254,
+      "dependencies": [
+        "TOWN-05",
+        "SAFE-03",
+        "SAFE-04",
+        "CON-03",
+        "SEC-05",
+        "SEC-06"
+      ],
+      "conflict_groups": [
+        "town-hall",
+        "town-reviews",
+        "vault-collections",
+        "hub-main",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "finance_front",
+        "finance_back",
+        "server_back"
+      ],
+      "children": [
+        "SCENE-07"
+      ]
+    },
+    {
+      "id": "HEALTH-01",
+      "title": "Build the complete private Clinic with shared units and entry-dialog shell",
+      "parent_issues": [
+        90
+      ],
+      "kind": "implementation",
+      "issue": 256,
+      "dependencies": [
+        "SAFE-02",
+        "SAFE-03",
+        "SAFE-04",
+        "TOWN-01",
+        "CON-02",
+        "SEC-05",
+        "SEC-06"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-clinic",
+        "health-units-dialog",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "finance_front",
+        "server_back"
+      ],
+      "children": [
+        "HEAL-01",
+        "HEAL-02",
+        "HEAL-03",
+        "HEAL-04",
+        "HEAL-05",
+        "ROOM-13",
+        "ROOM-14"
+      ]
+    },
+    {
+      "id": "HEALTH-02",
+      "title": "Build complete Gym PR editing and apply all settled badge names",
+      "parent_issues": [
+        90
+      ],
+      "kind": "implementation",
+      "issue": 257,
+      "dependencies": [
+        "HEALTH-01"
+      ],
+      "conflict_groups": [
+        "health-gym",
+        "health-units-dialog",
+        "health-store",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "finance_front",
+        "server_back"
+      ],
+      "children": [
+        "FIT-05",
+        "FIT-06",
+        "HEAL-05",
+        "ROOM-12"
+      ]
+    },
+    {
+      "id": "HEALTH-03",
+      "title": "Integrate stage-only Clinic/Gym lots and Today rows without changing Town XP",
+      "parent_issues": [
+        90
+      ],
+      "kind": "implementation",
+      "issue": 258,
+      "dependencies": [
+        "HEALTH-02",
+        "TOWN-03"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "town-lots",
+        "town-today",
+        "health-stage-facade"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "children": [
+        "SCENE-02",
+        "ROOM-11",
+        "ROOM-12",
+        "ROOM-13",
+        "ROOM-14",
+        "QA-03"
+      ]
+    },
+    {
+      "id": "PLACE-02",
+      "title": "Expose bounded dated facts and learning annotations with honest provenance",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 306,
+      "dependencies": [
+        "PLACE-01",
+        "TOWN-02",
+        "SAFE-05"
+      ],
+      "conflict_groups": [
+        "pixels-year",
+        "town-read-service",
+        "world-read-service"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "children": [
+        "PIX-01",
+        "PIX-02",
+        "SCENE-09"
+      ]
+    },
+    {
+      "id": "PLACE-03",
+      "title": "Connect exact-date visits and reliable return across Town, World and Pixels",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 307,
+      "dependencies": [
+        "PLACE-01",
+        "CON-02"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "world-ui",
+        "pixels-year",
+        "pixels-life"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "children": [
+        "NAV-02",
+        "SCENE-10",
+        "MERGE-02"
+      ]
+    },
+    {
+      "id": "PLACE-04",
+      "title": "Replace the Town tile scene with a composed interactive coastal garden",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 308,
+      "dependencies": [
+        "PLACE-01",
+        "TOWN-03",
+        "TOWN-04",
+        "TOWN-05"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "town-lots",
+        "world-ui",
+        "town-hall"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "children": [
+        "STYLE-04",
+        "SCENE-01",
+        "SCENE-02",
+        "SCENE-03"
+      ]
+    },
+    {
+      "id": "PLACE-05",
+      "title": "Make confirmed habit actions produce specific, reversible garden feedback",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 309,
+      "dependencies": [
+        "PLACE-03",
+        "PLACE-04"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "town-today",
+        "town-browser"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ],
+      "children": [
+        "SCENE-05"
+      ]
+    },
+    {
+      "id": "PLACE-06",
+      "title": "Make World objects inspectable and unrecorded landscapes welcoming",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 310,
+      "dependencies": [
+        "PLACE-02",
+        "PLACE-03",
+        "PLACE-05",
+        "UX-04"
+      ],
+      "conflict_groups": [
+        "world-ui",
+        "world-render",
+        "world-camera"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "children": [
+        "SCENE-01",
+        "SCENE-10",
+        "MERGE-01",
+        "MERGE-02",
+        "MERGE-03"
+      ]
+    },
+    {
+      "id": "PLACE-07",
+      "title": "Turn Pixels into an informative, orientable memory atlas",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 311,
+      "dependencies": [
+        "PLACE-02",
+        "PLACE-03",
+        "PLACE-06",
+        "UX-05"
+      ],
+      "conflict_groups": [
+        "pixels-year",
+        "pixels-life",
+        "pixels-grid"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ],
+      "children": [
+        "PIX-02",
+        "PIX-03",
+        "PHOTO-04",
+        "NOTE-04"
+      ]
+    },
+    {
+      "id": "PLACE-08",
+      "title": "Persist and edit a bounded personal Town layout with revision safety",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 312,
+      "dependencies": [
+        "PLACE-04",
+        "TOWN-07",
+        "CON-03"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "town-models",
+        "town-writes",
+        "schema-head"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back",
+        "schema"
+      ],
+      "children": [
+        "HOME-01",
+        "HOME-04",
+        "HOME-05",
+        "HOME-06"
+      ]
+    },
+    {
+      "id": "PLACE-09",
+      "title": "Offer bounded milestone ornaments through existing progression",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 313,
+      "dependencies": [
+        "PLACE-02",
+        "PLACE-05",
+        "PLACE-08"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "town-lots",
+        "town-read-service"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "children": [
+        "HOME-01",
+        "HOME-02",
+        "HOME-04",
+        "GAME-01",
+        "GAME-02"
+      ]
+    },
+    {
+      "id": "PLACE-10",
+      "title": "Bring completed Media home as source-linked library keepsakes",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 314,
+      "dependencies": [
+        "PLACE-02",
+        "PLACE-06",
+        "PLACE-09",
+        "TOWN-02"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "world-read-service",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back",
+        "media_back"
+      ],
+      "children": [
+        "SCENE-09",
+        "ROOM-06",
+        "ROOM-07",
+        "ROOM-08",
+        "ROOM-10"
+      ]
+    },
+    {
+      "id": "PLACE-11",
+      "title": "Make trips inspectable souvenirs with truthful spans and destinations",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 315,
+      "dependencies": [
+        "PLACE-02",
+        "PLACE-06",
+        "PLACE-09",
+        "TOWN-02"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "world-read-service",
+        "travel-summary"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back",
+        "travel_back"
+      ],
+      "children": [
+        "TUX-10",
+        "SCENE-09",
+        "ROOM-05"
+      ]
+    },
+    {
+      "id": "PLACE-12",
+      "title": "Give residents purposeful authored vignettes and restrained ambience",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 316,
+      "dependencies": [
+        "PLACE-04",
+        "PLACE-06",
+        "PLACE-10",
+        "PLACE-11"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "world-render",
+        "town-hall"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ],
+      "children": [
+        "SCENE-08",
+        "GAME-05",
+        "GAME-06",
+        "GAME-07",
+        "GAME-08",
+        "GAME-14"
+      ]
+    },
+    {
+      "id": "PLACE-13",
+      "title": "Unify compact Hub arrivals, dated navigation and factual recaps",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 317,
+      "dependencies": [
+        "PLACE-03",
+        "PLACE-07",
+        "PLACE-10",
+        "PLACE-11",
+        "UX-03",
+        "HUB-02"
+      ],
+      "conflict_groups": [
+        "hub-main",
+        "private-shell",
+        "pixels-hub-card",
+        "town-hall"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ],
+      "children": [
+        "NAV-02",
+        "NAV-03",
+        "SCENE-07",
+        "SCENE-10",
+        "PIX-02"
+      ]
+    },
+    {
+      "id": "PLACE-14",
+      "title": "Prove integrated beauty, interaction, information and release readiness",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 318,
+      "dependencies": [
+        "PLACE-07",
+        "PLACE-08",
+        "PLACE-09",
+        "PLACE-10",
+        "PLACE-11",
+        "PLACE-12",
+        "PLACE-13"
+      ],
+      "conflict_groups": [
+        "town-browser",
+        "world-ui",
+        "pixels-year",
+        "hub-main",
+        "schema-head"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back",
+        "schema"
+      ],
+      "children": [
+        "QA-01",
+        "QA-02",
+        "QA-03",
+        "QA-04",
+        "QA-05",
+        "MERGE-03"
+      ]
+    }
+  ],
+  "acceptance": [
+    {
+      "scope": "TOWN-04",
+      "id": "TQA1",
+      "original": [
+        "TQA1",
+        "the full20finding/31survivor source inventory",
+        "run each actual current trigger or demonstrate explicit supersession",
+        "every item has an exact invariant and passing surviving test; none is silently dropped",
+        "complete source-ID\u2192test/disposition matrix"
+      ],
+      "owner": "QA-01",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "TOWN-04",
+      "id": "TQA2",
+      "original": [
+        "TQA2",
+        "check/history/edit under loading/failure/held POST and Undo",
+        "use pointer/keyboard and repeat yesterday action",
+        "no duplicatePOST; disabled states/errors/focus/reannouncement/legend correct",
+        "unit/API and actual Town browser interactions"
+      ],
+      "owner": "SCENE-04",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "TOWN-04",
+      "id": "TQA3",
+      "original": [
+        "TQA3",
+        "390/1280,light/dark,hover/focus and relevant lot states",
+        "inspect/control Town and dialogs",
+        "contrast/shapes/labels/44px/no-overflow/axe hold",
+        "contrast measurements and responsive screenshots/browser"
+      ],
+      "owner": "QA-02",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "TOWN-05",
+      "id": "HALL1",
+      "original": [
+        "HALL1",
+        "active/archived habits and canonical thresholds",
+        "open/deep-reload Hall and follow edit/history",
+        "rules/progress match existing facts and links use current owners",
+        "route/CSP/API fixture and actual browser flow"
+      ],
+      "owner": "SCENE-06",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "TOWN-05",
+      "id": "APPEAR1",
+      "original": [
+        "APPEAR1",
+        "ownerA/B and each explicit/automatic seasonal preference near month boundaries",
+        "preview/save/reload/change owner",
+        "correct season ranges, isolated preference, no server mutation or XP change",
+        "clock/preference tests, network assertions and screenshots"
+      ],
+      "owner": "SCENE-08",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "TOWN-06",
+      "id": "REVIEW1",
+      "original": [
+        "REVIEW1",
+        "new/existing weeks including ISO year boundary and Unicode limits",
+        "save/edit/reload/delete/recent-navigate",
+        "week identity/limits/revisions correct; noextraTownXP",
+        "codec/API/browser lifecycle with exact stored schema"
+      ],
+      "owner": "SCENE-07",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "TOWN-06",
+      "id": "REVIEW2",
+      "original": [
+        "REVIEW2",
+        "marker note/focus with held load/save and conflict",
+        "lock/switch owner/leave then resolve or retry",
+        "no old text/preview retained or republished; conflict preserves valid same-session draft",
+        "DOM/store/network/localStorage markers and held promise tests"
+      ],
+      "owner": "SCENE-07",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "TOWN-06",
+      "id": "REVIEW3",
+      "original": [
+        "REVIEW3",
+        "completed review and backup bundle",
+        "export, restore into current account and open Hub pin",
+        "content restored only under current owner; Hub opens same editor with one link",
+        "all-collection recovery test and real route browser"
+      ],
+      "owner": "SCENE-07",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "HEALTH-01",
+      "id": "CLINIC1",
+      "original": [
+        "CLINIC1",
+        "all six Clinic kinds,existing records and >100-per-kind history",
+        "create/edit/delete/show-more and change units",
+        "limits/history/sparklines/ranges correct; display conversions leave stored bytes/revisions unchanged",
+        "pure validators plus full Clinic browser record roundtrips"
+      ],
+      "owner": "HEAL-04",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "HEALTH-01",
+      "id": "CLINIC2",
+      "original": [
+        "CLINIC2",
+        "locked/new vault,corrupt/slow/error rows and conflict",
+        "open deep link/unlock/setup,retry or correct dialog",
+        "return-to-origin,8s/local retry/corrupt notice/draft/errors/focus behave as intended",
+        "route/load/dialog browser and promise-gate tests"
+      ],
+      "owner": "HEAL-01",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "HEALTH-01",
+      "id": "CLINIC3",
+      "original": [
+        "CLINIC3",
+        "marker lab/name during held decrypt/save",
+        "lock/switch owner/leave then release and export/restore",
+        "no retained digits/text or plaintext network/storage; restored allowed records work under current owner",
+        "marker and all-collection recovery/browser evidence"
+      ],
+      "owner": "HEAL-05",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "HEALTH-02",
+      "id": "GYM1",
+      "original": [
+        "GYM1",
+        "lift/run/other history with current and previous best and recent dates",
+        "add/edit/delete current best and switch display units",
+        "derived pace/e1RM/best/NewPR/trophies correct, previous best returns and raw records/revisions are invariant",
+        "math fixtures and complete Gym browser"
+      ],
+      "owner": "FIT-05",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "HEALTH-02",
+      "id": "GYM2",
+      "original": [
+        "GYM2",
+        "datebounds,immutablelogged_on,409 and failed save",
+        "submit/correct/retry and delete with confirmation",
+        "linked errors/draft/focus survive; invalid date not saved and logged_on unchanged",
+        "validator/API payload/dialog tests"
+      ],
+      "owner": "FIT-05",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "HEALTH-02",
+      "id": "BADGE1",
+      "original": [
+        "BADGE1",
+        "each approved badgeID and its threshold fixture",
+        "render awards",
+        "exact approved display names, no internal placeholders, thresholds unchanged",
+        "all20ID/name assertions and award browser"
+      ],
+      "owner": "FIT-06",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "HEALTH-02",
+      "id": "GYMPRIVATE",
+      "original": [
+        "GYMPRIVATE",
+        "other-record marker and held read/write",
+        "lock/switch owner/leave or backuprestore",
+        "no private values/crypto initially locked or stale publication; allowed records restore",
+        "marker/import/module-load and recovery tests"
+      ],
+      "owner": "HEAL-05",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "HEALTH-03",
+      "id": "LOTS1",
+      "original": [
+        "LOTS1",
+        "ready/locked/unavailable Health stages and both routes",
+        "render Town and follow keyboard links",
+        "correct coarse sprites/state, no locked digits and real Clinic/Gym routes open",
+        "stage facade spies and actual Town\u2192Health browser"
+      ],
+      "owner": "SCENE-02",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "HEALTH-03",
+      "id": "LOTS2",
+      "original": [
+        "LOTS2",
+        "390/1280 light/dark with filler and private marker records",
+        "inspect layout,Tab order,lock and Town requests",
+        "11tiles/filler/three-column contract correct; filler notfocusable; no Health payload/serverXPchange",
+        "responsive/axe and request/XP before-after assertions"
+      ],
+      "owner": "QA-03",
+      "disposition": "amended presentation; retained guarantees",
+      "amendment": "Replace eleven-tile/filler/three-column presentation with the selected isometric exterior and keyboard/list equivalent; retain all functional Health entrances,44px/access/marker/unchanged server-XP guarantees."
+    },
+    {
+      "scope": "PLACE-02",
+      "id": "PLACE-02-FACT",
+      "original": [
+        "PLACE-02-FACT",
+        "F1 and overlapping/truncated source history",
+        "load/select a day",
+        "each fact has stable identity and provenance; intentional XP/count/artifact differences are explained",
+        "API/model vectors and cross-view fixture matrix"
+      ],
+      "owner": "PIX-01",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-02",
+      "id": "PLACE-02-LEARN",
+      "original": [
+        "PLACE-02-LEARN",
+        "understood, archived and deleted concepts",
+        "load Pixels and reverse/delete understanding",
+        "annotation agrees with World; original Pixels scores stay byte-for-byte equivalent",
+        "score regression vectors and actual browser annotation"
+      ],
+      "owner": "PIX-01",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-02",
+      "id": "PLACE-02-BOUND",
+      "original": [
+        "PLACE-02-BOUND",
+        "rich history, two owners and held source responses",
+        "select/change/leave/lock",
+        "bounded queries and request counts; no foreign or obsolete publication; independent failures survive",
+        "held-response/request-count and owner tests"
+      ],
+      "owner": "PIX-01",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-03",
+      "id": "PLACE-03-ROUND",
+      "original": [
+        "PLACE-03-ROUND",
+        "selected Year day and birthday-relative Life span",
+        "visit World and return/back/forward/reload",
+        "exact date/span/view restored; lost history state has useful canonical dated fallback",
+        "browser round trip and reload tests"
+      ],
+      "owner": "SCENE-10",
+      "disposition": "amended presentation; retained guarantees",
+      "amendment": "World destination becomes dated Town/Pixels; preserve exact Year day/Life span,return/back/reload and canonical fallback."
+    },
+    {
+      "scope": "PLACE-03",
+      "id": "PLACE-03-DATE",
+      "original": [
+        "PLACE-03-DATE",
+        "Feb29, Sunday/ISO boundaries, DST and mismatched client/server day",
+        "parse legacy/conflicting/invalid links",
+        "stable safe context; no date semantics conflation or redirect loop",
+        "pure date/URL vectors"
+      ],
+      "owner": "MERGE-02",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-03",
+      "id": "PLACE-03-FOCUS",
+      "original": [
+        "PLACE-03-FOCUS",
+        "keyboard and touch selection with filters/scroll",
+        "open and close detail, navigate away/back",
+        "correct invoking or nearby focus; no private URL values and no frame history spam",
+        "actual browser focus/history assertions"
+      ],
+      "owner": "NAV-02",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-04",
+      "id": "PLACE-04-SCENE",
+      "original": [
+        "PLACE-04-SCENE",
+        "F0/F2 across theme/viewport/zoom matrix",
+        "arrive/select/tend",
+        "reviewed scene and legible task hierarchy; no clipping or blocked practical action",
+        "art rubric and responsive browser artifacts"
+      ],
+      "owner": "SCENE-02",
+      "disposition": "amended presentation; retained guarantees",
+      "amendment": "The bounded garden becomes the selected six-district Town; preserve visual/viewport/zoom/readability and practical-action acceptance."
+    },
+    {
+      "scope": "PLACE-04",
+      "id": "PLACE-04-BUILD",
+      "original": [
+        "PLACE-04-BUILD",
+        "different Town/library/inn levels and Finance lock",
+        "inspect in Town and World",
+        "same truthful approved stages; no private or habit-derived Treasury facts",
+        "stage projection vectors and lock/browser tests"
+      ],
+      "owner": "SCENE-02",
+      "disposition": "amended presentation; retained guarantees",
+      "amendment": "Standalone World presentation retires; Town and private rooms consume the same truthful approved stages and existing source owners."
+    },
+    {
+      "scope": "PLACE-04",
+      "id": "PLACE-04-EQUIV",
+      "original": [
+        "PLACE-04-EQUIV",
+        "keyboard/list users and archived/locked/empty lots",
+        "inspect and invoke every supported action",
+        "same task coverage, meaningful names, focus and Today behavior",
+        "actual DOM/list keyboard journeys"
+      ],
+      "owner": "SCENE-03",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-05",
+      "id": "PLACE-05-COMMIT",
+      "original": [
+        "PLACE-05-COMMIT",
+        "ready/pending/failed/confirmed POST",
+        "check, retry, double-submit and Undo",
+        "no effect before success or duplicate credit; authoritative reversal reflected",
+        "held POST and actual browser journey"
+      ],
+      "owner": "SCENE-05",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-05",
+      "id": "PLACE-05-SAFE",
+      "original": [
+        "PLACE-05-SAFE",
+        "multiple habits and pending response",
+        "change day/route/owner then resolve",
+        "independent valid actions; obsolete feedback never publishes",
+        "lifecycle/clock fixtures"
+      ],
+      "owner": "SCENE-05",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-05",
+      "id": "PLACE-05-FEEL",
+      "original": [
+        "PLACE-05-FEEL",
+        "reduced motion and ordinary motion",
+        "complete a habit then inspect the affected lot",
+        "specific legible feedback, \u2264100ms pending and no blocked input; static equivalent",
+        "timing trace, capture and visual review"
+      ],
+      "owner": "SCENE-05",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-06",
+      "id": "PLACE-06-OBJECT",
+      "original": [
+        "PLACE-06-OBJECT",
+        "overlapping objects at resized/panned camera positions",
+        "tap versus drag, cancel or keyboard-inspect",
+        "correct object opens; drag never activates; source/date and focus agree",
+        "transform vectors and actual pointer/keyboard tests"
+      ],
+      "owner": "SCENE-01",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-06",
+      "id": "PLACE-06-QUIET",
+      "original": [
+        "PLACE-06-QUIET",
+        "unrecorded/future/unavailable/recorded days",
+        "toggle activity overlay and inspect",
+        "honest distinct states; no implication of failure/rest and no hidden source objects",
+        "state fixtures and visual review"
+      ],
+      "owner": "SCENE-10",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-06",
+      "id": "PLACE-06-ENGINE",
+      "original": [
+        "PLACE-06-ENGINE",
+        "existing golden fixtures and old week URLs",
+        "render new interaction/presentation",
+        "identical generation vectors and preserved keyboard/date/list journeys",
+        "purity/golden suite and first playable capture"
+      ],
+      "owner": "MERGE-03",
+      "disposition": "amended presentation; retained guarantees",
+      "amendment": "Preserve golden vectors for every still-consumed deterministic generator; retire only proven no-caller standalone presentation after migrating all date/list/keyboard/source behavior."
+    },
+    {
+      "scope": "PLACE-07",
+      "id": "PLACE-07-ATLAS",
+      "original": [
+        "PLACE-07-ATLAS",
+        "F1/F2 selected days/spans",
+        "scan/select/visit from grid and table",
+        "readable composition and exact facts/routes; original score/app modes preserved",
+        "date/score vectors and browser grid/table journeys"
+      ],
+      "owner": "PIX-03",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-07",
+      "id": "PLACE-07-COVER",
+      "original": [
+        "PLACE-07-COVER",
+        "pre-account, partial, locked/unavailable and future records",
+        "inspect Year/Life",
+        "coverage and uncertainty visible; no lifespan/death or unrecorded-life judgment",
+        "copy/state assertions and art review"
+      ],
+      "owner": "PIX-03",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-07",
+      "id": "PLACE-07-PRIV",
+      "original": [
+        "PLACE-07-PRIV",
+        "birthday hidden and two owners",
+        "refresh/switch view/visit/back",
+        "age privacy, spans, selected context and focus survive correctly",
+        "birthday/Feb29/owner regressions"
+      ],
+      "owner": "PIX-03",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-08",
+      "id": "PLACE-08-LAYOUT",
+      "original": [
+        "PLACE-08-LAYOUT",
+        "known anchors/items and two sessions",
+        "save/reload/Undo/reset/conflict",
+        "bounded valid layout persists; conflict visible and saved revision not overwritten",
+        "API/model and actual keyboard/browser flow"
+      ],
+      "owner": "HOME-05",
+      "disposition": "amended presentation; retained guarantees",
+      "amendment": "Expand fixed twelve anchors to bounded exterior anchors and four12x12 Home rooms; retain16KiB room-write cap,revision-safe Undo/reset/conflict and public/private data separation."
+    },
+    {
+      "scope": "PLACE-08",
+      "id": "PLACE-08-MIG",
+      "original": [
+        "PLACE-08-MIG",
+        "existing rows and foreign owner/malformed payload",
+        "upgrade, mutate and delete account",
+        "records preserved; foreign writes/invalid IDs rejected; single head",
+        "migration rehearsal and auth/CSRF tests"
+      ],
+      "owner": "HOME-01",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-08",
+      "id": "PLACE-08-RECOVER",
+      "original": [
+        "PLACE-08-RECOVER",
+        "unsupported/corrupt layout or failed/held save",
+        "preview, leave/switch owner, resolve response",
+        "data preserved; useful fallback and no stale draft publication",
+        "marker/held-response and recovery fixtures"
+      ],
+      "owner": "HOME-05",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-09",
+      "id": "PLACE-09-CHOICE",
+      "original": [
+        "PLACE-09-CHOICE",
+        "just-before/at/after milestone and maximum level",
+        "reach threshold, choose/preview/save/reload",
+        "exact existing milestone; one stable identity, three understandable options and no extra XP",
+        "threshold vectors and actual choice flow"
+      ],
+      "owner": "HOME-04",
+      "disposition": "amended presentation; retained guarantees",
+      "amendment": "Preserve all three existing milestone identities,nine options and canonical thresholds; add separately specified game-only Stamp shop without changing life XP."
+    },
+    {
+      "scope": "PLACE-09",
+      "id": "PLACE-09-REVERSE",
+      "original": [
+        "PLACE-09-REVERSE",
+        "source/XP correction removes eligibility",
+        "refresh and restore facts later",
+        "stored choice preserved but not rendered as earned; no duplicate reward endpoint",
+        "reversal/restoration model/browser tests"
+      ],
+      "owner": "HOME-04",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-09",
+      "id": "PLACE-09-PRIVATE",
+      "original": [
+        "PLACE-09-PRIVATE",
+        "Finance/Health locked versus unlocked",
+        "inspect catalog/save choice",
+        "only public Town eligibility and catalog IDs persist; no private-derived marker",
+        "payload/storage/DOM privacy assertions"
+      ],
+      "owner": "HOME-01",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-10",
+      "id": "PLACE-10-MEDIA",
+      "original": [
+        "PLACE-10-MEDIA",
+        "episode plus completed book/movie/TV/game with dates",
+        "complete/revisit/inspect source",
+        "qualifying keepsake and World occurrence agree; exact item/date; episode distinction explained",
+        "API/source fixture and actual cross-app journey"
+      ],
+      "owner": "SCENE-09",
+      "disposition": "amended presentation; retained guarantees",
+      "amendment": "World occurrence display moves into dated Town/Pixels rooms; preserve existing completed-kind allowlist,episode distinction,source/date and reversal."
+    },
+    {
+      "scope": "PLACE-10",
+      "id": "PLACE-10-UNDO",
+      "original": [
+        "PLACE-10-UNDO",
+        "completion reversed/deleted/redated",
+        "reload each scale",
+        "derived object retracts/moves; no copied title/reward persists or duplicate effect",
+        "source reversal tests"
+      ],
+      "owner": "SCENE-09",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-10",
+      "id": "PLACE-10-LOAD",
+      "original": [
+        "PLACE-10-LOAD",
+        "large history and unavailable Media",
+        "arrive/inspect bounded shelf",
+        "caps/coverage honest; no provider IO or N+1; Town remains usable",
+        "provider spy/request count and state screenshots"
+      ],
+      "owner": "SCENE-09",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-11",
+      "id": "PLACE-11-TRIP",
+      "original": [
+        "PLACE-11-TRIP",
+        "planned/completed/late-logged and overlapping trips",
+        "visit/inspect on each scale",
+        "actual span, source and eligibility explain intentional Town/World/Pixels differences",
+        "source-date fixture matrix and cross-app browser"
+      ],
+      "owner": "TUX-10",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-11",
+      "id": "PLACE-11-CHANGE",
+      "original": [
+        "PLACE-11-CHANGE",
+        "trip edit/cancel/delete and missing destination",
+        "reload and inspect",
+        "derived souvenir retracts/updates; honest fallback and no made-up place",
+        "reversal/fallback tests"
+      ],
+      "owner": "TUX-10",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-11",
+      "id": "PLACE-11-BIOME",
+      "original": [
+        "PLACE-11-BIOME",
+        "existing seed/latitude/hash vectors",
+        "render souvenir overlay",
+        "same deterministic terrain; explicit illustrative geography and bounded reads",
+        "golden vectors/request counts and visual review"
+      ],
+      "owner": "SCENE-09",
+      "disposition": "amended presentation; retained guarantees",
+      "amendment": "Illustrative scenery moves into Town; preserve still-consumed seed/latitude/hash vectors and disclose fiction versus actual saved destination."
+    },
+    {
+      "scope": "PLACE-12",
+      "id": "PLACE-12-CAST",
+      "original": [
+        "PLACE-12-CAST",
+        "known public facts and quiet/return visits",
+        "inspect each resident",
+        "specific truthful purpose, no invented events/private details and no task gate",
+        "catalog-condition tests and rendered vignettes"
+      ],
+      "owner": "GAME-05",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-12",
+      "id": "PLACE-12-ACCESS",
+      "original": [
+        "PLACE-12-ACCESS",
+        "keyboard/reduced-motion/sound-off/blocked storage",
+        "open/dismiss and act on Today",
+        "equivalent static feedback, stable focus, mute and no blocked tasks",
+        "actual browser controls"
+      ],
+      "owner": "GAME-14",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-12",
+      "id": "PLACE-12-IDLE",
+      "original": [
+        "PLACE-12-IDLE",
+        "hidden/offscreen and idle scene",
+        "record animation/audio work",
+        "no continuous hidden/idle work, no autoplay audio and catalog lazy-loaded",
+        "performance traces/payload measurements"
+      ],
+      "owner": "SCENE-08",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-13",
+      "id": "PLACE-13-ARRIVE",
+      "original": [
+        "PLACE-13-ARRIVE",
+        "Hub, direct and sibling routes",
+        "open dated action/back/reload",
+        "compact useful arrival, selected context and exact canonical links",
+        "shell/Hub/cross-scale browser journeys"
+      ],
+      "owner": "NAV-03",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-13",
+      "id": "PLACE-13-RECAP",
+      "original": [
+        "PLACE-13-RECAP",
+        "partial/empty/rich range and review available/unavailable",
+        "open recap and optional review action",
+        "facts/coverage honest; no private note copy or invented narrative/dead link",
+        "network/DOM marker assertions and range fixture"
+      ],
+      "owner": "PIX-02",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-13",
+      "id": "PLACE-13-SHARE",
+      "original": [
+        "PLACE-13-SHARE",
+        "concurrent summary consumers and one failed source",
+        "arrive and retry",
+        "bounded reused responses, independent source states and no second store",
+        "held-response/request-count regressions"
+      ],
+      "owner": "NAV-03",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-14",
+      "id": "PLACE-14-COMPLETE",
+      "original": [
+        "PLACE-14-COMPLETE",
+        "all packet acceptance and F0\u2013F5",
+        "run integrated actual journeys and review art",
+        "each beauty/interaction/information row has passing evidence or explicit approved amendment; none silently dropped",
+        "requirement\u2192test/artifact matrix and exact gate output"
+      ],
+      "owner": "QA-02",
+      "disposition": "amended presentation; retained guarantees",
+      "amendment": "Replace separate World art matrix with selected whole-suite/isometric-room matrix; retain every F0-F5,privacy,interaction,information and owner-review requirement."
+    },
+    {
+      "scope": "PLACE-14",
+      "id": "PLACE-14-PERF",
+      "original": [
+        "PLACE-14-PERF",
+        "baseline reference profile and rich fixture",
+        "measure final production bundle/frames/queries",
+        "acceptance.md budgets and existing gates met; no hidden loops/N+1",
+        "before/after traces, requests and payload measurements"
+      ],
+      "owner": "QA-04",
+      "disposition": "retained",
+      "amendment": null
+    },
+    {
+      "scope": "PLACE-14",
+      "id": "PLACE-14-RELEASE",
+      "original": [
+        "PLACE-14-RELEASE",
+        "supported existing data/layouts and rollback build",
+        "rehearse upgrade, disable new writes and roll back safely",
+        "source/layout data preserved; owners/docs current; no unsupported activation claim",
+        "migration/rollback record and removal ledger"
+      ],
+      "owner": "QA-05",
+      "disposition": "retained",
+      "amendment": null
+    }
+  ],
+  "explicit_amendments": [
+    "Direct building/object selection with isometric2.5D scenes replaces separate World navigation and eleven-tile layout.",
+    "Four bounded Home rooms and public exterior anchors replace twelve-anchor-only decoration;16KiB per-room request cap remains.",
+    "All game systems are selected; game-only Stamps and authored ranks/chapters do not change existing Town XP or private-data earning rules.",
+    "Gym includes full sessions/routines plus supported legacy PRs.",
+    "Hub stays the default compact practical home; public portfolio remains outside scope."
+  ]
+}

@@ -25,23 +25,24 @@ are kept only in the [completion archive](completed/README.md); they are never
 listed or launchable as future work. `--live` also rejects a reopened archived
 issue until the queue is reconciled.
 
-For the owner-selected Living World workstream, read the
-[product specification](../living-world/README.md), then filter this same queue:
+For the owner-selected suite/Town revamp, read the
+[selected design](../product-revamp/design.md) and
+[acceptance](../product-revamp/acceptance.md), then filter this same queue:
 
 ```sh
 python3 planning/implementation/plan.py list --live --parent 304
 ```
 
 This does not establish readiness: verify the named existing Town/UX/safety/route
-outcomes, then follow the exact PLACE packet. Unrelated tasks retain their relative
+outcomes, then follow the exact small-leaf packet. Unrelated tasks retain their relative
 order; the design documents do not introduce a second ready list.
 
 ## 2. Open its exact packet
 
-For example, launch the account-experience packet:
+For example, launch the selected style-token packet:
 
 ```sh
-python3 planning/implementation/plan.py launch HUB-01
+python3 planning/implementation/plan.py launch STYLE-01
 ```
 
 Substitute the selected key as work progresses. Launch prints the packet path and
@@ -86,7 +87,10 @@ exact next action; use [handoff](templates/handoff.md) before evidence exists.
 | How is it performed? | [Workflow](workflow.md), root/app AGENTS and deletion contract |
 | Which commands and results prove it? | [Profiles](verification.json), actual-diff root gates, then `evidence/KEY.md` |
 
-Only unfinished leaves belong in `queue.json` and `issues/`. After verified
+Only unfinished leaves belong in `queue.json` and `issues/`. Former large
+Town/Health/PLACE packets under `scopes/` are retained requirement trackers and
+cannot be launched. The revamp's issue map groups scope but never supplies a
+second ready list. After verified
 completion, the integration owner moves a packet to `completed/issues/`, registers
 its merged PR/SHA in `completed/registry.json`, and removes tracking parents with
 no remaining leaves. Preserve dependency IDs and issue-specific evidence; keep

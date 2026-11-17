@@ -1,5 +1,8 @@
 # Interaction and information specification
 
+> Supporting pre-revamp design. The [selected 2026-11-17 design](../product-revamp/design.md) supersedes product composition and cosmetic limits; exact retained requirements are assigned by the current queue and scope ledger.
+
+
 ## Town composition
 
 Desktop: scene is the primary place, Today is an adjacent compact working panel;
