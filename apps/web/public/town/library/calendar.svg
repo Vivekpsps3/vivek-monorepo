@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="134" height="108" viewBox="0 0 134 108">
+  <style>
+    :root { --wood:#765445; --trim:#a57457; --paper:#f9e8bc; --stripe:#3e726e; --week:#a88761; --mark:#b85d49; --pin:#eac077; --shadow:#3b362f; }
+    @media (prefers-color-scheme: dark) {
+      :root { --wood:#483a3b; --trim:#976b51; --paper:#dcc193; --stripe:#3a6466; --week:#947557; --mark:#aa5344; --pin:#edbc67; --shadow:#192634; }
+    }
+  </style>
+  <path fill="var(--shadow)" opacity=".27" d="m6 15 126 36v55L6 72z"/>
+  <path fill="var(--wood)" d="m1 7 129 39v60L1 65z"/>
+  <path fill="var(--trim)" d="m1 7 6-6 127 38-4 7zm129 39 4-7v60l-4 7z"/>
+  <g transform="translate(9 18) skewY(17)">
+    <path fill="var(--paper)" d="M0 0h111v43H0z"/>
+    <path fill="var(--stripe)" d="M0 0h111v11H0z"/>
+    <path fill="var(--pin)" d="M10 0h4v8h-4zm87 0h4v8h-4z"/>
+    <path stroke="var(--week)" fill="none" d="M6 17h99M6 24h99M6 31h99M6 38h99M6 17v21m14-21v21m14-21v21m14-21v21m15-21v21m14-21v21m14-21v21m14-21v21" opacity=".72"/>
+    <path fill="var(--mark)" d="M36 26h10v4H36zm43-7h10v4H79z"/>
+  </g>
+  <path fill="none" stroke="var(--trim)" d="m5 61 120 38"/>
+</svg>

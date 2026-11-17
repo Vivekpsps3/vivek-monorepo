@@ -50,6 +50,13 @@
       "status": "mounted"
     },
     {
+      "id": "town-library",
+      "path": "town/library",
+      "owner": "town",
+      "status": "mounted",
+      "query": "object=calendar"
+    },
+    {
       "id": "have-alias",
       "path": "have",
       "owner": "finance",

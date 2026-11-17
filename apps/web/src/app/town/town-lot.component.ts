@@ -60,7 +60,7 @@ export class TownLotComponent {
       name = kind === 'library' ? 'Library' : 'Inn';
       const source = kind === 'library' ? 'Media' : 'Travel';
       label = building?.source === 'unavailable' ? `Lv — · ${source} unavailable` : `Lv ${building?.level} · ${source}`;
-      sprite = buildingSprite(kind, building?.stage ?? 1); link = kind === 'library' ? '/media' : '/travel';
+      sprite = buildingSprite(kind, building?.stage ?? 1); link = kind === 'library' ? '/town/library' : '/travel';
     } else if (lot?.state === 'occupied' && habit) {
       name = habit.name;
       label = `Lv ${habit.level} · ${habit.streak.current}-${habit.streak.unit === 'days' ? 'day' : 'week'} streak`;

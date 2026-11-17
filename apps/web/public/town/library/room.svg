@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+  <style>
+    :root {
+      --sky:#eee3c6; --fade:#dfede1; --horizon:#98b9a5; --water:#86a99d;
+      --wall:#e9d5af; --wall-shade:#c2a47e; --wall-top:#f9ebc9; --mortar:#907656;
+      --floor:#bf996c; --plank:#a77e59; --floor-dark:#89664e; --floor-side:#745a49;
+      --teal:#506f68; --window:#9bc2b1; --window-lamp:#ead58c;
+      --rug:#567a6c; --rug-edge:#d9c397; --shadow:#51463e;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --sky:#172538; --fade:#29464c; --horizon:#365c62; --water:#3b6569;
+        --wall:#696153; --wall-shade:#484548; --wall-top:#a18b67; --mortar:#34373f;
+        --floor:#806047; --plank:#6e503f; --floor-dark:#58443d; --floor-side:#39363c;
+        --teal:#344d54; --window:#417477; --window-lamp:#f4c879;
+        --rug:#3c6060; --rug-edge:#d5b885; --shadow:#172332;
+      }
+    }
+  </style>
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1">
+      <stop stop-color="var(--sky)"/>
+      <stop offset="1" stop-color="var(--fade)"/>
+    </linearGradient>
+    <pattern id="grain" width="11" height="13" patternUnits="userSpaceOnUse">
+      <path d="M1 4h1m5 6h2" stroke="var(--mortar)" opacity=".14"/>
+    </pattern>
+    <clipPath id="floor">
+      <path d="M28 202 300 79 569 211 290 371Z"/>
+    </clipPath>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h600v400H0z"/>
+  <path fill="var(--horizon)" d="m0 139 47-4 49 8 67-13 57 10 84-4 83 5 65-15 61 9 87-5v20H0z" opacity=".58"/>
+  <path fill="var(--water)" d="M0 158h600v5H0zm19 19h73v3H19zm451-4h105v3H470zm66 22h64v3h-64z" opacity=".52"/>
+  <path fill="var(--shadow)" opacity=".2" d="m12 238 274 154 301-153-277-122z"/>
+  <path fill="var(--floor-dark)" d="m28 202 262 169v15L28 221z"/>
+  <path fill="var(--floor-side)" d="m290 371 279-160v18L290 386z"/>
+  <path fill="var(--floor)" d="M28 202 300 79 569 211 290 371Z"/>
+  <g clip-path="url(#floor)" fill="none" stroke="var(--plank)" stroke-width="2">
+    <path d="m20 217 301-140m-281 153L348 83M61 242 373 91M83 256 396 102M108 269l318-158M133 282l320-159m-293 174 316-163m-291 180 319-169M209 329l322-171M232 345l328-181m-300 196 321-175"/>
+    <path d="m152 167 19 9m61-45 21 12m-130 66 21 11m87-65 22 13m96-71 21 12M70 237l21 10m95-62 23 14m75-62 28 14m89-70 23 15M142 264l24 15m61-64 23 13m73-62 25 14m95-72 27 15M216 292l22 14m92-71 25 14m82-68 24 14m-178 123 20 12m66-64 25 16m69-60 23 15"/>
+  </g>
+  <path fill="var(--wall)" d="M28 117 300 7v72L28 202z"/>
+  <path fill="var(--wall-shade)" d="M300 7 569 128v83L300 79z"/>
+  <path fill="url(#grain)" d="M28 117 300 7l269 121v83L300 79 28 202z"/>
+  <path fill="var(--wall-top)" d="m23 111 277-111 274 121-5 7L300 8 28 117z"/>
+  <path fill="var(--mortar)" opacity=".55" d="m29 191 271-122 269 130v12L300 80 29 202z"/>
+  <path fill="var(--wall-shade)" d="m19 115 9 2v85l-9-5z"/>
+  <path fill="var(--floor-dark)" d="m569 128 9-4v81l-9 6z"/>
+  <path fill="var(--teal)" stroke="var(--mortar)" stroke-width="4" d="m220 67 62-26v48l-62 27z"/>
+  <path fill="var(--window)" d="m227 70 48-20v35l-48 21z"/>
+  <path fill="var(--horizon)" d="m227 89 23-8 25-17v21l-48 21z"/>
+  <path fill="var(--window-lamp)" d="m243 70 7-3v5l-7 3zm18-8 5-2v4l-5 2z"/>
+  <path fill="var(--teal)" d="m249 60 4-2v36l-4 2zm-22 25 48-20v3l-48 21z"/>
+  <path fill="var(--wall-top)" d="m217 113 67-29v5l-66 30z"/>
+  <path fill="var(--teal)" stroke="var(--mortar)" stroke-width="4" d="m328 46 63 29v49l-63-31z"/>
+  <path fill="var(--window)" d="m335 57 49 22v34l-49-23z"/>
+  <path fill="var(--horizon)" d="m335 74 20 14 29 8v17l-49-23z"/>
+  <path fill="var(--window-lamp)" d="m350 69 8 4v5l-8-4zm20 12 5 2v4l-5-2z"/>
+  <path fill="var(--teal)" d="m356 61 4 2v39l-4-2zm-22 13 52 25v4l-52-25z"/>
+  <path fill="var(--wall-top)" d="m325 90 68 32v5l-68-32z"/>
+  <path fill="var(--rug-edge)" d="m183 252 137-72 139 71-137 79z"/>
+  <path fill="var(--rug)" d="m192 252 128-67 128 66-126 73z"/>
+  <path fill="none" stroke="var(--rug-edge)" opacity=".75" stroke-width="2" d="m211 252 108-56 110 56-108 61z"/>
+  <path fill="none" stroke="var(--rug-edge)" opacity=".35" stroke-width="2" d="m255 253 65-33 65 32-65 37z"/>
+  <g transform="translate(489 205)">
+    <path fill="var(--shadow)" opacity=".26" d="m-16 55 30-14 25 12-28 14z"/>
+    <path fill="var(--wall-shade)" d="m-12 34 4 22 16 7 15-8 4-21z"/>
+    <path fill="var(--floor-dark)" d="m8 42 19-8-4 21-15 8z"/>
+    <path fill="var(--wall-top)" d="m-12 34 19-8 20 8-19 9z"/>
+    <path fill="var(--teal)" d="M4 37 0 19-16 5-21-6l12 4L6 14 4-5l7-16 6 7-2 25L30 1l8 5-9 11-18 13-1 8z"/>
+  </g>
+</svg>
