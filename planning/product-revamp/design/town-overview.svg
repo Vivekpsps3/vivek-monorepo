@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800"><rect width="1200" height="800" fill="#F4EEE3"/><text x="52" y="60" fill="#183943" font-family="system-ui,sans-serif" font-size="30" font-weight="700">A little world, directly at your fingertips</text><text x="54" y="94" fill="#60746F" font-family="system-ui,sans-serif" font-size="16" font-weight="400">Concept composition • direct object selection • not a final production asset</text><rect x="36" y="124" width="834" height="602" rx="28" fill="#C4D9CC" stroke="none"/><rect x="890" y="124" width="274" height="602" rx="24" fill="#FFFBF3" stroke="none"/><path d="M38 608C252 524 388 708 632 565S786 430 870 473V726H38Z" fill="#A6CDD0"/><path d="M122 524 409 357 747 514M410 357 659 209M410 357 164 214" fill="none" stroke="#E8DCC2" stroke-width="40" stroke-linecap="round"/><g transform="translate(200 215) scale(0.8)">
+ <ellipse cx="0" cy="47" rx="76" ry="24" fill="#213D3A" opacity=".13"/>
+ <path d="M-55-15 0 12 55-15 0-43Z" fill="#DFCFB3"/>
+ <path d="M-55-15 0 12 0 48-55 20Z" fill="#D3B58C"/>
+ <path d="M0 12 55-15 55 20 0 48Z" fill="#AE916F"/>
+ <path d="M-65-23 0-63 65-23 0 12Z" fill="#B47B67"/>
+ <path d="M0-63 0 12 65-23Z" fill="#142E38" opacity=".18"/>
+ <path d="M-16 16-3 22-3 43-16 36Z" fill="#26454A"/>
+ <path d="M19 16 33 9 33 23 19 30Z" fill="#FFE0A1"/>
+ <text x="-50" y="84" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Home</text>
+ </g><g transform="translate(470 214) scale(0.8)">
+ <ellipse cx="0" cy="47" rx="76" ry="24" fill="#213D3A" opacity=".13"/>
+ <path d="M-55-15 0 12 55-15 0-43Z" fill="#DFCFB3"/>
+ <path d="M-55-15 0 12 0 48-55 20Z" fill="#D3B58C"/>
+ <path d="M0 12 55-15 55 20 0 48Z" fill="#AE916F"/>
+ <path d="M-65-23 0-63 65-23 0 12Z" fill="#708C8B"/>
+ <path d="M0-63 0 12 65-23Z" fill="#142E38" opacity=".18"/>
+ <path d="M-16 16-3 22-3 43-16 36Z" fill="#26454A"/>
+ <path d="M19 16 33 9 33 23 19 30Z" fill="#FFE0A1"/>
+ <text x="-50" y="84" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Treasury</text>
+ </g><g transform="translate(688 260) scale(0.8)">
+ <ellipse cx="0" cy="47" rx="76" ry="24" fill="#213D3A" opacity=".13"/>
+ <path d="M-55-15 0 12 55-15 0-43Z" fill="#DFCFB3"/>
+ <path d="M-55-15 0 12 0 48-55 20Z" fill="#D3B58C"/>
+ <path d="M0 12 55-15 55 20 0 48Z" fill="#AE916F"/>
+ <path d="M-65-23 0-63 65-23 0 12Z" fill="#E0B46E"/>
+ <path d="M0-63 0 12 65-23Z" fill="#142E38" opacity=".18"/>
+ <path d="M-16 16-3 22-3 43-16 36Z" fill="#26454A"/>
+ <path d="M19 16 33 9 33 23 19 30Z" fill="#FFE0A1"/>
+ <text x="-50" y="84" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Hall</text>
+ </g><g transform="translate(150 374) scale(0.8)">
+ <ellipse cx="0" cy="47" rx="76" ry="24" fill="#213D3A" opacity=".13"/>
+ <path d="M-55-15 0 12 55-15 0-43Z" fill="#DFCFB3"/>
+ <path d="M-55-15 0 12 0 48-55 20Z" fill="#D3B58C"/>
+ <path d="M0 12 55-15 55 20 0 48Z" fill="#AE916F"/>
+ <path d="M-65-23 0-63 65-23 0 12Z" fill="#718C77"/>
+ <path d="M0-63 0 12 65-23Z" fill="#142E38" opacity=".18"/>
+ <path d="M-16 16-3 22-3 43-16 36Z" fill="#26454A"/>
+ <path d="M19 16 33 9 33 23 19 30Z" fill="#FFE0A1"/>
+ <text x="-50" y="84" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Library</text>
+ </g><g transform="translate(382 382) scale(0.8)">
+ <ellipse cx="0" cy="47" rx="76" ry="24" fill="#213D3A" opacity=".13"/>
+ <path d="M-55-15 0 12 55-15 0-43Z" fill="#DFCFB3"/>
+ <path d="M-55-15 0 12 0 48-55 20Z" fill="#D3B58C"/>
+ <path d="M0 12 55-15 55 20 0 48Z" fill="#AE916F"/>
+ <path d="M-65-23 0-63 65-23 0 12Z" fill="#BC7A6C"/>
+ <path d="M0-63 0 12 65-23Z" fill="#142E38" opacity=".18"/>
+ <path d="M-16 16-3 22-3 43-16 36Z" fill="#26454A"/>
+ <path d="M19 16 33 9 33 23 19 30Z" fill="#FFE0A1"/>
+ <text x="-50" y="84" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Theater</text>
+ </g><g transform="translate(632 405) scale(0.8)">
+ <ellipse cx="0" cy="47" rx="76" ry="24" fill="#213D3A" opacity=".13"/>
+ <path d="M-55-15 0 12 55-15 0-43Z" fill="#DFCFB3"/>
+ <path d="M-55-15 0 12 0 48-55 20Z" fill="#D3B58C"/>
+ <path d="M0 12 55-15 55 20 0 48Z" fill="#AE916F"/>
+ <path d="M-65-23 0-63 65-23 0 12Z" fill="#8E87A0"/>
+ <path d="M0-63 0 12 65-23Z" fill="#142E38" opacity=".18"/>
+ <path d="M-16 16-3 22-3 43-16 36Z" fill="#26454A"/>
+ <path d="M19 16 33 9 33 23 19 30Z" fill="#FFE0A1"/>
+ <text x="-50" y="84" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Music bar</text>
+ </g><g transform="translate(203 535) scale(0.8)">
+ <ellipse cx="0" cy="47" rx="76" ry="24" fill="#213D3A" opacity=".13"/>
+ <path d="M-55-15 0 12 55-15 0-43Z" fill="#DFCFB3"/>
+ <path d="M-55-15 0 12 0 48-55 20Z" fill="#D3B58C"/>
+ <path d="M0 12 55-15 55 20 0 48Z" fill="#AE916F"/>
+ <path d="M-65-23 0-63 65-23 0 12Z" fill="#87986F"/>
+ <path d="M0-63 0 12 65-23Z" fill="#142E38" opacity=".18"/>
+ <path d="M-16 16-3 22-3 43-16 36Z" fill="#26454A"/>
+ <path d="M19 16 33 9 33 23 19 30Z" fill="#FFE0A1"/>
+ <text x="-50" y="84" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Gym</text>
+ </g><g transform="translate(452 550) scale(0.8)">
+ <ellipse cx="0" cy="47" rx="76" ry="24" fill="#213D3A" opacity=".13"/>
+ <path d="M-55-15 0 12 55-15 0-43Z" fill="#DFCFB3"/>
+ <path d="M-55-15 0 12 0 48-55 20Z" fill="#D3B58C"/>
+ <path d="M0 12 55-15 55 20 0 48Z" fill="#AE916F"/>
+ <path d="M-65-23 0-63 65-23 0 12Z" fill="#93AAA0"/>
+ <path d="M0-63 0 12 65-23Z" fill="#142E38" opacity=".18"/>
+ <path d="M-16 16-3 22-3 43-16 36Z" fill="#26454A"/>
+ <path d="M19 16 33 9 33 23 19 30Z" fill="#FFE0A1"/>
+ <text x="-50" y="84" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Clinic</text>
+ </g><g transform="translate(708 552) scale(0.8)">
+ <ellipse cx="0" cy="47" rx="76" ry="24" fill="#213D3A" opacity=".13"/>
+ <path d="M-55-15 0 12 55-15 0-43Z" fill="#DFCFB3"/>
+ <path d="M-55-15 0 12 0 48-55 20Z" fill="#D3B58C"/>
+ <path d="M0 12 55-15 55 20 0 48Z" fill="#AE916F"/>
+ <path d="M-65-23 0-63 65-23 0 12Z" fill="#7297A0"/>
+ <path d="M0-63 0 12 65-23Z" fill="#142E38" opacity=".18"/>
+ <path d="M-16 16-3 22-3 43-16 36Z" fill="#26454A"/>
+ <path d="M19 16 33 9 33 23 19 30Z" fill="#FFE0A1"/>
+ <text x="-50" y="84" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Terminal</text>
+ </g><g transform="translate(586 655) scale(0.8)">
+ <ellipse cx="0" cy="47" rx="76" ry="24" fill="#213D3A" opacity=".13"/>
+ <path d="M-55-15 0 12 55-15 0-43Z" fill="#DFCFB3"/>
+ <path d="M-55-15 0 12 0 48-55 20Z" fill="#D3B58C"/>
+ <path d="M0 12 55-15 55 20 0 48Z" fill="#AE916F"/>
+ <path d="M-65-23 0-63 65-23 0 12Z" fill="#D6A75D"/>
+ <path d="M0-63 0 12 65-23Z" fill="#142E38" opacity=".18"/>
+ <path d="M-16 16-3 22-3 43-16 36Z" fill="#26454A"/>
+ <path d="M19 16 33 9 33 23 19 30Z" fill="#FFE0A1"/>
+ <text x="-50" y="84" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Arcade</text>
+ </g><ellipse cx="95" cy="190" rx="19" ry="8" fill="#355D4B" opacity=".2"/><path d="M95 170V193" stroke="#8A7253" stroke-width="6"/><circle cx="95" cy="162" r="22" fill="#73937A"/><ellipse cx="300" cy="300" rx="19" ry="8" fill="#355D4B" opacity=".2"/><path d="M300 280V303" stroke="#8A7253" stroke-width="6"/><circle cx="300" cy="272" r="22" fill="#73937A"/><ellipse cx="775" cy="374" rx="19" ry="8" fill="#355D4B" opacity=".2"/><path d="M775 354V377" stroke="#8A7253" stroke-width="6"/><circle cx="775" cy="346" r="22" fill="#73937A"/><ellipse cx="310" cy="648" rx="19" ry="8" fill="#355D4B" opacity=".2"/><path d="M310 628V651" stroke="#8A7253" stroke-width="6"/><circle cx="310" cy="620" r="22" fill="#73937A"/><ellipse cx="813" cy="679" rx="19" ry="8" fill="#355D4B" opacity=".2"/><path d="M813 659V682" stroke="#8A7253" stroke-width="6"/><circle cx="813" cy="651" r="22" fill="#73937A"/><ellipse cx="73" cy="485" rx="19" ry="8" fill="#355D4B" opacity=".2"/><path d="M73 465V488" stroke="#8A7253" stroke-width="6"/><circle cx="73" cy="457" r="22" fill="#73937A"/><text x="912" y="163" fill="#647C75" font-family="system-ui,sans-serif" font-size="13" font-weight="700">TODAY</text><text x="912" y="199" fill="#183943" font-family="system-ui,sans-serif" font-size="23" font-weight="700">Your place is here.</text><rect x="906" y="240" width="242" height="91" rx="14" fill="#F0EADF" stroke="none"/><text x="920" y="271" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Reading garden</text><text x="920" y="304" fill="#387E77" font-family="system-ui,sans-serif" font-size="15" font-weight="400">Check in</text><rect x="906" y="348" width="242" height="91" rx="14" fill="#F0EADF" stroke="none"/><text x="920" y="379" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">A room of your own</text><text x="920" y="412" fill="#387E77" font-family="system-ui,sans-serif" font-size="15" font-weight="400">Continue decorating</text><rect x="906" y="456" width="242" height="91" rx="14" fill="#F0EADF" stroke="none"/><text x="920" y="487" fill="#183943" font-family="system-ui,sans-serif" font-size="17" font-weight="650">Library chapter</text><text x="920" y="520" fill="#387E77" font-family="system-ui,sans-serif" font-size="15" font-weight="400">Meet Mara</text><text x="912" y="615" fill="#60746F" font-family="system-ui,sans-serif" font-size="14" font-weight="400">Every building opens a room.</text><text x="912" y="644" fill="#60746F" font-family="system-ui,sans-serif" font-size="14" font-weight="400">Every room has useful objects.</text><text x="912" y="690" fill="#183943" font-family="system-ui,sans-serif" font-size="14" font-weight="600">Hub  ·  Rooms  ·  Object list</text></svg>

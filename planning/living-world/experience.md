@@ -1,5 +1,8 @@
 # Experience and art direction
 
+> Supporting pre-revamp design. The [selected 2026-11-17 design](../product-revamp/design.md) supersedes product composition and cosmetic limits; exact retained requirements are assigned by the current queue and scope ledger.
+
+
 ## Creative thesis
 
 A miniature coastal settlement becomes recognizably yours through the things you

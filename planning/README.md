@@ -11,11 +11,12 @@ the default priority when the user has not selected a task.
 
 ## Active product specifications
 
-[Living World](living-world/README.md) / [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304)
-defines the selected Town/World/Pixels expansion: beautiful coastal scenes,
-meaningful interaction and informative dated memories. Read its scope reconciliation
-for retained Town/Health/Hub commitments. PLACE-02–14 are the remaining
-implementation packets in the same queue.
+[Personal workspace and Town revamp](product-revamp/README.md) /
+[#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304) defines the selected
+stylized suite, direct-selection 2.5D Town, all game systems, complete workouts plus
+PRs and dated Immich/Obsidian memories. Read its design, acceptance and small issue
+map; the same execution queue owns priority. Former large PLACE/Health/Town packets
+retain requirements as scope trackers, not a competing backlog.
 
 ## Discovery designs
 
@@ -33,6 +34,7 @@ and prerequisite proof are in the [completion archive](implementation/completed/
 - [Development practices](technical-debt/feature-addition-playbook.md) explains feature recipes.
 - [Technical-debt review](technical-debt/README.md) retains original TD-00–TD-39 rationale.
 - [Completed suite remediation](suite-experience-remediation/README.md) links its immutable acceptance and merge evidence.
+- [Earlier Living World design](living-world/README.md) preserves source/acceptance evidence whose presentation is superseded by the selected revamp.
 - [Historical planning snapshot](https://github.com/Vivekpsps3/vivek-monorepo/tree/5bc07c2aab4345446f408d6e331cd1bef193f4d6/planning) preserves the superseded product brief and dated roadmap, frontend and code-growth reviews.
 
 Historical records do not establish current priority, readiness or completion.

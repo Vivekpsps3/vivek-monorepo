@@ -1,0 +1,322 @@
+{
+  "purpose": "Discovery only; synthetic data; no implementation or production validation",
+  "date": "2026-11-17",
+  "source_head": "81280c15ec00dff233c7c47ffd537428a989bcce",
+  "working_tree_note": "Included pre-existing uncommitted World edits; these were left untouched",
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800,
+      "finance_holdings": {
+        "heading": {
+          "text": "Holdings",
+          "y": 547,
+          "height": 25.5
+        },
+        "note": "Phone uses an inner scroll container; document height is not total holdings height"
+      },
+      "asserted_observations": [
+        {
+          "name": "media-apparent-duplicate",
+          "savedAlbumRecords": 1,
+          "visibleAlbumLinks": 2
+        },
+        {
+          "name": "media-impossible-filter",
+          "kind": "book",
+          "state": "following",
+          "visibleItems": 0
+        },
+        {
+          "name": "pageerrors",
+          "errors": []
+        }
+      ],
+      "surveyed_pages": [
+        {
+          "name": "media-library",
+          "url_path": "/media/library",
+          "document_width": 1280,
+          "document_height": 822
+        },
+        {
+          "name": "media-expanded",
+          "url_path": "/media/library?expanded=4",
+          "document_width": 1280,
+          "document_height": 1049
+        },
+        {
+          "name": "media-books",
+          "url_path": "/media/library?kind=book&sort=activity",
+          "document_width": 1280,
+          "document_height": 801
+        },
+        {
+          "name": "travel-new",
+          "url_path": "/travel/trips/new",
+          "document_width": 1280,
+          "document_height": 833
+        },
+        {
+          "name": "travel-flight",
+          "url_path": "/travel/trips/new",
+          "document_width": 1280,
+          "document_height": 833
+        },
+        {
+          "name": "town-empty",
+          "url_path": "/town",
+          "document_width": 1280,
+          "document_height": 800
+        },
+        {
+          "name": "town",
+          "url_path": "/town",
+          "document_width": 1280,
+          "document_height": 957
+        },
+        {
+          "name": "pixels-day",
+          "url_path": "/pixels?year=2026&day=2026-08-15",
+          "document_width": 1280,
+          "document_height": 1284
+        },
+        {
+          "name": "world-list",
+          "url_path": "/town/world?day=2026-08-15&week=2026-08-10",
+          "document_width": 1280,
+          "document_height": 6671
+        },
+        {
+          "name": "world",
+          "url_path": "/town/world?day=2026-08-15&week=2026-08-10",
+          "document_width": 1280,
+          "document_height": 1637
+        },
+        {
+          "name": "hub",
+          "url_path": "/hub",
+          "document_width": 1280,
+          "document_height": 1431
+        },
+        {
+          "name": "hub-agenda",
+          "url_path": "/hub/agenda",
+          "document_width": 1280,
+          "document_height": 878
+        },
+        {
+          "name": "travel-home",
+          "url_path": "/travel",
+          "document_width": 1280,
+          "document_height": 906
+        },
+        {
+          "name": "travel-trip",
+          "url_path": "/travel/trips/3",
+          "document_width": 1280,
+          "document_height": 1855
+        },
+        {
+          "name": "travel-calendar",
+          "url_path": "/travel/calendar?month=2026-11",
+          "document_width": 1280,
+          "document_height": 801
+        },
+        {
+          "name": "travel-pto",
+          "url_path": "/travel/pto",
+          "document_width": 1280,
+          "document_height": 1819
+        },
+        {
+          "name": "media-now",
+          "url_path": "/media",
+          "document_width": 1280,
+          "document_height": 801
+        },
+        {
+          "name": "media-search",
+          "url_path": "/media/search",
+          "document_width": 1280,
+          "document_height": 801
+        },
+        {
+          "name": "media-calendar",
+          "url_path": "/media/calendar",
+          "document_width": 1280,
+          "document_height": 801
+        },
+        {
+          "name": "media-add",
+          "url_path": "/media/add",
+          "document_width": 1280,
+          "document_height": 801
+        },
+        {
+          "name": "settings",
+          "url_path": "/settings/account",
+          "document_width": 1280,
+          "document_height": 833
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "finance_holdings": {
+        "heading": {
+          "text": "Holdings",
+          "y": 694,
+          "height": 25.5
+        },
+        "note": "Phone uses an inner scroll container; document height is not total holdings height"
+      },
+      "asserted_observations": [
+        {
+          "name": "media-apparent-duplicate",
+          "savedAlbumRecords": 1,
+          "visibleAlbumLinks": 2
+        },
+        {
+          "name": "media-impossible-filter",
+          "kind": "book",
+          "state": "following",
+          "visibleItems": 0
+        },
+        {
+          "name": "pageerrors",
+          "errors": []
+        }
+      ],
+      "surveyed_pages": [
+        {
+          "name": "media-library",
+          "url_path": "/media/library",
+          "document_width": 390,
+          "document_height": 1461
+        },
+        {
+          "name": "media-expanded",
+          "url_path": "/media/library?expanded=4",
+          "document_width": 390,
+          "document_height": 1720
+        },
+        {
+          "name": "media-books",
+          "url_path": "/media/library?kind=book&sort=activity",
+          "document_width": 390,
+          "document_height": 1052
+        },
+        {
+          "name": "travel-new",
+          "url_path": "/travel/trips/new",
+          "document_width": 390,
+          "document_height": 956
+        },
+        {
+          "name": "travel-flight",
+          "url_path": "/travel/trips/new",
+          "document_width": 390,
+          "document_height": 956
+        },
+        {
+          "name": "town-empty",
+          "url_path": "/town",
+          "document_width": 390,
+          "document_height": 844
+        },
+        {
+          "name": "town",
+          "url_path": "/town",
+          "document_width": 390,
+          "document_height": 1326
+        },
+        {
+          "name": "pixels-day",
+          "url_path": "/pixels?year=2026&day=2026-08-15",
+          "document_width": 390,
+          "document_height": 1123
+        },
+        {
+          "name": "world-list",
+          "url_path": "/town/world?day=2026-08-15&week=2026-08-10",
+          "document_width": 390,
+          "document_height": 5985
+        },
+        {
+          "name": "world",
+          "url_path": "/town/world?day=2026-08-15&week=2026-08-10",
+          "document_width": 390,
+          "document_height": 2067
+        },
+        {
+          "name": "hub",
+          "url_path": "/hub",
+          "document_width": 390,
+          "document_height": 1747
+        },
+        {
+          "name": "hub-agenda",
+          "url_path": "/hub/agenda",
+          "document_width": 390,
+          "document_height": 1026
+        },
+        {
+          "name": "travel-home",
+          "url_path": "/travel",
+          "document_width": 390,
+          "document_height": 845
+        },
+        {
+          "name": "travel-trip",
+          "url_path": "/travel/trips/3",
+          "document_width": 390,
+          "document_height": 2026
+        },
+        {
+          "name": "travel-calendar",
+          "url_path": "/travel/calendar?month=2026-11",
+          "document_width": 390,
+          "document_height": 845
+        },
+        {
+          "name": "travel-pto",
+          "url_path": "/travel/pto",
+          "document_width": 390,
+          "document_height": 3110
+        },
+        {
+          "name": "media-now",
+          "url_path": "/media",
+          "document_width": 390,
+          "document_height": 845
+        },
+        {
+          "name": "media-search",
+          "url_path": "/media/search",
+          "document_width": 390,
+          "document_height": 855
+        },
+        {
+          "name": "media-calendar",
+          "url_path": "/media/calendar",
+          "document_width": 390,
+          "document_height": 845
+        },
+        {
+          "name": "media-add",
+          "url_path": "/media/add",
+          "document_width": 390,
+          "document_height": 845
+        },
+        {
+          "name": "settings",
+          "url_path": "/settings",
+          "document_width": 390,
+          "document_height": 844
+        }
+      ]
+    }
+  ]
+}

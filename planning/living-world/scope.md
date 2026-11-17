@@ -1,51 +1,39 @@
 # Scope reconciliation and retained commitments
 
-The owner selected a substantial Town/Pixels/World experience extension on
-2026-11-11, following the source-based creative critique. This document supersedes
-historical “maintenance only” recommendations for future product scope; it does
-not invalidate the original deliveries or claim their regressions are unresolved.
-Live issue links and packet numbers are indexed in the execution queue.
+The 2026-11-17 owner selected the [full suite/Town design](../product-revamp/design.md).
+It supersedes the former separate Town/World/Pixels composition and limited cosmetic
+catalog. The single queue and exact small packets own execution; this is a scope ledger.
 
-| Existing scope | Treatment | New plan relationship |
-| --- | --- | --- |
-| Pixels #100, World #102 | Keep closed as historical delivered scope | new Living World parent owns experience expansion; do not reopen or rewrite original completion |
-| Town #81 / TOWN-01 | Retain merged harness evidence | all new journeys use that harness; no second wrapper |
-| TOWN-02 passive credits | Retain all dates, caps, reversal, source and query/performance requirements | factual prerequisite for source-driven changes; PLACE-02 documents provenance differences |
-| TOWN-03 Treasury/Hub | Retain Finance-only budget weeks and immediate lock clearing | scene and World must consume the same correct approved Town presentation |
-| TOWN-04 interaction audit | Retain every finding/survivor and real regression evidence | new feedback/scene cannot replace or waive this audit |
-| TOWN-05 Hall/appearance | Retain route, authoritative rules, existing edit/history links and device season setting | owns appearance persistence; PLACE-01 defines coherent art, PLACE-04 consumes it |
-| TOWN-06 / Workspace #93 review pin | Retain encrypted review, limits/revisions/recovery/one editor | PLACE-13 links the editor only; no recap text copy |
-| TOWN-07 composite ownership | Retain preserving schema migration | PLACE-08 coordinates schema head; no rewriting old migration |
-| Health #90 / HEALTH-01–03 | Retain private Clinic/Gym and stage-only integration | new scene shows slots/stages honestly; early garden loop does not wait on all Health delivery |
-| UX-01/02/04 | Retain merged route/landmark/directional evidence | new screens must preserve these results |
-| UX-03 #261 | Retain compact accessible Hub strip | PLACE-13 adopts its result without duplicate Hub miniature work |
-| UX-05 #263 | Retain phone date/legend orientation | PLACE-07 extends meaning/detail after this focused fix |
-| SAFE-04/05 | Retain lifecycle and bounded source work | consumers reuse adapters rather than creating another invalidation system |
-| CON-02/03 and #197 | Retain route/storage ownership contracts | URL/layout/review changes use actual applicable outcomes |
-| Sidequests #194 | Remains independent selected discovery, no new implementation here | ornament/memento catalog cannot absorb its stamps or invent a universal reward economy |
-| Cards #195 and other product/engineering leaves | Unchanged | no new prerequisites, reordered unrelated tasks or accidental scope retirement |
+| Existing commitment | Current destination and treatment |
+| --- | --- |
+| Closed Pixels/World original deliveries #100/#102 | Remain closed historical proof; do not reopen as new unfinished work |
+| TOWN-01 harness | Reuse existing isolated server/worker/clock/browser fixtures |
+| TOWN-02 passive credits | Preserve source dates, caps, reversal, query limits and 600ms p50 gate in PIX/SCENE/TUX leaves |
+| TOWN-03 Treasury | Preserve Finance-only budget weeks, approved coarse stages and immediate lock clearing; rooms use browser Finance owner |
+| TOWN-04 interaction findings | All 20 findings/31 survivors retained in SCENE/QA leaves with exact source-ID disposition |
+| TOWN-05 Hall/appearance | SCENE-06/08 retain authoritative rules, editor links, owner/device seasons and preview |
+| TOWN-06 reflection / #93 link | SCENE-07 retains one encrypted editor, week identity, revisions, recovery and one Hub link; Obsidian reference is optional |
+| TOWN-07 relational ownership | Unchanged preserving migration leaf; new layouts depend on it |
+| HEALTH-01–03 / #90 | HEAL/FIT/ROOM leaves retain six metric kinds, PRs, settled names, privacy, units and stage-only exterior; full sessions are added explicitly |
+| Merged UX/SAFE/CON outcomes | Preserve actual routing/landmarks, bounded work, invalidation, private lifecycle, source and storage ownership |
+| PLACE dated facts and navigation | PIX/NAV/SCENE/MERGE leaves preserve identity/provenance, learning annotations, Year/Life spans, old URLs, Back/reload and accessible lists |
+| PLACE layout/milestones | HOME/GAME leaves expand bounded layout and game-only economy; three legacy milestones/nine variants still derive from canonical eligibility with no life-XP change |
+| Media/trip keepsakes | SCENE-09/TUX-10 and culture/terminal rooms retain allowlists, source dates, planned distinction, reversal and bounded reads |
+| Residents/ambience | Authored GAME/SCENE leaves expand purposeful interaction while preserving mute/reduced-motion, private data isolation and zero hidden work |
+| Release acceptance | QA leaves retain F0–F5, actual interaction/art/privacy/performance/migration/rollback evidence; none claims activation from a plan |
+| Cards/Sidequests proposals | Cards discovery unchanged; neither standalone implementation selected; Town game collectibles do not create Sidequests records |
+| Operations/security completed work | Preserve merge/evidence registry; remaining OPS-05/06 still require real activation/restore proof |
 
-## What replaces what
+## Explicit owner-selected presentation changes
 
-| Existing surface | Planned replacement | Acceptance that survives |
-| --- | --- | --- |
-| Town tile grid scene | bounded composed garden/civic scene, PLACE-04 | all lot actions/names, Today, responsive list and current facts |
-| Stage-only response | commit-bound specific feedback, PLACE-05 | Undo, failure, cadence, day and owner isolation |
-| World center-only activation | object inspector, PLACE-06 | camera keyboard, dated list, URL, deterministic engine |
-| Pixel volume-only explanation | composition/provenance and learning annotations, PLACE-02/07 | original scores, modes, birthday privacy and numerical tables |
-| Scattered route entry context | validated dated passage and compact arrivals, PLACE-03/13 | existing URLs, deep reload, Back/Forward and practical navigation |
+Direct building/object selection with isometric rooms replaces avatar alternatives,
+the eleven-tile grid and standalone World navigation. Six existing habit lots and
+functional Health entrances remain usable. Four Home rooms and bounded exterior
+anchors replace twelve-anchor-only decoration; private source bindings use the vault
+instead of public layout. Game-only currency, quests and relationships intentionally
+replace the old no-economy boundary without changing life XP or private-data rules.
 
-## Planning cleanup rules for this amendment
-
-Add the new parent and PLACE packets to the existing queue, leaving unrelated
-relative priority intact. Within this owner-selected workstream use queue order
-and dependencies; do not add ready tables in design documents. Existing leaves
-receive concise scope-boundary references, not a second copied specification.
-Update roadmap #134 and the relevant live parent/leaf bodies from fresh snapshots;
-preserve intervening edits and completed evidence. Historical reports receive a
-short forward pointer; their original findings remain historical evidence.
-
-No task is closed by this amendment. No generated evidence file says tests ran
-before they do. Local planning links are not claimed available on GitHub main
-until the planning changes are merged. The live new parent and leaves carry a
-self-contained scope and acceptance even while local source links await merge.
+The [requirement ledger](../product-revamp/requirements.json) preserves all 56 original
+acceptance rows with one accountable child, supporting children and exact amendments.
+Original full packets/steps/deletion contracts remain under `implementation/scopes/`.
+Scope trackers stay open; split/replaced presentation never means implementation complete.

@@ -1,6 +1,6 @@
 {
-  "base_sha": "2af4f04c4a47ea6831504f5431ce5c316a6e6b98",
-  "validated_on": "2026-11-16",
+  "base_sha": "18607fe30175a0b152f2d9fdaadef00828e89720",
+  "validated_on": "2026-11-17",
   "roadmap_issue": 134,
   "parents": [
     {
@@ -25,158 +25,400 @@
     },
     {
       "number": 304,
-      "title": "Living World: make Town, World and Pixels beautiful, interactive and informative"
+      "title": "Personal world: stylized suite, direct-selection Town, private Health and dated memories"
+    },
+    {
+      "number": 252,
+      "title": "Close every retained Town interaction finding and mutation survivor \u2014 retained scope tracker"
+    },
+    {
+      "number": 253,
+      "title": "Add a small Town Hall using existing progress/rules and bounded appearance settings \u2014 retained scope tracker"
+    },
+    {
+      "number": 254,
+      "title": "Deliver encrypted weekly reflection and one Hub link through the existing vault \u2014 retained scope tracker"
+    },
+    {
+      "number": 256,
+      "title": "Build the complete private Clinic with shared units and entry-dialog shell \u2014 retained scope tracker"
+    },
+    {
+      "number": 257,
+      "title": "Build complete Gym PR editing and apply all settled badge names \u2014 retained scope tracker"
+    },
+    {
+      "number": 258,
+      "title": "Integrate stage-only Clinic/Gym lots and Today rows without changing Town XP \u2014 retained scope tracker"
+    },
+    {
+      "number": 306,
+      "title": "Expose bounded dated facts and learning annotations with honest provenance \u2014 retained scope tracker"
+    },
+    {
+      "number": 307,
+      "title": "Connect exact-date visits and reliable return across Town, World and Pixels \u2014 retained scope tracker"
+    },
+    {
+      "number": 308,
+      "title": "Replace the Town tile scene with a composed interactive coastal garden \u2014 retained scope tracker"
+    },
+    {
+      "number": 309,
+      "title": "Make confirmed habit actions produce specific, reversible garden feedback \u2014 retained scope tracker"
+    },
+    {
+      "number": 310,
+      "title": "Make World objects inspectable and unrecorded landscapes welcoming \u2014 retained scope tracker"
+    },
+    {
+      "number": 311,
+      "title": "Turn Pixels into an informative, orientable memory atlas \u2014 retained scope tracker"
+    },
+    {
+      "number": 312,
+      "title": "Persist and edit a bounded personal Town layout with revision safety \u2014 retained scope tracker"
+    },
+    {
+      "number": 313,
+      "title": "Offer bounded milestone ornaments through existing progression \u2014 retained scope tracker"
+    },
+    {
+      "number": 314,
+      "title": "Bring completed Media home as source-linked library keepsakes \u2014 retained scope tracker"
+    },
+    {
+      "number": 315,
+      "title": "Make trips inspectable souvenirs with truthful spans and destinations \u2014 retained scope tracker"
+    },
+    {
+      "number": 316,
+      "title": "Give residents purposeful authored vignettes and restrained ambience \u2014 retained scope tracker"
+    },
+    {
+      "number": 317,
+      "title": "Unify compact Hub arrivals, dated navigation and factual recaps \u2014 retained scope tracker"
+    },
+    {
+      "number": 318,
+      "title": "Prove integrated beauty, interaction, information and release readiness \u2014 retained scope tracker"
     }
   ],
   "tasks": [
     {
-      "id": "HUB-01",
-      "title": "Finish coherent account/sign-in/invite/settings UX with real data links",
+      "id": "STYLE-01",
+      "title": "Apply the coastal palette, typography and day/night tokens",
       "parent_issues": [
-        93
+        304
       ],
       "kind": "implementation",
-      "issue": 243,
-      "dependencies": [
-        "UX-01",
-        "SEC-04",
-        "SEC-05",
-        "SEC-06"
-      ],
+      "issue": 382,
+      "dependencies": [],
       "conflict_groups": [
-        "account-settings",
-        "auth-forms",
-        "private-shell"
+        "shared-styles",
+        "shared-controls"
       ],
       "verification_profiles": [
-        "web_front",
-        "server_back"
+        "docs",
+        "shared_front"
       ]
     },
     {
-      "id": "HUB-05",
-      "title": "Finish Quick add, shortcut help and owner-appropriate workspace affordances",
+      "id": "STYLE-02",
+      "title": "Style shared buttons, fields, menus and dialogs",
       "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 383,
+      "dependencies": [
+        "STYLE-01"
+      ],
+      "conflict_groups": [
+        "shared-styles",
+        "shared-controls"
+      ],
+      "verification_profiles": [
+        "docs",
+        "shared_front"
+      ]
+    },
+    {
+      "id": "STYLE-03",
+      "title": "Style tables, collection cards and charts with readable dense data",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 384,
+      "dependencies": [
+        "STYLE-01"
+      ],
+      "conflict_groups": [
+        "shared-styles",
+        "shared-controls"
+      ],
+      "verification_profiles": [
+        "docs",
+        "shared_front"
+      ]
+    },
+    {
+      "id": "STYLE-04",
+      "title": "Register bounded scene assets and migrate one selectable composition",
+      "parent_issues": [
+        304,
+        308
+      ],
+      "kind": "implementation",
+      "issue": 385,
+      "dependencies": [
+        "STYLE-01"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "NAV-01",
+      "title": "Expose direct app destinations in the suite shell",
+      "parent_issues": [
+        304,
         93
       ],
       "kind": "implementation",
-      "issue": 247,
+      "issue": 386,
       "dependencies": [
-        "HUB-02",
-        "HUB-04"
+        "STYLE-02"
       ],
       "conflict_groups": [
-        "private-shell",
-        "hub-main",
-        "suite-shortcuts"
+        "private-routes",
+        "town-ui"
       ],
       "verification_profiles": [
-        "web_front",
-        "server_back",
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "NAV-02",
+      "title": "Preserve source context through editors, unlock and browser history",
+      "parent_issues": [
+        304,
+        307,
+        317,
+        93
+      ],
+      "kind": "implementation",
+      "issue": 387,
+      "dependencies": [
+        "NAV-01"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "NAV-03",
+      "title": "Make the compact practical Hub the default arrival",
+      "parent_issues": [
+        304,
+        317,
+        93
+      ],
+      "kind": "implementation",
+      "issue": 388,
+      "dependencies": [
+        "NAV-01",
+        "NAV-02",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "NAV-04",
+      "title": "Unify account, appearance and connector settings navigation",
+      "parent_issues": [
+        304,
+        93
+      ],
+      "kind": "implementation",
+      "issue": 389,
+      "dependencies": [
+        "NAV-02",
+        "STYLE-02"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FUX-01",
+      "title": "Make Holdings compact and immediately useful",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 390,
+      "dependencies": [
+        "NAV-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
         "finance_front"
       ]
     },
     {
-      "id": "HUB-06",
-      "title": "Deliver scoped revocable Travel/Media calendar subscriptions",
+      "id": "FUX-02",
+      "title": "Simplify account, asset and debt browsing and editing",
       "parent_issues": [
-        93
+        304
       ],
       "kind": "implementation",
-      "issue": 248,
+      "issue": 391,
       "dependencies": [
-        "HUB-03",
-        "CON-02"
+        "NAV-01",
+        "STYLE-03"
       ],
       "conflict_groups": [
-        "account-settings",
-        "calendar-feeds",
-        "schema-head",
-        "travel-summary",
-        "media-summary"
+        "finance-ui",
+        "finance-public-api"
       ],
       "verification_profiles": [
-        "web_front",
-        "server_back",
-        "travel_back",
-        "media_back",
-        "schema"
+        "docs",
+        "finance_front"
       ]
     },
     {
-      "id": "TOWN-04",
-      "title": "Close every retained Town interaction finding and mutation survivor",
+      "id": "FUX-03",
+      "title": "Make Activity filters, row actions and dated entry consistent",
       "parent_issues": [
-        81
+        304
       ],
       "kind": "implementation",
-      "issue": 252,
+      "issue": 392,
       "dependencies": [
-        "TOWN-01",
-        "TOWN-03"
+        "NAV-02",
+        "STYLE-03"
       ],
       "conflict_groups": [
-        "town-main",
-        "town-dialogs",
-        "town-today",
-        "town-browser"
+        "finance-ui",
+        "finance-public-api"
       ],
       "verification_profiles": [
-        "web_front",
-        "server_back"
+        "docs",
+        "finance_front"
       ]
     },
     {
-      "id": "TOWN-05",
-      "title": "Add a small Town Hall using existing progress/rules and bounded appearance settings",
+      "id": "FUX-04",
+      "title": "Organize bills and subscriptions in one due-date workspace",
       "parent_issues": [
-        81
+        304
       ],
       "kind": "implementation",
-      "issue": 253,
+      "issue": 393,
       "dependencies": [
-        "TOWN-04",
-        "CON-02"
+        "NAV-01",
+        "STYLE-03"
       ],
       "conflict_groups": [
-        "town-main",
-        "town-hall",
-        "private-routes"
+        "finance-ui",
+        "finance-public-api"
       ],
       "verification_profiles": [
-        "web_front",
-        "server_back"
+        "docs",
+        "finance_front"
       ]
     },
     {
-      "id": "TOWN-06",
-      "title": "Deliver encrypted weekly reflection and one Hub link through the existing vault",
+      "id": "FUX-05",
+      "title": "Clarify pay, compensation and income history",
       "parent_issues": [
-        81,
-        93
+        304
       ],
       "kind": "implementation",
-      "issue": 254,
+      "issue": 394,
       "dependencies": [
-        "TOWN-05",
-        "SAFE-03",
-        "SAFE-04",
-        "CON-03",
-        "SEC-05",
-        "SEC-06"
+        "NAV-01",
+        "STYLE-03"
       ],
       "conflict_groups": [
-        "town-hall",
-        "town-reviews",
-        "vault-collections",
-        "hub-main",
-        "private-routes"
+        "finance-ui",
+        "finance-public-api"
       ],
       "verification_profiles": [
-        "web_front",
-        "finance_front",
-        "finance_back",
-        "server_back"
+        "docs",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FUX-06",
+      "title": "Give every planning tool a direct styled destination",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 395,
+      "dependencies": [
+        "NAV-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FUX-07",
+      "title": "Make imports, receipts and recovery discoverable in context",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 396,
+      "dependencies": [
+        "NAV-04",
+        "STYLE-02"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
       ]
     },
     {
@@ -198,81 +440,6 @@
       "verification_profiles": [
         "server_back",
         "schema"
-      ]
-    },
-    {
-      "id": "HEALTH-01",
-      "title": "Build the complete private Clinic with shared units and entry-dialog shell",
-      "parent_issues": [
-        90
-      ],
-      "kind": "implementation",
-      "issue": 256,
-      "dependencies": [
-        "SAFE-02",
-        "SAFE-03",
-        "SAFE-04",
-        "TOWN-01",
-        "CON-02",
-        "SEC-05",
-        "SEC-06"
-      ],
-      "conflict_groups": [
-        "health-store",
-        "health-clinic",
-        "health-units-dialog",
-        "private-routes"
-      ],
-      "verification_profiles": [
-        "web_front",
-        "finance_front",
-        "server_back"
-      ]
-    },
-    {
-      "id": "HEALTH-02",
-      "title": "Build complete Gym PR editing and apply all settled badge names",
-      "parent_issues": [
-        90
-      ],
-      "kind": "implementation",
-      "issue": 257,
-      "dependencies": [
-        "HEALTH-01"
-      ],
-      "conflict_groups": [
-        "health-gym",
-        "health-units-dialog",
-        "health-store",
-        "private-routes"
-      ],
-      "verification_profiles": [
-        "web_front",
-        "finance_front",
-        "server_back"
-      ]
-    },
-    {
-      "id": "HEALTH-03",
-      "title": "Integrate stage-only Clinic/Gym lots and Today rows without changing Town XP",
-      "parent_issues": [
-        90
-      ],
-      "kind": "implementation",
-      "issue": 258,
-      "dependencies": [
-        "HEALTH-02",
-        "TOWN-03"
-      ],
-      "conflict_groups": [
-        "town-main",
-        "town-lots",
-        "town-today",
-        "health-stage-facade"
-      ],
-      "verification_profiles": [
-        "web_front",
-        "server_back"
       ]
     },
     {
@@ -333,320 +500,2208 @@
       ]
     },
     {
-      "id": "PLACE-02",
-      "title": "Expose bounded dated facts and learning annotations with honest provenance",
+      "id": "MUX-01",
+      "title": "Separate the library into visible media-type collections",
       "parent_issues": [
         304
       ],
       "kind": "implementation",
-      "issue": 306,
+      "issue": 397,
       "dependencies": [
-        "PLACE-01",
-        "TOWN-02",
-        "SAFE-05"
+        "NAV-01",
+        "STYLE-03"
       ],
       "conflict_groups": [
-        "pixels-year",
-        "town-read-service",
-        "world-read-service"
-      ],
-      "verification_profiles": [
-        "web_front",
-        "server_back"
-      ]
-    },
-    {
-      "id": "PLACE-03",
-      "title": "Connect exact-date visits and reliable return across Town, World and Pixels",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 307,
-      "dependencies": [
-        "PLACE-01",
-        "CON-02"
-      ],
-      "conflict_groups": [
-        "private-routes",
-        "world-ui",
-        "pixels-year",
-        "pixels-life"
-      ],
-      "verification_profiles": [
-        "web_front",
-        "server_back"
-      ]
-    },
-    {
-      "id": "PLACE-04",
-      "title": "Replace the Town tile scene with a composed interactive coastal garden",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 308,
-      "dependencies": [
-        "PLACE-01",
-        "TOWN-03",
-        "TOWN-04",
-        "TOWN-05"
-      ],
-      "conflict_groups": [
-        "town-main",
-        "town-lots",
-        "world-ui",
-        "town-hall"
-      ],
-      "verification_profiles": [
-        "web_front",
-        "server_back"
-      ]
-    },
-    {
-      "id": "PLACE-05",
-      "title": "Make confirmed habit actions produce specific, reversible garden feedback",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 309,
-      "dependencies": [
-        "PLACE-03",
-        "PLACE-04"
-      ],
-      "conflict_groups": [
-        "town-main",
-        "town-today",
-        "town-browser"
-      ],
-      "verification_profiles": [
-        "web_front"
-      ]
-    },
-    {
-      "id": "PLACE-06",
-      "title": "Make World objects inspectable and unrecorded landscapes welcoming",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 310,
-      "dependencies": [
-        "PLACE-02",
-        "PLACE-03",
-        "PLACE-05",
-        "UX-04"
-      ],
-      "conflict_groups": [
-        "world-ui",
-        "world-render",
-        "world-camera"
-      ],
-      "verification_profiles": [
-        "web_front",
-        "server_back"
-      ]
-    },
-    {
-      "id": "PLACE-07",
-      "title": "Turn Pixels into an informative, orientable memory atlas",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 311,
-      "dependencies": [
-        "PLACE-02",
-        "PLACE-03",
-        "PLACE-06",
-        "UX-05"
-      ],
-      "conflict_groups": [
-        "pixels-year",
-        "pixels-life",
-        "pixels-grid"
-      ],
-      "verification_profiles": [
-        "web_front"
-      ]
-    },
-    {
-      "id": "PLACE-08",
-      "title": "Persist and edit a bounded personal Town layout with revision safety",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 312,
-      "dependencies": [
-        "PLACE-04",
-        "TOWN-07",
-        "CON-03"
-      ],
-      "conflict_groups": [
-        "town-main",
-        "town-models",
-        "town-writes",
-        "schema-head"
-      ],
-      "verification_profiles": [
-        "web_front",
-        "server_back",
-        "schema"
-      ]
-    },
-    {
-      "id": "PLACE-09",
-      "title": "Offer bounded milestone ornaments through existing progression",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 313,
-      "dependencies": [
-        "PLACE-02",
-        "PLACE-05",
-        "PLACE-08"
-      ],
-      "conflict_groups": [
-        "town-main",
-        "town-lots",
-        "town-read-service"
-      ],
-      "verification_profiles": [
-        "web_front",
-        "server_back"
-      ]
-    },
-    {
-      "id": "PLACE-10",
-      "title": "Bring completed Media home as source-linked library keepsakes",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 314,
-      "dependencies": [
-        "PLACE-02",
-        "PLACE-06",
-        "PLACE-09",
-        "TOWN-02"
-      ],
-      "conflict_groups": [
-        "town-main",
-        "world-read-service",
+        "media-collections",
         "media-records"
       ],
       "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "MUX-02",
+      "title": "Group saved music by canonical artist identity without duplicate membership",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 398,
+      "dependencies": [],
+      "conflict_groups": [
+        "media-library-api",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_back",
+        "server_back"
+      ]
+    },
+    {
+      "id": "MUX-03",
+      "title": "Build artist, album and song collection views",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 399,
+      "dependencies": [
+        "MUX-01",
+        "MUX-02",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "MUX-04",
+      "title": "Style movie and series collections with useful progress",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 400,
+      "dependencies": [
+        "MUX-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "MUX-05",
+      "title": "Build readable book shelves and reading actions",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 401,
+      "dependencies": [
+        "MUX-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "MUX-06",
+      "title": "Style tracked games as a distinct collection",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 402,
+      "dependencies": [
+        "MUX-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "MUX-07",
+      "title": "Unify provider search and manual Media capture",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 403,
+      "dependencies": [
+        "MUX-01",
+        "STYLE-02"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "MUX-08",
+      "title": "Simplify detail editing and restore the exact collection on return",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 404,
+      "dependencies": [
+        "MUX-01",
+        "NAV-02"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "MUX-09",
+      "title": "Style Now and Calendar without duplicating their saved queries",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 405,
+      "dependencies": [
+        "MUX-04",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "TUX-01",
+      "title": "Verify advance-flight schedule coverage and select the adapter contract",
+      "parent_issues": [
+        304
+      ],
+      "kind": "discovery",
+      "issue": 406,
+      "dependencies": [],
+      "conflict_groups": [
+        "planning-discovery"
+      ],
+      "verification_profiles": [
+        "docs"
+      ]
+    },
+    {
+      "id": "TUX-02",
+      "title": "Support bounded advance-flight lookup with preserved overrides",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 407,
+      "dependencies": [
+        "TUX-01"
+      ],
+      "conflict_groups": [
+        "travel-provider"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_back",
+        "server_back"
+      ]
+    },
+    {
+      "id": "TUX-03",
+      "title": "Persist incomplete trip drafts without inventing return dates",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 408,
+      "dependencies": [],
+      "conflict_groups": [
+        "schema-head",
+        "travel-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_back",
+        "server_back",
+        "schema"
+      ]
+    },
+    {
+      "id": "TUX-04",
+      "title": "Create trips from flight number and date with review",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 409,
+      "dependencies": [
+        "TUX-02",
+        "TUX-03",
+        "NAV-02",
+        "STYLE-02"
+      ],
+      "conflict_groups": [
+        "travel-forms",
+        "travel-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "TUX-05",
+      "title": "Import flight calendar bookings through an explicit preview",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 410,
+      "dependencies": [
+        "TUX-03",
+        "STYLE-02"
+      ],
+      "conflict_groups": [
+        "travel-forms",
+        "travel-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "TUX-06",
+      "title": "Turn trip detail into a readable contextual itinerary",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 411,
+      "dependencies": [
+        "NAV-02",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "travel-forms",
+        "travel-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "TUX-07",
+      "title": "Style upcoming and past trips with map/text parity",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 412,
+      "dependencies": [
+        "STYLE-03",
+        "NAV-02"
+      ],
+      "conflict_groups": [
+        "travel-forms",
+        "travel-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "TUX-08",
+      "title": "Make PTO forecasts and trip allocations easier to inspect",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 413,
+      "dependencies": [
+        "STYLE-03",
+        "NAV-02"
+      ],
+      "conflict_groups": [
+        "travel-forms",
+        "travel-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "TUX-09",
+      "title": "Reconcile planned costs and posted Finance transactions explicitly",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 414,
+      "dependencies": [
+        "FUX-03",
+        "TUX-06"
+      ],
+      "conflict_groups": [
+        "travel-costs",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "PHOTO-01",
+      "title": "Survey Immich version, reachability, permissions and date visibility",
+      "parent_issues": [
+        304
+      ],
+      "kind": "discovery",
+      "issue": 415,
+      "dependencies": [],
+      "conflict_groups": [
+        "planning-discovery"
+      ],
+      "verification_profiles": [
+        "docs"
+      ]
+    },
+    {
+      "id": "PHOTO-02",
+      "title": "Add owner-scoped Immich connection and revoke/retry controls",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 416,
+      "dependencies": [
+        "PHOTO-01",
+        "NAV-04"
+      ],
+      "conflict_groups": [
+        "connections",
+        "vault-collections"
+      ],
+      "verification_profiles": [
+        "docs",
         "web_front",
         "server_back",
-        "media_back"
+        "finance_front"
       ]
     },
     {
-      "id": "PLACE-11",
-      "title": "Make trips inspectable souvenirs with truthful spans and destinations",
+      "id": "PHOTO-03",
+      "title": "Read a selected Immich day with bounded metadata and thumbnails",
       "parent_issues": [
         304
       ],
       "kind": "implementation",
-      "issue": 315,
+      "issue": 417,
       "dependencies": [
-        "PLACE-02",
-        "PLACE-06",
-        "PLACE-09",
-        "TOWN-02"
+        "PHOTO-02"
       ],
       "conflict_groups": [
-        "town-main",
-        "world-read-service",
-        "travel-summary"
+        "connections",
+        "vault-collections"
       ],
       "verification_profiles": [
+        "docs",
         "web_front",
         "server_back",
-        "travel_back"
+        "finance_front"
       ]
     },
     {
-      "id": "PLACE-12",
-      "title": "Give residents purposeful authored vignettes and restrained ambience",
+      "id": "NOTE-01",
+      "title": "Survey Obsidian vault access, sync and date conventions",
+      "parent_issues": [
+        304
+      ],
+      "kind": "discovery",
+      "issue": 418,
+      "dependencies": [],
+      "conflict_groups": [
+        "planning-discovery"
+      ],
+      "verification_profiles": [
+        "docs"
+      ]
+    },
+    {
+      "id": "NOTE-02",
+      "title": "Connect a read-only selected Obsidian projection safely",
       "parent_issues": [
         304
       ],
       "kind": "implementation",
-      "issue": 316,
+      "issue": 419,
       "dependencies": [
-        "PLACE-04",
-        "PLACE-06",
-        "PLACE-10",
-        "PLACE-11"
+        "NOTE-01",
+        "NAV-04"
       ],
       "conflict_groups": [
-        "town-main",
-        "world-render",
-        "town-hall"
+        "notes-connection",
+        "vault-collections"
       ],
       "verification_profiles": [
-        "web_front"
+        "docs",
+        "web_front",
+        "server_back",
+        "finance_front"
       ]
     },
     {
-      "id": "PLACE-13",
-      "title": "Unify compact Hub arrivals, dated navigation and factual recaps",
+      "id": "NOTE-03",
+      "title": "Resolve dated notes and stable note links across renames",
       "parent_issues": [
         304
       ],
       "kind": "implementation",
-      "issue": 317,
+      "issue": 420,
       "dependencies": [
-        "PLACE-03",
-        "PLACE-07",
-        "PLACE-10",
-        "PLACE-11",
-        "UX-03",
-        "HUB-02"
+        "NOTE-02"
       ],
       "conflict_groups": [
-        "hub-main",
-        "private-shell",
-        "pixels-hub-card",
-        "town-hall"
+        "notes-connection",
+        "vault-collections"
       ],
       "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "PIX-01",
+      "title": "Expose stable dated facts and learning annotations without changing scores",
+      "parent_issues": [
+        304,
+        306
+      ],
+      "kind": "implementation",
+      "issue": 421,
+      "dependencies": [],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
         "web_front",
         "server_back"
       ]
     },
     {
-      "id": "PLACE-14",
-      "title": "Prove integrated beauty, interaction, information and release readiness",
+      "id": "TUX-10",
+      "title": "Expose bounded named trip memories and honest source dates",
+      "parent_issues": [
+        304,
+        315
+      ],
+      "kind": "implementation",
+      "issue": 422,
+      "dependencies": [
+        "TUX-06",
+        "PIX-01"
+      ],
+      "conflict_groups": [
+        "travel-forms",
+        "travel-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "PIX-02",
+      "title": "Build a named daily-memory view with exact source actions",
+      "parent_issues": [
+        304,
+        306,
+        311,
+        317
+      ],
+      "kind": "implementation",
+      "issue": 423,
+      "dependencies": [
+        "PIX-01",
+        "NAV-02",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "PHOTO-04",
+      "title": "Show dated photos in Pixels and open the original asset",
+      "parent_issues": [
+        304,
+        311
+      ],
+      "kind": "implementation",
+      "issue": 424,
+      "dependencies": [
+        "PHOTO-03",
+        "PIX-02"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "NOTE-04",
+      "title": "Display dated note excerpts in Pixels with exact Obsidian open",
+      "parent_issues": [
+        304,
+        311
+      ],
+      "kind": "implementation",
+      "issue": 425,
+      "dependencies": [
+        "NOTE-03",
+        "PIX-02"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "PIX-03",
+      "title": "Style Year and Life as an orientable memory atlas",
+      "parent_issues": [
+        304,
+        311
+      ],
+      "kind": "implementation",
+      "issue": 426,
+      "dependencies": [
+        "PIX-02",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "HEAL-01",
+      "title": "Mount the private Health entry shell with shared units and field errors",
+      "parent_issues": [
+        304,
+        256,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 427,
+      "dependencies": [
+        "STYLE-02",
+        "NAV-02"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "HEAL-02",
+      "title": "Create, edit and delete vital measurements",
+      "parent_issues": [
+        304,
+        256,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 428,
+      "dependencies": [
+        "HEAL-01"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "HEAL-03",
+      "title": "Complete lab-result groups and checkup editing",
+      "parent_issues": [
+        304,
+        256,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 429,
+      "dependencies": [
+        "HEAL-01"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "HEAL-04",
+      "title": "Render latest Health values and bounded measurement history",
+      "parent_issues": [
+        304,
+        256,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 430,
+      "dependencies": [
+        "HEAL-02",
+        "HEAL-03",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FIT-01",
+      "title": "Register versioned private workout exercises, routines and sessions",
+      "parent_issues": [
+        304,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 431,
+      "dependencies": [
+        "HEAL-01"
+      ],
+      "conflict_groups": [
+        "vault-collections",
+        "health-store"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front",
+        "finance_back",
+        "server_back"
+      ]
+    },
+    {
+      "id": "FIT-02",
+      "title": "Persist and resume a revision-aware workout session draft",
+      "parent_issues": [
+        304,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 432,
+      "dependencies": [
+        "FIT-01"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FIT-03",
+      "title": "Log load, reps, bodyweight, time and distance sets",
+      "parent_issues": [
+        304,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 433,
+      "dependencies": [
+        "FIT-02",
+        "STYLE-02"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FIT-04",
+      "title": "Start workouts from routines or a previous session",
+      "parent_issues": [
+        304,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 434,
+      "dependencies": [
+        "FIT-03"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FIT-05",
+      "title": "Combine session-derived bests with editable legacy PRs",
+      "parent_issues": [
+        304,
+        257,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 435,
+      "dependencies": [
+        "FIT-03",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "HEAL-05",
+      "title": "Prove all private Health routes clear and recover through the vault",
+      "parent_issues": [
+        304,
+        256,
+        257,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 436,
+      "dependencies": [
+        "HEAL-04",
+        "FIT-05"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FIT-06",
+      "title": "Apply the twenty settled badge names and separate game medals",
+      "parent_issues": [
+        304,
+        257,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 437,
+      "dependencies": [
+        "FIT-05"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FIT-07",
+      "title": "Add an optional local rest timer with safe session return",
+      "parent_issues": [
+        304,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 438,
+      "dependencies": [
+        "FIT-03",
+        "NAV-04"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "SCENE-01",
+      "title": "Compose scene objects with shared visible and selectable bounds",
+      "parent_issues": [
+        304,
+        308,
+        310,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 439,
+      "dependencies": [
+        "STYLE-04"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "SCENE-02",
+      "title": "Replace the habit tile grid with the six-district Town exterior",
+      "parent_issues": [
+        304,
+        258,
+        308,
+        90,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 440,
+      "dependencies": [
+        "SCENE-01"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "SCENE-03",
+      "title": "Enter layered rooms and inspect useful objects",
+      "parent_issues": [
+        304,
+        308,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 441,
+      "dependencies": [
+        "SCENE-01",
+        "NAV-02"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "SCENE-04",
+      "title": "Keep all habit, Today and history actions usable in the new Town",
+      "parent_issues": [
+        304,
+        252,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 442,
+      "dependencies": [
+        "SCENE-02"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "SCENE-05",
+      "title": "Give committed habit actions specific reversible scene feedback",
+      "parent_issues": [
+        304,
+        252,
+        309,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 443,
+      "dependencies": [
+        "SCENE-04"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "SCENE-06",
+      "title": "Build Hall rules, progress and existing editor links",
+      "parent_issues": [
+        304,
+        253,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 444,
+      "dependencies": [
+        "SCENE-03",
+        "SCENE-04"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "SCENE-07",
+      "title": "Deliver the sole encrypted weekly reflection and one Hub link",
+      "parent_issues": [
+        304,
+        254,
+        317,
+        81,
+        93
+      ],
+      "kind": "implementation",
+      "issue": 445,
+      "dependencies": [
+        "SCENE-06",
+        "NAV-03"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "SCENE-08",
+      "title": "Add owner-specific seasons and restrained scene ambience",
+      "parent_issues": [
+        304,
+        253,
+        316,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 446,
+      "dependencies": [
+        "SCENE-02",
+        "NAV-04"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "SCENE-09",
+      "title": "Derive Media and Travel keepsakes from canonical sources",
+      "parent_issues": [
+        304,
+        306,
+        314,
+        315,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 447,
+      "dependencies": [
+        "PIX-01",
+        "TUX-10",
+        "MUX-02"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "SCENE-10",
+      "title": "Visit an exact past date in Town and return to Pixels",
+      "parent_issues": [
+        304,
+        307,
+        310,
+        317,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 448,
+      "dependencies": [
+        "SCENE-03",
+        "PIX-02"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "HOME-02",
+      "title": "Create the twelve starter and twelve shop cosmetic assets",
+      "parent_issues": [
+        304,
+        313
+      ],
+      "kind": "implementation",
+      "issue": 449,
+      "dependencies": [
+        "STYLE-04"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "HOME-03",
+      "title": "Compose four decoratable Home rooms with useful objects",
       "parent_issues": [
         304
       ],
       "kind": "implementation",
-      "issue": 318,
+      "issue": 450,
       "dependencies": [
-        "PLACE-07",
-        "PLACE-08",
-        "PLACE-09",
-        "PLACE-10",
-        "PLACE-11",
-        "PLACE-12",
-        "PLACE-13"
+        "SCENE-03",
+        "HOME-02"
       ],
       "conflict_groups": [
-        "town-browser",
-        "world-ui",
-        "pixels-year",
-        "hub-main",
-        "schema-head"
+        "private-routes",
+        "town-ui"
       ],
       "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "ROOM-01",
+      "title": "Open real account drawers in the Treasury accounts hall",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 451,
+      "dependencies": [
+        "SCENE-03",
+        "FUX-02"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "ROOM-02",
+      "title": "Inspect Holdings and Activity from the Treasury gallery",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 452,
+      "dependencies": [
+        "SCENE-03",
+        "FUX-01",
+        "FUX-03"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "ROOM-03",
+      "title": "Use bills and planning tools in the Treasury study",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 453,
+      "dependencies": [
+        "SCENE-03",
+        "FUX-04",
+        "FUX-05",
+        "FUX-06"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "ROOM-04",
+      "title": "Book and inspect a real journey in the terminal hall",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 454,
+      "dependencies": [
+        "SCENE-03",
+        "TUX-04",
+        "TUX-06"
+      ],
+      "conflict_groups": [
+        "travel-forms",
+        "travel-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "ROOM-05",
+      "title": "Explore travel maps, PTO, costs and souvenirs in connected rooms",
+      "parent_issues": [
+        304,
+        315
+      ],
+      "kind": "implementation",
+      "issue": 455,
+      "dependencies": [
+        "SCENE-03",
+        "TUX-07",
+        "TUX-08",
+        "TUX-09",
+        "SCENE-09"
+      ],
+      "conflict_groups": [
+        "travel-forms",
+        "travel-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "ROOM-06",
+      "title": "Browse and update real books inside the Library",
+      "parent_issues": [
+        304,
+        314
+      ],
+      "kind": "implementation",
+      "issue": 456,
+      "dependencies": [
+        "SCENE-03",
+        "MUX-05",
+        "SCENE-09"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "ROOM-07",
+      "title": "Browse films and personal notes in the Theater",
+      "parent_issues": [
+        304,
+        314
+      ],
+      "kind": "implementation",
+      "issue": 457,
+      "dependencies": [
+        "SCENE-03",
+        "MUX-04",
+        "MUX-08"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "ROOM-08",
+      "title": "Continue series from the Theater's episode lounge",
+      "parent_issues": [
+        304,
+        314
+      ],
+      "kind": "implementation",
+      "issue": 458,
+      "dependencies": [
+        "SCENE-03",
+        "MUX-04",
+        "MUX-09"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "ROOM-09",
+      "title": "Explore saved artists, records and songs in the Music bar",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 459,
+      "dependencies": [
+        "SCENE-03",
+        "MUX-03",
+        "MUX-08"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "ROOM-10",
+      "title": "Connect tracked games and Town games inside the Arcade",
+      "parent_issues": [
+        304,
+        314
+      ],
+      "kind": "implementation",
+      "issue": 460,
+      "dependencies": [
+        "SCENE-03",
+        "MUX-06"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "ROOM-11",
+      "title": "Start and log complete workouts on the Gym floor",
+      "parent_issues": [
+        304,
+        258,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 461,
+      "dependencies": [
+        "SCENE-03",
+        "FIT-03",
+        "FIT-04"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
         "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "ROOM-12",
+      "title": "Inspect workout progress, manual PRs and trophies upstairs",
+      "parent_issues": [
+        304,
+        257,
+        258,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 462,
+      "dependencies": [
+        "SCENE-03",
+        "FIT-05",
+        "FIT-06"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "ROOM-13",
+      "title": "Track vital measurements in the Clinic rooms",
+      "parent_issues": [
+        304,
+        256,
+        258,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 463,
+      "dependencies": [
+        "SCENE-03",
+        "HEAL-02",
+        "HEAL-04"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "ROOM-14",
+      "title": "Explore lab history and checkups in the Clinic archive",
+      "parent_issues": [
+        304,
+        256,
+        258,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 464,
+      "dependencies": [
+        "SCENE-03",
+        "HEAL-03",
+        "HEAL-04"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "GAME-01",
+      "title": "Implement the game-only Stamp wallet and entitlement contract",
+      "parent_issues": [
+        304,
+        313
+      ],
+      "kind": "implementation",
+      "issue": 465,
+      "dependencies": [],
+      "conflict_groups": [
+        "schema-head",
+        "town-writes"
+      ],
+      "verification_profiles": [
+        "docs",
         "server_back",
-        "schema"
+        "schema",
+        "web_front"
+      ]
+    },
+    {
+      "id": "HOME-01",
+      "title": "Persist bounded room layouts with owner and revision checks",
+      "parent_issues": [
+        304,
+        312,
+        313
+      ],
+      "kind": "implementation",
+      "issue": 466,
+      "dependencies": [
+        "TOWN-07",
+        "SCENE-03",
+        "GAME-01"
+      ],
+      "conflict_groups": [
+        "schema-head",
+        "town-writes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "server_back",
+        "schema",
+        "web_front"
+      ]
+    },
+    {
+      "id": "HOME-04",
+      "title": "Place, rotate and recolor room objects through preview and Save",
+      "parent_issues": [
+        304,
+        312,
+        313
+      ],
+      "kind": "implementation",
+      "issue": 467,
+      "dependencies": [
+        "HOME-01",
+        "HOME-03"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "HOME-05",
+      "title": "Recover layout conflicts, Undo and Reset without losing a draft",
+      "parent_issues": [
+        304,
+        312
+      ],
+      "kind": "implementation",
+      "issue": 468,
+      "dependencies": [
+        "HOME-04"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "HOME-06",
+      "title": "Bind private photos and records to decorative frames safely",
+      "parent_issues": [
+        304,
+        312
+      ],
+      "kind": "implementation",
+      "issue": 469,
+      "dependencies": [
+        "HOME-04",
+        "PHOTO-03",
+        "NOTE-03"
+      ],
+      "conflict_groups": [
+        "health-store",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "ROOM-16",
+      "title": "Display dated photos and notes in Home and Terminal galleries",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 470,
+      "dependencies": [
+        "SCENE-03",
+        "PHOTO-04",
+        "NOTE-04",
+        "HOME-06"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "GAME-02",
+      "title": "Buy and refund cosmetic unlocks at the workshop",
+      "parent_issues": [
+        304,
+        313
+      ],
+      "kind": "implementation",
+      "issue": 471,
+      "dependencies": [
+        "GAME-01",
+        "HOME-02",
+        "HOME-01",
+        "SCENE-03"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "GAME-03",
+      "title": "Track optional chapter quests with once-only completion",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 472,
+      "dependencies": [
+        "GAME-01",
+        "SCENE-03"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "GAME-05",
+      "title": "Give residents reachable dialogue and persistent relationship ranks",
+      "parent_issues": [
+        304,
+        316
+      ],
+      "kind": "implementation",
+      "issue": 473,
+      "dependencies": [
+        "GAME-01",
+        "SCENE-03"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "GAME-06",
+      "title": "Author Mara and Ada's Library and Treasury conversations",
+      "parent_issues": [
+        304,
+        316
+      ],
+      "kind": "implementation",
+      "issue": 474,
+      "dependencies": [
+        "GAME-05",
+        "ROOM-01",
+        "ROOM-06"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "GAME-07",
+      "title": "Author Imani and Jun's Terminal and Gym conversations",
+      "parent_issues": [
+        304,
+        316
+      ],
+      "kind": "implementation",
+      "issue": 475,
+      "dependencies": [
+        "GAME-05",
+        "ROOM-04",
+        "ROOM-11"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "GAME-08",
+      "title": "Author Wren and Sol's culture and Hall conversations",
+      "parent_issues": [
+        304,
+        316
+      ],
+      "kind": "implementation",
+      "issue": 476,
+      "dependencies": [
+        "GAME-05",
+        "ROOM-09",
+        "SCENE-06"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "GAME-09",
+      "title": "Add twelve discoverable Town object interactions",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 477,
+      "dependencies": [
+        "SCENE-02",
+        "GAME-03"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "GAME-10",
+      "title": "Build Memory Shelves as a complete six-pair minigame",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 478,
+      "dependencies": [
+        "SCENE-03"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "GAME-04",
+      "title": "Ship the six authored Town chapters and their keepsakes",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 479,
+      "dependencies": [
+        "GAME-03",
+        "HOME-04",
+        "ROOM-04",
+        "ROOM-06",
+        "GAME-10"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "GAME-11",
+      "title": "Build Harbor Rhythm with touch, keyboard and untimed play",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 480,
+      "dependencies": [
+        "SCENE-03",
+        "NAV-04"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "GAME-12",
+      "title": "Grant capped minigame rewards from validated play receipts",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 481,
+      "dependencies": [
+        "GAME-01",
+        "GAME-10",
+        "GAME-11"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "GAME-13",
+      "title": "Display chapter, discovery, friendship and arcade collections",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 482,
+      "dependencies": [
+        "GAME-04",
+        "GAME-06",
+        "GAME-07",
+        "GAME-08",
+        "GAME-09",
+        "GAME-12"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "GAME-14",
+      "title": "Persist game, audio and motion preferences without task friction",
+      "parent_issues": [
+        304,
+        316
+      ],
+      "kind": "implementation",
+      "issue": 483,
+      "dependencies": [
+        "NAV-04",
+        "SCENE-08",
+        "GAME-11"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "MERGE-01",
+      "title": "Move saved World concepts to a canonical Library-study route",
+      "parent_issues": [
+        304,
+        310
+      ],
+      "kind": "implementation",
+      "issue": 484,
+      "dependencies": [
+        "SCENE-03",
+        "PIX-01"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "ROOM-15",
+      "title": "Make the Library study the home of saved concepts and notes",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 485,
+      "dependencies": [
+        "SCENE-03",
+        "MERGE-01",
+        "NOTE-03"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "MERGE-02",
+      "title": "Redirect legacy World date and week links with useful return",
+      "parent_issues": [
+        304,
+        307,
+        310
+      ],
+      "kind": "implementation",
+      "issue": 486,
+      "dependencies": [
+        "MERGE-01",
+        "SCENE-10",
+        "PIX-02",
+        "ROOM-15"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "MERGE-03",
+      "title": "Remove the superseded standalone World presentation",
+      "parent_issues": [
+        304,
+        310,
+        318
+      ],
+      "kind": "implementation",
+      "issue": 487,
+      "dependencies": [
+        "MERGE-02",
+        "SCENE-02",
+        "SCENE-09",
+        "ROOM-15"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "QA-01",
+      "title": "Reconcile all twenty Town findings and thirty-one mutation survivors",
+      "parent_issues": [
+        304,
+        252,
+        318,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 488,
+      "dependencies": [
+        "SCENE-04",
+        "SCENE-05",
+        "SCENE-06"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "QA-02",
+      "title": "Review integrated visual, keyboard and touch acceptance",
+      "parent_issues": [
+        304,
+        252,
+        318,
+        81
+      ],
+      "kind": "implementation",
+      "issue": 489,
+      "dependencies": [
+        "ROOM-01",
+        "ROOM-02",
+        "ROOM-03",
+        "ROOM-04",
+        "ROOM-05",
+        "ROOM-06",
+        "ROOM-07",
+        "ROOM-08",
+        "ROOM-09",
+        "ROOM-10",
+        "ROOM-11",
+        "ROOM-12",
+        "ROOM-13",
+        "ROOM-14",
+        "ROOM-15",
+        "ROOM-16",
+        "GAME-13"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "QA-03",
+      "title": "Verify cross-source privacy, revisions and recovery",
+      "parent_issues": [
+        304,
+        258,
+        318,
+        90
+      ],
+      "kind": "implementation",
+      "issue": 490,
+      "dependencies": [
+        "QA-02",
+        "HEAL-05",
+        "HOME-05",
+        "HOME-06",
+        "PHOTO-04",
+        "NOTE-04",
+        "GAME-12",
+        "SCENE-07"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "QA-04",
+      "title": "Measure rich-scene frames, payloads and request budgets",
+      "parent_issues": [
+        304,
+        318
+      ],
+      "kind": "implementation",
+      "issue": 491,
+      "dependencies": [
+        "QA-02",
+        "MERGE-03"
+      ],
+      "conflict_groups": [
+        "town-models",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "QA-05",
+      "title": "Rehearse preserving rollout and record integrated release readiness",
+      "parent_issues": [
+        304,
+        318
+      ],
+      "kind": "implementation",
+      "issue": 492,
+      "dependencies": [
+        "QA-01",
+        "QA-02",
+        "QA-03",
+        "QA-04",
+        "OPS-06"
+      ],
+      "conflict_groups": [
+        "release-readiness"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front",
+        "travel_front",
+        "media_front",
+        "server_back",
+        "finance_back",
+        "travel_back",
+        "media_back",
+        "schema",
+        "ops"
       ]
     }
   ],
