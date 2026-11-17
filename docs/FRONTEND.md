@@ -4,7 +4,7 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 
 ## Stack
 
-- **Plain CSS** with shared design tokens from `packages/ui/tokens.css` (near-neutral light default; explicit light/dark choice)
+- **Plain CSS** with shared design tokens from `packages/ui/tokens.css` (coastal day/night palette; explicit light/dark choice)
 - **Shared UI** — generic Angular components, confirmation/toast services, theme preference helpers, and chart colors live in `@vivek/ui` (`packages/ui`); Finance imports them from the package API
 - Shared Angular controls own their component styles. Menu triggers reuse the button stylesheet; `packages/ui/kit.css` supplies public navigation and small global utilities, not a second card/header/button implementation. Use `ui-button` for public-page actions too.
 - **State** — `FinanceService` over `EncryptedStoreService` after vault unlock (RxJS `BehaviorSubject`s for ledger, balance sheet, recurring cashflow); `PlanningService`; `AuthService`
@@ -48,20 +48,23 @@ Source of truth: `packages/ui/tokens.css`.
 | `--surface-2` | Inputs, chips |
 | `--text` | Primary text |
 | `--text-secondary` | Secondary text |
-| `--accent` | Deep teal `#0F6E6A` — links, primary actions |
+| `--accent` | Sea-glass teal `#126963` — links, primary actions |
+| `--accent-fill` / `--on-accent` | Filled actions and their labels; separate from link text for forced colors |
 | `--border` | Borders |
 | `--success` / `--danger` / `--warning` | Status |
 
 Charts: shared palette and Chart.js options live in `@vivek/ui` (`packages/ui/src/chart-theme.ts`; prefer CSS vars for axes). Chart hover tooltips are off. Values sit in the table or readout beside the chart.
 
-**Appearance:** light is the default token set (warm paper `#F6F3EE`, warm-white
-cards `#FFFCF8`, ink `#1C1916`, deep teal `#0F6E6A`). Dark is warm ink
-(`#141311` canvas, `#1E1C19` cards, soft teal `#8FD0C8`) on
-`[data-theme="dark"]`. First visit follows the OS. The username dropdown offers System / Light / Dark. Choice is stored in `suite-theme`, with legacy app keys read during migration.
-Controls use the shared 8–20px radii; status and date shapes retain familiar forms.
-Reduced transparency and increased contrast media queries are honored.
-Typography prefers the system stack (no remote font fetch). Locale money and
-local-date helpers live in `@vivek/browser` (`packages/browser`).
+**Appearance:** `tokens.css` owns the coastal `--ivory`, `--navy`, `--teal`,
+`--coral`, `--brass` and `--wood` palette. Semantic surfaces/text/actions reference
+those colors; night uses navy surfaces with ivory ink and lamplit brass accents.
+The shell and Hub use material accents; system body text and tabular money remain.
+`--font-display` is reserved for large Hub readouts. Forced colors uses system
+surfaces, text, links and focus without decorative shadows. First visit follows
+the OS; Settings → Appearance offers System / Light / Dark. Choice is stored in
+`suite-theme`, with legacy app keys read during migration. Shared 8–20px radii,
+reduced-transparency/increased-contrast support and local font loading remain.
+Locale money and local-date helpers live in `@vivek/browser` (`packages/browser`).
 
 ## Viewport presentation matrix
 

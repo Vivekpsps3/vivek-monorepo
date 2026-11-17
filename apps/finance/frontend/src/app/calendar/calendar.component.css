@@ -158,7 +158,7 @@
   align-items: center;
   margin-top: var(--space-4);
   padding: var(--space-2) var(--space-4);
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   border-radius: var(--radius-md);
   text-decoration: none;
@@ -168,7 +168,7 @@
 }
 
 .calendar-cta:hover {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
 }
 
 .calendar-toolbar {
@@ -242,7 +242,7 @@
 }
 
 .day-btn.today .day-number {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   border-radius: 999px;
   min-width: 1.5rem;

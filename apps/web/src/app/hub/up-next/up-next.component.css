@@ -15,7 +15,7 @@ a { color: var(--accent); display: inline-flex; align-items: center; min-height:
 .date-chip { font-size: var(--text-sm); color: var(--text-secondary); }
 .overdue { color: var(--warning); background: var(--warning-soft-bg); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); }
 .done-check { width: 44px; height: 44px; border: 1px solid var(--border); border-radius: 50%; background: transparent; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; }
-.done .done-check { background: var(--accent); color: var(--card-bg); }
+.done .done-check { background: var(--accent-fill); color: var(--on-accent); }
 .done .event-link { text-decoration: line-through; color: var(--text-secondary); }
 .done-check:disabled { cursor: default; }
 .finance-row { border-top: 1px solid var(--border-subtle); padding-top: var(--space-3); margin-top: var(--space-3); font-size: var(--text-sm); }

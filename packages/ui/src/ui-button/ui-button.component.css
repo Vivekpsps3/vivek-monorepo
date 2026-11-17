@@ -74,12 +74,12 @@ a.ui-btn {
 }
 
 .ui-btn--primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
 }
 
 .ui-btn--primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
 }
 
 .ui-btn--secondary {

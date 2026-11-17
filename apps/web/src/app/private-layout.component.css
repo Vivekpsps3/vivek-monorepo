@@ -6,6 +6,7 @@
   position: sticky;
   top: 0;
   z-index: 40;
+  border-top: 3px solid var(--brass);
   border-bottom: 1px solid var(--border);
   background: var(--card-bg);
 }
@@ -116,7 +117,7 @@
 
 .app-switcher__bar a.is-current {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--coral);
 }
 
 .app-switcher__compact {

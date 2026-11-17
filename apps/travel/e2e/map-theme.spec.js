@@ -10,7 +10,7 @@ const surfaces = {
   water: [0xaa, 0xd3, 0xdf],
   park: [0xc8, 0xfa, 0xcc],
 };
-const containerBackground = [40, 37, 31];
+const containerBackground = [29, 50, 61];
 
 function pngChunk(type, data) {
   const body = Buffer.concat([Buffer.from(type), data]);
@@ -271,7 +271,7 @@ test('map renders in the Appearance theme after returning to the trip', async ({
   await expect(map.getByRole('status')).toContainText('Map ready');
   expect(await page.locator('html').evaluate(node => [node.getAttribute('data-theme'), node.getAttribute('data-theme-choice')])).toEqual(['dark', 'dark']);
   await expect(canvas.locator('.leaflet-tile')).not.toHaveCount(0);
-  expect(await canvas.evaluate(node => { const pin = node.querySelector('.leaflet-interactive'); const tiles = node.querySelector('.leaflet-tile-pane'); return [node.isConnected, getComputedStyle(node).backgroundColor, tiles ? getComputedStyle(tiles).backgroundColor : '', pin ? getComputedStyle(pin).fill : '']; })).toEqual([true, 'rgb(40, 37, 31)', 'rgb(40, 37, 31)', 'rgb(143, 208, 200)']);
+  expect(await canvas.evaluate(node => { const pin = node.querySelector('.leaflet-interactive'); const tiles = node.querySelector('.leaflet-tile-pane'); return [node.isConnected, getComputedStyle(node).backgroundColor, tiles ? getComputedStyle(tiles).backgroundColor : '', pin ? getComputedStyle(pin).fill : '']; })).toEqual([true, 'rgb(29, 50, 61)', 'rgb(29, 50, 61)', 'rgb(145, 208, 195)']);
 });
 
 test('map keeps the light pin and does not filter tiles', async ({ page, request }) => {

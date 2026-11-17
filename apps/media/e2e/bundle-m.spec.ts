@@ -188,7 +188,7 @@ test('the main Media screens pass accessibility in both themes at phone and desk
       if (route.startsWith('/media/item/')) await expect(page.locator('main h1')).toBeVisible();
       else await expectSectionHeading(page);
       await chooseColorTheme(page, theme);
-      await expect.poll(() => page.locator('body').evaluate(node => getComputedStyle(node).color)).toBe(theme === 'dark' ? 'rgb(246, 241, 234)' : 'rgb(28, 25, 22)');
+      await expect.poll(() => page.locator('body').evaluate(node => getComputedStyle(node).color)).toBe(theme === 'dark' ? 'rgb(255, 240, 212)' : 'rgb(24, 46, 64)');
       await page.evaluate(async () => {
         const finiteRunning = () => document.getAnimations().filter(animation => {
           const iterations = animation.effect?.getComputedTiming()?.iterations;

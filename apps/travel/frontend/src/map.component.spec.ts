@@ -20,14 +20,14 @@ describe('MapComponent theme', () => {
     expect(read()).toEqual(['rgb(221, 221, 221)', 'rgba(0, 0, 0, 0)', '#3388ff']);
     expect(stroke()).toEqual(['0.2', '#3388ff', '3']);
     expect(filter()).toBe('none');
-    theme.set('dark'); expect(read()).toEqual(['rgb(40, 37, 31)', 'rgb(40, 37, 31)', '#8fd0c8']);
-    expect(stroke()).toEqual(['0.9', '#28251f', '2']);
+    theme.set('dark'); expect(read()).toEqual(['rgb(29, 50, 61)', 'rgb(29, 50, 61)', '#91d0c3']);
+    expect(stroke()).toEqual(['0.9', '#1d323d', '2']);
     expect(filter()).toBe('brightness(0.4) contrast(1.1) saturate(0.8)');
     fixture.detectChanges();
     const canvas = fixture.nativeElement.querySelector('.map-canvas') as HTMLElement;
     const zoom = fixture.nativeElement.querySelector('[aria-label="Zoom in"]') as HTMLElement;
-    expect(ring(canvas)).toEqual(['solid', '2px', 'rgb(143, 208, 200)', '2px', 'rgb(40, 37, 31) 0px 0px 0px 2px']);
-    expect(ring(zoom)).toEqual(['solid', '2px', 'rgb(143, 208, 200)', '2px', 'rgb(40, 37, 31) 0px 0px 0px 2px']);
+    expect(ring(canvas)).toEqual(['solid', '2px', 'rgb(145, 208, 195)', '2px', 'rgb(29, 50, 61) 0px 0px 0px 2px']);
+    expect(ring(zoom)).toEqual(['solid', '2px', 'rgb(145, 208, 195)', '2px', 'rgb(29, 50, 61) 0px 0px 0px 2px']);
     theme.set('light'); expect(read()).toEqual(['rgb(221, 221, 221)', 'rgba(0, 0, 0, 0)', '#3388ff']);
     expect(stroke()).toEqual(['0.2', '#3388ff', '3']);
     expect(filter()).toBe('none');
