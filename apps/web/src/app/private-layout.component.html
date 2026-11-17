@@ -31,7 +31,7 @@
         aria-keyshortcuts="Control+K Meta+K" (click)="openSearch()">
         <ui-icon name="search" />
       </button>
-      <div class="suite-health" aria-hidden="true"></div>
+      <suite-health-chip />
       <div class="suite-account" #userMenu>
         <button #userButton class="btn btn-ghost user-menu-toggle" type="button"
           [attr.aria-expanded]="menuOpen()" aria-controls="user-dropdown" (click)="toggleMenu()">

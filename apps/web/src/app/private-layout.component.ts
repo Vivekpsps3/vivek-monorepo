@@ -6,12 +6,13 @@ import { filter } from 'rxjs';
 import { UiIconComponent, UiStateComponent, UserMenuContent, safeNextPathFrom } from '@vivek/ui';
 import { startFinanceTripSpend } from '../../../finance/frontend/src/public-api';
 import { SessionService } from './platform/session.service';
+import { HealthChipComponent } from './hub/health-chip.component';
 import { SearchDialogComponent } from './search/search-dialog.component';
 
 @Component({
   selector: 'suite-private-layout',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, AsyncPipe, NgTemplateOutlet, UiIconComponent, SearchDialogComponent, UiStateComponent],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, AsyncPipe, NgTemplateOutlet, UiIconComponent, SearchDialogComponent, UiStateComponent, HealthChipComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './private-layout.component.html',
   styleUrl: './private-layout.component.css',
@@ -25,13 +26,22 @@ export class PrivateLayoutComponent {
 
   @ViewChild(SearchDialogComponent) private searchDialog?: SearchDialogComponent;
 
-  /** Ctrl-K / ⌘-K opens search from anywhere in the layout, fields included. */
+  @ViewChild(RouterOutlet) private outlet?: RouterOutlet;
+
+  /** One global shortcut owner; page commands live with the mounted page. */
   @HostListener('document:keydown', ['$event'])
   onSearchShortcut(event: KeyboardEvent): void {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    if (event.defaultPrevented || event.repeat || !this.session.currentUser ||
+      document.querySelector('dialog[open], [role="dialog"][aria-modal="true"], [role="menu"]:not([hidden]), #user-dropdown, #app-switcher-menu')) return;
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       this.openSearch();
+      return;
     }
+    if (event.ctrlKey || event.metaKey || event.altKey ||
+      (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]'))) return;
+    const page = this.outlet?.isActivated ? this.outlet.component as { onWorkspaceShortcut?: (event: KeyboardEvent) => void } : null;
+    page?.onWorkspaceShortcut?.(event);
   }
 
   openSearch(): void {
