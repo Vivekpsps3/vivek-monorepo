@@ -57,14 +57,7 @@
       </div>
     </div>
     @if (hasMissingValues) {
-      <p class="hint">{{ missingValueCount | plural:'position' }} have no market value; the displayed portfolio value is incomplete.</p>
-    }
-    @if (netWorth?.portfolio_breakdown) {
-      <div class="portfolio-breakdown">
-        @for (entry of (netWorth!.portfolio_breakdown | keyvalue); track entry.key) {
-          <span><span class="breakdown-key">{{ entry.key }}</span><strong>{{ entry.value | money }}</strong></span>
-        }
-      </div>
+      <p class="hint">Market value unavailable for {{ missingValueCount | plural:'position' }}. The portfolio value is incomplete.</p>
     }
   </ui-card>
   }
@@ -116,8 +109,7 @@
                   @if (h.company_name) {
                     <small class="company-sub">{{ h.company_name }}</small>
                   }
-                  <small class="holding-details">Cost basis {{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }}</small>
-                  <small class="holding-details">Position date {{ dateLabel(h.position_as_of) }} · {{ holdingSource(h) }}</small>
+                  <small class="holding-details">Cost basis {{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }} · Position date {{ dateLabel(h.position_as_of) }} · {{ holdingSource(h) }}</small>
                 </td>
                 <td class="num">{{ h.shares }}</td>
                 <td class="num">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
@@ -127,17 +119,19 @@
                 </td>
                 <td class="price-cell">
                   <span>{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }}</span>
-                  @if (hasCurrentPrice(h)) { <span class="as-of-small">{{ asOfText(h) }}</span> }
+                  @if (h.price_as_of) { <span class="as-of-small">{{ asOfText(h) }}</span> }
                   <ui-badge [variant]="priceSourceBadgeVariant(h)">{{ priceFreshness(h) }}</ui-badge>
                   <span class="as-of-small">{{ quoteDateLabel(h) }}</span>
                   @if (priceSourceHint(h); as hint) {
                     <span class="price-hint">{{ hint }}</span>
                   }
                 </td>
-                <td class="actions actions--row">
-                  <ui-button variant="ghost" size="sm" [ariaLabel]="'Refresh price for ' + h.symbol" (clicked)="refreshHoldingPrice(h)">↻</ui-button>
-                  <ui-button variant="ghost" size="sm" [ariaLabel]="'Edit ' + h.symbol" (clicked)="editHolding(h)">Edit</ui-button>
-                  <ui-button variant="danger" size="sm" [ariaLabel]="'Delete ' + h.symbol" (clicked)="deleteHolding(h)">Delete</ui-button>
+                <td class="actions">
+                  <div class="actions--row">
+                    <ui-button variant="ghost" size="sm" [ariaLabel]="'Refresh price for ' + h.symbol" (clicked)="refreshHoldingPrice(h)">↻</ui-button>
+                    <ui-button variant="ghost" size="sm" [ariaLabel]="'Edit ' + h.symbol" (clicked)="editHolding(h)">Edit</ui-button>
+                    <ui-button variant="danger" size="sm" [ariaLabel]="'Delete ' + h.symbol" (clicked)="deleteHolding(h)">Delete</ui-button>
+                  </div>
                 </td>
               </tr>
             }

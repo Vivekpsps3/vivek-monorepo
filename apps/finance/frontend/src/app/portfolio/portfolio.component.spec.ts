@@ -7,7 +7,7 @@ import { PortfolioComponent } from './portfolio.component';
 
 function componentWithFinance(overrides: Record<string, unknown> = {}) {
   const finance = jasmine.createSpyObj('FinanceService', [
-    'refreshAllHoldingPrices', 'lookupSharePrice', 'getHoldingImportStages', 'getHoldings', 'getNetWorth',
+    'refreshAllHoldingPrices', 'lookupSharePrice', 'getHoldingImportStages', 'getHoldings',
     'resumeFidelityImportStage',
     'previewFidelityImport', 'getBrokerageAccounts', 'commitFidelityImport', 'getBrokerageImports',
   ]);
@@ -15,7 +15,6 @@ function componentWithFinance(overrides: Record<string, unknown> = {}) {
   finance.refreshAllHoldingPrices.and.returnValue(of({ holdings: [], updated: 0, failed: 0 }));
   finance.getHoldingImportStages.and.returnValue(of([]));
   finance.getHoldings.and.returnValue(of([]));
-  finance.getNetWorth.and.returnValue(of(null));
   finance.resumeFidelityImportStage.and.returnValue(of({ inserted: 1, status: 'activated' }));
   finance.getBrokerageAccounts.and.returnValue(of([]));
   finance.getBrokerageImports.and.returnValue(of([]));

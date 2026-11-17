@@ -95,6 +95,7 @@
 
   .ui-data-table--compact ::ng-deep :is(thead th, tbody td).num {
     text-align: end;
+    overflow-wrap: normal;
   }
 }
 

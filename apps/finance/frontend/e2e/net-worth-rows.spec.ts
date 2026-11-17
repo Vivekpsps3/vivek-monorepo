@@ -28,7 +28,7 @@ test('assets and debts use the plain labels and delete copy', async ({ page }) =
   await expect(page.getByText('Card deleted')).toBeVisible();
 });
 
-test('holdings show one table shape with a details row', async ({ page }) => {
+test('holdings retain the details in one row per position', async ({ page }) => {
   const vault = await syntheticVault(page, {
     holdings: [{ id: 1, symbol: 'VOO', shares: 3, purchase_price: 100, purchase_date: '2026-01-01', position_as_of: '2026-01-01' }],
   });
@@ -42,5 +42,6 @@ test('holdings show one table shape with a details row', async ({ page }) => {
 
   const table = page.getByRole('table', { name: 'Manual holdings' });
   await expect(table.getByRole('columnheader')).toHaveText(['Symbol', 'Shares', 'Value', 'Gain', 'Price', 'Actions']);
+  await expect(table.locator('tbody tr')).toHaveCount(1);
   await expect(table).toContainText(moneyText('Cost basis $100.00 · Position date Jan 1 · Manual'));
 });

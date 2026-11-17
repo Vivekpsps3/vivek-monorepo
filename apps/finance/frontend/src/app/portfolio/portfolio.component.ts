@@ -6,7 +6,7 @@ import {
   OnDestroy,
   OnInit,
 } from '@angular/core';
-import { CommonModule, KeyValuePipe } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
@@ -14,7 +14,6 @@ import {
   Holding,
   HoldingCreate,
   MarketPriceQuote,
-  NetWorth,
   FidelityPreviewResult,
   FidelityCommitResult,
 } from '../models/transaction.model';
@@ -69,7 +68,6 @@ import { PluralPipe } from '../shared/pipes/plural.pipe';
     PluralPipe,
     MoneyPipe,
     CommonModule,
-    KeyValuePipe,
     FormsModule,
     UiPageHeaderComponent,
     UiButtonComponent,
@@ -87,7 +85,6 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   @Input() embedded = false;
   holdings: Holding[] = [];
   filteredHoldings: Holding[] = [];
-  netWorth: NetWorth | null = null;
   searchTerm = '';
   showModal = false;
   saving = false;
@@ -140,10 +137,6 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       this.applyFilter();
       this.cdr.markForCheck();
     });
-    this.financeService.netWorth$.pipe(takeUntil(this.destroy$)).subscribe(data => {
-      this.netWorth = data;
-      this.cdr.markForCheck();
-    });
     this.financeService.getHoldings().pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.loading = false;
@@ -156,7 +149,6 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       },
     });
-    this.financeService.getNetWorth().pipe(takeUntil(this.destroy$)).subscribe();
     this.loadResumableFidelityStages();
   }
 
@@ -252,11 +244,6 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   asOfText(h: Holding): string {
     return formatAsOf(h.price_as_of);
-  }
-
-  /** A saved price exists when current_price is neither null nor undefined. */
-  hasCurrentPrice(h: Holding): boolean {
-    return h.current_price != null;
   }
 
   checkSharePrice() {

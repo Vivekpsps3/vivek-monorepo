@@ -108,33 +108,6 @@ h3 {
   font-weight: 600;
 }
 
-.portfolio-breakdown {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap: var(--space-2) var(--space-4);
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-  font-size: var(--text-sm);
-}
-
-.portfolio-breakdown > span {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.breakdown-key {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.portfolio-breakdown strong {
-  font-variant-numeric: tabular-nums;
-}
-
 .table-actions--toolbar {
   flex-wrap: wrap;
   min-width: 0;
@@ -295,8 +268,10 @@ details.account-sub[open] > summary::before {
   overflow-wrap: anywhere;
 }
 
-.actions {
-  white-space: normal;
+@media (min-width: 1024px) {
+  .actions--row {
+    flex-wrap: nowrap;
+  }
 }
 
 .holding-form,
@@ -510,10 +485,6 @@ details.account-sub[open] > summary::before {
     padding: var(--space-4) 0 0;
     border-left: 0;
     border-top: 1px solid var(--border-subtle);
-  }
-
-  .portfolio-breakdown {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .table-actions--toolbar {

@@ -55,8 +55,11 @@ for (const [width, theme, zoom] of [
     await expect(rows.filter({ hasText: 'TIDE' })).toContainText('Stale');
     await expect(rows.filter({ hasText: 'UNLISTED' }).locator('[data-label="Value"]')).toHaveText('Unavailable');
     await expectNoOverflow(page);
+    await expect(page.locator('app-portfolio .summary-card')).not.toContainText('UNLISTED');
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await info.attach('holdings', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+    await harbor.scrollIntoViewIfNeeded();
+    await info.attach('holdings-rows', { body: await page.screenshot(), contentType: 'image/png' });
 
     const edit = harbor.getByRole('button', { name: 'Edit HARBOR' });
     for (const button of await harbor.getByRole('button').all()) {
