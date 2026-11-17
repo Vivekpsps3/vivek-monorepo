@@ -3,7 +3,7 @@
 - Leaf #383; parent #304; roadmap #134.
 - Agent: issue_383; branch `agent/style-02`; isolated worktree `/tmp/vivek-style-02`.
 - Fresh main/base: `4cecdd9eaccef5960fa160d5bc3a1809b8a0f153`.
-- Tested application and tests: `a94ac9ca052e9e3167e71c66ac4bbc7230a65612`; later commits contain evidence only.
+- Tested application and full-suite source: `a94ac9ca052e9e3167e71c66ac4bbc7230a65612`. Final test-source cleanup: `e7a5938beb165081f40f1940e7cc6551bbb7d2f2` removes repeated Travel viewport/theme setup; its full Travel suite is rerun. Other production/test sources are unchanged; later commits contain evidence only.
 - STYLE-01 outcome verified on fresh origin/main: merged PR #494, named coastal day/night tokens and real consumer evidence present. Live #383 comments/open PRs had no competing claim before the issue claim.
 
 ## Acceptance
@@ -32,7 +32,7 @@ and production activation remain separate and are not claimed.
 | Separate empty/populated Add bill/subscription action trees | Finance recurring hub | Existing header actions | Delete empty-state copies and the header condition. One stable real opener survives first save and retains focus; the domain editor/store is unchanged. |
 
 - Classification: feature replacement with necessary focus/scroll safety repairs; no simplification claim, no files moved.
-- Base-to-tested production: 110 added / 87 deleted physical lines (includes comments/blank lines), net +23. The positive delta supplies material tokens, visible focus and bounded shared scroll-lock/focus guards. Tests: 238 added / 2 deleted; package guidance: 3 added / 2 deleted; this evidence is documentation. Generated output/captures are excluded.
+- Base-to-tested production: 110 added / 87 deleted physical lines (includes comments/blank lines), net +23. The positive delta supplies material tokens, visible focus and bounded shared scroll-lock/focus guards. Tests: 236 added / 2 deleted; package guidance: 3 added / 2 deleted; this evidence is documentation. Generated output/captures are excluded.
 - Before/after: same component, native-control, theme, preference and domain-store owners; same public inputs/entry points and listener disposal. One bounded scroll-target map replaces per-dialog restore snapshots; entries disappear on final close/destroy. No new requests, domain state, calculations, crypto/AAD/record formats, routes or persistence owners.
 - Old flat values, desktop compact target exceptions, undefined menu shadow, duplicate sheet keyframes and duplicate recurring Add branches are removed from this slice. No useful assertion or supported record/behavior was removed. The contrast test now asserts the increased compact target; all numerical contrast floors remain.
 - A later frame edit still changes the existing UI owner, with real consumers inheriting it. Domain validation remains local. No uncoupled helper or permanent adapter was introduced.
@@ -69,7 +69,7 @@ without changing tests/timeouts. No partial or failed run is substituted for a g
 
 ## Handoff
 
-- PR: pending; closes only #383, references #304 and #134.
-- Roadmap #134 scoped note: pending.
-- All required local gates and acceptance journeys pass. Complete issue/PR review, exact-head CI, merge/closure and cleanup remain before verified completion.
-- Next actor: same worker completes local evidence, publishes/reviews the entire PR, verifies CI on exact final head, records pre-merge vetting, merges under the user's authorization, verifies leaf closure and cleans only this worktree/branch.
+- PR: https://github.com/Vivekpsps3/vivek-monorepo/pull/495; closes only #383, references #304 and #134.
+- Roadmap #134 scoped note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6953887113.
+- Required local gates and acceptance journeys pass. The original issue and all acceptance/deletion rows and the complete published diff were critically reviewed for omissions, regressions, security, scope and coverage. Duplicate Travel fixture setup found in that review was removed; no production deficiency remains. The affected full Travel rerun passes all 147 tests. Exact-final-head CI must pass before recorded pre-merge vetting and merge.
+- Next actor: same worker verifies final local/CI outcomes, records pre-merge vetting on the PR, merges under the user's authorization, verifies leaf closure and cleans only this worktree/branch.
