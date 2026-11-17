@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -125,3 +126,16 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now, nullable=False, index=True
     )
+
+
+class CalendarFeed(Base):
+    __tablename__ = "calendar_feeds"
+    __table_args__ = (UniqueConstraint("user_id", "scope", name="uq_calendar_feed_owner_scope"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(100), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)

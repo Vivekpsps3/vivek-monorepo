@@ -42,6 +42,11 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     loadComponent: () => import('./finance-section.component').then(m => m.FinanceSectionComponent),
   },
   {
+    path: 'calendars',
+    label: 'Calendars',
+    loadComponent: () => import('./calendar-section.component').then(m => m.CalendarSectionComponent),
+  },
+  {
     path: 'about',
     label: 'About',
     loadComponent: () => import('./about-section.component').then(m => m.AboutSectionComponent),

@@ -7,7 +7,14 @@ from sqlalchemy.orm import Session
 
 from apps.finance.backend.models import EncryptedRecord, UserVault
 from apps.finance.backend.services.encrypted_storage import wipe_encrypted_user_data
-from apps.server.identity.models import AuditEvent, AuthChallenge, AuthEnrollment, User, UserSession
+from apps.server.identity.models import (
+    AuditEvent,
+    AuthChallenge,
+    AuthEnrollment,
+    CalendarFeed,
+    User,
+    UserSession,
+)
 from apps.server.identity.session import role_str, utc_now_naive
 
 
@@ -163,6 +170,7 @@ def delete_user_account(db: Session, user: User, *, actor_user_id: int) -> None:
         db.execute(
             text("DELETE FROM settings WHERE key LIKE :prefix"), {"prefix": f"user:{user.id}:%"}
         )
+    db.query(CalendarFeed).filter(CalendarFeed.user_id == user.id).delete(synchronize_session=False)
     db.query(AuthChallenge).filter(AuthChallenge.user_id == user.id).delete(
         synchronize_session=False
     )

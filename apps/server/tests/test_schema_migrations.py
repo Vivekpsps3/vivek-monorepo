@@ -158,6 +158,7 @@ def test_baseline_database_is_stamped_then_upgraded(tmp_path):
             "site_leave_carry_v1",
             "site_leave_accrual_v1",
             "site_vault_restore_v1",
+            "site_credential_wrap_revision_v1",
         }
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
     assert model_diff(database) == []

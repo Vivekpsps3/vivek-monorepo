@@ -174,6 +174,7 @@ def test_fresh_file_startup_creates_only_current_schema(tmp_path, monkeypatch):
         "audit_events",
         "auth_challenges",
         "auth_enrollments",
+        "calendar_feeds",
         "user_vaults",
         "encrypted_records",
         "encrypted_record_indexes",
