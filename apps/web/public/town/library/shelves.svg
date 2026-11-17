@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="156" height="161" viewBox="0 0 156 161">
+  <style>
+    :root { --wood:#9f6950; --side:#604c45; --trim:#d5a478; --inside:#534a43; --navy:#48676e; --coral:#cb8067; --gold:#d7b87a; --teal:#82a597; --paper:#ebd6a7; --shadow:#3b362f; }
+    @media (prefers-color-scheme: dark) {
+      :root { --wood:#745342; --side:#47353a; --trim:#b28864; --inside:#253240; --navy:#527981; --coral:#c48263; --gold:#d3ad76; --teal:#608b81; --paper:#e2bf80; --shadow:#15222e; }
+    }
+  </style>
+  <path fill="var(--shadow)" opacity=".23" d="m9 128 98 31 48-22-90-31z"/>
+  <path fill="var(--side)" d="m104 39 43-19v106l-43 24z"/>
+  <path fill="var(--wood)" d="m6 13 98 26v111L6 122z"/>
+  <path fill="var(--trim)" d="M6 13 55 1l92 19-43 19z"/>
+  <path fill="var(--inside)" d="m16 32 77 21v81l-77-22z"/>
+  <path fill="var(--wood)" d="m16 58 77 20v7L16 64zm0 28 77 22v6L16 93z"/>
+  <g transform="translate(19 38) skewY(15)">
+    <path fill="var(--teal)" d="M0 1h8v17H0zM9 6h6v12H9zM41 2h6v16h-6z"/>
+    <path fill="var(--coral)" d="M17 0h10v18H17zm37 5h10v13H54z"/>
+    <path fill="var(--gold)" d="M28 4h8v14h-8zm20-3h5v17h-5z"/>
+    <path stroke="var(--paper)" d="M2 6h4m13 4h6m5 1h4m25-2h3"/>
+    <path fill="var(--navy)" d="M1 30h9v17H1zm24 5h12v12H25z"/>
+    <path fill="var(--gold)" d="M11 33h7v14h-7zm8-2h5v16h-5z"/>
+    <path fill="var(--teal)" d="M38 30h8v17h-8z"/>
+    <path fill="var(--paper)" d="M49 43h19v4H49z"/>
+    <path fill="var(--coral)" d="M52 38h15v5H52zM2 65h24v4H2zm26-4h19v4H28z"/>
+    <path fill="var(--teal)" d="M5 61h20v4H5zm26 4h20v4H31z"/>
+    <path fill="var(--gold)" d="M53 54h6v15h-6zm8-4h8v19h-8z"/>
+  </g>
+  <path fill="var(--trim)" d="m6 21 98 27v5L6 26zm0 96 98 28v5L6 122z"/>
+  <path fill="none" stroke="var(--trim)" opacity=".36" d="m116 49 23-11v72l-23 13z"/>
+</svg>

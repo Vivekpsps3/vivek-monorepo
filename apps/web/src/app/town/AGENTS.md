@@ -19,3 +19,8 @@ Keep dialogs and display components small by reusing shared interaction owners;
 extract only when it removes repeated decisions. Town reset fixtures and worker
 clock ownership must remain deterministic. Root test gates apply, including the
 Town Playwright config for affected screens and server coverage for Town backend work.
+
+Reading Hall's [asset metadata](library-room.assets.ts) owns display bounds,
+anchors, layering, theme schemes and source attribution. Use the same rectangle
+for artwork and selection. Load room art only from the room route and keep the
+object list usable through an art failure. No room animation runs off-route.

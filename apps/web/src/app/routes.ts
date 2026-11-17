@@ -19,6 +19,7 @@ export const routes: Routes = [
   ] },
     { path: 'town', title: 'Town', children: [
       { path: '', loadComponent: () => import('./town/town.component').then(m => m.TownComponent) },
+      { path: 'library', title: 'Town · Reading Hall', loadComponent: () => import('./town/library-room.component').then(m => m.LibraryRoomComponent) },
       { path: 'world', title: 'World', loadComponent: () => import('./world/ui/world.component').then(m => m.WorldComponent) },
     ] },
     { path: 'pixels', loadChildren: () => import('./pixels/pixels.routes').then(m => m.PIXELS_ROUTES) },

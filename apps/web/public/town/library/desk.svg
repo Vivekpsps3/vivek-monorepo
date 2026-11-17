@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="172" height="130" viewBox="0 0 172 130">
+  <style>
+    :root { --top:#d9a675; --front:#9c674c; --shade:#725448; --trim:#ebbd86; --ink:#47535b; --brass:#b5864c; --lamp:#f4d38e; --paper:#f5e3b8; --shadow:#3b362f; }
+    @media (prefers-color-scheme: dark) {
+      :root { --top:#ae8056; --front:#77513f; --shade:#4d3938; --trim:#c69564; --ink:#344b56; --brass:#b58a54; --lamp:#ffda8d; --paper:#e1c897; --shadow:#172330; }
+    }
+  </style>
+  <path fill="var(--shadow)" opacity=".27" d="m1 92 79 37 90-33-81-36z"/>
+  <path fill="var(--shade)" d="m14 61 11 5v41l-11-5zm123 9 11-6v39l-11 7zm-61 8 13 4-1 40-12-4z"/>
+  <path fill="var(--front)" d="m1 52 79 34v12L1 64z"/>
+  <path fill="var(--shade)" d="m80 86 86-37v12L80 98z"/>
+  <path fill="var(--top)" d="m1 52 84-38 81 35-86 37z"/>
+  <path fill="var(--trim)" d="m1 52 79 34 86-37v3L80 90 1 55z"/>
+  <path fill="none" stroke="var(--shade)" opacity=".32" d="m12 51 68-31m-58 36 68-31m17 7-68 31m15 6 69-31m11 5L65 75m15 5 68-31"/>
+  <path fill="var(--ink)" d="m53 48 26 1 23-15 26 9-40 24-40-13z"/>
+  <path fill="var(--paper)" d="m52 45 25 1 11 16-37-12zm25 1 25-15 23 9-37 22z"/>
+  <path fill="none" stroke="var(--brass)" stroke-linecap="round" d="m57 48 18 3m-17 0 20 4m5-8 21-12m-18 16 21-13m-17 17 22-14"/>
+  <path fill="var(--shade)" opacity=".35" d="m17 41 10 8 22-11-13-6z"/>
+  <path fill="var(--brass)" d="m20 39 15-6 12 6-16 7zm10-29h5v29h-5z"/>
+  <path fill="var(--lamp)" d="M21 4 38 0l11 16-32 8z"/>
+  <path fill="var(--brass)" d="m17 24 32-8v4l-32 8z"/>
+  <path fill="var(--trim)" d="m24 8 4-2-2 12-5 1z" opacity=".8"/>
+</svg>

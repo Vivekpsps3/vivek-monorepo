@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, Injector, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, InjectionToken, Injector, afterNextRender, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Router, RouterLink } from '@angular/router';
 import { DOCUMENT } from '@angular/common';
 import { EMPTY, Subject, fromEvent, interval } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
@@ -57,7 +58,7 @@ function vaultOpenFor(userId: number | null): boolean {
 
 @Component({
   selector: 'app-town',
-  imports: [UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent, TownLotComponent, TownTodayComponent, HabitDialogComponent, HistoryDialogComponent],
+  imports: [RouterLink, UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent, TownLotComponent, TownTodayComponent, HabitDialogComponent, HistoryDialogComponent],
   templateUrl: './town.component.html',
   styleUrl: './town.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -89,6 +90,9 @@ export class TownComponent {
   readonly emptySprite = townSpriteUrl('lot-empty');
   readonly exploreWorld = WORLD_COPY.explore;
   private readonly document = inject(DOCUMENT);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private returnToLibrary = inject(Router).currentNavigation()?.previousNavigation?.finalUrl?.root
+    .children['primary']?.segments.map(segment => segment.path).join('/') === 'town/library';
   constructor() {
     this.session.user$.pipe(takeUntilDestroyed(this.destroy)).subscribe(user => this.noteOwner(user?.id ?? null));
     this.session.cleared$.pipe(takeUntilDestroyed(this.destroy)).subscribe(() => this.dropTreasury());
@@ -144,6 +148,16 @@ export class TownComponent {
     const toasted = this.observe(sorted);
     this.data.set(sorted);
     this.state.set('ready');
+    if (this.returnToLibrary) {
+      this.returnToLibrary = false;
+      afterNextRender(() => {
+        const active = this.document.activeElement;
+        const town = this.host.nativeElement;
+        if (active === this.document.body || active === town.querySelector('h1')) {
+          town.querySelector<HTMLAnchorElement>('a[href="/town/library"]')?.focus();
+        }
+      }, { injector: this.injector });
+    }
     this.refreshTreasury(sorted.town.today);
     const pending = this.pendingLive;
     this.pendingLive = null;

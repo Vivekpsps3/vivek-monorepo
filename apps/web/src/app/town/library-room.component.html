@@ -1,0 +1,68 @@
+<main>
+  <header>
+    <ui-button variant="ghost" href="/town" label="Back to Town" />
+    <h1>Reading Hall</h1>
+  </header>
+  <div class="room-layout">
+    <div class="composition">
+      <div class="scene" [style.aspect-ratio]="room.bounds.width + ' / ' + room.bounds.height">
+        @for (src of [artUrl(room)]; track src) {
+          <img class="room" [style.z-index]="room.layer" [src]="src" [width]="room.bounds.width" [height]="room.bounds.height"
+            [style.color-scheme]="room.palette[theme()]" [hidden]="!painted().includes(room.id)" (load)="artLoaded(room)" (error)="artFailed(room)" alt="">
+        }
+        @for (object of objects; track object.asset.id) {
+          <a class="piece" [routerLink]="[]" [queryParams]="{ object: object.asset.id }" [replaceUrl]="true" tabindex="-1"
+            [attr.aria-label]="object.label" [attr.aria-current]="selected() === object ? 'true' : null"
+            [hidden]="!painted().includes(object.asset.id)"
+            [style.left.%]="object.left" [style.top.%]="object.top" [style.width.%]="object.width" [style.height.%]="object.height"
+            [style.z-index]="object.asset.layer">
+            @for (src of [artUrl(object.asset)]; track src) {
+              <img [src]="src" [width]="object.asset.bounds.width" [height]="object.asset.bounds.height"
+                [style.color-scheme]="object.asset.palette[theme()]" (load)="artLoaded(object.asset)" (error)="artFailed(object.asset)" alt="">
+            }
+          </a>
+        }
+      </div>
+      @if (failed().length) {
+        <p role="status">Some room artwork is unavailable. You can still select each object below.</p>
+        <ui-button variant="secondary" (clicked)="retryArt()">Retry artwork</ui-button>
+      }
+      <ul class="objects" aria-label="Room objects">
+        @for (object of objects; track object.asset.id) {
+          <li>
+            <a class="action" [routerLink]="[]" [queryParams]="{ object: object.asset.id }" [replaceUrl]="true"
+              [attr.aria-current]="selected() === object ? 'true' : null">{{ object.label }}</a>
+          </li>
+        }
+      </ul>
+    </div>
+    <aside class="inspector" aria-label="Reading Hall details">
+      <section aria-live="polite">
+        @if (selected(); as object) {
+          <h2>{{ object.label }}</h2>
+          <p>{{ object.detail }}</p>
+          <ui-button [href]="object.link" [queryParams]="object.query" [label]="object.action" />
+        } @else {
+          <h2>Library</h2>
+          <p>Choose an object to explore your Media library.</p>
+          <ui-button href="/media" label="Open Media Now" />
+        }
+      </section>
+      <section class="progress" aria-labelledby="library-progress">
+        <h2 id="library-progress" tabindex="-1">Library progress</h2>
+        @let building = progress();
+        @if (building === 'loading') {
+          <p role="status">Loading Library progress…</p>
+        } @else if (!building) {
+          <p role="status">Library progress is unavailable.</p>
+          <ui-button variant="secondary" (clicked)="retryProgress()">Retry progress</ui-button>
+        } @else if (building.source === 'unavailable') {
+          <p role="status">Media is unavailable. Library progress may be out of date.</p>
+          <ui-button variant="secondary" (clicked)="retryProgress()">Retry progress</ui-button>
+        } @else {
+          <p>Level {{ building.level }} · {{ building.today_xp }} / {{ building.today_cap }} Media XP today</p>
+        }
+      </section>
+    </aside>
+  </div>
+</main>
