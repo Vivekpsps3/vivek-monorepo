@@ -3,7 +3,7 @@
 - Leaf: #382; parent scope: #304; roadmap: #134.
 - Agent: autonomous issue worker; branch `agent/style-01`; isolated worktree `/tmp/vivek-style-01`.
 - Fresh main/base: `b2bbf722c5164cb0ab6c23f413273782f4da026a`.
-- Tested implementation: `70405f6df01f28320019fcaf62082f4c4aee6f62` (subsequent evidence-only commits do not change application/test source).
+- Tested implementation: `1d5e88b3ebbb62699e684e211f118c1b99266ae5` (subsequent evidence-only commits do not change application/test source).
 - No dependencies. Fresh GitHub issue/comments and open-PR checks found no competing claims or PRs before implementation. The planning amendment #493 is on main.
 
 ## Acceptance
@@ -11,7 +11,7 @@
 | Row | Concrete executed proof | Result |
 | --- | --- | --- |
 | STYLE-01-A1 | `coastal-theme.spec.ts`: actual Settings → Appearance keyboard selection and Back twice preserve populated Hub and Finance. Synthetic Harbor savings stays $1,234.56; Harbor tour/Kyoto and Coastal stories remain visible. Both themes, 320×844, 390×844 and 1280×800. Record snapshots remain identical; tabular numbers and named shell material paint asserted. | PASS |
-| STYLE-01-A2 | Same browser spec: forced colors and 200% root text size, both themes, real Hub and Finance, keyboard menu open/Escape/focus return, 44px trigger and no page overflow. Axe runs on both screens. | PASS |
+| STYLE-01-A2 | Same browser spec: forced colors and 200% root text size, both themes, real Hub and Finance, keyboard menu open/Escape/focus return, 44px trigger and no page overflow. Filled-link idle/hover paint must match ButtonText/ButtonFace, preventing invisible text backplates; axe also runs on both screens. | PASS |
 | STYLE-01-LIFE | Existing web Karma `hub.component.spec.ts` executes held previous-owner summaries, retry failure/sign-out, and in-flight Finance responses released after lock; `fin-05-races.spec.ts` executes held legacy rewrite across lock and subsequent unlock. No state, request, persistence or lifecycle code changed. | PASS |
 | STYLE-01-VIEW | Actual theme selection, keyboard return and touch navigation, reduced motion, contrast token floors and axe at the stated dimensions; synthetic captures in the Finance HTML report and `/tmp/style-01-review`. Full browser matrices retain empty/loading/locked/error, source retry and existing Finance value semantics. | PASS |
 
@@ -29,10 +29,11 @@ capture; the full web suite separately exercises populated and empty sources.
 | --- | --- | --- | --- |
 | Warm-paper/warm-ink role values in `tokens.css` at the base | Real shared controls and suite/app CSS | Same token file and unchanged semantic names, now backed by six named coastal colors | Replaced the old assignments in place; no second theme stylesheet or compatibility adapter. Existing light/dark/system preference, app keys and OS listeners remain untouched. |
 | Teal shell selection and generic Hub top edge/readout | Private shell and real Hub cards | Existing component CSS | Coral current destination, material card edges and tabular display text replace those presentation values in their original owners. No copied component, route or data store. |
+| `--accent` used for both link text and inverse-label fills | Shared button/native/segmented controls, Finance calendar/Home, suite skip link and Hub completion marker | Same token file: `--accent` foreground; `--accent-fill`/`--accent-fill-hover` plus `--on-accent` for fills | Migrated these real consumers together; normal paint aliases the same palette. Forced colors pairs ButtonFace/ButtonText and keeps LinkText for links. No duplicated per-control forced-color fallback. |
 | Palette-specific RGB/hex assertions | Finance, Media, Travel, skeleton and contrast suites | Existing tests | Updated expected paint only; all contrast floors, map pixel-distance guards, focus, owner, data and save assertions remain. |
 
 - Classification: feature replacement, not a simplification claim. No files moved.
-- Production: 106 added / 52 deleted physical lines across the token file and two existing component styles (includes comments/blank lines); net +54 for named palette roles, forced-color fallback and material accents. Tests: 135 added / 27 deleted; frontend documentation: 12 added / 10 deleted.
+- Production: 123 added / 63 deleted physical lines across the token file and existing shell, Hub, shared-control and Finance styles (includes comments/blank lines); net +60 for named palette roles, forced-color fallback and material accents. Tests: 158 added / 27 deleted; frontend documentation: 13 added / 10 deleted.
 - Before/after: one theme token owner, one preference owner, unchanged public token entry points, zero new state/cache/listener/disposal owners.
 - Old token assignments were removed from the selected stylesheet. Separate World renderer art constants and chart fallbacks remain outside this token-consumer slice; no live consumer was routed to a duplicated palette.
 - A later palette edit still changes `packages/ui/tokens.css`; app-specific composition remains in the shell/Hub owners. Domain rules, encrypted formats, keys/AAD, records, supported routes and useful regression assertions are unchanged.
@@ -42,7 +43,9 @@ capture; the full web suite separately exercises populated and empty sources.
 Final results below apply to the tested implementation. Commands use Node 24 from
 `/tmp/node-v24-linux-x64/bin`, the existing `.venv`, and installed Chromium via
 `CHROME_BIN` for Karma. Local dependency symlinks and synthetic captures are not
-committed. No gate or baseline was lowered.
+committed. No gate or baseline was lowered. The final implementation revision
+above includes the full foreground/filled-paint consumer migration; earlier
+iteration results are not substituted for these final command results.
 
 | Command | Final result |
 | --- | --- |
@@ -53,7 +56,7 @@ committed. No gate or baseline was lowered.
 | `npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI` | PASS: 9 tests and coverage gate |
 | `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS: 403 tests and coverage gate |
 | `node --test packages/browser/runtime/*.test.mjs packages/ui/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs` | PASS: 20 tests; existing numeric contrast floors retained |
-| `make build-frontends` | PASS: production build and release manifest; 651.21kB initial bundle exceeds the 650kB warning level but remains below its configured error budget |
+| `make build-frontends` | PASS: production build and release manifest; 651.45kB initial bundle exceeds the 650kB warning level but remains below its configured error budget |
 | `make e2e` | PASS: production build, 213 browser tests; five pre-existing viewport-specific skips, none added |
 | `npx playwright test --config apps/media/e2e/playwright.config.ts` | PASS: 95 browser tests |
 | `npx playwright test --config apps/travel/e2e/playwright.config.js` | PASS: 143 browser tests; original map pixel and ≥3:1 contrast guards pass |
@@ -62,7 +65,10 @@ committed. No gate or baseline was lowered.
 
 Initial runs exposed stale old-palette assertions, a cross-owner test-fixture
 import (replaced with an app-owned synthetic fixture), default Node 20/Python
-runtime mismatches, and the navy map-surface distinction. These were genuinely
+runtime mismatches, and the navy map-surface distinction. Visual review also caught a filled-link
+label backplate invisible under forced colors despite green axe results; matched
+system paints and a direct idle/hover assertion correct it. The enlarged-text
+keyboard test now waits for the actual arrived-heading focus. These were genuinely
 corrected before final reruns. Two first-pass Media page-load failures did not
 recur after the production rebuild was complete. No failed check is treated as a
 pass, and no PR is opened with a required local gate pending.
