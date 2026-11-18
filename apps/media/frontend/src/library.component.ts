@@ -13,6 +13,7 @@ import {
   BehaviorSubject,
   combineLatest,
   catchError,
+  EMPTY,
   of,
   switchMap,
   Subscription,
@@ -36,13 +37,21 @@ import {
   MediaCard,
 } from "./media.models";
 import {
+  collectionKey,
+  collectionQuery,
+  collectionSummary,
+  emptyLibraryCopy,
   filterCount,
   filterLabel,
   isFiltered,
+  libraryTransition,
+  MUSIC_VIEWS,
   readFilters,
+  statusChoices,
   tagOptions,
   toQueryParams,
   type LibraryFilters,
+  type LibraryView,
 } from "./library-filters.mjs";
 const LIBRARY = "/media/library";
 
@@ -60,13 +69,26 @@ const LIBRARY = "/media/library";
     UiEmptyStateComponent,
   ],
   styleUrl: "./library-filters.css",
-  template: `<main class="page media-page">
+  template: `<main class="page media-page" [attr.data-collection]="collection">
     <ui-page-header
       [title]="heading"
       titleId="library-heading"
       [titleTabIndex]="-1"
       [concealTitle]="true"
     />
+    <p class="collection-summary">{{ summary }}</p>
+    @if (collection === "music") {
+      <nav class="music-views" aria-label="Music views">
+        @for (view of musicViews; track view.kind) {
+          <a
+            [routerLink]="['/media/library']"
+            [queryParams]="viewParams(view.kind)"
+            [attr.aria-current]="kind === view.kind ? 'page' : null"
+            >{{ view.label }}</a
+          >
+        }
+      </nav>
+    }
     <div class="library-toolbar">
       <form class="library-search" role="search" (ngSubmit)="searchNow()">
         <label for="library-q" class="visually-hidden"
@@ -99,18 +121,6 @@ const LIBRARY = "/media/library";
       (closed)="closeFilters()"
     >
       <h2 id="filters-title">Filters</h2>
-      <ui-field label="Type"
-        ><select
-          uiFieldControl
-          [(ngModel)]="kind"
-          (ngModelChange)="applySoon()"
-        >
-          <option value="">All types</option>
-          @for (k of kinds; track k.value) {
-            <option [value]="k.value">{{ k.label }}</option>
-          }
-        </select></ui-field
-      >
       <ui-field label="State"
         ><select
           uiFieldControl
@@ -118,8 +128,8 @@ const LIBRARY = "/media/library";
           (ngModelChange)="applySoon()"
         >
           <option value="">All states</option>
-          @for (s of states; track s) {
-            <option [value]="s">{{ s.replace("_", " ") }}</option>
+          @for (s of stateChoices; track s.value) {
+            <option [value]="s.value">{{ s.label }}</option>
           }
         </select></ui-field
       >
@@ -183,6 +193,9 @@ const LIBRARY = "/media/library";
         </button>
       </div>
     </ui-dialog>
+    @if (notice()) {
+      <p class="collection-notice" role="status">{{ notice() }}</p>
+    }
     @if (error()) {
       <div class="local-error" role="alert">
         {{ error() }}
@@ -237,22 +250,13 @@ const LIBRARY = "/media/library";
             }
           </section>
         } @empty {
-          <ui-empty-state
-            [title]="
-              filtered
-                ? 'No saved items match these filters'
-                : 'Your next favorite starts here'
-            "
-            [message]="
-              filtered
-                ? 'Try clearing a filter.'
-                : 'Search for a title, follow an artist, or add something of your own.'
-            "
-          >
+          <ui-empty-state [title]="emptyTitle" [message]="emptyMessage">
             @if (filtered) {
               <ui-button variant="ghost" (click)="clearAllFilters()">
                 Clear filters
               </ui-button>
+            } @else if (kind) {
+              <ui-button variant="ghost" href="/media/library" label="All items" />
             }
             <ui-button
               variant="primary"
@@ -301,16 +305,9 @@ export class LibraryComponent {
     return this.context.link(LIBRARY);
   }
   readonly kinds = kinds;
-  readonly states = [
-    "want",
-    "anticipating",
-    "in_progress",
-    "completed",
-    "paused",
-    "dropped",
-    "following",
-    "unfollowed",
-  ];
+  readonly musicViews = MUSIC_VIEWS;
+  readonly notice = signal("");
+  private seen: LibraryView | null = null;
   q = "";
   kind = "";
   status = "";
@@ -341,6 +338,24 @@ export class LibraryComponent {
       ? "Music"
       : kinds.find(item => item.value === this.kind)?.label || "Library";
   }
+  get summary(): string {
+    return collectionSummary(this.kind);
+  }
+  get collection(): string {
+    return collectionKey(this.kind);
+  }
+  get stateChoices() {
+    return statusChoices(this.kind);
+  }
+  get emptyTitle(): string {
+    return emptyLibraryCopy(this.kind, this.filtered).title;
+  }
+  get emptyMessage(): string {
+    return emptyLibraryCopy(this.kind, this.filtered).message;
+  }
+  viewParams(kind: string) {
+    return collectionQuery(this.currentFilters(), kind);
+  }
   get count(): number {
     return filterCount(this.currentFilters());
   }
@@ -359,7 +374,7 @@ export class LibraryComponent {
   readonly childrenLoading = signal(false);
   constructor() {
     // Router Back is deferred with setTimeout(0). A paused test clock does not
-    // run that timer, so the URL changes while the Type control keeps the
+    // run that timer, so the URL changes while the State control keeps the
     // pending value. Sync from the browser URL in the popstate event itself.
     const onPopState = () => this.dropPendingFilters(true);
     window.addEventListener("popstate", onPopState);
@@ -390,17 +405,19 @@ export class LibraryComponent {
       }
     });
     let requestedKind: string | undefined;
+    let suppressRead = false;
     combineLatest([this.route.queryParamMap, this.reload])
       .pipe(
         tap(([p]) => {
           const filters = readFilters(p);
+          const transition = libraryTransition(this.seen, filters);
           if (requestedKind !== filters.kind) {
             requestedKind = filters.kind;
             this.data.set(null);
           }
           this.q = filters.q;
-          this.kind = filters.kind;
-          this.status = filters.status;
+          this.kind = transition.kind;
+          this.status = transition.status;
           this.sort = filters.sort;
           this.favorite = filters.favorite;
           this.tags = filters.tags;
@@ -413,11 +430,29 @@ export class LibraryComponent {
             this.childrenLoading.set(false);
           }
           this.expanded.set(expanded);
+          if (transition.notice) this.notice.set(transition.notice);
+          else if (
+            transition.kindChange ||
+            (filters.status !== "" && filters.status !== this.seen?.status)
+          ) {
+            this.notice.set("");
+          }
+          this.seen = { kind: transition.kind, status: transition.status };
+          suppressRead = transition.redirect;
+          if (transition.redirect) {
+            void this.router.navigate([], {
+              relativeTo: this.route,
+              queryParams: { status: null },
+              queryParamsHandling: "merge",
+              replaceUrl: true,
+            });
+          }
           if (!this.data()) this.loading.set(true);
-          this.refreshing.set(true);
+          this.refreshing.set(!suppressRead);
           this.error.set("");
         }),
         switchMap(() => {
+          if (suppressRead) return EMPTY;
           let params = new HttpParams()
             .set("q", this.q)
             .set("kind", this.kind)
@@ -471,9 +506,10 @@ export class LibraryComponent {
     clearTimeout(this.filterTimer);
     this.filterTimer = undefined;
     const filters = readFilters(new URLSearchParams(window.location.search));
+    const transition = libraryTransition(this.seen, filters);
     this.q = filters.q;
-    this.kind = filters.kind;
-    this.status = filters.status;
+    this.kind = transition.kind;
+    this.status = transition.status;
     this.sort = filters.sort;
     this.favorite = filters.favorite;
     this.tags = filters.tags;
@@ -482,9 +518,8 @@ export class LibraryComponent {
     const root = document.getElementById("library-filters");
     const selects = root?.querySelectorAll("select");
     if (selects) {
-      const [type, state, sort] = selects;
-      if (type instanceof HTMLSelectElement) type.value = filters.kind;
-      if (state instanceof HTMLSelectElement) state.value = filters.status;
+      const [state, sort] = selects;
+      if (state instanceof HTMLSelectElement) state.value = transition.status;
       if (sort instanceof HTMLSelectElement) sort.value = filters.sort;
     }
     const favorite = root?.querySelector('input[type="checkbox"]');
@@ -512,10 +547,10 @@ export class LibraryComponent {
     this.filtersOpen.set(false);
   }
   clearFilters(): void {
-    this.kind = "";
     this.status = "";
     this.favorite = false;
     this.tags = [];
+    this.notice.set("");
     this.applyNow();
   }
   clearAllFilters(): void {

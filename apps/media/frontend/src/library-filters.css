@@ -1,3 +1,77 @@
+.collection-summary {
+  margin: 0;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 4px solid var(--data-edge);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.media-page[data-collection="movie"] {
+  --data-edge: var(--coral);
+}
+
+.media-page[data-collection="tv"] {
+  --data-edge: var(--teal);
+}
+
+.media-page[data-collection="book"] {
+  --data-edge: var(--brass);
+}
+
+.media-page[data-collection="music"] {
+  --data-edge: var(--chart-4);
+}
+
+.media-page[data-collection="game"] {
+  --data-edge: var(--wood);
+}
+
+.media-page[data-collection="all"] {
+  --data-edge: var(--chart-5);
+}
+
+.music-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+
+.music-views a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  box-shadow: var(--control-shadow);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.music-views a[aria-current="page"] {
+  border-color: var(--data-edge);
+  box-shadow: inset 0 -3px 0 var(--data-edge);
+}
+
+.music-views a:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.collection-notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--warning-soft-bg);
+  color: var(--text);
+}
+
 .library-toolbar {
   display: flex;
   align-items: center;
