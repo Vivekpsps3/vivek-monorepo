@@ -1,5 +1,5 @@
 {
-  "base_sha": "901306724fe358e97e73b0f4b2721431e996cd33",
+  "base_sha": "b912b0407340a1bb5f1efeca29f76f6eb0863c8d",
   "validated_on": "2026-11-18",
   "roadmap_issue": 134,
   "parents": [
@@ -456,27 +456,6 @@
       ],
       "verification_profiles": [
         "docs"
-      ]
-    },
-    {
-      "id": "MUX-04",
-      "title": "Style movie and series collections with useful progress",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 400,
-      "dependencies": [
-        "MUX-01",
-        "STYLE-03"
-      ],
-      "conflict_groups": [
-        "media-collections",
-        "media-records"
-      ],
-      "verification_profiles": [
-        "docs",
-        "media_front"
       ]
     },
     {
