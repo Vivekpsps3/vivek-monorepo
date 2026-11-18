@@ -103,7 +103,7 @@ for (const width of [390, 768, 1280]) for (const theme of ['light', 'dark'] as c
     await openFilters(page);
     await page.getByRole('dialog').getByRole('checkbox', { name: 'Favorites only' }).check();
     await closeFilters(page);
-    await expect(page.getByText('No saved items match these filters', { exact: true })).toBeVisible();
+    await expect(page.getByText('Nothing in this collection matches', { exact: true })).toBeVisible();
     await shot('library-filter-empty');
     expect(errors).toEqual([]);
   });

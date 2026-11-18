@@ -60,9 +60,10 @@ test('filters apply live and count updates', async ({ page, request }) => {
   await addItem(request, { kind: 'book', title: 'A book' });
   await openLibrary(page, theme, violations);
   await openFilters(page);
-  await page.getByRole('dialog').getByLabel('Type').selectOption('movie');
+  await page.getByRole('dialog').getByLabel('State').selectOption('want');
   await expect(page.locator('button[aria-controls="library-filters"]')).toHaveText('Filters (1)');
-  await expect(page).toHaveURL(/kind=movie/);
+  await expect(page).toHaveURL(/status=want/);
+  await expect(page).not.toHaveURL(/kind=/);
   await expect(page.getByRole('dialog')).toBeVisible();
   await expectCleanPage(page, violations);
 });
@@ -88,15 +89,17 @@ test('tags multi-select uses AND', async ({ page, request }) => {
   await expectCleanPage(page, violations);
 });
 
-test('clear filters keeps search and sort', async ({ page, request }) => {
+test('clear filters keeps search, sort, and the collection', async ({ page, request }) => {
   const violations: string[] = [];
   await addItem(request, { kind: 'movie', title: 'Story movie' });
-  await openLibrary(page, theme, violations, '/media/library?q=story&sort=title');
+  await openLibrary(page, theme, violations, '/media/library?kind=book&q=story&sort=title');
   await openFilters(page);
-  await page.getByRole('dialog').getByLabel('Type').selectOption('movie');
-  await expect(page).toHaveURL(/kind=movie/);
+  await page.getByRole('dialog').getByLabel('State').selectOption('completed');
+  await expect(page).toHaveURL(/kind=book/);
+  await expect(page).toHaveURL(/status=completed/);
   await page.getByRole('dialog').getByRole('button', { name: 'Clear filters' }).click();
-  await expect(page).not.toHaveURL(/kind=/);
+  await expect(page).toHaveURL(/kind=book/);
+  await expect(page).not.toHaveURL(/status=/);
   expect(page.url()).toContain('q=story');
   expect(page.url()).toContain('sort=title');
   await expect(page.locator('button[aria-controls="library-filters"]')).toHaveText('Filters');
@@ -150,30 +153,27 @@ test('rapid typing sends one debounced library read', async ({ page, request }) 
   await expectCleanPage(page, violations);
 });
 
-test('back and forward restore filter URL, controls, and results', async ({ page, request }) => {
+test('back and forward restore collection URL and results', async ({ page, request }) => {
   const violations: string[] = [];
   await addItem(request, { kind: 'movie', title: 'Filter movie' });
   await addItem(request, { kind: 'book', title: 'Filter book' });
   await openLibrary(page, theme, violations);
-  await openFilters(page);
-  const type = page.getByRole('dialog').getByLabel('Type');
-  await type.selectOption('movie');
+  const sections = page.getByRole('navigation', { name: 'Media sections' });
+  await sections.getByRole('link', { name: 'Movies', exact: true }).click();
   await expect(page).toHaveURL(/kind=movie/);
   await expect(page.getByText('Filter movie')).toBeVisible();
   await expect(page.getByText('Filter book')).toHaveCount(0);
-  await type.selectOption('book');
+  await sections.getByRole('link', { name: 'Books', exact: true }).click();
   await expect(page).toHaveURL(/kind=book/);
   await expect(page.getByText('Filter book')).toBeVisible();
   await expect(page.getByText('Filter movie')).toHaveCount(0);
   await page.goBack();
   await expect(page).toHaveURL(/kind=movie/);
   await expect(page).not.toHaveURL(/kind=book/);
-  await expect(type).toHaveValue('movie');
   await expect(page.getByText('Filter movie')).toBeVisible();
   await expect(page.getByText('Filter book')).toHaveCount(0);
   await page.goForward();
   await expect(page).toHaveURL(/kind=book/);
-  await expect(type).toHaveValue('book');
   await expect(page.getByText('Filter book')).toBeVisible();
   await expect(page.getByText('Filter movie')).toHaveCount(0);
   await expectCleanPage(page, violations);
@@ -189,25 +189,25 @@ test('Back drops a pending filter instead of applying it later', async ({ page, 
   });
   await openLibrary(page, theme, violations);
   await openFilters(page);
-  const type = page.getByRole('dialog').getByLabel('Type');
-  await type.selectOption('movie');
-  await expect(page).toHaveURL(/kind=movie/);
+  const state = page.getByRole('dialog').getByLabel('State');
+  await state.selectOption('want');
+  await expect(page).toHaveURL(/status=want/);
   await page.clock.pauseAt(new Date('2026-10-15T12:02:00Z'));
   const before = requests;
-  await type.selectOption('book');
+  await state.selectOption('completed');
   expect(requests).toBe(before);
   await page.goBack();
-  await expect(page).not.toHaveURL(/kind=/);
-  // The paused clock must not apply the pending type. Zero-delay router work
+  await expect(page).not.toHaveURL(/status=/);
+  // The paused clock must not apply the pending state. Zero-delay router work
   // can still be due, and the select stays stale until that work runs.
   await page.clock.runFor(0);
-  await expect(type).toHaveValue('');
+  await expect(state).toHaveValue('');
   const afterBack = requests;
   expect(afterBack).toBe(before + 1);
   await page.clock.runFor(1000);
   expect(requests).toBe(afterBack);
-  await expect(page).not.toHaveURL(/kind=book/);
-  await expect(type).toHaveValue('');
+  await expect(page).not.toHaveURL(/status=completed/);
+  await expect(state).toHaveValue('');
   await expect(page.getByText('Pending movie')).toBeVisible();
   await expectCleanPage(page, violations);
 });
@@ -224,21 +224,21 @@ test('Escape flushes a pending filter and returns focus', async ({ page, request
   await openFilters(page);
   await page.clock.pauseAt(new Date('2026-10-15T12:02:00Z'));
   const dialog = page.getByRole('dialog');
-  const type = dialog.getByLabel('Type');
+  const state = dialog.getByLabel('State');
   const before = reads;
-  await type.selectOption('movie');
+  await state.selectOption('want');
   expect(reads).toBe(before);
-  await expect(page).not.toHaveURL(/kind=movie/);
-  // Leave the native type menu before Escape. A click on the heading does not
+  await expect(page).not.toHaveURL(/status=want/);
+  // Leave the native state menu before Escape. A click on the heading does not
   // reliably do that while the menu is open, and then Escape closes the menu.
-  await type.blur();
+  await state.blur();
   await page.keyboard.press('Escape');
   // Event coalescing paints the closed sheet on the next timer. The clock is
   // paused, so run that callback without reaching the 250ms filter debounce.
   await page.clock.runFor(1);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('button[aria-controls="library-filters"]')).toBeFocused();
-  await expect(page).toHaveURL(/kind=movie/);
+  await expect(page).toHaveURL(/status=want/);
   await expect(page.getByText('Escape movie')).toBeVisible();
   expect(reads).toBe(before + 1);
   await page.clock.runFor(1000);
@@ -259,10 +259,10 @@ test('empty filtered result shows clear button', async ({ page, request }) => {
   const violations: string[] = [];
   await addItem(request, { kind: 'book', title: 'Only a book' });
   await openLibrary(page, theme, violations, '/media/library?kind=movie');
-  await expect(page.getByText('No saved items match these filters', { exact: true })).toBeVisible();
-  const clear = page.getByRole('button', { name: 'Clear filters' });
-  await expect(clear).toBeVisible();
-  await clear.click();
+  await expect(page.getByText('No movies saved yet', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0);
+  await page.locator('main').getByRole('link', { name: 'All items', exact: true }).click();
+  await expect(page).not.toHaveURL(/kind=/);
   await expect(page.locator('media-card')).toHaveCount(4);
   await expect(page.getByText('Only a book')).toBeVisible();
   await expectCleanPage(page, violations);
