@@ -87,6 +87,24 @@ test("Following then Books drops the state and keeps the rest of the library que
   assert.equal(elsewhere.find((item) => item.label === "Books").link, "/media/library?kind=book");
 });
 
+test("Search and Add keep the open collection type", () => {
+  const sections = [
+    { label: "Search", link: "/media/search" },
+    { label: "Add", ariaLabel: "Add manually", link: "/media/add" },
+    { label: "Books", link: "/media/library?kind=book" },
+  ];
+  const linked = mediaSectionLinks("/media/library?kind=book&status=want&q=harbor", sections);
+  assert.equal(linked[0].link, "/media/search?kind=book");
+  assert.equal(linked[1].link, "/media/add?kind=book");
+  assert.equal(linked[2].link, "/media/library?kind=book&q=harbor&status=want");
+  const games = mediaSectionLinks("/media/library?kind=game", sections);
+  assert.equal(games[0].link, "/media/search?kind=game");
+  assert.equal(games[1].link, "/media/add?kind=game");
+  const plain = mediaSectionLinks("/media/search", sections);
+  assert.equal(plain[0], sections[0]);
+  assert.equal(plain[1], sections[1]);
+});
+
 test("an impossible status is a visible normalization, not a silent empty read", () => {
   const bookmarked = libraryTransition(null, {
     q: "",

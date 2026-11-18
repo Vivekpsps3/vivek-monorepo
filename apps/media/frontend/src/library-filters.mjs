@@ -194,12 +194,28 @@ function carriedLibraryQuery(current, kind) {
  * All items stays the clean mixed view. Impossible states are not copied.
  * Query from another Media page is not the library's query.
  */
+const CAPTURE_PATHS = new Set(["/media/library", "/media/search", "/media/add"]);
+const CAPTURE_KINDS = new Set(["movie", "tv", "book", "game", "artist", "album", "track"]);
+
+function carriedCaptureKind(parsed) {
+  if (!CAPTURE_PATHS.has(parsed.pathname)) return "";
+  const kind = parsed.searchParams.get("kind") || "";
+  return CAPTURE_KINDS.has(kind) ? kind : "";
+}
+
 export function mediaSectionLinks(url, sections) {
   const parsed = new URL(url || "/", "http://local");
   const current =
     parsed.pathname === "/media/library" ? parsed.searchParams : new URLSearchParams();
+  const carried = carriedCaptureKind(parsed);
   return sections.map((item) => {
     const link = new URL(item.link, "http://local");
+    if (link.pathname === "/media/search" || link.pathname === "/media/add") {
+      if (!carried) return item;
+      const next = new URLSearchParams(link.searchParams);
+      next.set("kind", carried);
+      return { ...item, link: `${link.pathname}?${next.toString()}` };
+    }
     if (link.pathname !== "/media/library") return item;
     const kind = link.searchParams.get("kind");
     if (!kind) return item;

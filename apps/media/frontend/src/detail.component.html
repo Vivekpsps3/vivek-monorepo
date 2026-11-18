@@ -73,7 +73,7 @@
         </ui-badge>
       }
       <div class="button-row">
-        @if (entry.catalog.source !== "manual") {
+        @if (entry.catalog.source !== "manual" && !entry.catalog.extra["metadata_pending"]) {
           <ui-button
             variant="ghost"
             [disabled]="busy()"
@@ -106,7 +106,25 @@
         </p>
       }
       @if (entry.catalog.extra["metadata_pending"]) {
-        <p class="muted">Metadata pending. Your saved item is ready to edit.</p>
+        <p class="muted" id="metadata-pending">
+          Metadata is still pending. This saved item stays editable.
+        </p>
+        @if (metadataRetryOpen) {
+          <div id="metadata-retry" class="button-row">
+            <ui-button variant="ghost" [disabled]="busy()" (click)="retryMetadata()">
+              Retry metadata
+            </ui-button>
+          </div>
+          <p class="muted">
+            {{ metadataRetryLimit - metadataRetries }}
+            {{ metadataRetryLimit - metadataRetries === 1 ? "attempt" : "attempts" }}
+            left. Retry does not run when you open this item.
+          </p>
+        } @else {
+          <p id="metadata-limit" tabindex="-1" role="status">
+            Metadata retry limit reached. This saved item stays editable, and opening it will not call the provider.
+          </p>
+        }
       }
     </ui-page-header>
     @if (message()) {

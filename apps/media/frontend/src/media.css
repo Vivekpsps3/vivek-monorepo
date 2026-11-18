@@ -521,3 +521,25 @@
 .media-page .popular-error p {
   margin: 0 0 0.75rem;
 }
+.media-page a.capture-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  margin-bottom: 0.5rem;
+}
+.media-page .provider-coverage {
+  margin: 0 0 1rem;
+}
+.media-page .provider-coverage h2,
+.media-page .capture-manual h2 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+.media-page .provider-coverage ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.media-page .capture-manual {
+  margin-top: 1.5rem;
+}

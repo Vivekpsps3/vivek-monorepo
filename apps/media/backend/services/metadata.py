@@ -127,6 +127,29 @@ def ingest_series(db: Session, catalog: CatalogItem, detail: dict) -> None:
     db.flush()
 
 
+# Explicit pending retries. Opening the item does not spend one.
+METADATA_RETRY_LIMIT = 3
+
+
+def _retry_count(catalog: CatalogItem) -> int:
+    from apps.media.backend.services.records import _extra, _metadata_pending
+
+    if not _metadata_pending(catalog):
+        return 0
+    raw = _extra(catalog).get("metadata_retries")
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+        return 0
+    return raw
+
+
+def _spend_retry(catalog: CatalogItem) -> None:
+    from apps.media.backend.services.records import _extra, _save_extra
+
+    extra = _extra(catalog)
+    extra["metadata_retries"] = _retry_count(catalog) + 1
+    _save_extra(catalog, extra)
+
+
 def refresh(db: Session, entry: UserEntry, body: dict | None = None) -> UserEntry:
     from apps.media.backend.services import providers, records
 
@@ -157,6 +180,17 @@ def refresh(db: Session, entry: UserEntry, body: dict | None = None) -> UserEntr
             )
     if source == "manual" or not identity:
         fail("Link a provider identity before refreshing this item.")
+    from apps.media.backend.services.records import _metadata_pending
+
+    if _metadata_pending(catalog):
+        if _retry_count(catalog) >= METADATA_RETRY_LIMIT:
+            raise APIError(
+                409,
+                "retry_limit",
+                "Metadata retry limit reached. Your saved item is unchanged.",
+            )
+        # Commit the attempt before provider IO. A failed lookup still counts.
+        _spend_retry(catalog)
     release_for_provider_io(db)
     key = f"saved-detail:{source}:{catalog.kind}:{identity}"
 

@@ -166,6 +166,8 @@ export interface SearchHit {
   artwork_url?: string | null;
   already_saved?: boolean;
   saved_id?: number;
+  /** Set after a save when the provider did not return metadata. Title text is not this flag. */
+  metadata_pending?: boolean;
   extra?: {
     lifecycle?: string;
   };

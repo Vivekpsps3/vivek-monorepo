@@ -4,8 +4,8 @@
   Shared catalog identity and an owner's personal entry are different entities.
 - [Providers](backend/services/providers.py) owns public metadata transport/parsing;
   [metadata](backend/services/metadata.py) owns explicit refresh behavior.
-- [Detail](frontend/src/detail.component.ts), [library](frontend/src/library.component.ts)
-  and [Add](frontend/src/add.component.ts) are existing UI owners.
+- [Detail](frontend/src/detail.component.ts), [library](frontend/src/library.component.ts),
+  and [search](frontend/src/search.component.ts) own the screens, including manual add.
 
 Ordinary saved reads stay bounded and database-only: do not contact providers
 or repair saved state during a GET. Keep provider I/O outside write transactions.
@@ -25,7 +25,7 @@ similar fields can represent different privacy/identity contracts; prove
 equivalence before combining serializers.
 
 [membership.py](backend/services/membership.py) contains migration SQL imported by
-applied revisions. It is not an orphan runtime store; preserve historical migration
+applied revisions. It is not an orphan; preserve historical migration
 behavior and its imports when cleaning records code.
 
 Use [MEDIA](../../docs/MEDIA.md) for affected behavior and root gates for changed

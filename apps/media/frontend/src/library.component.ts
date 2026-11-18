@@ -316,7 +316,12 @@ const LIBRARY = "/media/library";
               } @else {
                 <ui-button variant="ghost" href="/media/library" label="All items" />
               }
-              <ui-button variant="primary" href="/media/search" label="Search Media" />
+              <ui-button
+                variant="primary"
+                href="/media/search"
+                [queryParams]="captureParams()"
+                label="Search Media"
+              />
             </ui-empty-state>
           }
         </div>
@@ -362,7 +367,12 @@ const LIBRARY = "/media/library";
             } @else if (kind) {
               <ui-button variant="ghost" href="/media/library" label="All items" />
             }
-            <ui-button variant="primary" href="/media/search" label="Search Media" />
+            <ui-button
+              variant="primary"
+              href="/media/search"
+              [queryParams]="captureParams()"
+              label="Search Media"
+            />
           </ui-empty-state>
         }
       } @else if (collection === "game") {
@@ -392,7 +402,12 @@ const LIBRARY = "/media/library";
             } @else if (kind) {
               <ui-button variant="ghost" href="/media/library" label="All items" />
             }
-            <ui-button variant="primary" href="/media/search" label="Search Media" />
+            <ui-button
+              variant="primary"
+              href="/media/search"
+              [queryParams]="captureParams()"
+              label="Search Media"
+            />
           </ui-empty-state>
         }
       } @else {
@@ -481,6 +496,7 @@ const LIBRARY = "/media/library";
             <ui-button
               variant="primary"
               href="/media/search"
+              [queryParams]="captureParams()"
               label="Search Media"
             />
           </ui-empty-state>
@@ -592,6 +608,9 @@ export class LibraryComponent {
   }
   viewParams(kind: string) {
     return collectionQuery(this.currentFilters(), kind);
+  }
+  captureParams(): { kind?: string } {
+    return this.kind ? { kind: this.kind } : {};
   }
   shelfParams(status: string) {
     return {

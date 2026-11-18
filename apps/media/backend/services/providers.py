@@ -118,6 +118,83 @@ def sources_for_kind(kind: str) -> frozenset[str]:
     return KIND_SOURCES.get(kind, frozenset())
 
 
+def describe_coverage(kind: str | None) -> list[dict]:
+    """Which sources can search this type. Does not contact a provider or invent a hit."""
+    selected = None if kind in (None, "", "all") else kind
+    tmdb_key = bool(os.getenv("TMDB_API_KEY", "").strip())
+    rawg_key = bool(os.getenv("RAWG_API_KEY", "").strip())
+    rows: list[dict] = []
+
+    def consider(source_id: str, kinds: list[str], coverage: str, state: str, reason: str | None):
+        if selected is not None and selected not in kinds:
+            return
+        rows.append(
+            {
+                "id": source_id,
+                "kinds": list(kinds),
+                "coverage": coverage,
+                "state": state,
+                "reason": reason,
+            }
+        )
+
+    if tmdb_key:
+        consider("tmdb", ["movie", "tv"], "official", "configured", None)
+    else:
+        consider(
+            "tmdb",
+            ["movie"],
+            "extraction",
+            "configured",
+            "No TMDB key is set. Movie search can use the public page. That is not an official or paid account.",
+        )
+        consider(
+            "tmdb",
+            ["tv"],
+            "official",
+            "unconfigured",
+            "TMDB series search needs a key. Nothing is sent to TMDB for series.",
+        )
+    consider("tvmaze", ["tv"], "official", "configured", None)
+    if scrape_mode():
+        consider("itunes", ["movie"], "official", "configured", None)
+    else:
+        consider(
+            "itunes",
+            ["movie"],
+            "official",
+            "unconfigured",
+            "iTunes search is off until MEDIA_SCRAPE_MODE is enabled. It is not a purchased library.",
+        )
+    consider("musicbrainz", ["artist", "album", "track"], "official", "configured", None)
+    consider("openlibrary", ["book"], "official", "configured", None)
+    if rawg_key:
+        consider("rawg", ["game"], "official", "configured", None)
+        consider(
+            "steam",
+            ["game"],
+            "keyless",
+            "unconfigured",
+            "Steam is not queried while a RAWG key is set.",
+        )
+    else:
+        consider(
+            "rawg",
+            ["game"],
+            "official",
+            "unconfigured",
+            "RAWG needs a key. No hosted game account is connected.",
+        )
+        consider(
+            "steam",
+            ["game"],
+            "keyless",
+            "configured",
+            "Steam search is keyless. It does not prove a Steam account.",
+        )
+    return rows
+
+
 def provenance(provider: str, coverage: str) -> dict:
     fetched = datetime.now(UTC).replace(microsecond=0).isoformat()
     return {"provider": provider, "coverage": coverage, "fetched_at": fetched}
