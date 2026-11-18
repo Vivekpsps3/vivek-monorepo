@@ -15,10 +15,40 @@ describe('section nav', () => {
     const mediaLayout = mediaRoutes[0].component;
     if (!travelLayout || !mediaLayout) throw new Error('section layouts are missing from the public routes');
     expect(new travelLayout().sections).toBe(travelSections);
-    expect(new mediaLayout().sections).toBe(mediaSections);
+    TestBed.configureTestingModule({ providers: [provideRouter([{ path: '**', component: Blank }])] });
+    const media = TestBed.createComponent(mediaLayout);
+    expect(media.componentInstance.sections).toBe(mediaSections);
+  });
+
+  it('keeps compatible library query on collection links and leaves All items clean', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideRouter([{ path: '**', component: Blank }])] });
+    const router = TestBed.inject(Router);
+    const mediaLayout = mediaRoutes[0].component;
+    if (!mediaLayout) throw new Error('media layout missing');
+    await router.navigateByUrl('/media/library?kind=artist&status=following&sort=title&q=harbor&offset=24');
+    const fixture = TestBed.createComponent(mediaLayout);
+    fixture.detectChanges();
+    const href = (name: string) => {
+      const link = [...fixture.nativeElement.querySelectorAll('a')].find(anchor => anchor.textContent?.trim() === name) as HTMLAnchorElement;
+      return new URL(link.getAttribute('href') || '', 'http://local');
+    };
+    const books = href('Books');
+    expect(books.pathname).toBe('/media/library');
+    expect(books.searchParams.get('kind')).toBe('book');
+    expect(books.searchParams.get('q')).toBe('harbor');
+    expect(books.searchParams.get('sort')).toBe('title');
+    expect(books.searchParams.get('status')).toBeNull();
+    expect(books.searchParams.has('offset')).toBeFalse();
+    const music = href('Music');
+    expect(music.searchParams.get('kind')).toBe('artist');
+    expect(music.searchParams.get('status')).toBe('following');
+    expect(href('All items').search).toBe('');
+    expect(href('Now').pathname).toBe('/media');
   });
 
   it('marks one canonical or compatible destination current', async () => {
+    TestBed.resetTestingModule();
     TestBed.configureTestingModule({ providers: [provideRouter([{ path: '**', component: Blank }])] });
     const router = TestBed.inject(Router);
     const fixture = TestBed.createComponent(UiSectionNavComponent);

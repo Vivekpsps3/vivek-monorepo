@@ -13,14 +13,25 @@ import {
   BehaviorSubject,
   combineLatest,
   catchError,
+  EMPTY,
+  map,
   of,
   switchMap,
   Subscription,
   tap,
 } from "rxjs";
+import { formatDay } from "@vivek/browser";
+import { BookShelfComponent } from "./book-shelf.component";
+import { GameCabinetComponent } from "./game-cabinet.component";
+import { noteExcerpt } from "./books.mjs";
 import { MediaCardComponent } from "./media-card.component";
+import { NextEpisodeButtonComponent } from "./next-episode-button.component";
+import { NextResult } from "./next-episode.service";
+import { NextEpisodeUndoService } from "./next-episode-undo.service";
+import { seriesShelf } from "./theater.mjs";
 import {
   ReturnContext,
+  SESSION_CONTEXT,
   UiButtonComponent,
   UiDialogComponent,
   UiEmptyStateComponent,
@@ -32,17 +43,29 @@ import {
   errorCopy,
   kinds,
   LibraryResponse,
+  ArtistGroup,
+  ArtistGroupPage,
+  ArtistGroupSummary,
+  Continuation,
   Detail,
   MediaCard,
 } from "./media.models";
 import {
+  collectionKey,
+  collectionQuery,
+  collectionSummary,
+  emptyLibraryCopy,
   filterCount,
   filterLabel,
   isFiltered,
+  libraryTransition,
+  MUSIC_VIEWS,
   readFilters,
+  statusChoices,
   tagOptions,
   toQueryParams,
   type LibraryFilters,
+  type LibraryView,
 } from "./library-filters.mjs";
 const LIBRARY = "/media/library";
 
@@ -51,7 +74,10 @@ const LIBRARY = "/media/library";
   imports: [
     FormsModule,
     RouterLink,
+    BookShelfComponent,
+    GameCabinetComponent,
     MediaCardComponent,
+    NextEpisodeButtonComponent,
     UiButtonComponent,
     UiDialogComponent,
     UiFieldComponent,
@@ -60,13 +86,26 @@ const LIBRARY = "/media/library";
     UiEmptyStateComponent,
   ],
   styleUrl: "./library-filters.css",
-  template: `<main class="page media-page">
+  template: `<main class="page media-page" [attr.data-collection]="collection">
     <ui-page-header
       [title]="heading"
       titleId="library-heading"
       [titleTabIndex]="-1"
       [concealTitle]="true"
     />
+    <p class="collection-summary">{{ summary }}</p>
+    @if (collection === "music") {
+      <nav class="music-views" aria-label="Music views">
+        @for (view of musicViews; track view.kind) {
+          <a
+            [routerLink]="['/media/library']"
+            [queryParams]="viewParams(view.kind)"
+            [attr.aria-current]="kind === view.kind ? 'page' : null"
+            >{{ view.label }}</a
+          >
+        }
+      </nav>
+    }
     <div class="library-toolbar">
       <form class="library-search" role="search" (ngSubmit)="searchNow()">
         <label for="library-q" class="visually-hidden"
@@ -99,18 +138,6 @@ const LIBRARY = "/media/library";
       (closed)="closeFilters()"
     >
       <h2 id="filters-title">Filters</h2>
-      <ui-field label="Type"
-        ><select
-          uiFieldControl
-          [(ngModel)]="kind"
-          (ngModelChange)="applySoon()"
-        >
-          <option value="">All types</option>
-          @for (k of kinds; track k.value) {
-            <option [value]="k.value">{{ k.label }}</option>
-          }
-        </select></ui-field
-      >
       <ui-field label="State"
         ><select
           uiFieldControl
@@ -118,8 +145,8 @@ const LIBRARY = "/media/library";
           (ngModelChange)="applySoon()"
         >
           <option value="">All states</option>
-          @for (s of states; track s) {
-            <option [value]="s">{{ s.replace("_", " ") }}</option>
+          @for (s of stateChoices; track s.value) {
+            <option [value]="s.value">{{ s.label }}</option>
           }
         </select></ui-field
       >
@@ -183,6 +210,9 @@ const LIBRARY = "/media/library";
         </button>
       </div>
     </ui-dialog>
+    @if (notice()) {
+      <p class="collection-notice" role="status">{{ notice() }}</p>
+    }
     @if (error()) {
       <div class="local-error" role="alert">
         {{ error() }}
@@ -194,12 +224,203 @@ const LIBRARY = "/media/library";
     }
     @if (data(); as library) {
       <p class="muted">
-        {{ library.total }} saved {{ library.total === 1 ? "item" : "items" }}
+        @if (kind === "artist") {
+          {{ library.total }} {{ library.total === 1 ? "artist" : "artists" }}
+        } @else {
+          {{ library.total }} saved {{ library.total === 1 ? "item" : "items" }}
+        }
       </p>
-      <div class="media-grid" [attr.aria-busy]="refreshing()">
+      @if (kind === "artist") {
+        <div class="media-grid" [attr.aria-busy]="refreshing()">
+          @if (offPageGroup()) {
+            @if (groupLoading()) {
+              <p role="status">Loading saved music…</p>
+            }
+            @if (groupError()) {
+              <p role="alert">{{ groupError() }}</p>
+              <ui-button variant="ghost" (click)="reloadGroup()">Retry saved music</ui-button>
+            }
+          }
+          @for (group of visibleGroups(); track group.catalog_id) {
+            <section
+              class="artist-group"
+              [attr.data-artist-group]="group.catalog_id"
+            >
+              <h2>
+                @if (group.entry_id) {
+                  <a
+                    [attr.data-media-item]="group.entry_id"
+                    [routerLink]="['/media/item', group.entry_id]"
+                    [state]="source()"
+                    >{{ group.title }}</a
+                  >
+                } @else {
+                  {{ group.title }}
+                }
+              </h2>
+              <p class="muted">
+                {{ group.followed ? "Following" : "Not followed" }}
+                @if (group.rating !== null && group.rating !== undefined) {
+                  · {{ group.rating }} / 10
+                }
+              </p>
+              <ui-button
+                variant="ghost"
+                [ariaExpanded]="expandedGroup() === group.catalog_id"
+                [ariaControls]="'group-' + group.catalog_id"
+                (click)="expandGroup(group)"
+              >
+                {{ expandedGroup() === group.catalog_id ? "Hide" : "Show" }}
+                saved albums and songs ({{ group.saved_count || 0 }})
+              </ui-button>
+              @if (expandedGroup() === group.catalog_id) {
+                <div [id]="'group-' + group.catalog_id" class="saved-children">
+                  @for (album of group.albums || []; track album.id) {
+                    <div class="saved-album">
+                      <media-card [item]="album" [source]="source()" />
+                      <div class="saved-songs">
+                        @for (song of album.songs || []; track song.id) {
+                          <media-card [item]="song" [source]="source()" />
+                        } @empty {
+                          <p>No saved songs on this album.</p>
+                        }
+                      </div>
+                    </div>
+                  }
+                  @if (group.songs?.length) {
+                    <h3 class="loose-songs">Saved without an album</h3>
+                    @for (song of group.songs || []; track song.id) {
+                      <media-card [item]="song" [source]="source()" />
+                    }
+                  }
+                  @if (!group.albums?.length && !group.songs?.length && !groupLoading()) {
+                    <p>No saved albums or songs for this artist.</p>
+                  }
+                  @if (group.entry_id && group.source === "musicbrainz") {
+                    <a
+                      class="discography-link"
+                      [routerLink]="['/media/item', group.entry_id, 'discography']"
+                      [state]="source()"
+                      >Browse discography</a
+                    >
+                  }
+                </div>
+              }
+            </section>
+          } @empty {
+            <ui-empty-state [title]="emptyTitle" [message]="emptyMessage">
+              @if (filtered) {
+                <ui-button variant="ghost" (click)="clearAllFilters()">
+                  Clear filters
+                </ui-button>
+              } @else {
+                <ui-button variant="ghost" href="/media/library" label="All items" />
+              }
+              <ui-button variant="primary" href="/media/search" label="Search Media" />
+            </ui-empty-state>
+          }
+        </div>
+      } @else if (collection === "book") {
+        <nav class="book-signs" aria-label="Book shelves">
+          @for (sign of bookSigns; track sign.status) {
+            <a
+              [routerLink]="['/media/library']"
+              [queryParams]="shelfParams(sign.status)"
+              [attr.aria-current]="status === sign.status ? 'page' : null"
+              >{{ sign.label }}</a
+            >
+          }
+        </nav>
+        <nav class="book-signs" aria-label="Book presentation">
+          <a
+            [routerLink]="['/media/library']"
+            [queryParams]="faceParams('spine')"
+            [attr.aria-current]="face === 'spine' ? 'page' : null"
+            >Covers and spines</a
+          >
+          <a
+            [routerLink]="['/media/library']"
+            [queryParams]="faceParams('text')"
+            [attr.aria-current]="face === 'text' ? 'page' : null"
+            >Text</a
+          >
+        </nav>
+        @if (library.items.length) {
+          <media-book-shelf
+            [items]="library.items"
+            [status]="status"
+            [face]="face"
+            [linkState]="source()"
+            (saved)="onBookSaved($event)"
+          />
+        } @else {
+          <ui-empty-state [title]="emptyTitle" [message]="emptyMessage">
+            @if (filtered) {
+              <ui-button variant="ghost" (click)="clearAllFilters()">
+                Clear filters
+              </ui-button>
+            } @else if (kind) {
+              <ui-button variant="ghost" href="/media/library" label="All items" />
+            }
+            <ui-button variant="primary" href="/media/search" label="Search Media" />
+          </ui-empty-state>
+        }
+      } @else if (collection === "game") {
+        <nav class="game-bays" aria-label="Game cabinet">
+          @for (sign of gameSigns; track sign.status) {
+            <a
+              [routerLink]="['/media/library']"
+              [queryParams]="bayParams(sign.status)"
+              [attr.aria-current]="status === sign.status ? 'page' : null"
+              >{{ sign.label }}</a
+            >
+          }
+        </nav>
+        @if (library.items.length) {
+          <media-game-cabinet
+            [items]="library.items"
+            [status]="status"
+            [linkState]="source()"
+            (saved)="onGameSaved($event)"
+          />
+        } @else {
+          <ui-empty-state [title]="emptyTitle" [message]="emptyMessage">
+            @if (filtered) {
+              <ui-button variant="ghost" (click)="clearAllFilters()">
+                Clear filters
+              </ui-button>
+            } @else if (kind) {
+              <ui-button variant="ghost" href="/media/library" label="All items" />
+            }
+            <ui-button variant="primary" href="/media/search" label="Search Media" />
+          </ui-empty-state>
+        }
+      } @else {
+      <div
+        class="media-grid"
+        [class.theater-shelf]="shelfLayout() === 'poster'"
+        [attr.aria-busy]="refreshing()"
+      >
         @for (item of library.items; track item.id) {
           <section>
-            <media-card [item]="item" [source]="source()" />
+            <media-card [item]="item" [source]="source()" [layout]="shelfLayout()">
+              @if (showShelfAction(item)) {
+                <div mediaCardActions class="theater-actions">
+                  @if (airLine(item); as air) {
+                    <p class="poster-air">{{ air }}</p>
+                  }
+                  <media-next-episode
+                    [entryId]="item.id"
+                    [episodeId]="shelfEpisodeId(item)"
+                    [season]="item.continuation?.season ?? 0"
+                    [episode]="item.continuation?.episode ?? 0"
+                    [showTitle]="item.title"
+                    (done)="onShelfDone($event, item.id)"
+                    (failed)="onShelfFailed($event)"
+                  />
+                </div>
+              }
+            </media-card>
             @if (item.kind === "artist") {
               <ui-button
                 variant="ghost"
@@ -235,24 +456,27 @@ const LIBRARY = "/media/library";
                 </div>
               }
             }
+            @if (item.kind === "album" || item.kind === "track") {
+              @for (group of item.artist_groups || []; track group.catalog_id) {
+                <a
+                  class="group-link"
+                  [routerLink]="['/media/library']"
+                  [queryParams]="artistGroupParams(group)"
+                  >Show {{ group.title }}{{ group.followed ? "" : ", not followed" }} ({{
+                    group.saved_count || 0
+                  }})</a
+                >
+              }
+            }
           </section>
         } @empty {
-          <ui-empty-state
-            [title]="
-              filtered
-                ? 'No saved items match these filters'
-                : 'Your next favorite starts here'
-            "
-            [message]="
-              filtered
-                ? 'Try clearing a filter.'
-                : 'Search for a title, follow an artist, or add something of your own.'
-            "
-          >
+          <ui-empty-state [title]="emptyTitle" [message]="emptyMessage">
             @if (filtered) {
               <ui-button variant="ghost" (click)="clearAllFilters()">
                 Clear filters
               </ui-button>
+            } @else if (kind) {
+              <ui-button variant="ghost" href="/media/library" label="All items" />
             }
             <ui-button
               variant="primary"
@@ -262,6 +486,7 @@ const LIBRARY = "/media/library";
           </ui-empty-state>
         }
       </div>
+      }
       <nav class="button-row" aria-label="Library pages">
         <ui-button
           variant="ghost"
@@ -270,10 +495,8 @@ const LIBRARY = "/media/library";
         >
           Previous items</ui-button
         ><span
-          >{{ library.total ? library.offset + 1 : 0 }}–{{
-            library.offset + library.items.length
-          }}
-          of {{ library.total }}</span
+          >{{ library.total ? library.offset + 1 : 0 }}–{{ pageEnd() }} of
+          {{ library.total }}</span
         ><ui-button
           variant="ghost"
           [disabled]="!library.has_more || loading()"
@@ -290,6 +513,10 @@ export class LibraryComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroy = inject(DestroyRef);
+  private readonly session = inject(SESSION_CONTEXT);
+  private readonly shelfOwner = this.session.currentUser?.id ?? null;
+  private progressEpoch = 0;
+  private focusAfterLoad: number | null = null;
   readonly reload = new BehaviorSubject(0);
   private readonly context = inject(ReturnContext);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -301,24 +528,31 @@ export class LibraryComponent {
     return this.context.link(LIBRARY);
   }
   readonly kinds = kinds;
-  readonly states = [
-    "want",
-    "anticipating",
-    "in_progress",
-    "completed",
-    "paused",
-    "dropped",
-    "following",
-    "unfollowed",
+  readonly musicViews = MUSIC_VIEWS;
+  readonly bookSigns = [
+    { status: "", label: "All shelves" },
+    { status: "in_progress", label: "Current" },
+    { status: "completed", label: "Read" },
+    { status: "want", label: "To read" },
   ];
+  readonly gameSigns = [
+    { status: "", label: "All bays" },
+    { status: "in_progress", label: "Playing" },
+    { status: "want", label: "Want to play" },
+    { status: "completed", label: "Played" },
+  ];
+  readonly notice = signal("");
+  private seen: LibraryView | null = null;
   q = "";
   kind = "";
   status = "";
   favorite = false;
   sort = "activity";
   tags: string[] = [];
+  face: "spine" | "text" = "spine";
   offset = 0;
   private childrenRequest?: Subscription;
+  private groupRequest?: Subscription;
   private filterTimer: ReturnType<typeof setTimeout> | undefined;
   readonly data = signal<LibraryResponse | null>(null);
   readonly error = signal("");
@@ -341,6 +575,101 @@ export class LibraryComponent {
       ? "Music"
       : kinds.find(item => item.value === this.kind)?.label || "Library";
   }
+  get summary(): string {
+    return collectionSummary(this.kind);
+  }
+  get collection(): string {
+    return collectionKey(this.kind);
+  }
+  get stateChoices() {
+    return statusChoices(this.kind);
+  }
+  get emptyTitle(): string {
+    return emptyLibraryCopy(this.kind, this.filtered).title;
+  }
+  get emptyMessage(): string {
+    return emptyLibraryCopy(this.kind, this.filtered).message;
+  }
+  viewParams(kind: string) {
+    return collectionQuery(this.currentFilters(), kind);
+  }
+  shelfParams(status: string) {
+    return {
+      ...collectionQuery(this.currentFilters(), "book"),
+      status: status || null,
+      face: this.face === "text" ? "text" : null,
+    };
+  }
+  bayParams(status: string) {
+    return {
+      ...collectionQuery(this.currentFilters(), "game"),
+      status: status || null,
+    };
+  }
+  faceParams(face: "spine" | "text") {
+    return {
+      ...collectionQuery(this.currentFilters(), "book"),
+      status: this.status || null,
+      offset: this.offset || null,
+      face: face === "text" ? "text" : null,
+    };
+  }
+  onBookSaved(detail: Detail): void {
+    if (
+      !this.active ||
+      this.session.currentUser?.id !== this.shelfOwner ||
+      this.collection !== "book"
+    ) {
+      return;
+    }
+    const library = this.data();
+    if (!library) return;
+    const note = noteExcerpt(detail.review);
+    this.data.set({
+      ...library,
+      items: library.items.map((item) =>
+        item.id === detail.id
+          ? {
+              ...item,
+              status: detail.status,
+              progress_value: detail.progress_value,
+              progress_unit: detail.progress_unit,
+              progress_label: detail.progress_label ?? null,
+              note,
+            }
+          : item,
+      ),
+    });
+  }
+  onGameSaved(detail: Detail): void {
+    if (
+      !this.active ||
+      this.session.currentUser?.id !== this.shelfOwner ||
+      this.collection !== "game"
+    ) {
+      return;
+    }
+    const library = this.data();
+    if (!library) return;
+    const note = noteExcerpt(detail.review);
+    this.data.set({
+      ...library,
+      items: library.items.map((item) =>
+        item.id === detail.id
+          ? {
+              ...item,
+              status: detail.status,
+              progress_value: detail.progress_value,
+              progress_unit: detail.progress_unit,
+              progress_label: detail.progress_label ?? null,
+              rating: detail.rating,
+              favorite: detail.favorite,
+              note,
+            }
+          : item,
+      ),
+    });
+  }
   get count(): number {
     return filterCount(this.currentFilters());
   }
@@ -357,9 +686,117 @@ export class LibraryComponent {
   readonly children = signal<MediaCard[]>([]);
   readonly childrenError = signal("");
   readonly childrenLoading = signal(false);
+  readonly expandedGroup = signal<number | null>(null);
+  readonly artistGroups = signal<ArtistGroup[]>([]);
+  readonly focusedGroup = signal<ArtistGroup | null>(null);
+  readonly groupError = signal("");
+  readonly groupLoading = signal(false);
+  visibleGroups(): ArtistGroup[] {
+    const page = this.artistGroups();
+    const opened = this.focusedGroup();
+    if (!opened || page.some((group) => group.catalog_id === opened.catalog_id)) return page;
+    return [opened, ...page];
+  }
+  offPageGroup(): boolean {
+    const groupId = this.expandedGroup();
+    return groupId != null && !this.artistGroups().some((group) => group.catalog_id === groupId) && !this.focusedGroup();
+  }
+  pageEnd(): number {
+    const shown = this.kind === "artist" ? this.artistGroups().length : this.data()?.items.length || 0;
+    return this.offset + shown;
+  }
+  artistGroupParams(group: ArtistGroupSummary) {
+    return { ...collectionQuery(this.currentFilters(), "artist"), group: group.catalog_id };
+  }
+  shelfLayout(): "poster" | "row" {
+    return this.collection === "movie" || this.collection === "tv" ? "poster" : "row";
+  }
+  showShelfAction(item: MediaCard): boolean {
+    if (this.collection !== "tv" || item.kind !== "tv") return false;
+    const shelf = seriesShelf(item);
+    if (shelf.progress === "next" || shelf.progress === "upcoming") return true;
+    return (
+      shelf.progress === "caught-up" &&
+      shelf.lifecycle !== "ended" &&
+      shelf.lifecycle !== "canceled"
+    );
+  }
+  shelfEpisodeId(item: MediaCard): number | null {
+    const row = item.continuation;
+    return row && row.state === "next" ? row.episode_id : null;
+  }
+  airLine(item: MediaCard): string {
+    const row = item.continuation;
+    if (!row || row.state !== "upcoming") return "";
+    if (!row.air_date) return "Air date not announced";
+    const day = formatDay(row.air_date);
+    return day ? `Airs ${day}` : "Air date not announced";
+  }
+  onShelfDone(result: NextResult & { entry?: Detail }, entryId: number): void {
+    if (!this.shelfCurrent()) return;
+    const library = this.data();
+    if (!library) return;
+    this.progressEpoch += 1;
+    const items = library.items.map((item) =>
+      item.id === entryId ? this.advancedShow(item, result) : item,
+    );
+    this.data.set({ ...library, items });
+    this.focusTitle(entryId);
+  }
+  onShelfFailed(event: { reload: boolean }): void {
+    if (!this.shelfCurrent() || !event.reload) return;
+    this.reload.next(this.reload.value + 1);
+  }
+  private shelfCurrent(): boolean {
+    return (
+      this.active &&
+      this.shelfOwner != null &&
+      this.session.currentUser?.id === this.shelfOwner &&
+      this.collection === "tv"
+    );
+  }
+  private advancedShow(item: MediaCard, result: NextResult & { entry?: Detail }): MediaCard {
+    const show = result.entry?.show;
+    if (!show) return item;
+    const upcoming = show.next_episode ? null : show.upcoming_episodes?.[0];
+    const chosen = show.next_episode ?? upcoming ?? null;
+    const continuation: Continuation | null = chosen
+      ? {
+          episode_id: chosen.id,
+          season: chosen.season_number,
+          episode: chosen.episode_number,
+          title: chosen.title,
+          air_date: chosen.air_date,
+          state: chosen.released ? "next" : "upcoming",
+        }
+      : null;
+    return {
+      ...item,
+      caught_up: show.caught_up,
+      metadata_incomplete: show.metadata_incomplete,
+      episode_count: show.episode_count,
+      watched_count: show.watched_count,
+      continuation,
+    };
+  }
+  private focusTitle(entryId: number): void {
+    requestAnimationFrame(() => {
+      if (!this.active) return;
+      this.host.nativeElement
+        .querySelector<HTMLElement>(`a[data-media-item="${entryId}"]`)
+        ?.focus();
+    });
+  }
   constructor() {
+    inject(NextEpisodeUndoService).restored$
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe((entryId) => {
+        if (!this.shelfCurrent()) return;
+        this.focusAfterLoad = entryId;
+        this.reload.next(this.reload.value + 1);
+      });
     // Router Back is deferred with setTimeout(0). A paused test clock does not
-    // run that timer, so the URL changes while the Type control keeps the
+    // run that timer, so the URL changes while the State control keeps the
     // pending value. Sync from the browser URL in the popstate event itself.
     const onPopState = () => this.dropPendingFilters(true);
     window.addEventListener("popstate", onPopState);
@@ -390,20 +827,25 @@ export class LibraryComponent {
       }
     });
     let requestedKind: string | undefined;
+    let suppressRead = false;
     combineLatest([this.route.queryParamMap, this.reload])
       .pipe(
         tap(([p]) => {
           const filters = readFilters(p);
+          const transition = libraryTransition(this.seen, filters);
           if (requestedKind !== filters.kind) {
             requestedKind = filters.kind;
             this.data.set(null);
+            this.artistGroups.set([]);
+            this.focusedGroup.set(null);
           }
           this.q = filters.q;
-          this.kind = filters.kind;
-          this.status = filters.status;
+          this.kind = transition.kind;
+          this.status = transition.status;
           this.sort = filters.sort;
           this.favorite = filters.favorite;
           this.tags = filters.tags;
+          this.face = p.get("face") === "text" ? "text" : "spine";
           this.offset = Math.max(0, Number(p.get("offset")) || 0);
           const expanded = Number(p.get("expanded")) || null;
           if (expanded !== this.expanded()) {
@@ -413,11 +855,39 @@ export class LibraryComponent {
             this.childrenLoading.set(false);
           }
           this.expanded.set(expanded);
+          const group = Number(p.get("group")) || null;
+          if (group !== this.expandedGroup()) {
+            this.groupRequest?.unsubscribe();
+            this.focusedGroup.set(null);
+            this.groupError.set("");
+            this.groupLoading.set(false);
+          }
+          this.expandedGroup.set(group);
+          if (transition.notice) this.notice.set(transition.notice);
+          else if (
+            transition.kindChange ||
+            (filters.status !== "" && filters.status !== this.seen?.status)
+          ) {
+            this.notice.set("");
+          }
+          this.seen = { kind: transition.kind, status: transition.status };
+          suppressRead = transition.redirect;
+          if (transition.redirect) {
+            void this.router.navigate([], {
+              relativeTo: this.route,
+              queryParams: { status: null },
+              queryParamsHandling: "merge",
+              replaceUrl: true,
+            });
+          }
           if (!this.data()) this.loading.set(true);
-          this.refreshing.set(true);
+          this.refreshing.set(!suppressRead);
           this.error.set("");
         }),
         switchMap(() => {
+          if (suppressRead) return EMPTY;
+          const requested = this.kind;
+          const epoch = this.progressEpoch;
           let params = new HttpParams()
             .set("q", this.q)
             .set("kind", this.kind)
@@ -427,27 +897,71 @@ export class LibraryComponent {
             .set("limit", 24)
             .set("favorite", this.favorite);
           for (const tag of this.tags) params = params.append("tags", tag);
-          return this.http
-            .get<LibraryResponse>("/media/api/library", { params })
-            .pipe(
-              catchError((e) => {
-                this.error.set(errorCopy(e));
-                return of(null);
-              }),
-            );
+          const url =
+            requested === "artist" ? "/media/api/music-groups" : "/media/api/library";
+          if (requested === "artist") params = params.delete("kind");
+          return this.http.get<LibraryResponse | ArtistGroupPage>(url, { params }).pipe(
+            map((body) => ({ requested, body, epoch })),
+            catchError((e) => {
+              if (this.kind === requested) this.error.set(errorCopy(e));
+              return of({
+                requested,
+                body: null as LibraryResponse | ArtistGroupPage | null,
+                epoch,
+              });
+            }),
+          );
         }),
         takeUntilDestroyed(),
       )
-      .subscribe((data) => {
-        this.data.set(data);
-        if (data?.available_tags) this.availableTags.set(data.available_tags);
+      .subscribe((result) => {
+        if (!result || result.requested !== this.kind || result.epoch !== this.progressEpoch) {
+          return;
+        }
+        const data = result.body;
         this.loading.set(false);
         this.refreshing.set(false);
-        const expanded = data?.items.find(
-          (item) => item.id === this.expanded(),
-        );
+        if (!data) {
+          this.data.set(null);
+          this.artistGroups.set([]);
+          this.restoreScroll();
+          return;
+        }
+        if (data.available_tags) this.availableTags.set(data.available_tags);
+        if (result.requested === "artist") {
+          const page = data as ArtistGroupPage;
+          const items = page.items || [];
+          this.artistGroups.set(items);
+          this.data.set({
+            items: [],
+            total: page.total,
+            offset: page.offset,
+            limit: page.limit,
+            has_more: page.has_more,
+            available_tags: page.available_tags,
+          });
+          const groupId = this.expandedGroup();
+          const visible = groupId != null && items.some((group) => group.catalog_id === groupId);
+          if (groupId != null && !visible) this.loadGroup(groupId);
+          else {
+            this.focusedGroup.set(null);
+            this.groupLoading.set(false);
+            this.restoreScroll();
+          }
+          return;
+        }
+        const library = data as LibraryResponse;
+        this.artistGroups.set([]);
+        this.focusedGroup.set(null);
+        this.data.set(library);
+        if (this.focusAfterLoad != null) {
+          const focusId = this.focusAfterLoad;
+          this.focusAfterLoad = null;
+          this.focusTitle(focusId);
+        }
+        const expanded = library.items.find((item) => item.id === this.expanded());
         if (expanded) this.loadChildren(expanded);
-        else this.restoreScroll();
+        if (!expanded) this.restoreScroll();
       });
   }
   retry(): void {
@@ -459,7 +973,10 @@ export class LibraryComponent {
     this.filterTimer = undefined;
     this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: toQueryParams(this.currentFilters()),
+      queryParams: {
+        ...toQueryParams(this.currentFilters()),
+        face: this.collection === "book" && this.face === "text" ? "text" : null,
+      },
       onSameUrlNavigation: "reload",
     });
   }
@@ -471,20 +988,21 @@ export class LibraryComponent {
     clearTimeout(this.filterTimer);
     this.filterTimer = undefined;
     const filters = readFilters(new URLSearchParams(window.location.search));
+    const transition = libraryTransition(this.seen, filters);
     this.q = filters.q;
-    this.kind = filters.kind;
-    this.status = filters.status;
+    this.kind = transition.kind;
+    this.status = transition.status;
     this.sort = filters.sort;
     this.favorite = filters.favorite;
     this.tags = filters.tags;
+    this.face = new URLSearchParams(window.location.search).get("face") === "text" ? "text" : "spine";
     const search = document.getElementById("library-q");
     if (search instanceof HTMLInputElement) search.value = filters.q;
     const root = document.getElementById("library-filters");
     const selects = root?.querySelectorAll("select");
     if (selects) {
-      const [type, state, sort] = selects;
-      if (type instanceof HTMLSelectElement) type.value = filters.kind;
-      if (state instanceof HTMLSelectElement) state.value = filters.status;
+      const [state, sort] = selects;
+      if (state instanceof HTMLSelectElement) state.value = transition.status;
       if (sort instanceof HTMLSelectElement) sort.value = filters.sort;
     }
     const favorite = root?.querySelector('input[type="checkbox"]');
@@ -512,10 +1030,10 @@ export class LibraryComponent {
     this.filtersOpen.set(false);
   }
   clearFilters(): void {
-    this.kind = "";
     this.status = "";
     this.favorite = false;
     this.tags = [];
+    this.notice.set("");
     this.applyNow();
   }
   clearAllFilters(): void {
@@ -534,6 +1052,19 @@ export class LibraryComponent {
       queryParams: { offset: Math.max(0, this.offset + direction * 24) },
       queryParamsHandling: "merge",
     });
+  }
+  expandGroup(group: ArtistGroupSummary): void {
+    const next = this.expandedGroup() === group.catalog_id ? null : group.catalog_id;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { group: next },
+      queryParamsHandling: "merge",
+      replaceUrl: true,
+    });
+  }
+  reloadGroup(): void {
+    const catalogId = this.expandedGroup();
+    if (catalogId != null) this.loadGroup(catalogId);
   }
   expand(item: MediaCard, retry = false): void {
     if (retry) {
@@ -554,6 +1085,7 @@ export class LibraryComponent {
       !this.scrollerReady ||
       this.loading() ||
       this.childrenLoading() ||
+      this.groupLoading() ||
       this.restoring ||
       typeof window === "undefined"
     )
@@ -597,6 +1129,41 @@ export class LibraryComponent {
           if (this.expanded() !== item.id) return;
           this.childrenError.set(errorCopy(e));
           this.childrenLoading.set(false);
+          this.restoreScroll();
+        },
+      });
+  }
+  private focusOpenedGroup(catalogId: number): void {
+    requestAnimationFrame(() => {
+      if (!this.active || this.restoredView) return;
+      const active = document.activeElement;
+      if (active !== document.body && active?.id !== "library-heading") return;
+      const section = this.host.nativeElement.querySelector<HTMLElement>(
+        `[data-artist-group="${catalogId}"]`,
+      );
+      section?.querySelector<HTMLElement>("h2 a, button")?.focus({ preventScroll: true });
+    });
+  }
+  private loadGroup(catalogId: number): void {
+    this.focusedGroup.set(null);
+    this.groupError.set("");
+    this.groupLoading.set(true);
+    this.groupRequest?.unsubscribe();
+    this.groupRequest = this.http
+      .get<ArtistGroup>("/media/api/music-groups/" + catalogId)
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (payload) => {
+          if (this.expandedGroup() !== catalogId || this.kind !== "artist") return;
+          this.focusedGroup.set(payload);
+          this.groupLoading.set(false);
+          this.restoreScroll();
+          this.focusOpenedGroup(catalogId);
+        },
+        error: (error) => {
+          if (this.expandedGroup() !== catalogId || this.kind !== "artist") return;
+          this.groupError.set(errorCopy(error));
+          this.groupLoading.set(false);
           this.restoreScroll();
         },
       });

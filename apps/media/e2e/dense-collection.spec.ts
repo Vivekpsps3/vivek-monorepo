@@ -24,7 +24,7 @@ for (const [width, theme, zoom] of [
     await page.goto('/media/library?kind=book&sort=title');
     await expectSectionHeading(page, 'Books');
     if (zoom) await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
-    const grid = page.locator('.media-grid');
+    const grid = page.locator('media-book-shelf');
     for (const title of [shortTitle, longTitle, unbrokenTitle]) {
       await expect(grid.getByRole('link', { name: title, exact: true })).toBeVisible();
     }
@@ -35,7 +35,7 @@ for (const [width, theme, zoom] of [
     await expect(longCard).toContainText('Favorite');
     expect(await grid.evaluate(el => {
       return document.documentElement.scrollWidth <= innerWidth &&
-        [...el.querySelectorAll('article, .media-card-copy')].every(box => box.scrollWidth <= box.clientWidth + 1);
+        [...el.querySelectorAll('article')].every(box => box.scrollWidth <= box.clientWidth + 1);
     })).toBe(true);
     for (const link of [shortLink, grid.getByRole('link', { name: longTitle, exact: true })]) {
       const box = await link.boundingBox();
@@ -57,7 +57,7 @@ for (const [width, theme, zoom] of [
     await expect(page).toHaveURL(/kind=book&sort=title/);
     await expect(shortLink).toBeVisible();
     if (width === 390 && theme === 'light') {
-      await expect(grid.locator('article').filter({ has: page.getByRole('link', { name: shortTitle, exact: true }) })).toContainText('Favorite');
+      await expect(grid.locator('article[data-book]').filter({ has: page.getByRole('link', { name: shortTitle, exact: true }) })).toContainText('Favorite');
     }
   });
 }

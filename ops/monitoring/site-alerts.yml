@@ -1,34 +1,48 @@
+# Local Prometheus signals only. These rules do not send a webhook, heartbeat, or page.
+# Readiness, TLS, and backup-age decisions are site_check_state values from
+# apps/server/monitor.py. No recipient is configured. OPS-06 owns activation.
 groups:
   - name: personal-site
     rules:
       - alert: PersonalSiteProbeFailed
-        expr: site_probe_success == 0
+        expr: site_check_state{source="local",check=~"readiness|http",state=~"unhealthy|unreachable|unknown"} == 1
         for: 2m
-        labels: {severity: critical}
+        labels: {severity: critical, source: local, delivers: "false"}
         annotations:
-          summary: 'Personal site probe {{ $labels.target }} is failing'
+          summary: Local probe is not healthy. This rule does not notify.
       - alert: PersonalSiteExporterMissing
         expr: up{job=~"personal-site|personal-site-probes"} == 0
         for: 2m
-        labels: {severity: critical}
-        annotations: {summary: Personal site monitoring target is missing}
+        labels: {severity: critical, source: local, delivers: "false"}
+        annotations:
+          summary: Personal site monitoring target is missing. This rule does not notify.
       - alert: PersonalSiteBackupStale
-        expr: time() - site_backup_last_success_timestamp_seconds > 7500
+        expr: site_check_state{check="backup_age",source="local",state=~"stale|unknown"} == 1
         for: 5m
-        labels: {severity: critical}
-        annotations: {summary: No verified personal site backup in over two hours}
+        labels: {severity: critical, source: local, delivers: "false"}
+        annotations:
+          summary: Local backup age is not fresh. This rule does not notify.
       - alert: PersonalSiteCertificateExpiring
-        expr: site_tls_expiry_timestamp_seconds - time() < 1209600
+        expr: site_check_state{check="tls",source="local",state=~"expiring|unknown"} == 1
         for: 10m
-        labels: {severity: warning}
-        annotations: {summary: Personal site certificate expires within fourteen days}
+        labels: {severity: warning, source: local, delivers: "false"}
+        annotations:
+          summary: Local certificate read is not fresh. This rule does not notify.
+      - alert: PersonalSiteCertificateExpired
+        expr: site_check_state{check="tls",source="local",state="expired"} == 1
+        for: 10m
+        labels: {severity: critical, source: local, delivers: "false"}
+        annotations:
+          summary: Local certificate is expired. This rule does not notify.
       - alert: PersonalSiteErrorsHigh
         expr: sum(rate(site_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(site_requests_total[5m])), 0.01) > 0.05
         for: 5m
-        labels: {severity: warning}
-        annotations: {summary: Personal site server error ratio exceeds five percent}
+        labels: {severity: warning, source: local, delivers: "false"}
+        annotations:
+          summary: Personal site server error ratio exceeds five percent. This rule does not notify.
       - alert: PersonalSiteLatencyHigh
         expr: histogram_quantile(0.95, sum by (le) (rate(site_request_duration_seconds_bucket[5m]))) > 2
         for: 10m
-        labels: {severity: warning}
-        annotations: {summary: Personal site p95 response time exceeds two seconds}
+        labels: {severity: warning, source: local, delivers: "false"}
+        annotations:
+          summary: Personal site p95 response time exceeds two seconds. This rule does not notify.

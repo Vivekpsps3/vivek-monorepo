@@ -17,6 +17,40 @@ export interface Lifecycle {
   freshness: string;
   fetched_at?: string | null;
   completeness: string;
+  raw_value?: string | null;
+}
+export interface Continuation {
+  episode_id: number;
+  season: number;
+  episode: number;
+  title: string | null;
+  air_date: string | null;
+  state: "next" | "upcoming";
+}
+export interface ArtistGroupSummary {
+  catalog_id: number;
+  title: string;
+  followed: boolean;
+  entry_id: number | null;
+  saved_count: number;
+}
+export interface NestedAlbum extends MediaCard {
+  songs?: MediaCard[];
+}
+export interface ArtistGroup extends ArtistGroupSummary {
+  source?: string;
+  rating?: number | null;
+  saved_children: MediaCard[];
+  albums?: NestedAlbum[];
+  songs?: MediaCard[];
+}
+export interface ArtistGroupPage {
+  items: ArtistGroup[];
+  total: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+  available_tags?: string[];
 }
 export interface MediaCard {
   id: number;
@@ -29,10 +63,25 @@ export interface MediaCard {
   favorite: boolean;
   rating: number | null;
   saved_count?: number;
+  artist_groups?: ArtistGroupSummary[];
+  progress_value?: number | null;
+  progress_unit?: string | null;
   progress_label?: string | null;
+  /** Canonical author id. A creator string is not an author link. */
+  author?: { id: string; name: string | null } | null;
+  /** Canonical series id. A similar title is not a series. */
+  series?: { id: string; name: string | null } | null;
+  /** Excerpt of the saved note. The full note stays on the entry. */
+  note?: string | null;
+  anticipated?: boolean;
   lifecycle?: Lifecycle;
   caught_up?: boolean;
   metadata_incomplete?: boolean;
+  /** A date the person recorded for a film. Absent means this card is not a film. */
+  viewed_on?: string | null;
+  episode_count?: number;
+  watched_count?: number;
+  continuation?: Continuation | null;
 }
 export interface Episode {
   id: number;

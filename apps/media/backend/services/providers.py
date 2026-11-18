@@ -1128,6 +1128,11 @@ def image_from_relations(relations) -> str | None:
     return direct
 
 
+# Public MusicBrainz artist. A display name of "Various Artists" is not this id.
+VARIOUS_ARTISTS_MBID = "89ad4ac3-39f7-470e-963a-56509c546377"
+_FEATURE_JOIN = re.compile(r"\b(?:feat\.?|ft\.?|featuring)\b", re.IGNORECASE)
+
+
 def artist_name(credit) -> str | None:
     if not isinstance(credit, list) or not credit:
         return None
@@ -1135,19 +1140,72 @@ def artist_name(credit) -> str | None:
     return name or None
 
 
-def primary_artist_id(credit) -> str | None:
-    """MusicBrainz id of the first credited artist. The display name is not an id."""
-    if not isinstance(credit, list):
+def _credit_name(item: dict) -> str | None:
+    raw_artist = item.get("artist")
+    artist = raw_artist if isinstance(raw_artist, dict) else {}
+    raw = item.get("name") if isinstance(item.get("name"), str) else None
+    artist_name = artist.get("name")
+    if not raw and isinstance(artist_name, str):
+        raw = artist_name
+    if not isinstance(raw, str):
         return None
+    name = raw.strip()
+    return name[:200] or None
+
+
+def artist_credits(credit) -> list[dict]:
+    """Album or recording credits. Identity is the MusicBrainz id, never the name.
+
+    A join phrase of feat/ft/featuring marks every following credit as featured.
+    Featured credits are not album membership. The first credited id stays primary
+    unless it is the Various Artists artist.
+    """
+    if not isinstance(credit, list):
+        return []
+    featured = False
+    rows: list[dict] = []
     for item in credit:
         if not isinstance(item, dict):
             continue
-        artist = item.get("artist")
-        if not isinstance(artist, dict):
+        raw_artist = item.get("artist")
+        artist = raw_artist if isinstance(raw_artist, dict) else {}
+        source_id = mbid(artist.get("id"))
+        if source_id:
+            source_id = source_id.casefold()
+        name = _credit_name(item)
+        if source_id is None and name is None:
+            raw_join = item.get("joinphrase")
+            if isinstance(raw_join, str) and _FEATURE_JOIN.search(raw_join):
+                featured = True
             continue
-        found = mbid(artist.get("id"))
-        if found:
-            return found
+        if featured:
+            role = "featured"
+        elif not any(row["role"] in {"primary", "various"} for row in rows):
+            role = "various" if source_id == VARIOUS_ARTISTS_MBID else "primary"
+        else:
+            role = "collaboration"
+        rows.append(
+            {
+                "source": "musicbrainz" if source_id else None,
+                "source_id": source_id,
+                "name": name,
+                "role": role,
+            }
+        )
+        if len(rows) >= 8:
+            break
+        raw_join = item.get("joinphrase")
+        if isinstance(raw_join, str) and _FEATURE_JOIN.search(raw_join):
+            featured = True
+    return rows
+
+
+def primary_artist_id(credit) -> str | None:
+    """MusicBrainz id of the primary credited artist. A featured id is not primary."""
+    for row in artist_credits(credit):
+        if row["role"] == "featured" or not row.get("source_id"):
+            continue
+        return row["source_id"]
     return None
 
 
@@ -1728,6 +1786,76 @@ def itunes_detail(http: httpx.Client, source_id: str) -> dict | None:
     }
 
 
+_OL_AUTHOR_KEY = re.compile(r"^/authors/(OL[1-9]\d{0,12}A)$")
+_OL_SERIES_KEY = re.compile(r"^/series/(OL[1-9]\d{0,12}S)$")
+
+
+def _openlibrary_key(value: object) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, dict):
+        key = value.get("key")
+        if isinstance(key, str) and key.strip():
+            return key.strip()
+    return None
+
+
+def _openlibrary_person_name(value: object) -> str | None:
+    if not isinstance(value, dict) or not isinstance(value.get("name"), str):
+        return None
+    text = " ".join(value["name"].split())
+    if not text or text.startswith("/"):
+        return None
+    return text[:300]
+
+
+def _openlibrary_links(item: dict) -> tuple[list[str], list[dict], list[dict]]:
+    """Names stay names. Only /authors/OL…A and /series/OL…S become identities."""
+    names: list[str] = []
+    authors: list[dict] = []
+    seen_authors: set[str] = set()
+    raw_authors = item.get("authors")
+    for author in raw_authors if isinstance(raw_authors, list) else []:
+        if isinstance(author, str) and author.strip() and not author.strip().startswith("/"):
+            label = " ".join(author.split())[:300]
+            if label and label not in names:
+                names.append(label)
+            continue
+        nested = author.get("author") if isinstance(author, dict) else None
+        key = _openlibrary_key(nested) or _openlibrary_key(author)
+        name = _openlibrary_person_name(author) or _openlibrary_person_name(nested)
+        if name and name not in names:
+            names.append(name)
+        matched = _OL_AUTHOR_KEY.fullmatch(key or "")
+        if matched is None or f"openlibrary:{matched.group(1)}" in seen_authors:
+            continue
+        ident = f"openlibrary:{matched.group(1)}"
+        seen_authors.add(ident)
+        row = {"id": ident}
+        if name:
+            row["name"] = name
+        authors.append(row)
+    if not names and isinstance(item.get("by_statement"), str):
+        statement = " ".join(item["by_statement"].split())[:300]
+        if statement:
+            names.append(statement)
+    series: list[dict] = []
+    seen_series: set[str] = set()
+    raw_series = item.get("series")
+    for entry in raw_series if isinstance(raw_series, list) else []:
+        matched = _OL_SERIES_KEY.fullmatch(_openlibrary_key(entry) or "")
+        if matched is None or f"openlibrary:{matched.group(1)}" in seen_series:
+            continue
+        ident = f"openlibrary:{matched.group(1)}"
+        seen_series.add(ident)
+        row = {"id": ident}
+        name = _openlibrary_person_name(entry)
+        if name:
+            row["name"] = name
+        series.append(row)
+    return names, authors, series
+
+
 def _openlibrary_record(source_id: str) -> tuple[str, str] | None:
     text = source_id.strip()
     if not text or "/" in text or len(text) > 40:
@@ -1757,25 +1885,23 @@ def openlibrary_detail(http: httpx.Client, source_id: str) -> dict | None:
     description = item.get("description")
     if isinstance(description, dict):
         description = description.get("value")
-    authors = []
-    for author in item.get("authors") or []:
-        if isinstance(author, dict) and isinstance(author.get("name"), str):
-            authors.append(author["name"])
-        elif isinstance(author, str):
-            authors.append(author)
-    if not authors and isinstance(item.get("by_statement"), str):
-        authors.append(item["by_statement"])
+    names, authors, series = _openlibrary_links(item)
     dated = item.get("first_publish_date") or item.get("publish_date")
     year, releases = _loose_release(dated if isinstance(dated, str) else None)
     covers = item.get("covers") if isinstance(item.get("covers"), list) else []
     cover = covers[0] if covers and isinstance(covers[0], int) else None
     row = _detail_base("openlibrary", source_id.strip(), "book", title.strip(), "official")
-    row["creator"] = authors[0] if authors else None
+    row["creator"] = names[0] if names else None
     row["year"] = year
     row["overview"] = plain_text(description, 4000) if isinstance(description, str) else None
     row["artwork_url"] = f"https://covers.openlibrary.org/b/id/{cover}-M.jpg" if cover else None
     row["releases"] = releases
-    row["extra"] = {"record": record}
+    extra: dict = {"record": record}
+    if authors:
+        extra["authors"] = authors
+    if series:
+        extra["series"] = series
+    row["extra"] = extra
     return row
 
 
@@ -1922,9 +2048,12 @@ def musicbrainz_artist_detail(http: httpx.Client, source_id: str) -> dict | None
 
 
 def _album_identity_extra(group_id: str | None, credit, pressing_id: str | None = None) -> dict:
-    extra = {}
+    extra: dict = {}
     if mbid(group_id):
         extra["release_group_id"] = group_id
+    credits = artist_credits(credit)
+    if credits:
+        extra["artist_credits"] = credits
     artist_id = primary_artist_id(credit)
     if artist_id:
         extra["artist_id"] = artist_id
@@ -2019,6 +2148,14 @@ def musicbrainz_track_detail(http: httpx.Client, source_id: str) -> dict | None:
         artist_name(item.get("artist-credit")),
         released,
     )
+    credits = artist_credits(item.get("artist-credit"))
+    extra: dict = {}
+    if credits:
+        extra["artist_credits"] = credits
+    artist_id = primary_artist_id(item.get("artist-credit"))
+    if artist_id:
+        extra["artist_id"] = artist_id
+    row["extra"] = extra
     row["provenance"] = provenance("musicbrainz", "official")
     return row
 

@@ -20,6 +20,10 @@ describe('return context', () => {
       .toBe('/finance/spending?t=calendar');
     expect(returnPath('/media/library?kind=artist&kind=book&q=private&tag=private&offset=24&expanded=42'))
       .toBe('/media/library?offset=24');
+    expect(returnPath('/media/library?kind=book&face=text&status=in_progress&sort=title&q=private'))
+      .toBe('/media/library?kind=book&status=in_progress&sort=title&face=text');
+    expect(returnPath('/media/library?kind=book&face=poster')).toBe('/media/library?kind=book');
+    expect(returnPath('/media/library?kind=book&face=text&face=spine')).toBe('/media/library?kind=book');
   });
 
   it('rejects external, unknown, and recursive authentication destinations', () => {

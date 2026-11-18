@@ -1,6 +1,6 @@
 {
-  "validated_on": "2026-11-17",
-  "base_sha": "18607fe30175a0b152f2d9fdaadef00828e89720",
+  "validated_on": "2026-11-18",
+  "base_sha": "7f55790a3d6c3ac92e4dc3c77cbcc581be86c35c",
   "tasks": [
     {
       "id": "MED-11",
@@ -1664,6 +1664,184 @@
       ],
       "merged_pr": 381,
       "merge_sha": "18607fe30175a0b152f2d9fdaadef00828e89720"
+    },
+    {
+      "id": "DISC-02",
+      "title": "Produce a bounded Cards design/data-flow PR without building the app",
+      "parent_issues": [
+        195
+      ],
+      "kind": "discovery",
+      "issue": 265,
+      "dependencies": [],
+      "conflict_groups": [
+        "planning-discovery"
+      ],
+      "verification_profiles": [
+        "docs"
+      ],
+      "merged_pr": 501,
+      "merge_sha": "fc145a7c076c20541b295757e2c1ef5ea65bcf63"
+    },
+    {
+      "id": "OPS-05",
+      "title": "Deliver independent-monitor integrations with synthetic alert proof",
+      "parent_issues": [
+        125
+      ],
+      "kind": "implementation",
+      "issue": 276,
+      "dependencies": [
+        "OPS-01",
+        "OPS-03"
+      ],
+      "conflict_groups": [
+        "monitoring",
+        "operations-docs"
+      ],
+      "verification_profiles": [
+        "ops",
+        "server_back"
+      ],
+      "merged_pr": 503,
+      "merge_sha": "fe1a8377306bf5091ac834fd62b190aab4255513"
+    },
+    {
+      "id": "MUX-01",
+      "title": "Separate the library into visible media-type collections",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 397,
+      "dependencies": [
+        "NAV-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ],
+      "merged_pr": 505,
+      "merge_sha": "8e9ad566367158c1c61285d990bcec7d6288c9d0"
+    },
+    {
+      "id": "MUX-02",
+      "title": "Group saved music by canonical artist identity without duplicate membership",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 398,
+      "dependencies": [],
+      "conflict_groups": [
+        "media-library-api",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_back",
+        "server_back"
+      ],
+      "merged_pr": 507,
+      "merge_sha": "a0c8c1d6da9a0622085d9d3b8f56f2f640c13f84"
+    },
+    {
+      "id": "MUX-03",
+      "title": "Build artist, album and song collection views",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 399,
+      "dependencies": [
+        "MUX-01",
+        "MUX-02",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ],
+      "merged_pr": 509,
+      "merge_sha": "901306724fe358e97e73b0f4b2721431e996cd33"
+    },
+    {
+      "id": "MUX-04",
+      "title": "Style movie and series collections with useful progress",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 400,
+      "dependencies": [
+        "MUX-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ],
+      "merged_pr": 511,
+      "merge_sha": "b912b0407340a1bb5f1efeca29f76f6eb0863c8d"
+    },
+    {
+      "id": "MUX-05",
+      "title": "Build readable book shelves and reading actions",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 401,
+      "dependencies": [
+        "MUX-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ],
+      "merged_pr": 513,
+      "merge_sha": "70d136915aa9e31ce6286e4d68f9d0e2db87039c"
+    },
+    {
+      "id": "MUX-06",
+      "title": "Style tracked games as a distinct collection",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 402,
+      "dependencies": [
+        "MUX-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ],
+      "merged_pr": 515,
+      "merge_sha": "7f55790a3d6c3ac92e4dc3c77cbcc581be86c35c"
     }
   ],
   "td_coverage": {

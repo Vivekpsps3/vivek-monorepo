@@ -1,3 +1,157 @@
+.collection-summary {
+  margin: 0;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 4px solid var(--data-edge);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.media-page[data-collection="movie"] {
+  --data-edge: var(--coral);
+}
+
+.media-page[data-collection="tv"] {
+  --data-edge: var(--teal);
+}
+
+.media-page[data-collection="book"] {
+  --data-edge: var(--brass);
+}
+
+.media-page[data-collection="music"] {
+  --data-edge: var(--chart-4);
+}
+
+.media-page[data-collection="game"] {
+  --data-edge: var(--wood);
+}
+
+.media-page[data-collection="all"] {
+  --data-edge: var(--chart-5);
+}
+
+.media-page .media-grid.theater-shelf {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+  align-items: stretch;
+}
+
+.media-page .theater-shelf > ui-empty-state {
+  grid-column: 1 / -1;
+}
+
+.theater-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.theater-actions media-next-episode {
+  display: block;
+}
+
+.theater-actions ui-button,
+.theater-actions .ui-btn {
+  width: 100%;
+}
+
+.poster-air {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.3;
+}
+
+.music-views,
+.book-signs,
+.game-bays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+
+.music-views a,
+.book-signs a,
+.game-bays a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  box-shadow: var(--control-shadow);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.music-views a[aria-current="page"],
+.book-signs a[aria-current="page"],
+.game-bays a[aria-current="page"] {
+  border-color: var(--data-edge);
+  box-shadow: inset 0 -3px 0 var(--data-edge);
+}
+
+.music-views a:focus-visible,
+.book-signs a:focus-visible,
+.game-bays a:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.artist-group {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.artist-group h2 {
+  margin: 0;
+}
+
+.artist-group h2 a,
+.group-link,
+.discography-link {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.group-link,
+.discography-link {
+  color: var(--text);
+}
+
+.saved-album,
+.saved-songs {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.saved-songs {
+  margin-inline-start: var(--space-4);
+}
+
+.loose-songs {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+}
+
+.collection-notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--warning-soft-bg);
+  color: var(--text);
+}
+
 .library-toolbar {
   display: flex;
   align-items: center;

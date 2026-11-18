@@ -91,7 +91,7 @@ def library(
     rows, total = records.list_library(
         db, user_id, kind, status, q, sort, offset, limit, favorite, tags=selected or None
     )
-    # Continuation is served by /summary for Now; filters only need this page.
+    # Show continuation on this page comes from the same episode rows as detail.
     return {
         "items": records.library_cards(db, rows),
         "total": total,
@@ -100,6 +100,56 @@ def library(
         "has_more": offset + len(rows) < total,
         "available_tags": available_tags(db, user_id),
     }
+
+
+@router.get("/music-groups")
+def music_group_page(
+    q: str | None = None,
+    status: str | None = None,
+    sort: str = "activity",
+    offset: int = Query(0, ge=0, le=100000),
+    limit: int = Query(24, ge=1, le=100),
+    favorite: bool = False,
+    tags: list[str] = Query(default=[]),
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    """Artist groups for this user. Opening the page does not follow or import."""
+    from apps.media.backend.services.tag_filter import available_tags, parse_tag_params
+
+    sort = sort.strip().lower()
+    if sort not in {"added", "rating", "activity", "release", "title"}:
+        sort = "activity"
+    selected = parse_tag_params(tags)
+    items, total = records.list_saved_artist_groups(
+        db,
+        principal.id,
+        q,
+        status,
+        sort,
+        offset,
+        limit,
+        favorite,
+        selected or None,
+    )
+    return {
+        "items": items,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + len(items) < total,
+        "available_tags": available_tags(db, principal.id),
+    }
+
+
+@router.get("/music-groups/{catalog_id}")
+def music_group(
+    catalog_id: Annotated[int, bounded_path_id("That item is not in your library.")],
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    """Saved membership for one artist. A read does not follow or contact a provider."""
+    return records.saved_artist_group(db, principal.id, catalog_id)
 
 
 @router.get("/movies")

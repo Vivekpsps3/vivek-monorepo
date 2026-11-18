@@ -27,6 +27,11 @@ A domain reset must not delete another domain or unknown supported ciphertext.
 Password-only migration endpoints are retired (404); stored migration-only
 sessions must remain denied normal app access.
 
+The maintenance monitor classifies readiness, TLS expiry, and backup age once.
+Local `/metrics` probes and independent webhook/heartbeat delivery do not share
+an execution path. `SITE_ALERT_MODE` defaults to off. Off and dry-run send
+nothing. No recipient is hardcoded, and a synthetic transport is not activation.
+
 Use root Python lint/type/coverage gates plus affected domain suites. Use
 [SECURITY_MODEL](../../docs/SECURITY_MODEL.md) for auth/vault protocol changes and
 [OPERATIONS](../../docs/OPERATIONS.md) for release/restore work. Test with disposable

@@ -19,7 +19,6 @@ apps/media/backend/services/followups.py	SIM105	1
 apps/media/backend/services/followups.py	UP017	1
 apps/server/identity/session.py	UP045	4
 apps/server/migrate.py	SIM117	1
-apps/server/monitor.py	SIM117	1
 apps/server/tests/test_migration.py	B905	1
 apps/server/tests/test_schema_migrations.py	SIM117	3
 apps/server/tests/test_security_headers.py	RUF012	2
