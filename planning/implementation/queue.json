@@ -1,5 +1,5 @@
 {
-  "base_sha": "8e9ad566367158c1c61285d990bcec7d6288c9d0",
+  "base_sha": "a0c8c1d6da9a0622085d9d3b8f56f2f640c13f84",
   "validated_on": "2026-11-18",
   "roadmap_issue": 134,
   "parents": [
@@ -456,25 +456,6 @@
       ],
       "verification_profiles": [
         "docs"
-      ]
-    },
-    {
-      "id": "MUX-02",
-      "title": "Group saved music by canonical artist identity without duplicate membership",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 398,
-      "dependencies": [],
-      "conflict_groups": [
-        "media-library-api",
-        "media-records"
-      ],
-      "verification_profiles": [
-        "docs",
-        "media_back",
-        "server_back"
       ]
     },
     {
