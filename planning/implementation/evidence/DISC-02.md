@@ -58,10 +58,12 @@ The `.venv` and `node_modules` symlinks are gitignored and are not part of the d
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet.
-- Roadmap #134 append-only status-note URL: not posted yet. The note waits until merge, per the completion instruction.
-- Merged/activation status (actual evidence, not assumption): not merged, not deployed, not activated. No app exists.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/501 (`Closes #265` only).
+- Roadmap #134 append-only status-note URL: not posted yet. The note waits until this leaf is merged.
+- Merged/activation status (actual evidence, not assumption): pull request #501 is open. Not merged, not deployed, not activated. No app exists.
 - Remaining external prerequisites or approved scope decisions: the owner has not selected implementation. Open choices are whether to build Cards and which appearance leads. Art approval is not claimed.
-- Next actor: finish local gates, open the pull request with `Closes #265`, and do not close #195.
+- Next actor: wait for required CI on #501, merge only when green, then archive the leaf without closing #195.
+
+Follow-up `470cdffd5d2302eb8ab20c73f6fba8e343ff0a4b` passed `make test-fast` and both planner commands before the pull request. This handoff line is the PR link only.
 
 No unstated decision from this context is necessary to continue.
