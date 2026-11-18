@@ -48,8 +48,8 @@ The first targeted Playwright run failed 3 and passed 8 because `getByRole('aler
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): after push. `Closes #399` only. Parent #304 remains open.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/509. `Closes #399` only. Parent #304 remains open.
 - Roadmap #134 append-only status-note URL: after merge and archive.
-- Merged/activation status: local gates passed on `2d3c1b4decd2ae1ba18f5a12d32e32c6996e9a29`. Merge waits on required checks.
+- Merged/activation status: PR #509 is open. Local gates passed on `2d3c1b4decd2ae1ba18f5a12d32e32c6996e9a29`. Merge waits on required checks.
 - Remaining external prerequisites: none for this leaf. MUX-04 through MUX-09 stay unbuilt. OPS-06 / #277 was not touched.
 - Next actor: required CI, then merge, then archive.
