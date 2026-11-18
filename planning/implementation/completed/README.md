@@ -3,9 +3,9 @@
 This archive is historical proof, outside the active roadmap. Start new work from
 the [execution queue](../README.md), which contains only remaining leaves.
 
-[Registry](registry.json) records 73 completed packets, their GitHub leaves,
+[Registry](registry.json) records 74 completed packets, their GitHub leaves,
 merged PRs and merge commits. Every recorded merge was verified as an ancestor
-of main `fc145a7c076c20541b295757e2c1ef5ea65bcf63` on 2026-11-18. Original
+of main `fe1a8377306bf5091ac834fd62b190aab4255513` on 2026-11-18. Original
 packets are under `issues/`; executed acceptance and local test results remain
 in [evidence](../evidence/). Historical handoffs describe their recording time;
 the registry supplies reconciled merge proof. A merge does not prove activation.

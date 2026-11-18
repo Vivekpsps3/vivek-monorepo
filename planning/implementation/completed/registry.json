@@ -1,6 +1,6 @@
 {
   "validated_on": "2026-11-18",
-  "base_sha": "fc145a7c076c20541b295757e2c1ef5ea65bcf63",
+  "base_sha": "fe1a8377306bf5091ac834fd62b190aab4255513",
   "tasks": [
     {
       "id": "MED-11",
@@ -1682,6 +1682,29 @@
       ],
       "merged_pr": 501,
       "merge_sha": "fc145a7c076c20541b295757e2c1ef5ea65bcf63"
+    },
+    {
+      "id": "OPS-05",
+      "title": "Deliver independent-monitor integrations with synthetic alert proof",
+      "parent_issues": [
+        125
+      ],
+      "kind": "implementation",
+      "issue": 276,
+      "dependencies": [
+        "OPS-01",
+        "OPS-03"
+      ],
+      "conflict_groups": [
+        "monitoring",
+        "operations-docs"
+      ],
+      "verification_profiles": [
+        "ops",
+        "server_back"
+      ],
+      "merged_pr": 503,
+      "merge_sha": "fe1a8377306bf5091ac834fd62b190aab4255513"
     }
   ],
   "td_coverage": {
