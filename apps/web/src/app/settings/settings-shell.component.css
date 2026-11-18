@@ -18,22 +18,36 @@
   flex-direction: column;
   gap: var(--space-4);
   min-width: 0;
-  order: 1;
 }
 
 .settings-nav {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  order: 2;
+  gap: var(--space-4);
 }
 
 .settings-shell.is-section .settings-nav {
   display: none;
 }
 
-.settings-shell:not(.is-section) .settings-back {
-  display: none;
+.settings-group {
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.settings-group h2 {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.settings-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .settings-nav a,
@@ -46,10 +60,12 @@
 }
 
 .settings-nav a {
+  display: flex;
   padding: 0 var(--space-3);
   border-radius: var(--radius-sm);
 }
 
+.settings-nav a:hover,
 .settings-nav a[aria-current='page'] {
   color: var(--text);
   background: var(--surface-2);
@@ -70,23 +86,26 @@
 }
 
 @media (min-width: 1024px) {
-  .settings-shell {
+  .settings-shell.is-section {
     display: grid;
     grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-areas: "navigation content";
     column-gap: var(--space-6);
     align-items: start;
   }
 
-  .settings-nav,
-  .settings-main {
-    order: 0;
+  .settings-shell.is-section .settings-main {
+    grid-area: content;
   }
 
-  .settings-nav {
-    width: 240px;
+  .settings-shell:not(.is-section) .settings-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
   }
 
   .settings-shell.is-section .settings-nav {
+    grid-area: navigation;
     display: flex;
   }
 

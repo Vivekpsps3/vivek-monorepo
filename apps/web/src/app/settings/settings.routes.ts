@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { SettingsHomeComponent, SettingsShellComponent } from './settings-shell.component';
+import { SettingsShellComponent } from './settings-shell.component';
 import { SETTINGS_SECTIONS } from './settings.registry';
 
 export const SETTINGS_ROUTES: Routes = [
@@ -8,7 +8,7 @@ export const SETTINGS_ROUTES: Routes = [
     component: SettingsShellComponent,
     title: 'Settings',
     children: [
-      { path: '', pathMatch: 'full', title: 'Settings', component: SettingsHomeComponent },
+      { path: '', pathMatch: 'full', children: [] },
       ...SETTINGS_SECTIONS.map(section => ({
         path: section.path,
         title: `${section.label} · Settings`,

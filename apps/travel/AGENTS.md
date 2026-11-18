@@ -20,6 +20,8 @@ balance engine. Policy removal must preserve historical entries and conflict beh
 Reuse existing menus, confirmation, date and field controls. Migrate both real
 consumers before deleting repeated editor logic. Preserve keyboard access, save-error
 drafts and chart-only recovery; a failed summary must not hide usable forms.
+FlightAware settings use the same editor from suite Settings and the transport
+dialog. Keep the transport draft mounted in memory and cancel obsolete lookups.
 
 Read [TRAVEL](../../docs/TRAVEL.md) for the affected journey and root instructions
 for applicable gates. Pure chart/date behavior has Node tests under

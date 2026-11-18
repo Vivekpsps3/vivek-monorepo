@@ -151,8 +151,8 @@ export class PrivateLayoutComponent {
         && !!active.closest('a, button, input, textarea, select, [role="button"], [role="link"], [role="grid"], [tabindex]:not([tabindex="-1"]), [contenteditable="true"]');
       if (inPageControl) return;
       if (shellToggle(active) && !correctShellToggle) return;
-      if (shellToggle(active)) correctShellToggle = false;
       if (!dialogOpen && heading) {
+        if (shellToggle(active)) correctShellToggle = false;
         if (active !== heading) {
           if (confirm || performance.now() - started > 400) return;
           heading.tabIndex = -1;
