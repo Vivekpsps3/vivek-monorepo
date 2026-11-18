@@ -23,6 +23,7 @@ export declare function artRatio(): string;
 export declare function experienceTitle(kind: string): string;
 export declare function aboutSummary(kind: string): string;
 export declare function progressPrimary(kind: string): boolean;
+export declare function editorLead(kind: string): string[];
 export declare function showsGenericProgress(kind: string): boolean;
 export declare function showsAnticipated(kind: string): boolean;
 export declare function moreSummary(kind: string): string;

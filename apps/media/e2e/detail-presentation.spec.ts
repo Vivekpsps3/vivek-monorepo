@@ -95,14 +95,15 @@ test('DET1 fallback, dates, pressed targets and drafts survive mark-next, failur
   expect(nextBox).toBeTruthy();
   expect(nextBox!.height).toBeGreaterThanOrEqual(44);
 
-  await expect(page.getByText('Manual progress', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Progress', { exact: true })).toBeHidden();
+  await expect(page.getByLabel('Progress', { exact: true })).toBeVisible();
+  await expect(page.getByText('Anticipation', { exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Anticipated', exact: true })).toBeHidden();
   await note(page).fill('Keep this note');
   await rating(page).click();
-  await page.getByText('Manual progress', { exact: true }).click();
-  await expect(page.getByLabel('Progress', { exact: true })).toBeVisible();
-  await page.getByText('Manual progress', { exact: true }).click();
-  await expect(page.getByLabel('Progress', { exact: true })).toBeHidden();
+  await page.getByText('Anticipation', { exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Anticipated', exact: true })).toBeVisible();
+  await page.getByText('Anticipation', { exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Anticipated', exact: true })).toBeHidden();
   await expect(note(page)).toHaveValue('Keep this note');
   await expect(rating(page)).toBeChecked();
 
@@ -158,7 +159,7 @@ test('DET1 fallback, dates, pressed targets and drafts survive mark-next, failur
   expect(draft.fields.rating).toBe(4);
 });
 
-test('kind disclosure keeps book progress visible and movie progress folded', async ({ page, request }) => {
+test('kind disclosure keeps book and movie progress visible and anticipation folded', async ({ page, request }) => {
   const book = await addItem(request, { kind: 'book', title: 'Compact book' });
   await openItem(page, book.id, 'Compact book');
   await expect(page.locator('[data-art-fallback]')).toHaveAttribute('data-kind-icon', kindIcon('book'));
@@ -181,8 +182,10 @@ test('kind disclosure keeps book progress visible and movie progress folded', as
   await expect(page.locator('.meta-chips')).toContainText('Movie');
   await expect(page.locator('.meta-chips')).toContainText('Ada Lovelace');
   await expect(page.getByLabel('Note (optional)', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Progress', { exact: true })).toBeHidden();
-  await page.getByText('Progress and anticipation', { exact: true }).click();
   await expect(page.getByLabel('Progress', { exact: true })).toBeVisible();
+  await expect(page.getByText('Anticipation', { exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Anticipated', exact: true })).toBeHidden();
+  await page.getByText('Anticipation', { exact: true }).click();
   await expect(page.getByRole('checkbox', { name: 'Anticipated', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Progress', { exact: true })).toBeVisible();
 });

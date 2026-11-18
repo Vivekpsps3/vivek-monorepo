@@ -31,6 +31,24 @@ const STATUS_SPOKEN = {
   unfollowed: "Unfollowed",
 };
 
+const COLLECTION_KINDS = new Set([
+  "movie",
+  "tv",
+  "book",
+  "artist",
+  "album",
+  "track",
+  "game",
+]);
+
+/**
+ * A direct item link has no collection history. Open that item's own collection
+ * at the first page. Do not invent an expanded artist, filter, or scroll.
+ */
+export function collectionHref(kind) {
+  return COLLECTION_KINDS.has(kind) ? `/media/library?kind=${kind}` : "/media/library";
+}
+
 /** Movies, series, books, music and games. Empty kind is the mixed activity view. */
 export function collectionKey(kind) {
   if (kind === "artist" || kind === "album" || kind === "track") return "music";

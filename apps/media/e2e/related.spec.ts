@@ -200,7 +200,9 @@ test('a held related response cannot publish after leaving and the observer is d
     return observers.length === 1 && observers[0].__disconnected !== true;
   })).toBe(true);
   await page.getByRole('link', { name: '← Library' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Library', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/media\/library\?kind=movie$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Movies', exact: true })).toBeVisible();
+  await expect(page.getByText(/scroll position/i)).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => {
     const observers = (window as Window & { __relatedObservers?: Array<{ __disconnected?: boolean }> }).__relatedObservers ?? [];
     return observers.length === 1 && observers.every((observer) => observer.__disconnected === true);

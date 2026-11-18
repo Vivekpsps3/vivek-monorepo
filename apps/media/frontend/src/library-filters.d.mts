@@ -72,6 +72,7 @@ export interface SectionLink {
   exact?: boolean;
   also?: readonly string[];
 }
+export declare function collectionHref(kind: string): string;
 export declare function collectionKey(kind: string): CollectionKey;
 export declare function collectionSummary(kind: string): string;
 export declare function normalizationNotice(kind: string, status: string): string;
