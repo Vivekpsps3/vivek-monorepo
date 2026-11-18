@@ -6,5 +6,5 @@ export interface RelatedNode {
   year: number | null;
 }
 export declare function relationLabel(relation: string): string;
-export declare function relatedHref(node: { title: string }): string;
+export declare function relatedHref(node: { title: string }, kind?: string): string;
 export declare function cleanNodes(nodes: unknown): RelatedNode[];

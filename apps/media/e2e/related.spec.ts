@@ -101,9 +101,10 @@ test('related loads once from a distant sentinel and an artist never requests it
   ]);
   expect(labels.filter((label) => label === 'Dune Part Two')).toHaveLength(1);
   expect(hrefs.every((href) => href?.startsWith('/media/add?title='))).toBe(true);
-  expect(hrefs[1]).toBe('/media/add?title=' + encodeURIComponent(accent));
-  expect(hrefs[2]).toBe('/media/add?title=' + encodeURIComponent(scheme));
-  expect(hrefs[3]).toBe('/media/add?title=' + encodeURIComponent(markup));
+  expect(hrefs.every((href) => href?.endsWith('&kind=movie'))).toBe(true);
+  expect(hrefs[1]).toBe('/media/add?title=' + encodeURIComponent(accent) + '&kind=movie');
+  expect(hrefs[2]).toBe('/media/add?title=' + encodeURIComponent(scheme) + '&kind=movie');
+  expect(hrefs[3]).toBe('/media/add?title=' + encodeURIComponent(markup) + '&kind=movie');
   expect(hrefs.some((href) => href?.toLowerCase().includes('javascript:'))).toBe(false);
   await expect(page.locator('.related-card').nth(0)).toContainText('Sequel · 2024');
   await expect(page.getByRole('link', { name: 'Extra 6', exact: true })).toHaveCount(0);

@@ -125,6 +125,9 @@ export class DetailComponent {
   private mutation?: Subscription;
   private progressRequest?: Subscription;
   private generation = 0;
+  /** Explicit metadata retries for a pending item. Opening the page does not spend one. */
+  metadataRetries = 0;
+  readonly metadataRetryLimit = 3;
   private pendingId: number | null = null;
   private baseFields: ItemFields | null = null;
   private baseVersion = "";
@@ -250,6 +253,7 @@ export class DetailComponent {
     this.busy.set(false);
     this.error.set("");
     this.message.set("");
+    this.metadataRetries = 0;
     this.recovery.set(null);
     this.item.set(null);
     this.loadingRequest = this.http
@@ -392,6 +396,7 @@ export class DetailComponent {
   private adopt(d: Detail): void {
     const composer = this.tagText;
     const keepComposer = this.item()?.id === d.id;
+    this.metadataRetries = this.pendingRetries(d);
     this.item.set(d);
     this.review = d.review || "";
     this.rating = d.rating;
@@ -414,6 +419,7 @@ export class DetailComponent {
   /** Progress responses change the item clock. Rebase the draft onto that clock and keep the form. */
   private keepDrafts(detail: Detail): void {
     const fields = this.fields();
+    this.metadataRetries = this.pendingRetries(detail);
     this.item.set(detail);
     this.applyFields(fields);
     this.baseVersion = detail.updated_at;
@@ -530,7 +536,7 @@ export class DetailComponent {
     this.fetchRelated(item.id, this.generation);
   }
   relatedLink(node: { title: string }): string {
-    return relatedHref(node);
+    return relatedHref(node, this.item()?.kind);
   }
   relatedMeta(node: RelatedNode): string {
     const label = relationLabel(node.relation);
@@ -540,7 +546,7 @@ export class DetailComponent {
   openRelated(event: MouseEvent, node: { title: string }): void {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    void this.router.navigateByUrl(relatedHref(node));
+    void this.router.navigateByUrl(relatedHref(node, this.item()?.kind));
   }
   onTagText(value: string): void {
     this.tagText = value;
@@ -711,6 +717,58 @@ export class DetailComponent {
           this.rememberDraft();
         },
       });
+  }
+  get metadataRetryOpen(): boolean {
+    return this.metadataRetries < this.metadataRetryLimit;
+  }
+  retryMetadata(): void {
+    const current = this.item();
+    if (!current || !this.metadataRetryOpen || this.busy() || !this.ownsSession) return;
+    const generation = this.generation;
+    this.busy.set(true);
+    this.error.set("");
+    this.mutation?.unsubscribe();
+    this.mutation = this.http
+      .post<Detail>(this.endpoint() + "/refresh", {})
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (detail) => {
+          if (generation !== this.generation || !this.ownsSession) return;
+          this.metadataRetries = 0;
+          this.keepDrafts(detail);
+          this.busy.set(false);
+          this.message.set(
+            detail.catalog.extra?.["metadata_pending"]
+              ? "Metadata is still pending. Your saved item stays editable."
+              : "Metadata updated.",
+          );
+          this.focusMetadata();
+        },
+        error: (error) => {
+          if (generation !== this.generation || !this.ownsSession) return;
+          const code = (error as { error?: { code?: string } }).error?.code;
+          this.metadataRetries =
+            code === "retry_limit" ? this.metadataRetryLimit : this.metadataRetries + 1;
+          this.error.set(errorCopy(error));
+          this.busy.set(false);
+          this.rememberDraft();
+          this.focusMetadata();
+        },
+      });
+  }
+  private pendingRetries(detail: Detail): number {
+    const extra = detail.catalog?.extra;
+    if (!extra || extra["metadata_pending"] !== true) return 0;
+    const raw = extra["metadata_retries"];
+    return typeof raw === "number" && Number.isInteger(raw) && raw >= 0 ? raw : 0;
+  }
+  private focusMetadata(): void {
+    const id = this.metadataRetryOpen ? "metadata-retry" : "metadata-limit";
+    queueMicrotask(() => {
+      const host = document.getElementById(id);
+      const button = host?.querySelector("button, a");
+      (button instanceof HTMLElement ? button : host)?.focus();
+    });
   }
   markNext(episode: Episode): void {
     const current = this.item();

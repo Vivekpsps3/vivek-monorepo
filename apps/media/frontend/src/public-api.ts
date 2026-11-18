@@ -23,6 +23,7 @@ export const routes: Routes = [
       {
         path: "search",
         title: "Media · Search",
+        canDeactivate: [leave],
         loadComponent: () =>
           import("./search.component").then((m) => m.SearchComponent),
       },
@@ -38,7 +39,7 @@ export const routes: Routes = [
         title: "Media · Add",
         canDeactivate: [leave],
         loadComponent: () =>
-          import("./add.component").then((m) => m.AddComponent),
+          import("./search.component").then((m) => m.SearchComponent),
       },
       {
         path: "item/:id/discography",

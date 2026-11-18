@@ -658,6 +658,17 @@ def entry_web(
     return {"kind": catalog.kind, "nodes": []}
 
 
+@router.get("/capture/coverage")
+def capture_coverage(
+    kind: str | None = None,
+    principal: Principal = Depends(require_principal),
+):
+    """Configuration for the selected type. This route does not search or refresh."""
+    if kind not in (None, "", "all") and kind not in records.KINDS:
+        raise HTTPException(status_code=422, detail="This media type is not supported.")
+    return {"kind": kind or "all", "sources": providers.describe_coverage(kind)}
+
+
 @router.get("/search")
 def search(
     q: str = Query(""),

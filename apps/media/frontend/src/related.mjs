@@ -14,8 +14,20 @@ export function relationLabel(relation) {
   return RELATION_LABELS[relation] ?? "";
 }
 
-export function relatedHref(node) {
-  return "/media/add?title=" + encodeURIComponent(node.title);
+export function relatedHref(node, kind) {
+  let href = "/media/add?title=" + encodeURIComponent(node.title);
+  if (
+    kind === "movie" ||
+    kind === "tv" ||
+    kind === "book" ||
+    kind === "game" ||
+    kind === "artist" ||
+    kind === "album" ||
+    kind === "track"
+  ) {
+    href += "&kind=" + encodeURIComponent(kind);
+  }
+  return href;
 }
 
 export function cleanNodes(nodes) {

@@ -20,6 +20,8 @@ Search is transient. A process cache is bounded by TTL, entry count, bytes and i
 
 The UI shows the active type/query, source coverage, partial failure, missing configuration, timeout, throttling, empty results and retry. Deterministic The Gentlemen movie/series fixtures cover ambiguous titles and partial source failure. They establish regression behavior rather than proving a past intermittent production cause.
 
+Search and manual add are one capture flow. The selected collection type is carried on Search, Add, and Save, and it changes only from the Type field. The page lists which providers can search that type and which are unconfigured, and it does not invent a result for an unconfigured source. A provider timeout or pending metadata still leaves the saved item editable. Retry is an explicit action, at most three attempts for that search or pending item, and opening the item does not refresh it. Saving the same provider identity twice keeps one membership even when the title text differs. Two provider identities that share a title stay two memberships. A manual item has no provider identity and is not merged into a provider item by title. A failed save keeps the typed fields. Sign-out clears the unsaved draft.
+
 | Source | Capability |
 | --- | --- |
 | TMDB | Movies/series using `TMDB_API_KEY`; public movie-search fallback without a key |

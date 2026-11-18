@@ -964,6 +964,7 @@ def _apply_authoritative(db: Session, catalog: CatalogItem, detail: dict) -> Non
         mark = provenance(catalog.source, "official")
     extra["provenance"] = mark
     extra["metadata_pending"] = False
+    extra.pop("metadata_retries", None)
     catalog.extra = dumps(extra)
     catalog.updated_at = utc_now()
     has_release = db.query(Release.id).filter(Release.catalog_id == catalog.id).first() is not None

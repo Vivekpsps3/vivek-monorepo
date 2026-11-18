@@ -8,6 +8,11 @@ import {
   relationLabel,
 } from "../../../frontend/src/related.mjs";
 
+test("a related manual link keeps the open type", () => {
+  assert.equal(relatedHref({ title: "Paper Harbor" }, "book"), "/media/add?title=Paper%20Harbor&kind=book");
+  assert.equal(relatedHref({ title: "Paper Harbor" }), "/media/add?title=Paper%20Harbor");
+});
+
 test("related kinds are movie, series and book, never an artist", () => {
   assert.deepEqual(RELATED_KINDS, ["movie", "tv", "book"]);
   assert.equal(RELATED_KINDS.includes("artist"), false);
