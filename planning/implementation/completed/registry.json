@@ -1,6 +1,6 @@
 {
   "validated_on": "2026-11-18",
-  "base_sha": "a0c8c1d6da9a0622085d9d3b8f56f2f640c13f84",
+  "base_sha": "901306724fe358e97e73b0f4b2721431e996cd33",
   "tasks": [
     {
       "id": "MED-11",
@@ -1749,6 +1749,30 @@
       ],
       "merged_pr": 507,
       "merge_sha": "a0c8c1d6da9a0622085d9d3b8f56f2f640c13f84"
+    },
+    {
+      "id": "MUX-03",
+      "title": "Build artist, album and song collection views",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 399,
+      "dependencies": [
+        "MUX-01",
+        "MUX-02",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ],
+      "merged_pr": 509,
+      "merge_sha": "901306724fe358e97e73b0f4b2721431e996cd33"
     }
   ],
   "td_coverage": {
