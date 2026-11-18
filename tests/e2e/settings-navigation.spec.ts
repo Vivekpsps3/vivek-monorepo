@@ -73,7 +73,8 @@ test('signing out clears the connection settings while a key save is pending', a
   });
   await page.route('**/api/auth/logout', async route => {
     await logout;
-    await route.fallback();
+    // Browser-local clearing is under test. Keep the worker's shared synthetic login available.
+    await route.fulfill({ json: { ok: true } }).catch(() => undefined);
   });
   try {
     await page.goto('/settings/connections');
