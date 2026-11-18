@@ -255,6 +255,8 @@ dd {
       max(var(--space-10), env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
   }
 
+  .split { display: grid; }
+
   .arrival, .pair, .split {
     grid-template-columns: minmax(0, 1fr);
   }
