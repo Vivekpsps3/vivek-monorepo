@@ -33,6 +33,8 @@ import {
   errorCopy,
   kinds,
   LibraryResponse,
+  ArtistGroup,
+  ArtistGroupSummary,
   Detail,
   MediaCard,
 } from "./media.models";
@@ -248,6 +250,41 @@ const LIBRARY = "/media/library";
                 </div>
               }
             }
+            @if (item.kind === "album" || item.kind === "track") {
+              @for (group of item.artist_groups || []; track group.catalog_id) {
+                <ui-button
+                  variant="ghost"
+                  size="sm"
+                  [ariaExpanded]="expandedGroup() === group.catalog_id"
+                  [ariaControls]="'group-' + group.catalog_id"
+                  (click)="expandGroup(group)"
+                >
+                  {{ expandedGroup() === group.catalog_id ? "Hide" : "Show" }}
+                  {{ group.title }}{{ group.followed ? "" : ", not followed" }}
+                  ({{ group.saved_count || 0 }})
+                </ui-button>
+              }
+              @if (hostsGroup(item)) {
+                <div [id]="'group-' + expandedGroup()" class="saved-children">
+                  @if (groupLoading()) {
+                    <p role="status">Loading saved music…</p>
+                  }
+                  @if (groupError()) {
+                    <p role="alert">{{ groupError() }}</p>
+                    <ui-button variant="ghost" (click)="reloadGroup()">
+                      Retry saved music
+                    </ui-button>
+                  }
+                  @for (child of groupChildren(); track child.id) {
+                    <media-card [item]="child" [source]="source()" />
+                  } @empty {
+                    @if (!groupLoading() && !groupError()) {
+                      <p>No saved albums or songs for this artist.</p>
+                    }
+                  }
+                </div>
+              }
+            }
           </section>
         } @empty {
           <ui-empty-state [title]="emptyTitle" [message]="emptyMessage">
@@ -316,6 +353,7 @@ export class LibraryComponent {
   tags: string[] = [];
   offset = 0;
   private childrenRequest?: Subscription;
+  private groupRequest?: Subscription;
   private filterTimer: ReturnType<typeof setTimeout> | undefined;
   readonly data = signal<LibraryResponse | null>(null);
   readonly error = signal("");
@@ -372,6 +410,10 @@ export class LibraryComponent {
   readonly children = signal<MediaCard[]>([]);
   readonly childrenError = signal("");
   readonly childrenLoading = signal(false);
+  readonly expandedGroup = signal<number | null>(null);
+  readonly groupChildren = signal<MediaCard[]>([]);
+  readonly groupError = signal("");
+  readonly groupLoading = signal(false);
   constructor() {
     // Router Back is deferred with setTimeout(0). A paused test clock does not
     // run that timer, so the URL changes while the State control keeps the
@@ -430,6 +472,14 @@ export class LibraryComponent {
             this.childrenLoading.set(false);
           }
           this.expanded.set(expanded);
+          const group = Number(p.get("group")) || null;
+          if (group !== this.expandedGroup()) {
+            this.groupRequest?.unsubscribe();
+            this.groupChildren.set([]);
+            this.groupError.set("");
+            this.groupLoading.set(false);
+          }
+          this.expandedGroup.set(group);
           if (transition.notice) this.notice.set(transition.notice);
           else if (
             transition.kindChange ||
@@ -478,11 +528,20 @@ export class LibraryComponent {
         if (data?.available_tags) this.availableTags.set(data.available_tags);
         this.loading.set(false);
         this.refreshing.set(false);
-        const expanded = data?.items.find(
-          (item) => item.id === this.expanded(),
-        );
+        if (!data) {
+          this.restoreScroll();
+          return;
+        }
+        const expanded = data.items.find((item) => item.id === this.expanded());
         if (expanded) this.loadChildren(expanded);
-        else this.restoreScroll();
+        const groupId = this.expandedGroup();
+        const groupVisible =
+          groupId != null &&
+          data.items.some((item) =>
+            item.artist_groups?.some((group) => group.catalog_id === groupId),
+          );
+        if (groupVisible && groupId != null) this.loadGroup(groupId);
+        if (!expanded && !groupVisible) this.restoreScroll();
       });
   }
   retry(): void {
@@ -570,6 +629,27 @@ export class LibraryComponent {
       queryParamsHandling: "merge",
     });
   }
+  hostsGroup(item: MediaCard): boolean {
+    const catalogId = this.expandedGroup();
+    if (catalogId == null) return false;
+    const host = this.data()?.items.find((row) =>
+      row.artist_groups?.some((group) => group.catalog_id === catalogId),
+    );
+    return host?.id === item.id;
+  }
+  expandGroup(group: ArtistGroupSummary): void {
+    const next = this.expandedGroup() === group.catalog_id ? null : group.catalog_id;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { group: next },
+      queryParamsHandling: "merge",
+      replaceUrl: true,
+    });
+  }
+  reloadGroup(): void {
+    const catalogId = this.expandedGroup();
+    if (catalogId != null) this.loadGroup(catalogId);
+  }
   expand(item: MediaCard, retry = false): void {
     if (retry) {
       this.loadChildren(item);
@@ -589,6 +669,7 @@ export class LibraryComponent {
       !this.scrollerReady ||
       this.loading() ||
       this.childrenLoading() ||
+      this.groupLoading() ||
       this.restoring ||
       typeof window === "undefined"
     )
@@ -632,6 +713,29 @@ export class LibraryComponent {
           if (this.expanded() !== item.id) return;
           this.childrenError.set(errorCopy(e));
           this.childrenLoading.set(false);
+          this.restoreScroll();
+        },
+      });
+  }
+  private loadGroup(catalogId: number): void {
+    this.groupChildren.set([]);
+    this.groupError.set("");
+    this.groupLoading.set(true);
+    this.groupRequest?.unsubscribe();
+    this.groupRequest = this.http
+      .get<ArtistGroup>("/media/api/music-groups/" + catalogId)
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (payload) => {
+          if (this.expandedGroup() !== catalogId) return;
+          this.groupChildren.set(payload.saved_children || []);
+          this.groupLoading.set(false);
+          this.restoreScroll();
+        },
+        error: (error) => {
+          if (this.expandedGroup() !== catalogId) return;
+          this.groupError.set(errorCopy(error));
+          this.groupLoading.set(false);
           this.restoreScroll();
         },
       });

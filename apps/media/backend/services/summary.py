@@ -16,6 +16,7 @@ from apps.media.backend.services.records import (
 
 _ALBUM_RELATIONS = ("artist-album", "artist-release-group")
 _TRACK_RELATIONS = ("album-recording", "release-group-recording")
+_DIRECT_TRACK = "artist-recording"
 
 
 def build_summary(db: Session, user_id: int) -> dict:
@@ -169,19 +170,31 @@ def linked_artist(db: Session, entry: UserEntry) -> dict | None:
         ]
     else:
         return None
-    if not album_ids:
-        return None
-    found = (
-        db.query(CatalogItem)
-        .join(MusicLink, MusicLink.parent_catalog_id == CatalogItem.id)
-        .filter(
-            MusicLink.child_catalog_id.in_(album_ids),
-            MusicLink.relation.in_(_ALBUM_RELATIONS),
-            CatalogItem.kind == "artist",
+    found = None
+    if album_ids:
+        found = (
+            db.query(CatalogItem)
+            .join(MusicLink, MusicLink.parent_catalog_id == CatalogItem.id)
+            .filter(
+                MusicLink.child_catalog_id.in_(album_ids),
+                MusicLink.relation.in_(_ALBUM_RELATIONS),
+                CatalogItem.kind == "artist",
+            )
+            .order_by(MusicLink.position, MusicLink.id)
+            .first()
         )
-        .order_by(MusicLink.position, MusicLink.id)
-        .first()
-    )
+    if found is None and kind == "track":
+        found = (
+            db.query(CatalogItem)
+            .join(MusicLink, MusicLink.parent_catalog_id == CatalogItem.id)
+            .filter(
+                MusicLink.child_catalog_id == entry.catalog_id,
+                MusicLink.relation == _DIRECT_TRACK,
+                CatalogItem.kind == "artist",
+            )
+            .order_by(MusicLink.position, MusicLink.id)
+            .first()
+        )
     if found is None:
         return None
     saved = (

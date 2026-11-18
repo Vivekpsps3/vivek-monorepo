@@ -11,6 +11,9 @@ Ordinary saved reads must remain bounded and database-only: do not contact provi
 or repair saved state during a GET. Keep provider I/O outside write transactions.
 Preserve source identity, MusicBrainz release-group versus pressing, and isolation of
 notes, ratings, progress and Undo across owners. Public metadata is not a personal save.
+An album or song save groups under a canonical artist id and does not follow that
+artist or import a discography. Compilations, featured credits, unknown credits,
+and similar names stay distinct. A group read is this user's saved rows only.
 
 Consolidate proven repeated policy in small functions. Do not build a provider plugin
 framework or merge different transport/cache semantics. The current pacing/client

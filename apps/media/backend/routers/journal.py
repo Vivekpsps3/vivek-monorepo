@@ -102,6 +102,16 @@ def library(
     }
 
 
+@router.get("/music-groups/{catalog_id}")
+def music_group(
+    catalog_id: Annotated[int, bounded_path_id("That item is not in your library.")],
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    """Saved membership for one artist. A read does not follow or contact a provider."""
+    return records.saved_artist_group(db, principal.id, catalog_id)
+
+
 @router.get("/movies")
 def movies(
     db: Session = Depends(get_db, scope="function"),

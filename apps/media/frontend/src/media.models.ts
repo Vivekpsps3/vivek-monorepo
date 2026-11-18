@@ -18,6 +18,16 @@ export interface Lifecycle {
   fetched_at?: string | null;
   completeness: string;
 }
+export interface ArtistGroupSummary {
+  catalog_id: number;
+  title: string;
+  followed: boolean;
+  entry_id: number | null;
+  saved_count: number;
+}
+export interface ArtistGroup extends ArtistGroupSummary {
+  saved_children: MediaCard[];
+}
 export interface MediaCard {
   id: number;
   kind: Kind;
@@ -29,6 +39,7 @@ export interface MediaCard {
   favorite: boolean;
   rating: number | null;
   saved_count?: number;
+  artist_groups?: ArtistGroupSummary[];
   progress_label?: string | null;
   lifecycle?: Lifecycle;
   caught_up?: boolean;

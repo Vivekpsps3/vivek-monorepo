@@ -23,6 +23,7 @@ export declare function toQueryParams(f: LibraryFilters): {
   tag: string[] | null;
   offset: null;
   expanded: null;
+  group: null;
 };
 export declare function tagOptions(
   available: string[] | undefined,
@@ -58,6 +59,7 @@ export interface CollectionQuery {
   tag: string[] | null;
   offset: null;
   expanded: null;
+  group: null;
 }
 export interface MusicView {
   kind: string;
