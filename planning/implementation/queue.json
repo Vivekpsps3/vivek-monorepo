@@ -1,6 +1,6 @@
 {
-  "base_sha": "18607fe30175a0b152f2d9fdaadef00828e89720",
-  "validated_on": "2026-11-17",
+  "base_sha": "fc145a7c076c20541b295757e2c1ef5ea65bcf63",
+  "validated_on": "2026-11-18",
   "roadmap_issue": 134,
   "parents": [
     {
@@ -18,10 +18,6 @@
     {
       "number": 125,
       "title": "Operations: prove CI isolation, release verification, encrypted backups and recovery"
-    },
-    {
-      "number": 195,
-      "title": "Proposal: Cards \u2014 a beautiful private credit-card, benefits and renewal tracker"
     },
     {
       "number": 304,
@@ -440,22 +436,6 @@
       "verification_profiles": [
         "server_back",
         "schema"
-      ]
-    },
-    {
-      "id": "DISC-02",
-      "title": "Produce a bounded Cards design/data-flow PR without building the app",
-      "parent_issues": [
-        195
-      ],
-      "kind": "discovery",
-      "issue": 265,
-      "dependencies": [],
-      "conflict_groups": [
-        "planning-discovery"
-      ],
-      "verification_profiles": [
-        "docs"
       ]
     },
     {

@@ -1,6 +1,6 @@
 {
-  "validated_on": "2026-11-17",
-  "base_sha": "18607fe30175a0b152f2d9fdaadef00828e89720",
+  "validated_on": "2026-11-18",
+  "base_sha": "fc145a7c076c20541b295757e2c1ef5ea65bcf63",
   "tasks": [
     {
       "id": "MED-11",
@@ -1664,6 +1664,24 @@
       ],
       "merged_pr": 381,
       "merge_sha": "18607fe30175a0b152f2d9fdaadef00828e89720"
+    },
+    {
+      "id": "DISC-02",
+      "title": "Produce a bounded Cards design/data-flow PR without building the app",
+      "parent_issues": [
+        195
+      ],
+      "kind": "discovery",
+      "issue": 265,
+      "dependencies": [],
+      "conflict_groups": [
+        "planning-discovery"
+      ],
+      "verification_profiles": [
+        "docs"
+      ],
+      "merged_pr": 501,
+      "merge_sha": "fc145a7c076c20541b295757e2c1ef5ea65bcf63"
     }
   ],
   "td_coverage": {

@@ -199,6 +199,10 @@ All links are real published issues. This map groups scope; it does not define r
 ## Retained independent leaves
 
 - [TOWN-07 / #255](https://github.com/Vivekpsps3/vivek-monorepo/issues/255): Enforce Town relational ownership with one preserving migration.
-- [DISC-02 / #265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265): Produce a bounded Cards design/data-flow PR without building the app.
 - [OPS-05 / #276](https://github.com/Vivekpsps3/vivek-monorepo/issues/276): Deliver independent-monitor integrations with synthetic alert proof.
 - [OPS-06 / #277](https://github.com/Vivekpsps3/vivek-monorepo/issues/277): Record real off-host restore and independent alert activation evidence.
+
+[DISC-02 / #265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265) is archived.
+The Cards design is [planning/implementation/cards.md](../implementation/cards.md).
+The app is not built, implementation stays unselected, and parent
+[#195](https://github.com/Vivekpsps3/vivek-monorepo/issues/195) stays open.
