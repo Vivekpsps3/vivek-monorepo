@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265) DISC-02; parent [#195](https://github.com/Vivekpsps3/vivek-monorepo/issues/195). Parent stays open. Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open.
 - Agent/context, branch/worktree: Grok Build subagent, sole implementer; `agent/disc-02`; `/home/vivek/.grok/worktrees/deployments-vivek-monorepo/subagent-01a1ed20-aee1-73f1-9ae4-7fcf5d354693`.
-- Base main SHA, current tested SHA: base `8126d6efef2e6e0564d7dccc67e17d785204d4f9`. The passing local gates below ran on this design tree before the commit SHA existed. The handoff records the committed SHA after the same gates were rerun.
+- Base main SHA, current tested SHA: base `8126d6efef2e6e0564d7dccc67e17d785204d4f9`. Design commit `b61f00ac3782df8df172d3b3cb1a369a3b5a1edd` passed `make test-fast`, both planner validates, and `git diff --check`. This follow-up only records that SHA.
 - Fresh-main/prerequisite/active-PR checks: `git fetch origin main` at claim matched `8126d6efef2e6e0564d7dccc67e17d785204d4f9`. Packet dependencies: none. #265 was open with no comments before the claim. #195 was open. The only open pull request was #500 (NAV-03, `agent/nav-03`); it does not edit this leaf's files. Conflict group `planning-discovery` had no other open PR. Shared checkout and other worktrees were not edited.
 
 ## Acceptance
@@ -48,11 +48,11 @@ Recorded after the local run. A failed command stays FAIL.
 
 | Command | Tested SHA | Result |
 | --- | --- | --- |
-| `python3 planning/implementation/plan.py validate` | design tree on base `8126d6ef` before commit | PASS. 115 active packets, 25 parents, 72 completed packets, forty TD owners. |
-| `python3 planning/implementation/plan.py validate --self-test` | same tree | PASS. Thirteen negative fixtures and the listing fixtures. |
-| `git diff --check origin/main` | same tree | PASS. No whitespace errors. |
-| `make test-fast` | same tree, system `python3` without Alembic | FAIL. `scripts.test_restore_drill` `setUpClass` raised `ModuleNotFoundError: No module named 'alembic'`. Doc paths, planner, blame, shared boundaries, and Finance UX F1 had already passed. The suite was not skipped. |
-| `make test-fast` | same tree, `PATH` pointed at this worktree's `.venv` symlink to the main checkout | PASS. Doc paths OK. Planning validation PASS (115 packets, 25 parents, 72 completed, forty TD owners). Blame-ignore revisions OK. Shared boundaries OK. Finance UX F1 OK. 111 Python unittest tests OK. E2E discovery guard OK (projects listed, not executed). Node tests 21 pass / 0 fail. |
+| `python3 planning/implementation/plan.py validate` | `b61f00ac3782df8df172d3b3cb1a369a3b5a1edd` | PASS. 115 active packets, 25 parents, 72 completed packets, forty TD owners. |
+| `python3 planning/implementation/plan.py validate --self-test` | `b61f00ac3782df8df172d3b3cb1a369a3b5a1edd` | PASS. Thirteen negative fixtures and the listing fixtures. |
+| `git diff --check origin/main` | `b61f00ac3782df8df172d3b3cb1a369a3b5a1edd` | PASS. No whitespace errors. |
+| `make test-fast` | design tree before `b61f00ac`, system `python3` without Alembic | FAIL. `scripts.test_restore_drill` `setUpClass` raised `ModuleNotFoundError: No module named 'alembic'`. Doc paths, planner, blame, shared boundaries, and Finance UX F1 had already passed. The suite was not skipped. |
+| `make test-fast` | `b61f00ac3782df8df172d3b3cb1a369a3b5a1edd`, `PATH` pointed at this worktree's `.venv` symlink to the main checkout | PASS. Doc paths OK. Planning validation PASS (115 packets, 25 parents, 72 completed, forty TD owners). Blame-ignore revisions OK. Shared boundaries OK. Finance UX F1 OK. 111 Python unittest tests OK. E2E discovery guard OK (projects listed, not executed). Node tests 21 pass / 0 fail. |
 
 The `.venv` and `node_modules` symlinks are gitignored and are not part of the diff. No application Karma or Playwright suite was required for this docs-only diff. CI on the pull request is a separate run. Merge and deployment have not run.
 
