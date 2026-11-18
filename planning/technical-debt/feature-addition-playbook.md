@@ -119,19 +119,19 @@ backup protocol restores each one. Registration checks need behavior examples.
 
 ## 5. Worked example: add a card-benefit field inside Finance
 
-1. Keep the feature in Finance. Add the typed optional field and legacy decoder/default
-   to its owned encrypted card metadata, not a plaintext server card endpoint.
-2. Extend its existing editor/projection and reuse canonical money/date controls.
-3. Keep the benefit period/value distinct from statement/debt/transaction meaning.
-4. If the collection already participates in recovery, add a record-version example;
-   do not create a new allowlist string everywhere for each field.
-5. Test edit/save/reload, absent old field, invalid amount/date, conflict and lock during save.
-6. Run relevant Finance/shared and browser checks. No Travel/Media calculation edit
-   or new root shell state should be necessary.
+The Cards design is [planning/implementation/cards.md](../implementation/cards.md).
+There is no card collection on current main, and this guide does not authorize
+creating one. When the owner selects implementation, that design's first slice
+adds one Finance vault collection, `cards`, and keeps statement, benefit,
+renewal, and debt facts distinct. It does not add a plaintext card endpoint or
+a field on `liabilities`.
 
-This illustration does not implement Cards. Product selection stays with
-[DISC-02](https://github.com/Vivekpsps3/vivek-monorepo/issues/265). It does not
-authorize the app, a bank connection, or a new collection.
+A later field on an existing card row reuses that collection's codec. Recovery
+already follows the finance/health union, so the field does not add another
+allowlist string. Benefit period and value stay distinct from statement, debt,
+and transaction meaning. Tests cover edit/save/reload, a missing old field, an
+invalid amount or date, conflict, and lock during save. No Travel or Media
+calculation edit, and no new root shell state, should be necessary.
 
 ## 6. Worked example: add Sidequests as an encrypted domain
 
@@ -205,7 +205,7 @@ A Health list/editor already saves through `createStat` / `createPr` with `expec
 
 - Do not add a package, plugin loader, second recovery list, generic repository, or event bus for one feature.
 - Do not leave a toy route, collection, or symbol in production. The `ref01_probe` registration in the table was reverted before this guide was committed.
-- Cards stays discovery [#265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265) (DISC-02). The Sidequests design is [#264](https://github.com/Vivekpsps3/vivek-monorepo/issues/264) (DISC-01) and does not authorize that app. This guide does not approve a bank connection, credential, or provider.
+- The Cards design is [planning/implementation/cards.md](../implementation/cards.md) (DISC-02 / [#265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265)). It does not authorize the app. The Sidequests design is [#264](https://github.com/Vivekpsps3/vivek-monorepo/issues/264) (DISC-01) and does not authorize that app. This guide does not approve a bank connection, credential, or provider.
 - Historical leaf ownership is `td_coverage` in the [completion registry](../implementation/completed/registry.json). Only unfinished owners remain in the [active queue](../implementation/queue.json). This file is the REF-01 slice of TD-00, TD-30, TD-31, TD-37, TD-38, and TD-39 only.
 
 Commands, floors, and architecture stay in [Verification](../../docs/VERIFICATION.md), [Quality](../../docs/QUALITY.md), [Architecture](../../docs/ARCHITECTURE.md), [Security](../../docs/SECURITY_MODEL.md), root [AGENTS.md](../../AGENTS.md), the [deletion contract](../implementation/deletion-strategy.md), and the [workflow](../implementation/workflow.md). Bank CSV rules stay in [Adding a bank import](../../docs/ADDING_A_BANK_IMPORT.md).
