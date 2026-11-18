@@ -7,7 +7,7 @@
       <ui-button variant="primary" (clicked)="openAddModal()">Add holding</ui-button>
       <ui-menu label="Holdings actions">
         <button uiMenuItem (select)="openFidelityImportModal()">Import from Fidelity</button>
-        <button uiMenuItem [disabled]="!filteredHoldings.length" (select)="exportToCsv()">Export CSV</button>
+        <button uiMenuItem (select)="exportToCsv()">Export CSV</button>
         <button uiMenuItem [disabled]="refreshingPrices || !holdings.length" (select)="refreshAllPrices()">Refresh prices</button>
       </ui-menu>
     </div>

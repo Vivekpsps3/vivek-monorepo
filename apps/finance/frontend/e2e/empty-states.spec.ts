@@ -101,7 +101,7 @@ test.describe('empty states behavior', () => {
     const menu = page.getByRole('menu', { name: 'Holdings actions', exact: true });
     await expect(menu.getByRole('menuitem')).toHaveText(['Import from Fidelity', 'Export CSV', 'Refresh prices']);
     await expect(menu.getByRole('menuitem', { name: 'Import from Fidelity' })).toBeEnabled();
-    await expect(menu.getByRole('menuitem', { name: 'Export CSV' })).toBeDisabled();
+    await expect(menu.getByRole('menuitem', { name: 'Export CSV' })).toBeEnabled();
     await expect(menu.getByRole('menuitem', { name: 'Refresh prices' })).toBeDisabled();
     await holdingsActions.click();
 

@@ -25,8 +25,10 @@ test('Settings reaches real CSV/security flows and signs out this browser once',
   expect((await saved).ok()).toBe(true);
   for (const [label, filename] of [['Export transaction CSV', 'transactions.csv'], ['Export portfolio CSV', 'holdings.csv']]) {
     await page.getByRole('link', { name: label, exact: true }).press('Enter');
+    const isPortfolio = filename === 'holdings.csv';
+    if (isPortfolio) await page.getByRole('button', { name: 'Holdings actions', exact: true }).click();
     const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
+    await page.getByRole(isPortfolio ? 'menuitem' : 'button', { name: 'Export CSV', exact: true }).click();
     expect((await download).suggestedFilename()).toBe(filename);
     await page.goBack();
     await expect(page.getByRole('heading', { name: 'Your data', exact: true })).toBeVisible();
