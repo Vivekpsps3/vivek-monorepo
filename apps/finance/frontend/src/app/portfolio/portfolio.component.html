@@ -53,6 +53,7 @@
       @for (stage of resumableFidelityStages; track stage.id) {
         <ui-card class="resume-stage" [headingLevel]="2" [title]="stage.filename">
           <ui-button uiCardActions variant="secondary" (clicked)="resumeFidelityStage(stage)" [disabled]="fidelityImportCommitting">
+            @if (fidelityImportCommitting) { <span class="spinner-inline" aria-hidden="true"></span> }
             Resume Fidelity import
           </ui-button>
           <p>{{ stage.expected_row_count | plural:'staged position' }} · {{ stage.account_masks.length | plural:'account' }}</p>

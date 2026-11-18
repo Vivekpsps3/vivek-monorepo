@@ -184,11 +184,11 @@ export class PortfolioComponent implements OnInit, OnDestroy {
           `Updated ${plural(result.updatedHoldings, 'holding price')} and ${plural(result.updatedEmployerValuations, 'employer valuation')}`
         );
       } else {
-        this.toastService.error('Some prices could not be refreshed. Saved prices remain available.');
+        this.toastService.error('Some prices could not be refreshed.');
       }
     } catch {
       if (!this.destroyed && session === this.financeService.sessionToken) {
-        this.toastService.error('Prices could not be refreshed. Saved prices remain available.');
+        this.toastService.error('Prices could not be refreshed.');
       }
     } finally {
       if (!this.destroyed && session === this.financeService.sessionToken) {
@@ -204,13 +204,13 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   private async refreshSavedPrice(symbol: string): Promise<void> {
     const session = this.financeService.sessionToken;
-    const failure = symbol + ' price could not be refreshed. Its prior price remains available.';
+    const failure = symbol + ' price could not be refreshed.';
     try {
       const result = await this.marketRefresh.refreshSymbol(symbol);
       // The coordinator publishes eligible results to holdings$ itself.
       if (this.destroyed || session !== this.financeService.sessionToken) return;
       if (result.error) this.toastService.error(failure);
-      else if (result.failedRecords.length) this.toastService.error(symbol + ' quote could not be fully saved. Its prior price remains available.');
+      else if (result.failedRecords.length) this.toastService.error(symbol + ' quote could not be saved for every position.');
       else this.toastService.success(symbol + ' price refreshed');
     } catch {
       if (!this.destroyed && session === this.financeService.sessionToken) this.toastService.error(failure);

@@ -101,12 +101,16 @@ for (const [width, theme, zoom] of [
       const tide = rows.filter({ hasText: 'TIDE' });
       vault.failQuote('TIDE');
       await tide.getByRole('button', { name: 'Refresh price for TIDE' }).tap();
-      await expect(page.getByText('TIDE price could not be refreshed. Its prior price remains available.')).toBeVisible();
+      await expect(page.getByText('TIDE price could not be refreshed.')).toBeVisible();
       await expect(tide).toContainText('Stale · 14 days old');
       await expect(tide.locator('[data-label="Value"]')).toHaveText(moneyText('$51.16'));
       expect(vault.data('holdings').find(row => row.symbol === 'TIDE')).toMatchObject({
         current_price: 25.58, quote_date: '2026-10-01',
       });
+      vault.failQuote('UNLISTED');
+      await unknown.getByRole('button', { name: 'Refresh price for UNLISTED' }).tap();
+      await expect(page.getByText('UNLISTED price could not be refreshed.', { exact: true })).toBeVisible();
+      await expect(unknown.locator('[data-label="Price"]')).toContainText('Unavailable');
       expect(vault.mutations).toHaveLength(0);
       await edit.tap();
       dialog = page.getByRole('dialog', { name: 'Edit holding' });
@@ -280,7 +284,7 @@ for (const refresh of ['row', 'all'] as const) {
     await expect(page).toHaveURL(/\/vault\/unlock/);
     release();
     await expect(draft).toHaveCount(0);
-    await expect(page.getByText(/HARBOR price (refreshed|could not be refreshed)|Updated .*holding price|Saved prices remain available/)).toHaveCount(0);
+    await expect(page.getByText(/HARBOR price (refreshed|could not be refreshed)|Updated .*holding price|[Pp]rices could not be refreshed/)).toHaveCount(0);
     await page.getByLabel('Vault passphrase').fill(SYNTHETIC_VAULT_PASSPHRASE);
     await page.getByRole('button', { name: 'Unlock', exact: true }).click();
     await expect(page.getByRole('table', { name: 'Manual holdings' })).toContainText(moneyText('$249.12'));
