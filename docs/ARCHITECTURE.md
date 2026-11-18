@@ -2,7 +2,7 @@
 
 One Angular 21 web application, one explicit FastAPI application factory, one identity/session implementation and one SQLite database compose the public site, Hub, Finance, Travel and Media. App-owned domain code stays in its own folder. Finance plaintext remains in the browser.
 
-A new field, provider fixture, or private record starts from the existing owner in [Feature addition](../planning/technical-debt/feature-addition-playbook.md). Cards remains discovery issue [#265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265). The Sidequests design is issue [#264](https://github.com/Vivekpsps3/vivek-monorepo/issues/264) and does not authorize that app.
+A new field, provider fixture, or private record starts from the existing owner in [Feature addition](../planning/technical-debt/feature-addition-playbook.md). The Cards design is [planning/implementation/cards.md](../planning/implementation/cards.md) and does not authorize that app. The Sidequests design is issue [#264](https://github.com/Vivekpsps3/vivek-monorepo/issues/264) and does not authorize that app.
 
 ## Active API surface
 
@@ -118,7 +118,7 @@ There is no active plaintext analytics or planning router. Monte Carlo inputs an
 
 ## Frontend
 
-- Finance local navigation: `MainLayoutComponent` (five hubs: Home, What you have, Spending, Recurring, Planning); lazy feature routes in `app.routes.ts`; `authGuard` + `vaultGuard` protect the app shell. `adminGuard` protects `/hub/admin`, which is outside the Finance shell. `/admin` and `/finance/admin` redirect there.
+- Finance local navigation is `financeSections` in `finance-navigation.ts` (Home, Accounts, Holdings, Activity, Calendar, Bills, Pay, Planning, Imports), rendered by `MainLayoutComponent` and the shell Finance list. Hub routes remain Home, `have`, `spending`, `recurring`, and `planning` in `app.routes.ts`. `authGuard` and `vaultGuard` protect that shell. Cards is not a route; its design is [planning/implementation/cards.md](../planning/implementation/cards.md). `adminGuard` protects `/hub/admin`, which is outside the Finance shell. `/admin` and `/finance/admin` redirect there.
 - Vault routes: `/finance/vault/setup`, `/finance/vault/unlock`; shared sign-in remains `/auth/login`.
 - State: `FinanceService` / `PlanningService` use the encrypted client store after vault unlock; `VaultService` / `EncryptedStoreService`; `AuthService`.
 - Prices: manual/imported prices remain local. After authenticated entry and vault unlock, one bounded, nonblocking session refresh sends deduplicated holding and configured employer ticker symbols to `/api/market`; Portfolio retry and Stock Lab/typed lookup also disclose symbols. Shares, values, account details, and other holding fields remain encrypted. See [SECURITY_MODEL.md](./SECURITY_MODEL.md#holdings-price-privacy).

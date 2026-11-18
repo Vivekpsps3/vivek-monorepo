@@ -24,7 +24,10 @@ retain requirements as scope trackers, not a competing backlog.
 is the DISC-01 design for a private experience cabinet. It disposes the
 proposal and leaves the open product choices labeled. It does not add queue
 entries, routes, or an app. Implementation stays unselected until the owner
-says otherwise. Cards remain [DISC-02](implementation/issues/DISC-02.md).
+says otherwise. [Cards](implementation/cards.md) /
+[#195](https://github.com/Vivekpsps3/vivek-monorepo/issues/195) is the DISC-02
+design for a private Finance card workspace. It disposes that proposal the
+same way and does not add a route or an app.
 
 ## Supporting guidance and history
 

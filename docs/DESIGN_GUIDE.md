@@ -25,7 +25,7 @@ and clear graphs.
 Home starts with two clickable blocks, followed by a first-steps checklist for an empty vault and charts:
 
 - current net worth with a holdings / assets / debts split
-- this month's pay, spending, and net, with card activity and repeating pay and bills counted once
+- this month's pay, spending, and net, with posted card purchases and repeating pay and bills counted once. "Card activity" here is the ledger, not the unbuilt Cards workspace in [planning/implementation/cards.md](../planning/implementation/cards.md).
 - portfolio summary with source dates and a portfolio allocation chart; detailed holdings remain on What you have
 - embedded cashflow, category, and allocation charts
 
@@ -38,6 +38,7 @@ Each major subpage should have page-level metrics at the top:
 - Jobs & pay: annual/monthly gross and net, active jobs.
 - Bills: monthly/annual total, active count, largest items.
 - Subscriptions: monthly/annual total, next bills, active count.
+- Cards, design only: answer what needs attention with a list before any chart. Do not add a chart, score, or savings total to satisfy the dashboard standard. The design is [planning/implementation/cards.md](../planning/implementation/cards.md).
 - Balance sheet: total assets, liabilities, net worth, stale balances.
 - Portfolio: market value, account allocation, largest holdings, price freshness.
 - Investment insights: portfolio value, growth assumptions, projected value, withdrawal-rate income (client-side; speculative).
