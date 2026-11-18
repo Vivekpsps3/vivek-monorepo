@@ -114,7 +114,7 @@ export const MUSIC_VIEWS = [
 
 /**
  * The next library query when the collection changes.
- * Page and expanded artist reset. A state the new kind cannot show is omitted.
+ * Page, expanded artist, and open artist group reset. A state the new kind cannot show is omitted.
  */
 export function collectionQuery(filters, kind) {
   const status = libraryStatusForKind(kind, filters.status);
@@ -128,6 +128,7 @@ export function collectionQuery(filters, kind) {
     tag: filters.tags.length ? [...filters.tags] : null,
     offset: null,
     expanded: null,
+    group: null,
   };
 }
 
@@ -228,6 +229,7 @@ export function toQueryParams(f) {
     tag: f.tags.length ? [...f.tags] : null,
     offset: null,
     expanded: null,
+    group: null,
   };
 }
 

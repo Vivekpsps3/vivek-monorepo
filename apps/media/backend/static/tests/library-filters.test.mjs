@@ -115,6 +115,19 @@ test("an impossible status is a visible normalization, not a silent empty read",
   assert.equal(albums.sort, "title");
   assert.deepEqual(albums.tag, ["night"]);
   assert.equal(albums.offset, null);
+  assert.equal(albums.expanded, null);
+  assert.equal(albums.group, null);
+  assert.equal(
+    toQueryParams({
+      q: "harbor",
+      kind: "artist",
+      status: "following",
+      sort: "title",
+      favorite: true,
+      tags: ["night"],
+    }).group,
+    null,
+  );
   assert.equal(collectionKey("album"), "music");
   assert.match(collectionSummary("book"), /^Books\./);
   assert.equal(collectionSummary(""), "All activity: movies, series, books, music, and games.");
