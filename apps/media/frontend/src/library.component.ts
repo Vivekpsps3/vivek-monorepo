@@ -28,7 +28,7 @@ import { MediaCardComponent } from "./media-card.component";
 import { NextEpisodeButtonComponent } from "./next-episode-button.component";
 import { NextResult } from "./next-episode.service";
 import { NextEpisodeUndoService } from "./next-episode-undo.service";
-import { seriesShelf } from "./theater.mjs";
+import { continuationFromShow, seriesShelf, showContinuation } from "./theater.mjs";
 import {
   ReturnContext,
   SESSION_CONTEXT,
@@ -46,7 +46,6 @@ import {
   ArtistGroup,
   ArtistGroupPage,
   ArtistGroupSummary,
-  Continuation,
   Detail,
   MediaCard,
 } from "./media.models";
@@ -741,11 +740,11 @@ export class LibraryComponent {
     );
   }
   shelfEpisodeId(item: MediaCard): number | null {
-    const row = item.continuation;
+    const row = showContinuation(item);
     return row && row.state === "next" ? row.episode_id : null;
   }
   airLine(item: MediaCard): string {
-    const row = item.continuation;
+    const row = showContinuation(item);
     if (!row || row.state !== "upcoming") return "";
     if (!row.air_date) return "Air date not announced";
     const day = formatDay(row.air_date);
@@ -777,25 +776,13 @@ export class LibraryComponent {
   private advancedShow(item: MediaCard, result: NextResult & { entry?: Detail }): MediaCard {
     const show = result.entry?.show;
     if (!show) return item;
-    const upcoming = show.next_episode ? null : show.upcoming_episodes?.[0];
-    const chosen = show.next_episode ?? upcoming ?? null;
-    const continuation: Continuation | null = chosen
-      ? {
-          episode_id: chosen.id,
-          season: chosen.season_number,
-          episode: chosen.episode_number,
-          title: chosen.title,
-          air_date: chosen.air_date,
-          state: chosen.released ? "next" : "upcoming",
-        }
-      : null;
     return {
       ...item,
       caught_up: show.caught_up,
       metadata_incomplete: show.metadata_incomplete,
       episode_count: show.episode_count,
       watched_count: show.watched_count,
-      continuation,
+      continuation: continuationFromShow(show),
     };
   }
   private focusTitle(entryId: number): void {

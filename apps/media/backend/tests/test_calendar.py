@@ -190,3 +190,155 @@ def test_linked_shows_refresh_and_a_provider_failure_keeps_saved_episodes(client
     assert (len(tvmaze_calls), len(tmdb_calls)) == calls_after
     november = client.post("/api/calendar/refresh", params={"month": "2026-11"}).json()
     assert by_title(november, "Later")[0]["date"] == "2026-11-02"
+
+
+def test_saved_reads_share_one_calendar_and_a_month_is_not_a_day(client, monkeypatch):
+    monkeypatch.setenv("MEDIA_TODAY", "2026-11-18")
+    monkeypatch.delenv("TMDB_API_KEY", raising=False)
+    wiki: list[str] = []
+    tmdb: list[str] = []
+
+    def wiki_related(*_args, **_kwargs):
+        wiki.append("wiki")
+        return []
+
+    def tmdb_parts(*_args, **_kwargs):
+        tmdb.append("tmdb")
+        return []
+
+    silence(monkeypatch, wiki=wiki_related, parts=tmdb_parts)
+    add_movie(
+        client,
+        "Paper Month",
+        status="anticipating",
+        anticipated=True,
+        release_on="2026-11-20",
+        release_precision="month",
+        release_status="scheduled",
+    )
+    add_movie(
+        client,
+        "Year Lantern",
+        status="anticipating",
+        anticipated=True,
+        release_on="2026-05-02",
+        release_precision="year",
+    )
+    add_movie(client, "Undated Reel", status="anticipating", anticipated=True)
+    add_movie(
+        client,
+        "Night Screening",
+        status="anticipating",
+        anticipated=True,
+        release_on="2026-11-28",
+        release_precision="day",
+    )
+    add_movie(client, "Seen Reel", status="completed")
+    saved = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "tmdb",
+            "source_id": "movie:88",
+            "kind": "movie",
+            "title": "Keyed Film",
+            "status": "want",
+        },
+    )
+    assert saved.status_code == 200, saved.text
+
+    first = client.get("/api/calendar", params={"month": "2026-11"}).json()
+    second = client.get("/api/calendar", params={"month": "2026-11"}).json()
+    assert wiki == []
+    assert tmdb == []
+    assert first["partial"] is False
+    assert second == first
+    paper = by_title(first, "Paper Month")[0]
+    assert paper["band"] == "month_band"
+    assert paper["release_on"] == "2026-11"
+    assert paper["on"] is None
+    assert "2026-11-01" not in json.dumps(first)
+    year = by_title(first, "Year Lantern")[0]
+    assert year["band"] == "year_band"
+    assert year["release_on"] == "2026"
+    assert year["on"] is None
+    unknown = by_title(first, "Undated Reel")[0]
+    assert unknown["band"] == "unknown"
+    assert unknown["release_on"] is None
+    assert by_title(first, "Night Screening")[0]["date"] == "2026-11-28"
+    assert first["unconfigured"] == ["tmdb"]
+
+    refreshed = client.post("/api/calendar/refresh", params={"month": "2026-11"}).json()
+    assert wiki == ["wiki"]
+    assert tmdb == []
+    assert refreshed["partial"] is False
+    assert by_title(refreshed, "Paper Month")[0]["release_on"] == "2026-11"
+    assert "2026-11-01" not in json.dumps(refreshed)
+    follow = client.get("/api/calendar", params={"month": "2026-11"}).json()
+    assert wiki == ["wiki"]
+    assert tmdb == []
+    assert follow["unconfigured"] == ["tmdb"]
+    assert by_title(follow, "Paper Month")[0]["release_on"] == "2026-11"
+
+
+def _lifecycle(client, entry_id: int, state: str) -> None:
+    from sqlalchemy import text
+
+    from apps.media.backend.models import SeriesLifecycle
+
+    database = client.app.state.database
+    with database.sessionmaker() as session:
+        catalog_id = session.execute(
+            text("SELECT catalog_id FROM user_entries WHERE id = :id"),
+            {"id": entry_id},
+        ).scalar()
+        session.add(
+            SeriesLifecycle(catalog_id=catalog_id, lifecycle=state, completeness="complete")
+        )
+        session.commit()
+
+
+def _episode(client, entry_id: int, season: int, episode: int, title: str, air_date: str) -> None:
+    response = client.post(
+        f"/api/entries/{entry_id}/episodes",
+        json={
+            "season_number": season,
+            "episode_number": episode,
+            "title": title,
+            "air_date": air_date,
+        },
+    )
+    assert response.status_code == 200, response.text
+
+
+def test_now_reuses_the_series_continuation(client, monkeypatch):
+    monkeypatch.setenv("MEDIA_TODAY", "2026-11-18")
+    ongoing = add_movie(client, "Harbor Signal", kind="tv", status="completed")
+    _episode(client, ongoing["id"], 1, 1, "Pilot", "2020-01-01")
+    _episode(client, ongoing["id"], 2, 1, "Later", "2099-01-01")
+    marked = client.post(f"/api/entries/{ongoing['id']}/episodes/next", json={})
+    assert marked.status_code == 200, marked.text
+    _lifecycle(client, ongoing["id"], "ongoing")
+
+    ended = add_movie(client, "Last Reel", kind="tv", status="completed")
+    _episode(client, ended["id"], 1, 1, "Finale", "2020-02-01")
+    _episode(client, ended["id"], 3, 1, "Someday", "2099-06-01")
+    caught = client.post(f"/api/entries/{ended['id']}/episodes/next", json={})
+    assert caught.status_code == 200, caught.text
+    _lifecycle(client, ended["id"], "ended")
+
+    watching = add_movie(client, "Glass Hour", kind="tv", status="in_progress")
+    _episode(client, watching["id"], 1, 1, "Open", "2020-03-01")
+
+    summary = client.get("/api/summary").json()
+    titles = [row["show_title"] for row in summary["next_episodes"]]
+    assert "Harbor Signal" in titles
+    assert "Last Reel" not in titles
+    harbor = next(row for row in summary["next_episodes"] if row["show_title"] == "Harbor Signal")
+    assert harbor["state"] == "upcoming"
+    assert harbor["season"] == 2
+    assert harbor["episode"] == 1
+    assert harbor["air_date"] == "2099-01-01"
+    card = next(item for item in summary["currently"] if item["title"] == "Glass Hour")
+    assert card["continuation"]["state"] == "next"
+    assert card["continuation"]["episode"] == 1
+    assert card["caught_up"] is False

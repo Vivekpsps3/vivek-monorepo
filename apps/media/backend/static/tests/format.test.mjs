@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { WEEK_STARTS_ON, weekStartsOn, artworkUrl, chooseReview, coverImage, dayLabel, defaultStatus, draftKey, emptyState, escapeHtml, failedNoteAfterReload, genericStatusOptions, libraryStatusForKind, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, routeErrorCopy, safeUrl, seasonLabel, shiftMonth, statusLabel, statusOptions, weekDayLabels, whenLabel } from "../../../frontend/src/format.mjs";
+import { WEEK_STARTS_ON, weekStartsOn, artworkUrl, chooseReview, coverImage, dayLabel, defaultStatus, draftKey, emptyState, escapeHtml, failedNoteAfterReload, genericStatusOptions, libraryStatusForKind, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseBand, releaseLabel, routeErrorCopy, safeUrl, seasonLabel, shiftMonth, statusLabel, statusOptions, weekDayLabels, whenLabel } from "../../../frontend/src/format.mjs";
 
 test("escapes review text and rejects unsafe artwork urls", () => {
   assert.equal(escapeHtml(`<script>"&'</script>`), "&lt;script&gt;&quot;&amp;&#39;&lt;/script&gt;");
@@ -65,6 +65,13 @@ test("month and year releases are not shown as a day", () => {
   assert.equal(releaseLabel({ precision: "unknown", status: "unknown" }), "Date unknown");
   assert.equal(releaseLabel({ precision: "day", released_on: "2026-01-01", status: "postponed" }), "Postponed");
   assert.equal(whenLabel({ when: "this_month", precision: "month", release_on: "2026-10-01" }), "This month");
+  assert.equal(releaseBand({ precision: "month", release_on: "2026-10-01", release_status: "scheduled" }), "October 2026");
+  assert.equal(releaseBand({ release_on: "2026-10" }), "October 2026");
+  assert.equal(releaseBand({ precision: "year", release_on: "2026" }), "2026");
+  assert.equal(releaseBand({ precision: "unknown", release_on: null }), "Date unknown");
+  assert.equal(releaseBand({ precision: "day", release_on: "2026-11-28", release_status: "scheduled" }), "November 28, 2026");
+  assert.equal(releaseBand({ precision: "month", release_on: "2026-10", release_status: "postponed" }), "Postponed");
+  assert.equal(releaseBand({ precision: "month", release_on: "2026-10-01" }).includes("1"), false);
   assert.equal(draftKey(12), "media-review-draft:12");
   assert.equal(dayLabel("2026-10"), "");
   assert.equal(dayLabel("2026-10-01"), "Thursday, October 1");

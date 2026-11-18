@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filmShelf, recordedViewing, seriesShelf } from "../../../frontend/src/theater.mjs";
+import { continuationFromShow, filmShelf, recordedViewing, seriesShelf, showContinuation } from "../../../frontend/src/theater.mjs";
 
 test("a watched film and a planned film differ without inventing a date", () => {
   assert.deepEqual(filmShelf("want", "2024-03-02"), {
@@ -73,4 +73,38 @@ test("series lifecycle stays separate from caught up and the next episode", () =
     }).lifecycle,
     "planned",
   );
+});
+
+test("continuation comes from the show payload and keeps a null title", () => {
+  assert.equal(continuationFromShow(null), null);
+  assert.deepEqual(
+    continuationFromShow({
+      next_episode: {
+        id: 4,
+        season_number: 1,
+        episode_number: 2,
+        title: null,
+        air_date: "2020-01-01",
+        released: true,
+      },
+      upcoming_episodes: [{ id: 9, season_number: 2, episode_number: 1, title: "Later", released: false }],
+    }),
+    {
+      episode_id: 4,
+      season: 1,
+      episode: 2,
+      title: null,
+      air_date: "2020-01-01",
+      state: "next",
+    },
+  );
+  const upcoming = continuationFromShow({
+    next_episode: null,
+    upcoming_episodes: [{ id: 9, season_number: 2, episode_number: 1, title: "Later", air_date: "2099-01-01", released: false }],
+  });
+  assert.equal(upcoming.state, "upcoming");
+  assert.equal(upcoming.title, "Later");
+  const card = { continuation: upcoming };
+  assert.equal(showContinuation(card), upcoming);
+  assert.equal(showContinuation({}), null);
 });

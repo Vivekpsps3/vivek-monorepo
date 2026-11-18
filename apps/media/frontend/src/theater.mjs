@@ -78,3 +78,33 @@ export function seriesShelf(card) {
     fact,
   };
 }
+
+function episodeChoice(episode) {
+  if (!episode || typeof episode !== "object") return null;
+  const season = Number(episode.season_number);
+  const number = Number(episode.episode_number);
+  const id = Number(episode.id);
+  if (!Number.isInteger(season) || !Number.isInteger(number) || !Number.isInteger(id)) return null;
+  return {
+    episode_id: id,
+    season,
+    episode: number,
+    title: episode.title == null ? null : episode.title,
+    air_date: episode.air_date ?? null,
+    state: episode.released ? "next" : "upcoming",
+  };
+}
+
+/** The shelf continuation, taken from the show payload. A null title stays null. */
+export function continuationFromShow(show) {
+  if (!show || typeof show !== "object") return null;
+  const upcoming = show.next_episode ? null : show.upcoming_episodes?.[0];
+  return episodeChoice(show.next_episode ?? upcoming ?? null);
+}
+
+/** The continuation already stored on a card. This is not a second calculation. */
+export function showContinuation(card) {
+  const row = card?.continuation;
+  if (!row || typeof row !== "object") return null;
+  return row;
+}
