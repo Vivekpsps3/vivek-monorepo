@@ -1,0 +1,55 @@
+# MUX-06 — Style tracked games as a distinct collection
+
+- Leaf #402. Tracking parent #304. Roadmap #134.
+- Branch `agent/mux-06`. Worktree `/home/vivek/.grok/worktrees/deployments-vivek-monorepo/subagent-01a1ef12-9625-7831-bcf7-b89f618f9ffe`.
+- Base main `a363dfc78ff135681ae42061d8ff0a61d522ffdd` (archive merge of #514). Tested source SHA `028e48e1fc45b1bb4457f9aa8c7313974f3f8484`. This evidence commit does not change that source.
+- MUX-01 is on this base: implementation #505 merge `8e9ad566367158c1c61285d990bcec7d6288c9d0`. STYLE-03 is PR #496. MUX-05 is on this base and was not reimplemented: implementation #513 merge `70d136915aa9e31ce6286e4d68f9d0e2db87039c`, archive #514 merge `a363dfc78ff135681ae42061d8ff0a61d522ffdd`. Books stay current/read/to-read shelves. Movies and Series stay poster shelves. Music stays artist groups. Open PR #500 (`agent/nav-03`) edits Hub and Town app files only; this leaf did not touch those paths. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/402#issuecomment-6981797260
+
+## Acceptance
+
+| Row | Executed proof | Result |
+| --- | --- | --- |
+| MUX-06-A1 | Playwright `reads boxes, search, detail, and one progress update` sets Lantern Kart from 12 hours to 13, returns focus to “Update progress for Lantern Kart”, keeps the other Lantern Kart at “Progress not recorded”, and keeps Untouched Quest at 3 hours. The stored entry stays `in_progress`, hour 13, the original review, with `completed_on` absent. The same-title want row and the other games are unchanged. No non-GET request hits `/api/town`. Moving Glass Circuit to Played keeps its recorded 40 percent and returns focus to that box. `test_game_update_changes_only_that_membership` patches one Lantern Kart to paused and 13 hours, leaves the library total at 8, and leaves Untouched Quest, the second Lantern Kart, and Quiet Arcade untouched. The card list has no `completed_on`, `score`, `playtime`, or full `review`. A long review is an excerpt on the card and the full text on the entry. | PASS at `028e48e1fc45b1bb4457f9aa8c7313974f3f8484` |
+| MUX-06-A2 | No Town minigame exists (GAME-10 through GAME-12 are unbuilt). The closest live Town session is the seeded habit check-in. `apps/web/e2e/town-media-boundary.spec.ts` seeds Lantern Kart and Untouched Quest, opens `/town` at a fixed clock `2026-10-29T19:00:00Z`, and marks “Read 20 pages” done with Enter or tap. The accessible name becomes “Read 20 pages, done today. Undo” and `aria-pressed` is true. Non-GET `/media` writes stay empty. Library total and rows stay the two want games. Town HTML does not contain those titles. The Games page then shows both boxes and the sentence “This cabinet is your Media library, not a Town minigame.” | PASS at `028e48e1fc45b1bb4457f9aa8c7313974f3f8484` |
+| MUX-06-LIFE | `a failed save keeps the game and the typed progress` leaves typed 55 and the typed note on the desk after a 502, and the stored entry stays 12 hours. `a late cabinet move does not rewrite the movie shelf, and sign-out clears the draft` fulfills a held status patch after Movies is open, leaves the movie poster count at 1, keeps the server status `want`, and a logout plus 401 removes every `media-item-draft:` key. The Python test rejects percent 140 with 422 and leaves hour 13 and paused. Another principal’s patch is 404 and does not change progress. | PASS at `028e48e1fc45b1bb4457f9aa8c7313974f3f8484` |
+| MUX-06-VIEW | `reads boxes, search, detail, and one progress update` runs at 390×844 light keyboard, 390×844 night touch, 1280×800 light touch, and 1280×800 night keyboard, with reduced motion. Boxes show Playing, Want to play, Played, Anticipating, and Paused in player words. A finished game says “Progress not recorded”, not 100% and not a year. Missing and broken box art print the title. Search for Quiet opens Quiet Arcade and back restores `kind=game`, `sort=title`, and `q=Quiet`. The Playing bay reloads with `status=in_progress`. Detail for Zebra Cabinet restores the cabinet and, at 844px, scroll within 80px. Bay links, update, and move targets are at least 44px. Axe on `main` reports no serious or critical violations. `expectCleanMediaPage` stays clean. Empty Games says “No games saved yet” and still shows the boundary sentence. All items stay rows. Books still show `p. 40` on shelves. Movies stay posters. A long title stays inside the page at 320px and at 200% text, and “1 hour recorded” stays singular. Screenshots for each matrix cell are attached to the Playwright report and are not committed. | PASS at `028e48e1fc45b1bb4457f9aa8c7313974f3f8484` |
+
+Synthetic titles only: Lantern Kart, Untouched Quest, Quiet Arcade, Paper Cartridge, Anticipated Port, Paused Relay, Long Margin, Glass Circuit, Broken Box, Zebra Cabinet, Paper Lantern, Harbor Tactics, Aisle games, and the long cabinet title. The Town habit name “Read 20 pages” is the existing seed, not a play history. No provider credentials.
+
+## Deletion and compatibility
+
+| Candidate | Previous consumers | Surviving owner | Disposition and proof |
+| --- | --- | --- | --- |
+| Generic game row inside the Games collection | Games library page used `media-card` rows | `media-game-cabinet` composes `media-card` with `layout=box`. `media-card` remains the row and poster owner for Movies, Series, Music, Now, and All items, and the box face for Games | Replaced for the Games collection only. No file deleted. All items, books, and movies passed in the full Media Playwright suite. STYLE-03 card material was not replaced. |
+| No prior game-cabinet store | None | Existing entry status, `progress_value`, `progress_unit`, `progress_label`, `review`, `rating`, and `favorite` | No second library store, no second progress model, and no new crypto protocol. A finished game does not invent a percent, playtime, score, or completion date. `completed_on` stays off the card and the detail response. |
+
+- Feature replacement at base `a363dfc78ff135681ae42061d8ff0a61d522ffdd`. Production files `records.py`, `library-filters.css`, `library-filters.mjs`, `library.component.ts`, `media-card.component.css`, `media-card.component.ts`, `game-cabinet.component.css`, `game-cabinet.component.ts`, `games.d.mts`, and `games.mjs`: 5189 lines before, 6199 after. Diff adds 1021 and deletes 11 physical lines (net +1010). The positive production delta is the cabinet, the box face, and the progress desk. It is not a simplification. The desk repeats the book shelf’s owner/token/draft lifecycle instead of extracting a shared desk; the units and copy differ, and that duplication is left in place.
+- Tests add 753 and delete 3 (`games.test.mjs` 73, `test_game_cabinet.py` 158, `game-cabinet.spec.ts` 430, `town-media-boundary.spec.ts` 86, plus small locator and allowlist updates). Docs add 10 and delete 11 (`docs/MEDIA.md`, `docs/QUALITY.md`, `apps/media/AGENTS.md`). This evidence file is separate.
+- Game cards gained a note excerpt for `kind == "game"` only, the same 160-character excerpt books already use. Movies do not receive it. Town’s allowlist now selects `town-media-boundary.spec.ts` so the boundary journey is part of the Town Playwright set. `apps/media/AGENTS.md` stays at 299 words.
+- Primary bays are Playing, Want to play, and Played. Anticipating, Paused, and Dropped appear when populated or filtered. URL `kind=game` keeps `status`, `sort`, `q`, `fav`, and `tags`. `face=text` stays books-only.
+
+## Verification
+
+Playwright with cached Chromium 1248. This worktree has no `.venv` or `node_modules`; gates used the symlinks to `/home/vivek/Deployments/vivek-monorepo/.venv` and `node_modules`. Those symlinks are not gitignored as links, so they were never staged. Python gates used `PATH=".venv/bin:$PATH"`. Karma used `CHROME_BIN` pointed at that Chromium. The first game-cabinet run used `https://synthetic.example` art, which the media image CSP blocks, so broken images replaced the box. Art fixtures moved to `https://media.rawg.io`, which the CSP already allows, and are intercepted by `page.route`. A lazy missing image below the fold at 390 stayed `data-art=present` until the box was scrolled into view. The Town check-in locator originally matched the pre-success name, which disappears after the habit is marked done; the spec now holds the row button and asserts the new name. A collections assertion matched both the Games summary and the cabinet boundary sentence; it now requires the “Games. ” prefix. Browser retries and coverage floors were unchanged. Media coverage printed 73.67% against floor 68.7% (suggested floor 72.67% was not pinned). The production bundle reported the existing initial-size warning at 669.83 kB. Release `1ccd2083b57b91d03aade273c92f4cc953be0294b7b91788100282aed8e1b168`.
+
+| Exact command | Final result |
+| --- | --- |
+| `PATH=".venv/bin:$PATH" make test-fast` | PASS on the implementation tree and again with this evidence file present. Doc paths, planning validation (108 active packets, 24 parents, 79 completed), blame ignore, shared boundaries, finance UX F1, 135 unittest OK, e2e discovery media files=24 and town files=11, 21 Node script tests. |
+| `PATH=".venv/bin:$PATH" make lint-python` | PASS. Ruff format OK. Ruff 90 matches the baseline. Suppressions 6 match. |
+| `PATH=".venv/bin:$PATH" make typecheck-python` | PASS. mypy 80 findings match the baseline. |
+| `PATH=".venv/bin:$PATH" ./scripts/coverage-gate.sh media` | PASS. 105 passed. 73.67% >= 68.7%. |
+| `node --test apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs` | PASS. 48 tests, 0 failed. |
+| `make lint-web` | PASS. ESLint baselines matched. Engine purity OK. |
+| `make typecheck-web` | PASS. |
+| `CHROME_BIN="$HOME/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome" npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS. 415 of 415. |
+| `make build-frontends` | PASS. Release `1ccd2083b57b91d03aade273c92f4cc953be0294b7b91788100282aed8e1b168`. |
+| `npx playwright test --config apps/media/e2e/playwright.config.ts --reporter=line` | PASS. 149 passed, 0 failed (1.1m), including the four game viewports, progress update, search, detail, failed save, late move, empty cabinet, books, movies, collections, and All items. |
+| `npx playwright test --config apps/web/e2e/playwright.config.ts apps/web/e2e/town-media-boundary.spec.ts --reporter=line` | PASS. 4 passed (4.7s). No Town minigame was added. The journey is the existing habit check-in, then a read of the Media library. |
+
+## Handoff
+
+- PR URL (leaf closure keyword only): not opened yet.
+- Roadmap #134 append-only status-note URL: after merge and archive.
+- Merged/activation status: local gates passed on `028e48e1fc45b1bb4457f9aa8c7313974f3f8484`. Merge waits on the pull request and required checks.
+- Remaining external prerequisites: none for this leaf. MUX-07 through MUX-09 stay unbuilt. OPS-06 / #277 was not touched.
+- Next actor: commit this evidence, open the pull request, wait for required checks, merge, then archive. Parent #304 remains open.
