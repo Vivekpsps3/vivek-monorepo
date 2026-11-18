@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './frozen-clock';
 import { openUserMenu } from '../../../../tests/e2e/user-menu.mjs';
-import { syntheticVault } from './synthetic-vault';
+import { SYNTHETIC_VAULT_PASSPHRASE, syntheticVault } from './synthetic-vault';
 
 const LABELS = ['Home', 'Accounts', 'Holdings', 'Activity', 'Calendar', 'Bills', 'Pay', 'Planning', 'Imports'];
 const VIEWPORTS = [
@@ -152,3 +152,34 @@ for (const viewport of VIEWPORTS) {
     });
   }
 }
+
+test('an app switcher link to Holdings goes through the locked vault and preserves the destination', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const vault = await syntheticVault(page, { holdings: [{
+    id: 12, symbol: 'HBR', company_name: 'Private Harbor Fund', shares: 3,
+    current_price: 125, price_source: 'manual',
+  }] });
+  await vault.open('/');
+  await (await openUserMenu(page)).getByRole('button', { name: 'Lock Finance', exact: true }).click();
+  const unlock = page.getByRole('textbox', { name: 'Vault passphrase', exact: true });
+  await expect(unlock).toBeVisible();
+
+  const apps = page.getByRole('navigation', { name: 'Apps', exact: true });
+  const menu = apps.getByRole('group', { name: 'App destinations' });
+  await apps.getByRole('button', { name: /Switch apps and destinations.*Finance/ }).click();
+  await menu.getByRole('link', { name: 'Travel', exact: true }).click();
+  await expect(page).toHaveURL(/\/travel$/);
+
+  await apps.getByRole('button', { name: /Switch apps and destinations.*Travel/ }).click();
+  await menu.getByRole('group', { name: 'Finance', exact: true }).getByRole('link', { name: 'Holdings', exact: true }).click();
+  await expect(unlock).toBeVisible();
+  expect(new URL(page.url()).searchParams.get('next')).toBe('/finance/have?t=holdings');
+  await expect(page.getByRole('navigation', { name: 'Finance sections' })).toHaveCount(0);
+  await expect(page.getByText('Private Harbor Fund', { exact: true })).toHaveCount(0);
+
+  await unlock.fill(SYNTHETIC_VAULT_PASSPHRASE);
+  await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await expect(page).toHaveURL(/\/finance\/have\?t=holdings$/);
+  await expect(page.getByRole('row').filter({ hasText: 'Private Harbor Fund' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Finance sections' }).locator('[aria-current="page"]')).toHaveText('Holdings');
+});
