@@ -25,8 +25,23 @@ export interface ArtistGroupSummary {
   entry_id: number | null;
   saved_count: number;
 }
+export interface NestedAlbum extends MediaCard {
+  songs?: MediaCard[];
+}
 export interface ArtistGroup extends ArtistGroupSummary {
+  source?: string;
+  rating?: number | null;
   saved_children: MediaCard[];
+  albums?: NestedAlbum[];
+  songs?: MediaCard[];
+}
+export interface ArtistGroupPage {
+  items: ArtistGroup[];
+  total: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+  available_tags?: string[];
 }
 export interface MediaCard {
   id: number;

@@ -47,7 +47,7 @@ export function collectionSummary(kind) {
     case "book":
       return "Books. What you want to read, are reading, or have read.";
     case "artist":
-      return "Music. Artists you follow, with saved albums and songs beside them.";
+      return "Music. Artists you have saved, with their albums and then their songs. Saving music does not follow the artist.";
     case "album":
       return "Music. Saved albums, without marking the artist followed.";
     case "track":
@@ -80,7 +80,10 @@ export function emptyLibraryCopy(kind, filtered) {
     case "book":
       return { title: "No books saved yet", message: "Search for a book or add one of your own." };
     case "artist":
-      return { title: "No artists saved yet", message: "Follow an artist to keep them in Music." };
+      return {
+        title: "No artists in your music yet",
+        message: "Save an album or a song, or follow an artist. A catalog is not imported for you.",
+      };
     case "album":
       return { title: "No albums saved yet", message: "Save an album without following the artist." };
     case "track":

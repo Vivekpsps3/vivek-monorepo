@@ -475,7 +475,7 @@
         }
         <div class="media-grid">
           @for (child of music.saved_children || []; track child.id) {
-            <media-card [item]="child" />
+            <media-card [item]="child" [source]="libraryReturn()" />
           } @empty {
             <p>No saved albums or songs here yet.</p>
           }

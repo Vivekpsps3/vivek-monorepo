@@ -14,6 +14,7 @@ import {
   combineLatest,
   catchError,
   EMPTY,
+  map,
   of,
   switchMap,
   Subscription,
@@ -34,6 +35,7 @@ import {
   kinds,
   LibraryResponse,
   ArtistGroup,
+  ArtistGroupPage,
   ArtistGroupSummary,
   Detail,
   MediaCard,
@@ -209,8 +211,103 @@ const LIBRARY = "/media/library";
     }
     @if (data(); as library) {
       <p class="muted">
-        {{ library.total }} saved {{ library.total === 1 ? "item" : "items" }}
+        @if (kind === "artist") {
+          {{ library.total }} {{ library.total === 1 ? "artist" : "artists" }}
+        } @else {
+          {{ library.total }} saved {{ library.total === 1 ? "item" : "items" }}
+        }
       </p>
+      @if (kind === "artist") {
+        <div class="media-grid" [attr.aria-busy]="refreshing()">
+          @if (offPageGroup()) {
+            @if (groupLoading()) {
+              <p role="status">Loading saved music…</p>
+            }
+            @if (groupError()) {
+              <p role="alert">{{ groupError() }}</p>
+              <ui-button variant="ghost" (click)="reloadGroup()">Retry saved music</ui-button>
+            }
+          }
+          @for (group of visibleGroups(); track group.catalog_id) {
+            <section
+              class="artist-group"
+              [attr.data-artist-group]="group.catalog_id"
+            >
+              <h2>
+                @if (group.entry_id) {
+                  <a
+                    [attr.data-media-item]="group.entry_id"
+                    [routerLink]="['/media/item', group.entry_id]"
+                    [state]="source()"
+                    >{{ group.title }}</a
+                  >
+                } @else {
+                  {{ group.title }}
+                }
+              </h2>
+              <p class="muted">
+                {{ group.followed ? "Following" : "Not followed" }}
+                @if (group.rating !== null && group.rating !== undefined) {
+                  · {{ group.rating }} / 10
+                }
+              </p>
+              <ui-button
+                variant="ghost"
+                [ariaExpanded]="expandedGroup() === group.catalog_id"
+                [ariaControls]="'group-' + group.catalog_id"
+                (click)="expandGroup(group)"
+              >
+                {{ expandedGroup() === group.catalog_id ? "Hide" : "Show" }}
+                saved albums and songs ({{ group.saved_count || 0 }})
+              </ui-button>
+              @if (expandedGroup() === group.catalog_id) {
+                <div [id]="'group-' + group.catalog_id" class="saved-children">
+                  @for (album of group.albums || []; track album.id) {
+                    <div class="saved-album">
+                      <media-card [item]="album" [source]="source()" />
+                      <div class="saved-songs">
+                        @for (song of album.songs || []; track song.id) {
+                          <media-card [item]="song" [source]="source()" />
+                        } @empty {
+                          <p>No saved songs on this album.</p>
+                        }
+                      </div>
+                    </div>
+                  }
+                  @if (group.songs?.length) {
+                    <h3 class="loose-songs">Saved without an album</h3>
+                    @for (song of group.songs || []; track song.id) {
+                      <media-card [item]="song" [source]="source()" />
+                    }
+                  }
+                  @if (!group.albums?.length && !group.songs?.length && !groupLoading()) {
+                    <p>No saved albums or songs for this artist.</p>
+                  }
+                  @if (group.entry_id && group.source === "musicbrainz") {
+                    <a
+                      class="discography-link"
+                      [routerLink]="['/media/item', group.entry_id, 'discography']"
+                      [state]="source()"
+                      >Browse discography</a
+                    >
+                  }
+                </div>
+              }
+            </section>
+          } @empty {
+            <ui-empty-state [title]="emptyTitle" [message]="emptyMessage">
+              @if (filtered) {
+                <ui-button variant="ghost" (click)="clearAllFilters()">
+                  Clear filters
+                </ui-button>
+              } @else {
+                <ui-button variant="ghost" href="/media/library" label="All items" />
+              }
+              <ui-button variant="primary" href="/media/search" label="Search Media" />
+            </ui-empty-state>
+          }
+        </div>
+      } @else {
       <div class="media-grid" [attr.aria-busy]="refreshing()">
         @for (item of library.items; track item.id) {
           <section>
@@ -252,37 +349,14 @@ const LIBRARY = "/media/library";
             }
             @if (item.kind === "album" || item.kind === "track") {
               @for (group of item.artist_groups || []; track group.catalog_id) {
-                <ui-button
-                  variant="ghost"
-                  size="sm"
-                  [ariaExpanded]="expandedGroup() === group.catalog_id"
-                  [ariaControls]="'group-' + group.catalog_id"
-                  (click)="expandGroup(group)"
+                <a
+                  class="group-link"
+                  [routerLink]="['/media/library']"
+                  [queryParams]="artistGroupParams(group)"
+                  >Show {{ group.title }}{{ group.followed ? "" : ", not followed" }} ({{
+                    group.saved_count || 0
+                  }})</a
                 >
-                  {{ expandedGroup() === group.catalog_id ? "Hide" : "Show" }}
-                  {{ group.title }}{{ group.followed ? "" : ", not followed" }}
-                  ({{ group.saved_count || 0 }})
-                </ui-button>
-              }
-              @if (hostsGroup(item)) {
-                <div [id]="'group-' + expandedGroup()" class="saved-children">
-                  @if (groupLoading()) {
-                    <p role="status">Loading saved music…</p>
-                  }
-                  @if (groupError()) {
-                    <p role="alert">{{ groupError() }}</p>
-                    <ui-button variant="ghost" (click)="reloadGroup()">
-                      Retry saved music
-                    </ui-button>
-                  }
-                  @for (child of groupChildren(); track child.id) {
-                    <media-card [item]="child" [source]="source()" />
-                  } @empty {
-                    @if (!groupLoading() && !groupError()) {
-                      <p>No saved albums or songs for this artist.</p>
-                    }
-                  }
-                </div>
               }
             }
           </section>
@@ -303,6 +377,7 @@ const LIBRARY = "/media/library";
           </ui-empty-state>
         }
       </div>
+      }
       <nav class="button-row" aria-label="Library pages">
         <ui-button
           variant="ghost"
@@ -311,10 +386,8 @@ const LIBRARY = "/media/library";
         >
           Previous items</ui-button
         ><span
-          >{{ library.total ? library.offset + 1 : 0 }}–{{
-            library.offset + library.items.length
-          }}
-          of {{ library.total }}</span
+          >{{ library.total ? library.offset + 1 : 0 }}–{{ pageEnd() }} of
+          {{ library.total }}</span
         ><ui-button
           variant="ghost"
           [disabled]="!library.has_more || loading()"
@@ -411,9 +484,27 @@ export class LibraryComponent {
   readonly childrenError = signal("");
   readonly childrenLoading = signal(false);
   readonly expandedGroup = signal<number | null>(null);
-  readonly groupChildren = signal<MediaCard[]>([]);
+  readonly artistGroups = signal<ArtistGroup[]>([]);
+  readonly focusedGroup = signal<ArtistGroup | null>(null);
   readonly groupError = signal("");
   readonly groupLoading = signal(false);
+  visibleGroups(): ArtistGroup[] {
+    const page = this.artistGroups();
+    const opened = this.focusedGroup();
+    if (!opened || page.some((group) => group.catalog_id === opened.catalog_id)) return page;
+    return [opened, ...page];
+  }
+  offPageGroup(): boolean {
+    const groupId = this.expandedGroup();
+    return groupId != null && !this.artistGroups().some((group) => group.catalog_id === groupId) && !this.focusedGroup();
+  }
+  pageEnd(): number {
+    const shown = this.kind === "artist" ? this.artistGroups().length : this.data()?.items.length || 0;
+    return this.offset + shown;
+  }
+  artistGroupParams(group: ArtistGroupSummary) {
+    return { ...collectionQuery(this.currentFilters(), "artist"), group: group.catalog_id };
+  }
   constructor() {
     // Router Back is deferred with setTimeout(0). A paused test clock does not
     // run that timer, so the URL changes while the State control keeps the
@@ -456,6 +547,8 @@ export class LibraryComponent {
           if (requestedKind !== filters.kind) {
             requestedKind = filters.kind;
             this.data.set(null);
+            this.artistGroups.set([]);
+            this.focusedGroup.set(null);
           }
           this.q = filters.q;
           this.kind = transition.kind;
@@ -475,7 +568,7 @@ export class LibraryComponent {
           const group = Number(p.get("group")) || null;
           if (group !== this.expandedGroup()) {
             this.groupRequest?.unsubscribe();
-            this.groupChildren.set([]);
+            this.focusedGroup.set(null);
             this.groupError.set("");
             this.groupLoading.set(false);
           }
@@ -503,6 +596,7 @@ export class LibraryComponent {
         }),
         switchMap(() => {
           if (suppressRead) return EMPTY;
+          const requested = this.kind;
           let params = new HttpParams()
             .set("q", this.q)
             .set("kind", this.kind)
@@ -512,36 +606,63 @@ export class LibraryComponent {
             .set("limit", 24)
             .set("favorite", this.favorite);
           for (const tag of this.tags) params = params.append("tags", tag);
-          return this.http
-            .get<LibraryResponse>("/media/api/library", { params })
-            .pipe(
-              catchError((e) => {
-                this.error.set(errorCopy(e));
-                return of(null);
-              }),
-            );
+          const url =
+            requested === "artist" ? "/media/api/music-groups" : "/media/api/library";
+          if (requested === "artist") params = params.delete("kind");
+          return this.http.get<LibraryResponse | ArtistGroupPage>(url, { params }).pipe(
+            map((body) => ({ requested, body })),
+            catchError((e) => {
+              if (this.kind === requested) this.error.set(errorCopy(e));
+              return of({
+                requested,
+                body: null as LibraryResponse | ArtistGroupPage | null,
+              });
+            }),
+          );
         }),
         takeUntilDestroyed(),
       )
-      .subscribe((data) => {
-        this.data.set(data);
-        if (data?.available_tags) this.availableTags.set(data.available_tags);
+      .subscribe((result) => {
+        if (!result || result.requested !== this.kind) return;
+        const data = result.body;
         this.loading.set(false);
         this.refreshing.set(false);
         if (!data) {
+          this.data.set(null);
+          this.artistGroups.set([]);
           this.restoreScroll();
           return;
         }
-        const expanded = data.items.find((item) => item.id === this.expanded());
+        if (data.available_tags) this.availableTags.set(data.available_tags);
+        if (result.requested === "artist") {
+          const page = data as ArtistGroupPage;
+          const items = page.items || [];
+          this.artistGroups.set(items);
+          this.data.set({
+            items: [],
+            total: page.total,
+            offset: page.offset,
+            limit: page.limit,
+            has_more: page.has_more,
+            available_tags: page.available_tags,
+          });
+          const groupId = this.expandedGroup();
+          const visible = groupId != null && items.some((group) => group.catalog_id === groupId);
+          if (groupId != null && !visible) this.loadGroup(groupId);
+          else {
+            this.focusedGroup.set(null);
+            this.groupLoading.set(false);
+            this.restoreScroll();
+          }
+          return;
+        }
+        const library = data as LibraryResponse;
+        this.artistGroups.set([]);
+        this.focusedGroup.set(null);
+        this.data.set(library);
+        const expanded = library.items.find((item) => item.id === this.expanded());
         if (expanded) this.loadChildren(expanded);
-        const groupId = this.expandedGroup();
-        const groupVisible =
-          groupId != null &&
-          data.items.some((item) =>
-            item.artist_groups?.some((group) => group.catalog_id === groupId),
-          );
-        if (groupVisible && groupId != null) this.loadGroup(groupId);
-        if (!expanded && !groupVisible) this.restoreScroll();
+        if (!expanded) this.restoreScroll();
       });
   }
   retry(): void {
@@ -629,14 +750,6 @@ export class LibraryComponent {
       queryParamsHandling: "merge",
     });
   }
-  hostsGroup(item: MediaCard): boolean {
-    const catalogId = this.expandedGroup();
-    if (catalogId == null) return false;
-    const host = this.data()?.items.find((row) =>
-      row.artist_groups?.some((group) => group.catalog_id === catalogId),
-    );
-    return host?.id === item.id;
-  }
   expandGroup(group: ArtistGroupSummary): void {
     const next = this.expandedGroup() === group.catalog_id ? null : group.catalog_id;
     void this.router.navigate([], {
@@ -717,8 +830,19 @@ export class LibraryComponent {
         },
       });
   }
+  private focusOpenedGroup(catalogId: number): void {
+    requestAnimationFrame(() => {
+      if (!this.active || this.restoredView) return;
+      const active = document.activeElement;
+      if (active !== document.body && active?.id !== "library-heading") return;
+      const section = this.host.nativeElement.querySelector<HTMLElement>(
+        `[data-artist-group="${catalogId}"]`,
+      );
+      section?.querySelector<HTMLElement>("h2 a, button")?.focus({ preventScroll: true });
+    });
+  }
   private loadGroup(catalogId: number): void {
-    this.groupChildren.set([]);
+    this.focusedGroup.set(null);
     this.groupError.set("");
     this.groupLoading.set(true);
     this.groupRequest?.unsubscribe();
@@ -727,13 +851,14 @@ export class LibraryComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (payload) => {
-          if (this.expandedGroup() !== catalogId) return;
-          this.groupChildren.set(payload.saved_children || []);
+          if (this.expandedGroup() !== catalogId || this.kind !== "artist") return;
+          this.focusedGroup.set(payload);
           this.groupLoading.set(false);
           this.restoreScroll();
+          this.focusOpenedGroup(catalogId);
         },
         error: (error) => {
-          if (this.expandedGroup() !== catalogId) return;
+          if (this.expandedGroup() !== catalogId || this.kind !== "artist") return;
           this.groupError.set(errorCopy(error));
           this.groupLoading.set(false);
           this.restoreScroll();
