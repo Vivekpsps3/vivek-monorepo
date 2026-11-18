@@ -210,6 +210,8 @@ def library_cards(db: Session, entries: list[UserEntry]) -> list[dict]:
         elif kind == "book":
             card.update(book_links(entry.catalog))
             card["note"] = excerpt(entry.review, 160) or None
+        elif kind == "game":
+            card["note"] = excerpt(entry.review, 160) or None
         elif kind == "track":
             extra = loads(entry.catalog.extra, {})
             raw = (

@@ -22,6 +22,7 @@ import {
 } from "rxjs";
 import { formatDay } from "@vivek/browser";
 import { BookShelfComponent } from "./book-shelf.component";
+import { GameCabinetComponent } from "./game-cabinet.component";
 import { noteExcerpt } from "./books.mjs";
 import { MediaCardComponent } from "./media-card.component";
 import { NextEpisodeButtonComponent } from "./next-episode-button.component";
@@ -74,6 +75,7 @@ const LIBRARY = "/media/library";
     FormsModule,
     RouterLink,
     BookShelfComponent,
+    GameCabinetComponent,
     MediaCardComponent,
     NextEpisodeButtonComponent,
     UiButtonComponent,
@@ -363,6 +365,36 @@ const LIBRARY = "/media/library";
             <ui-button variant="primary" href="/media/search" label="Search Media" />
           </ui-empty-state>
         }
+      } @else if (collection === "game") {
+        <nav class="game-bays" aria-label="Game cabinet">
+          @for (sign of gameSigns; track sign.status) {
+            <a
+              [routerLink]="['/media/library']"
+              [queryParams]="bayParams(sign.status)"
+              [attr.aria-current]="status === sign.status ? 'page' : null"
+              >{{ sign.label }}</a
+            >
+          }
+        </nav>
+        @if (library.items.length) {
+          <media-game-cabinet
+            [items]="library.items"
+            [status]="status"
+            [linkState]="source()"
+            (saved)="onGameSaved($event)"
+          />
+        } @else {
+          <ui-empty-state [title]="emptyTitle" [message]="emptyMessage">
+            @if (filtered) {
+              <ui-button variant="ghost" (click)="clearAllFilters()">
+                Clear filters
+              </ui-button>
+            } @else if (kind) {
+              <ui-button variant="ghost" href="/media/library" label="All items" />
+            }
+            <ui-button variant="primary" href="/media/search" label="Search Media" />
+          </ui-empty-state>
+        }
       } @else {
       <div
         class="media-grid"
@@ -503,6 +535,12 @@ export class LibraryComponent {
     { status: "completed", label: "Read" },
     { status: "want", label: "To read" },
   ];
+  readonly gameSigns = [
+    { status: "", label: "All bays" },
+    { status: "in_progress", label: "Playing" },
+    { status: "want", label: "Want to play" },
+    { status: "completed", label: "Played" },
+  ];
   readonly notice = signal("");
   private seen: LibraryView | null = null;
   q = "";
@@ -562,6 +600,12 @@ export class LibraryComponent {
       face: this.face === "text" ? "text" : null,
     };
   }
+  bayParams(status: string) {
+    return {
+      ...collectionQuery(this.currentFilters(), "game"),
+      status: status || null,
+    };
+  }
   faceParams(face: "spine" | "text") {
     return {
       ...collectionQuery(this.currentFilters(), "book"),
@@ -591,6 +635,35 @@ export class LibraryComponent {
               progress_value: detail.progress_value,
               progress_unit: detail.progress_unit,
               progress_label: detail.progress_label ?? null,
+              note,
+            }
+          : item,
+      ),
+    });
+  }
+  onGameSaved(detail: Detail): void {
+    if (
+      !this.active ||
+      this.session.currentUser?.id !== this.shelfOwner ||
+      this.collection !== "game"
+    ) {
+      return;
+    }
+    const library = this.data();
+    if (!library) return;
+    const note = noteExcerpt(detail.review);
+    this.data.set({
+      ...library,
+      items: library.items.map((item) =>
+        item.id === detail.id
+          ? {
+              ...item,
+              status: detail.status,
+              progress_value: detail.progress_value,
+              progress_unit: detail.progress_unit,
+              progress_label: detail.progress_label ?? null,
+              rating: detail.rating,
+              favorite: detail.favorite,
               note,
             }
           : item,

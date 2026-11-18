@@ -53,7 +53,7 @@ export function collectionSummary(kind) {
     case "track":
       return "Music. Saved songs, without saving the rest of an album.";
     case "game":
-      return "Games. What you want to play, are playing, or have played.";
+      return "Games. This cabinet is your Media library, not a Town minigame. Playing in Town does not add a box here. A box shows the state you saved, and hours or a percent only when you recorded them.";
     default:
       return "All activity: movies, series, books, music, and games.";
   }
@@ -101,7 +101,11 @@ export function emptyLibraryCopy(kind, filtered) {
     case "track":
       return { title: "No songs saved yet", message: "Save a song without saving the rest of the album." };
     case "game":
-      return { title: "No games saved yet", message: "Search for a game or add one of your own." };
+      return {
+        title: "No games saved yet",
+        message:
+          "Search for a game or add one of your own. This cabinet stays empty until you save a game here. A missing box image still shows the title, and progress stays blank until you record it.",
+      };
     default:
       return {
         title: "Your next favorite starts here",

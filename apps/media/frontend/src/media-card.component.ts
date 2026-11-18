@@ -2,6 +2,7 @@ import { Component, input, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { formatDay } from "@vivek/browser";
 import { UiBadgeComponent } from "@vivek/ui";
+import { gameProgressWords, gameStatusWords } from "./games.mjs";
 import { MediaCard, statusLabel } from "./media.models";
 import { filmShelf, seriesShelf } from "./theater.mjs";
 @Component({
@@ -12,10 +13,15 @@ import { filmShelf, seriesShelf } from "./theater.mjs";
   template: `<article
       class="media-card"
       [class.media-card--poster]="poster()"
+      [class.media-card--box]="box()"
       [attr.data-tone]="poster() ? tone() : null"
       [attr.data-film]="poster() && item().kind === 'movie' ? film().tone : null"
       [attr.data-progress]="poster() && item().kind === 'tv' ? series().progress : null"
       [attr.data-lifecycle]="poster() && item().kind === 'tv' ? series().lifecycle : null"
+      [attr.data-game]="box() ? item().id : null"
+      [attr.data-art]="box() ? (shownArt() ? 'present' : 'missing') : null"
+      [attr.data-status]="box() ? item().status : null"
+      [attr.aria-busy]="busy() ? 'true' : null"
     >
       @if (poster()) {
         <a
@@ -51,6 +57,50 @@ import { filmShelf, seriesShelf } from "./theater.mjs";
           }
           @if (item().kind === "tv") {
             <p class="poster-lifecycle">{{ series().lifecycleLabel }}</p>
+          }
+        </div>
+      } @else if (box()) {
+        <a
+          class="box-face"
+          [routerLink]="['/media/item', item().id]"
+          [state]="source()"
+          tabindex="-1"
+          aria-hidden="true"
+        >
+          @if (shownArt()) {
+            <img
+              [src]="item().artwork_url"
+              alt=""
+              loading="lazy"
+              (error)="broken.set(true)"
+            />
+          } @else {
+            <span class="box-title-face">{{ item().title }}</span>
+          }
+        </a>
+        <div class="box-copy">
+          <h3>
+            <a
+              [attr.data-media-item]="item().id"
+              [routerLink]="['/media/item', item().id]"
+              [state]="source()"
+              >{{ item().title }}</a
+            >
+          </h3>
+          <p class="box-status">{{ gameStatus() }}</p>
+          <p class="box-progress">{{ gameProgress() }}</p>
+          @if (item().favorite || (item().rating !== null && item().rating !== undefined)) {
+            <p class="box-marks">
+              @if (item().favorite) {
+                <span>Favorite</span>
+              }
+              @if (item().rating !== null && item().rating !== undefined) {
+                <span>{{ item().rating }} / 10</span>
+              }
+            </p>
+          }
+          @if (item().note) {
+            <p class="box-note">Note: {{ item().note }}</p>
           }
         </div>
       } @else {
@@ -128,11 +178,24 @@ import { filmShelf, seriesShelf } from "./theater.mjs";
 export class MediaCardComponent {
   readonly item = input.required<MediaCard>();
   readonly source = input<Record<string, unknown> | undefined>(undefined);
-  readonly layout = input<"row" | "poster">("row");
+  readonly layout = input<"row" | "poster" | "box">("row");
+  readonly busy = input(false);
   readonly broken = signal(false);
   readonly status = statusLabel;
   protected poster(): boolean {
     return this.layout() === "poster";
+  }
+  protected box(): boolean {
+    return this.layout() === "box";
+  }
+  protected shownArt(): boolean {
+    return Boolean(this.item().artwork_url) && !this.broken();
+  }
+  protected gameStatus(): string {
+    return gameStatusWords(this.item().status);
+  }
+  protected gameProgress(): string {
+    return gameProgressWords(this.item());
   }
   protected film() {
     return filmShelf(this.item().status, this.item().viewed_on);
