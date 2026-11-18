@@ -48,8 +48,8 @@ Python lint, mypy, and `./scripts/coverage-gate.sh media` were not run: `records
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this evidence commit. `Closes #397`. References #304 and #134 without closing them. #386 and #384 stay closed.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/505. `Closes #397`. References #304 and #134 without closing them. #386 and #384 stay closed.
 - Roadmap #134 append-only status-note URL: after merge and archive.
-- Merged/activation status: not merged at the time of this file.
+- Merged/activation status: PR #505 is open. Merge waits on required checks.
 - Remaining external prerequisites: none for this leaf. MUX-02 through MUX-09 stay with their owners. OPS-06 / #277 was not touched.
 - Next actor: required CI, then merge, then archive.
