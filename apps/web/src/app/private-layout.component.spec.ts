@@ -75,6 +75,90 @@ describe('Shared private shell', () => {
     expect(open).toHaveBeenCalledTimes(1);
   });
 
+  it('leaves a focused shell menu toggle alone while heading arrival is pending', fakeAsync(() => {
+    const events = new Subject<NavigationEnd>();
+    let fixture: ReturnType<typeof TestBed.createComponent<PrivateLayoutComponent>> | undefined;
+    render(false, events).then(result => { fixture = result.fixture; });
+    flushMicrotasks();
+    const workspace = fixture!.nativeElement.querySelector('#workspace-content') as HTMLElement;
+    const main = document.createElement('main');
+    const heading = document.createElement('h1');
+    heading.textContent = 'Trips';
+    main.append(heading);
+    workspace.append(main);
+    let elapsed = 0;
+    spyOn(performance, 'now').and.callFake(() => elapsed);
+    events.next(new NavigationEnd(1, '/travel', '/travel'));
+    flushMicrotasks();
+    const toggle = fixture!.nativeElement.querySelector('.app-switcher__toggle') as HTMLButtonElement;
+    const account = fixture!.nativeElement.querySelector('.user-menu-toggle') as HTMLButtonElement;
+    toggle.focus();
+    elapsed = 20;
+    tick(20);
+    expect(document.activeElement).toBe(toggle);
+    toggle.click();
+    fixture!.detectChanges();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    elapsed = 400;
+    tick(400);
+    expect(document.activeElement).toBe(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    events.next(new NavigationEnd(2, '/finance', '/finance'));
+    flushMicrotasks();
+    account.focus();
+    elapsed = 420;
+    tick(20);
+    expect(document.activeElement).toBe(account);
+    expect(account.getAttribute('aria-expanded')).not.toBe('true');
+    main.remove();
+  }));
+
+  it('moves focus from the app switcher to the arrived heading', fakeAsync(() => {
+    const events = new Subject<NavigationEnd>();
+    let fixture: ReturnType<typeof TestBed.createComponent<PrivateLayoutComponent>> | undefined;
+    render(false, events).then(result => { fixture = result.fixture; });
+    flushMicrotasks();
+    const workspace = fixture!.nativeElement.querySelector('#workspace-content') as HTMLElement;
+    const main = document.createElement('main');
+    const heading = document.createElement('h1');
+    heading.textContent = 'Books';
+    main.append(heading);
+    workspace.append(main);
+    const elapsed = 0;
+    spyOn(performance, 'now').and.callFake(() => elapsed);
+    const toggle = fixture!.nativeElement.querySelector('.app-switcher__toggle') as HTMLButtonElement;
+    toggle.focus();
+    events.next(new NavigationEnd(1, '/media/library', '/media/library'));
+    flushMicrotasks();
+    tick(0);
+    expect(document.activeElement).toBe(heading);
+    toggle.focus();
+    tick(0);
+    expect(document.activeElement).toBe(toggle);
+    main.remove();
+  }));
+
+  it('moves focus to the arrived heading while shell menus stay idle', fakeAsync(() => {
+    const events = new Subject<NavigationEnd>();
+    let fixture: ReturnType<typeof TestBed.createComponent<PrivateLayoutComponent>> | undefined;
+    render(false, events).then(result => { fixture = result.fixture; });
+    flushMicrotasks();
+    const workspace = fixture!.nativeElement.querySelector('#workspace-content') as HTMLElement;
+    const main = document.createElement('main');
+    const heading = document.createElement('h1');
+    heading.textContent = 'Trips';
+    main.append(heading);
+    workspace.append(main);
+    const elapsed = 0;
+    spyOn(performance, 'now').and.callFake(() => elapsed);
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    events.next(new NavigationEnd(1, '/travel', '/travel'));
+    flushMicrotasks();
+    tick(0);
+    expect(document.activeElement).toBe(heading);
+    main.remove();
+  }));
+
   it('cancels pending heading focus when the shell is destroyed', fakeAsync(() => {
     const events = new Subject<NavigationEnd>();
     let fixture: ReturnType<typeof TestBed.createComponent<PrivateLayoutComponent>> | undefined;

@@ -128,6 +128,11 @@ export class PrivateLayoutComponent {
     const attempt = ++this.focusAttempt;
     const started = performance.now();
     let confirm = false;
+    const shellToggle = (node: EventTarget | null): boolean =>
+      node === this.switcherButton?.nativeElement || node === this.userButton?.nativeElement;
+    // Navigation can begin with focus still on a shell toggle. Move to the
+    // heading once, then stop if the user returns to that toggle.
+    let correctShellToggle = shellToggle(document.activeElement);
     const tick = (): void => {
       if (attempt !== this.focusAttempt || place !== this.lastFocusedPlace) return;
       if (this.menuOpen() || this.switcherOpen()) return;
@@ -145,6 +150,8 @@ export class PrivateLayoutComponent {
         && !!active.closest('#workspace-content main')
         && !!active.closest('a, button, input, textarea, select, [role="button"], [role="link"], [role="grid"], [tabindex]:not([tabindex="-1"]), [contenteditable="true"]');
       if (inPageControl) return;
+      if (shellToggle(active) && !correctShellToggle) return;
+      if (shellToggle(active)) correctShellToggle = false;
       if (!dialogOpen && heading) {
         if (active !== heading) {
           if (confirm || performance.now() - started > 400) return;
@@ -198,8 +205,9 @@ export class PrivateLayoutComponent {
 
   onSwitcherLink(): void {
     // Let RouterLink handle the click before removing the link from the DOM.
+    // Leave focus alone; the arrived page heading takes it.
     queueMicrotask(() => {
-      if (this.switcherOpen()) this.closeSwitcher();
+      if (this.switcherOpen()) this.closeSwitcher(false);
     });
   }
 
