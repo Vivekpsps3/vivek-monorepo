@@ -1,6 +1,6 @@
 {
   "validated_on": "2026-11-18",
-  "base_sha": "70d136915aa9e31ce6286e4d68f9d0e2db87039c",
+  "base_sha": "7f55790a3d6c3ac92e4dc3c77cbcc581be86c35c",
   "tasks": [
     {
       "id": "MED-11",
@@ -1819,6 +1819,29 @@
       ],
       "merged_pr": 513,
       "merge_sha": "70d136915aa9e31ce6286e4d68f9d0e2db87039c"
+    },
+    {
+      "id": "MUX-06",
+      "title": "Style tracked games as a distinct collection",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 402,
+      "dependencies": [
+        "MUX-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ],
+      "merged_pr": 515,
+      "merge_sha": "7f55790a3d6c3ac92e4dc3c77cbcc581be86c35c"
     }
   ],
   "td_coverage": {

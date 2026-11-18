@@ -459,27 +459,6 @@
       ]
     },
     {
-      "id": "MUX-06",
-      "title": "Style tracked games as a distinct collection",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 402,
-      "dependencies": [
-        "MUX-01",
-        "STYLE-03"
-      ],
-      "conflict_groups": [
-        "media-collections",
-        "media-records"
-      ],
-      "verification_profiles": [
-        "docs",
-        "media_front"
-      ]
-    },
-    {
       "id": "MUX-07",
       "title": "Unify provider search and manual Media capture",
       "parent_issues": [
