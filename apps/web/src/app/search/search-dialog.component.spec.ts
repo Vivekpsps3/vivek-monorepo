@@ -31,6 +31,7 @@ describe('SearchDialogComponent', () => {
   let component: SearchDialogComponent;
   let fetchSpy: jasmine.Spy;
   let navigated: string[];
+  let routeUrl: string;
   let closedCount: number;
   let financeAnswer: SearchFinanceQueryResult;
   let financeRecents: SearchFinanceRecentResult;
@@ -75,6 +76,7 @@ describe('SearchDialogComponent', () => {
 
   beforeEach(() => {
     navigated = [];
+    routeUrl = '/hub';
     closedCount = 0;
     financeAnswer = { status: 'none' };
     financeRecents = { status: 'none', names: [], missing: [] };
@@ -114,7 +116,7 @@ describe('SearchDialogComponent', () => {
         {
           provide: Router,
           useValue: {
-            url: '/hub',
+            get url() { return routeUrl; },
             navigateByUrl: (url: string) => {
               navigated.push(url);
               return Promise.resolve(true);
@@ -210,6 +212,21 @@ describe('SearchDialogComponent', () => {
     component.activate(locked);
     expect(navigated).toEqual(['/finance/vault/unlock?next=%2Fhub']);
     expect(localStorage.getItem(SEARCH_RECENT_KEY)).toBeNull();
+  });
+
+  it('keeps collection coordinates and drops private filters from the search unlock link', async () => {
+    routeUrl = '/media/library?kind=book&q=Synthetic-private-filter';
+    financeAnswer = { status: 'locked' };
+    openDialog();
+    await settle();
+    typeQuery('kyoto');
+    await settle(200);
+    await settle();
+    const locked = component.options().find(option => option.group === 'Finance')!;
+    component.activate(locked);
+    const target = new URL(navigated[0], location.origin);
+    expect(target.pathname).toBe('/finance/vault/unlock');
+    expect(target.searchParams.get('next')).toBe('/media/library?kind=book');
   });
 
   it('resolves unlocked finance recents locally and prunes missing ids', async () => {

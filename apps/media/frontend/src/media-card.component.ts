@@ -10,7 +10,7 @@ import { MediaCard, statusLabel } from "./media.models";
   template: `<article class="media-card">
     <a
       class="media-art"
-      [routerLink]="['/media/item', item().id]"
+      [routerLink]="['/media/item', item().id]" [state]="source()"
       tabindex="-1"
       aria-hidden="true"
     >
@@ -39,7 +39,7 @@ import { MediaCard, statusLabel } from "./media.models";
         }
       </ui-badge>
       <h2>
-        <a [routerLink]="['/media/item', item().id]">{{ item().title }}</a>
+        <a [attr.data-media-item]="item().id" [routerLink]="['/media/item', item().id]" [state]="source()">{{ item().title }}</a>
       </h2>
       @if (item().creator) {
         <p class="muted">{{ item().creator }}</p>
@@ -72,6 +72,7 @@ import { MediaCard, statusLabel } from "./media.models";
 })
 export class MediaCardComponent {
   readonly item = input.required<MediaCard>();
+  readonly source = input<Record<string, unknown> | undefined>(undefined);
   readonly broken = signal(false);
   readonly status = statusLabel;
 }

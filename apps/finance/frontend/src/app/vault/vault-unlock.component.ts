@@ -1,7 +1,8 @@
 import { Inject, Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { continueAfterAuth, safeNextPath } from '@vivek/ui';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ReturnContext, currentVaultReturn, vaultReturnQuery } from '@vivek/ui';
 import { SESSION_CONTEXT, type SessionPort } from '@vivek/ui';
 import { VaultService } from '../crypto/vault.service';
 import { FinanceLockService } from '../core/finance-lock.service';
@@ -56,12 +57,31 @@ export class VaultUnlockComponent implements OnInit {
   private slowTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly financeLock = inject(FinanceLockService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly source = inject(ReturnContext);
+  private readonly owner: number | undefined;
+  private readonly sessionRevision: number;
+  private finishing = false;
+
+  private get active(): boolean {
+    return !this.destroyRef.destroyed && this.sessionRevision === this.auth.revision
+      && this.owner === this.auth.currentUser?.id;
+  }
 
   constructor(
     private vault: VaultService,
     @Inject(SESSION_CONTEXT) private auth: SessionPort,
     private router: Router
-  ) {}
+  ) {
+    this.owner = this.auth.currentUser?.id;
+    this.sessionRevision = this.auth.revision;
+    const clear = () => {
+      this.passphrase = '';
+      this.error = '';
+      if (this.slowTimer !== null) clearTimeout(this.slowTimer);
+    };
+    this.destroyRef.onDestroy(clear);
+    this.auth.cleared$?.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(clear);
+  }
 
   async ngOnInit(): Promise<void> {
     this.username = this.auth.currentUser?.username || this.auth.currentUser?.email || '';
@@ -71,9 +91,9 @@ export class VaultUnlockComponent implements OnInit {
     }
     this.financeLock.clearLockReason();
     const status = await this.vault.refreshStatus();
-    if (this.destroyRef.destroyed) return;
+    if (!this.active) return;
     if (!status.exists) {
-      await this.router.navigateByUrl('/finance/vault/setup');
+      await this.openSetup();
       return;
     }
     if (this.vault.isUnlocked) {
@@ -89,9 +109,19 @@ export class VaultUnlockComponent implements OnInit {
   private continueAfterUnlock(): Promise<boolean> {
     // Saved keys can open Home while a submitted passphrase is still deriving.
     // Its late completion must not replace the route the user opened next.
-    if (this.destroyRef.destroyed) return Promise.resolve(false);
-    if (safeNextPath()) return continueAfterAuth(this.router);
-    return this.router.navigateByUrl(window.self === window.top ? '/finance' : '/finance/embed');
+    if (!this.active || this.finishing) return Promise.resolve(false);
+    this.finishing = true;
+    this.passphrase = '';
+    return this.source.finishVault();
+  }
+
+  private openSetup(): Promise<boolean> {
+    const next = currentVaultReturn() ?? '';
+    return this.router.navigate(['/finance/vault/setup'], {
+      queryParams: vaultReturnQuery(next),
+      state: this.source.sourceState(next),
+      replaceUrl: true,
+    });
   }
 
   submit(event: Event): void {
@@ -100,6 +130,7 @@ export class VaultUnlockComponent implements OnInit {
   }
 
   async unlock(): Promise<void> {
+    if (!this.active || this.busy || this.finishing) return;
     if (!this.passphrase) {
       this.error = EMPTY_PASSPHRASE_MESSAGE;
       return;
@@ -112,6 +143,7 @@ export class VaultUnlockComponent implements OnInit {
     }, 1500);
     try {
       const opened = await this.vault.unlock(this.passphrase);
+      if (!this.active || this.finishing) return;
       if (!opened || !this.vault.isUnlocked) {
         this.error = 'Vault was locked, try again';
         this.focusPassphrase();
@@ -122,9 +154,9 @@ export class VaultUnlockComponent implements OnInit {
       void this.vault.upgradeKdfIfNeeded(this.passphrase);
       await this.continueAfterUnlock();
     } catch (e: any) {
+      if (!this.active || this.finishing) return;
       if (e?.message === 'Vault is not set up') {
-        const next = safeNextPath();
-        await this.router.navigate(['/finance/vault/setup'], { queryParams: { next: next ?? undefined } });
+        await this.openSetup();
         return;
       }
       this.error = unlockErrorMessage(e);
@@ -138,7 +170,9 @@ export class VaultUnlockComponent implements OnInit {
   }
 
   private focusPassphrase(): void {
-    setTimeout(() => document.getElementById('vault-passphrase')?.focus());
+    setTimeout(() => {
+      if (this.active) document.getElementById('vault-passphrase')?.focus();
+    });
   }
 }
 

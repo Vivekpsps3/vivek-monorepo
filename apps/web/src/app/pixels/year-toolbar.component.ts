@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { UiButtonComponent, UiIconComponent } from '@vivek/ui';
+import { ReturnContext, UiButtonComponent, UiIconComponent, vaultReturnQuery } from '@vivek/ui';
 import { ColorByToggleComponent } from './color-by-toggle.component';
 import { PixelsPreferences } from './pixels-preferences';
 import type { FinanceJoinStatus } from './pixels.types';
@@ -14,9 +14,12 @@ import type { FinanceJoinStatus } from './pixels.types';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class YearToolbarComponent {
+  protected readonly context = inject(ReturnContext);
+  protected readonly returnQuery = vaultReturnQuery;
   private readonly preferences = inject(PixelsPreferences);
 
   year = input.required<number>();
+  unlockSource = input('/pixels');
   financeStatus = input<FinanceJoinStatus | null>(null);
   shift = output<number>();
 

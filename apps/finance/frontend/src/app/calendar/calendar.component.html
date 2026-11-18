@@ -110,7 +110,7 @@
         @if (selectedTransactions.length) {
           <h4 class="day-detail__section">Posted</h4>
           @for (tx of selectedTransactions; track tx.id) {
-            <a class="tx-item tx-item-link" [routerLink]="['/finance/spending']" [queryParams]="transactionActivityQuery(tx.id)" [attr.aria-label]="'Edit ' + (tx.merchant || tx.description || tx.category || 'transaction') + ' from ' + selectedShortDate">
+            <a class="tx-item tx-item-link" [routerLink]="['/finance/spending']" [queryParams]="transactionActivityQuery(tx.id)" [state]="sourceState" [attr.aria-label]="'Edit ' + (tx.merchant || tx.description || tx.category || 'transaction') + ' from ' + selectedShortDate">
               @if (transactionEffects(tx).spending < 0) {
                 <ui-badge variant="success">Refund</ui-badge>
               } @else if (transactionEffects(tx).income > 0) {
@@ -149,7 +149,7 @@
       } @else {
         <p class="day-detail__empty">Nothing on {{ selectedShortDate }}.</p>
       }
-      <a class="calendar-cta" [routerLink]="['/finance/spending']" [queryParams]="{ t: 'activity', date: selectedDate, add: '1' }">Add transaction on {{ selectedShortDate }}</a>
+      <a class="calendar-cta" [routerLink]="['/finance/spending']" [queryParams]="{ t: 'activity', date: selectedDate, add: '1' }" [state]="sourceState">Add transaction on {{ selectedShortDate }}</a>
     } @else {
       <p class="day-detail__hint">Select a day to see what posted, what's scheduled and what came in.</p>
     }
@@ -192,7 +192,7 @@
         <ol class="top-list">
           @for (row of monthSummary.topPurchases; track row.id) {
             <li>
-              <a class="top-purchase-link" [routerLink]="['/finance/spending']" [queryParams]="transactionActivityQuery(row.id)">
+              <a class="top-purchase-link" [routerLink]="['/finance/spending']" [queryParams]="transactionActivityQuery(row.id)" [state]="sourceState">
                 <span class="top-row">
                   <span class="top-desc">{{ row.description }}</span>
                   <span class="top-amt">{{ row.amount | money }}</span>

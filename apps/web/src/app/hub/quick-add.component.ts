@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, ViewChild, inject, input, signal } from '@angular/core';
 import { Router, RouterLink, UrlTree } from '@angular/router';
 import { todayIsoDate } from '@vivek/browser';
-import { UiButtonComponent, UiDialogComponent, UiMenuComponent, UiMenuItemDirective } from '@vivek/ui';
+import { UiButtonComponent, UiDialogComponent, UiMenuComponent, UiMenuItemDirective, vaultUnlockHref } from '@vivek/ui';
 import { financeVaultPresent } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
 
@@ -41,7 +41,7 @@ export class QuickAddComponent {
   transactionHref(): UrlTree {
     const next = `/finance/spending?t=activity&date=${todayIsoDate()}&add=1`;
     return this.router.parseUrl(this.locked() && financeVaultPresent()
-      ? `/finance/vault/unlock?next=${encodeURIComponent(next)}` : next);
+      ? vaultUnlockHref(next) : next);
   }
 
   onWorkspaceShortcut(event: KeyboardEvent): void {

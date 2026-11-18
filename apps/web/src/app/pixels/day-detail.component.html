@@ -41,7 +41,7 @@
       </div>
       @if (detail.finance.locked) {
         <div class="row row--locked">
-          <a routerLink="/finance/vault/unlock" [queryParams]="{ next: '/pixels' }">{{ detail.finance.text }}</a>
+          <a routerLink="/finance/vault/unlock" [queryParams]="returnQuery(unlockSource())" [state]="context.link(unlockSource())">{{ detail.finance.text }}</a>
         </div>
       } @else {
         <div class="row">

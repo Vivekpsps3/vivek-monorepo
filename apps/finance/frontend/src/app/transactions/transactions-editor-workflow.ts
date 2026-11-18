@@ -3,7 +3,8 @@ import { ChangeDetectorRef, Injectable, OnDestroy, inject } from '@angular/core'
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
-import { ToastService, silentErrorToast, successCopy } from '@vivek/ui';
+import { ReturnContext, ToastService, silentErrorToast, successCopy } from '@vivek/ui';
+import { financeCalendarPath } from '../core/layout/finance-navigation';
 import { Transaction, TransactionCreate } from '../models/transaction.model';
 import { todayIsoDate, toDollars } from '@vivek/browser';
 import { validateMoney, validateTransaction, type FieldIssue } from '../utils/validators';
@@ -33,6 +34,8 @@ export class TransactionsEditorWorkflow implements OnDestroy {
   private originalAmount: number | null = null;
   private amountDirty = false;
   private readonly destroy$ = new Subject<void>();
+  private readonly dismissed$ = new Subject<void>();
+  private readonly context = inject(ReturnContext);
 
   constructor(
     private financeService: FinanceService,
@@ -113,7 +116,7 @@ export class TransactionsEditorWorkflow implements OnDestroy {
       ? this.financeService.updateTransaction(this.editingTxId, payload, true)
       : this.financeService.addTransaction(payload, true);
 
-    request.pipe(takeUntil(this.destroy$)).subscribe({
+    request.pipe(takeUntil(this.dismissed$), takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.saving = false;
         const wasEditing = this.editingTxId !== null;
@@ -155,11 +158,9 @@ export class TransactionsEditorWorkflow implements OnDestroy {
   }
 
   closeModal(): void {
-    this.showModal = false;
-    this.editingTxId = null;
-    this.editingImported = false;
-    this.transactionSaveError = '';
-    this.newTx = this.emptyTx();
+    const wasOpen = this.showModal;
+    this.dismiss();
+    if (wasOpen && this.context.back(financeCalendarPath)) return;
     const params = this.route.snapshot.queryParamMap;
     if (params.get('add') === '1' || params.has('edit')) {
       void this.router.navigate([], {
@@ -172,6 +173,18 @@ export class TransactionsEditorWorkflow implements OnDestroy {
     this.cdr.markForCheck();
   }
 
+  dismiss(): void {
+    this.dismissed$.next();
+    this.tripLoad += 1;
+    this.showModal = false;
+    this.saving = false;
+    this.editingTxId = null;
+    this.editingImported = false;
+    this.transactionSaveError = '';
+    this.newTx = this.emptyTx();
+    this.cdr.markForCheck();
+  }
+
   private loadTripChoices(): void {
     const request = ++this.tripLoad;
     const selected = this.newTx.trip_id;
@@ -180,7 +193,7 @@ export class TransactionsEditorWorkflow implements OnDestroy {
       return;
     }
     this.tripListNote = '';
-    this.http.get<TripTagHome>('/travel/api/home', { context: silentErrorToast() }).pipe(takeUntil(this.destroy$)).subscribe({
+    this.http.get<TripTagHome>('/travel/api/home', { context: silentErrorToast() }).pipe(takeUntil(this.dismissed$), takeUntil(this.destroy$)).subscribe({
       next: home => {
         if (request !== this.tripLoad) return;
         this.applyTripHome(home, this.newTx.trip_id, false);
@@ -199,6 +212,8 @@ export class TransactionsEditorWorkflow implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.dismissed$.complete();
+    this.newTx = this.emptyTx();
     this.destroy$.next();
     this.destroy$.complete();
   }

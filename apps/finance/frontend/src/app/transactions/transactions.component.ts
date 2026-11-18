@@ -183,6 +183,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   private lastDeepLinkedEdit = '';
   /** The edit id already opened, so a later ledger refresh does not reopen a closed dialog. */
   private consumedEditLink = '';
+  private datedAddLink: string | null = null;
 
   constructor(
     private financeService: FinanceService,
@@ -311,10 +312,14 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     const calendarDate = params.get('date') || '';
     this.selectedCalendarDate = /^\d{4}-\d{2}-\d{2}$/.test(calendarDate) ? calendarDate : null;
     if (params.get('add') === '1' && !this.selectedCalendarDate && !this.showImportModal) this.startImportWizard();
-    if (this.selectedCalendarDate && params.get('add') === '1' && !this.showModal) {
-      this.transactionEditor.openAddModal(this.selectedCalendarDate);
-    }
+    const addDate = params.get('add') === '1' ? this.selectedCalendarDate : null;
     const editId = params.get('edit') || '';
+    if ((this.lastDeepLinkedEdit && this.lastDeepLinkedEdit !== editId)
+      || (this.datedAddLink && this.datedAddLink !== addDate)) {
+      this.transactionEditor.dismiss();
+    }
+    this.datedAddLink = addDate;
+    if (addDate && !this.showModal) this.transactionEditor.openAddModal(addDate);
     if (editId !== this.lastDeepLinkedEdit) {
       this.lastDeepLinkedEdit = editId;
       this.consumedEditLink = '';

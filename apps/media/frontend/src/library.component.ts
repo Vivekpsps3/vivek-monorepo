@@ -1,4 +1,4 @@
-import { Component, DestroyRef, inject, signal } from "@angular/core";
+import { Component, DestroyRef, ElementRef, inject, signal } from "@angular/core";
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import {
@@ -20,6 +20,7 @@ import {
 } from "rxjs";
 import { MediaCardComponent } from "./media-card.component";
 import {
+  ReturnContext,
   UiButtonComponent,
   UiDialogComponent,
   UiEmptyStateComponent,
@@ -43,6 +44,8 @@ import {
   toQueryParams,
   type LibraryFilters,
 } from "./library-filters.mjs";
+const LIBRARY = "/media/library";
+
 @Component({
   standalone: true,
   imports: [
@@ -196,7 +199,7 @@ import {
       <div class="media-grid" [attr.aria-busy]="refreshing()">
         @for (item of library.items; track item.id) {
           <section>
-            <media-card [item]="item" />
+            <media-card [item]="item" [source]="source()" />
             @if (item.kind === "artist") {
               <ui-button
                 variant="ghost"
@@ -220,13 +223,13 @@ import {
                     </ui-button>
                   }
                   @for (child of children(); track child.id) {
-                    <media-card [item]="child" />
+                    <media-card [item]="child" [source]="source()" />
                   } @empty {
                     @if (!childrenLoading() && !childrenError()) {
                       <p>No saved albums or songs for this artist.</p>
                     }
                   }
-                  <a [routerLink]="['/media/item', item.id, 'discography']"
+                  <a [routerLink]="['/media/item', item.id, 'discography']" [state]="source()"
                     >Browse discography</a
                   >
                 </div>
@@ -288,13 +291,15 @@ export class LibraryComponent {
   private readonly router = inject(Router);
   private readonly destroy = inject(DestroyRef);
   readonly reload = new BehaviorSubject(0);
-  private restoredScroll =
-    typeof history === "undefined"
-      ? 0
-      : Number(history.state?.mediaLibraryScroll) || 0;
+  private readonly context = inject(ReturnContext);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private restoredView = this.context.view(LIBRARY);
   private scrollerReady = false;
   private restoring = false;
   private active = true;
+  source(): Record<string, unknown> {
+    return this.context.link(LIBRARY);
+  }
   readonly kinds = kinds;
   readonly states = [
     "want",
@@ -376,13 +381,8 @@ export class LibraryComponent {
       ) {
         clearTimeout(this.filterTimer);
         this.filterTimer = undefined;
-        history.replaceState(
-          {
-            ...history.state,
-            mediaLibraryScroll: this.restoredScroll || window.scrollY,
-          },
-          "",
-        );
+        const item = /^\/media\/item\/(\d+)(?:[/?#]|$)/.exec(event.url)?.[1] ?? null;
+        if (!this.restoredView) this.context.saveView(LIBRARY, item);
       }
       if (event instanceof Scroll) {
         this.scrollerReady = true;
@@ -548,9 +548,9 @@ export class LibraryComponent {
     });
   }
   private restoreScroll(): void {
-    const top = this.restoredScroll;
+    const view = this.restoredView;
     if (
-      !top ||
+      !view ||
       !this.scrollerReady ||
       this.loading() ||
       this.childrenLoading() ||
@@ -563,13 +563,18 @@ export class LibraryComponent {
     const apply = () => {
       if (!this.active) return;
       const room = document.documentElement.scrollHeight - window.innerHeight;
-      if (room + 1 < top && performance.now() - started < 1000) {
+      if (room + 1 < view.top && performance.now() - started < 1000) {
         requestAnimationFrame(apply);
         return;
       }
-      this.restoredScroll = 0;
+      this.restoredView = null;
       this.restoring = false;
-      window.scrollTo({ left: 0, top, behavior: "instant" });
+      const heading = this.host.nativeElement.querySelector<HTMLElement>("#library-heading");
+      if (view.focus && (document.activeElement === document.body || document.activeElement === heading)) {
+        const target = this.host.nativeElement.querySelector<HTMLElement>(`[data-media-item="${view.focus}"]`);
+        (target ?? heading)?.focus({ preventScroll: true });
+      }
+      window.scrollTo({ left: 0, top: view.top, behavior: "instant" });
     };
     requestAnimationFrame(apply);
   }

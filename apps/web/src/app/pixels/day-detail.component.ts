@@ -11,7 +11,7 @@ import {
   output,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { dayActivities } from '@vivek/ui';
+import { ReturnContext, dayActivities, vaultReturnQuery } from '@vivek/ui';
 import { isIsoDate } from './pixels-dates';
 import { tripDayLabel } from './pixels-model';
 import type { FinanceJoinStatus, PixelDayView } from './pixels.types';
@@ -65,12 +65,15 @@ export function financeCopy(status: FinanceJoinStatus, fin: number | null): { lo
 })
 export class DayDetailComponent implements AfterViewInit, OnDestroy {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  protected readonly context = inject(ReturnContext);
+  protected readonly returnQuery = vaultReturnQuery;
   private focusTimers: ReturnType<typeof setTimeout>[] = [];
 
   day = input<PixelDayView | null>(null);
   financeStatus = input<FinanceJoinStatus>('locked');
   today = input('');
   phone = input(false);
+  unlockSource = input('/pixels');
   closed = output<void>();
 
   readonly detail = computed(() => {
@@ -120,7 +123,7 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
     const focus = () => {
       if (!this.day()) return;
       const button = this.host.nativeElement.querySelector('[data-day-close]');
-      if (button instanceof HTMLButtonElement) button.focus();
+      if (button instanceof HTMLButtonElement) button.focus({ preventScroll: true });
     };
     focus();
     // The shell moves focus to the page heading while this sheet is still mounting.

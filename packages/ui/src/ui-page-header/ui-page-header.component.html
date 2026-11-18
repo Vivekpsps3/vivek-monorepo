@@ -1,8 +1,10 @@
 <header class="ui-page-header" [class.ui-page-header--embed]="embedded()">
   @if (!embedded() && backLabel() && backLink()) {
-    <a class="ui-page-header__back" [routerLink]="backLink()">{{
-      backLabel()
-    }}</a>
+    @if (backSource(); as source) {
+      <a class="ui-page-header__back" [uiReturnLink]="backLink()!" [uiReturnSource]="source">{{ backLabel() }}</a>
+    } @else {
+      <a class="ui-page-header__back" [routerLink]="backLink()">{{ backLabel() }}</a>
+    }
   }
   <div class="ui-page-header__row">
     <div class="ui-page-header__art">

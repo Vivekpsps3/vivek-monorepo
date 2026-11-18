@@ -1,3 +1,4 @@
+import { vaultUnlockHref } from '@vivek/ui';
 import { Injectable, inject } from '@angular/core';
 import { OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
@@ -446,8 +447,8 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     // vault.isUnlocked themselves. An unknown URL means the embedded
     // Finance context, which always lands on the unlock screen.
     const url = this.router.url || '';
-    if (url.startsWith('/finance/') && !url.startsWith('/finance/vault/')) {
-      await this.router.navigateByUrl(`/finance/vault/unlock?next=${encodeURIComponent(url)}`);
+    if (url.split('?')[0] === '/finance' || (url.startsWith('/finance/') && !url.startsWith('/finance/vault/'))) {
+      await this.router.navigateByUrl(vaultUnlockHref(url));
     } else if (url === '' || url.startsWith('/finance/vault/')) {
       await this.router.navigateByUrl('/finance/vault/unlock');
     }
