@@ -130,7 +130,8 @@ test('Spending opens on Activity without review controls and Home has no review 
 
   await vault.open('/spending');
   await expect(page.getByRole('link', { name: 'Activity', exact: true })).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByRole('link', { name: 'Imports', exact: true })).toHaveCount(0);
+  await expect(page.locator('app-spending-hub').getByRole('link', { name: 'Imports', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Finance sections' }).getByRole('link', { name: 'Imports', exact: true })).toHaveAttribute('href', '/finance/spending?receipts=1');
   await expect(page.locator('app-transactions')).toBeVisible();
   await expect(page.locator(nativeHoverTitleSelector)).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Review', exact: true })).toHaveCount(0);
