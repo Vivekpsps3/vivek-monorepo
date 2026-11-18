@@ -240,6 +240,8 @@ describe('HubComponent', () => {
     TestBed.inject(HttpTestingController).verify();
     localStorage.removeItem(DEK_STORE);
     localStorage.removeItem(VAULT_PRESENCE);
+    localStorage.removeItem('hub.pins.v1.1');
+    localStorage.removeItem('hub.pins.v1.2');
   });
 
   it('sends the account query to settings', async () => {
@@ -320,8 +322,15 @@ describe('HubComponent', () => {
     expect(auth.logout).not.toHaveBeenCalled();
   });
 
-  it('ignores a late summary from the previous user', async () => {
+  it('drops the previous owner’s pins, open editor and late summaries', async () => {
+    localStorage.setItem('hub.pins.v1.1', JSON.stringify(['town', 'pixels']));
     await render();
+    const hub = fixture.nativeElement as HTMLElement;
+    const firstShortcut = () => hub.querySelector('app-hub-destinations nav a')?.textContent?.trim();
+    expect(firstShortcut()).toBe('Town');
+    hub.querySelector<HTMLButtonElement>('app-hub-destinations nav button')!.click();
+    fixture.detectChanges();
+    expect(hub.querySelector('[role="dialog"]')).not.toBeNull();
     const firstTravel = takeCall('/travel/');
     const firstMedia = takeCall('/media/');
     const firstTown = takeCall('/api/town');
@@ -333,6 +342,10 @@ describe('HubComponent', () => {
     firstTown.resolve(json(200, { ...townBody(), level: 99, xp: 9999 }));
     resolveTown();
     await paint();
+    expect(firstShortcut()).toBe('Holdings');
+    expect(hub.querySelector('[role="dialog"]')).toBeNull();
+    expect(localStorage.getItem('hub.pins.v1.1')).toBe('["town","pixels"]');
+    expect(localStorage.getItem('hub.pins.v1.2')).toBeNull();
     expect(fixture.nativeElement.textContent).not.toContain('Secret');
     expect(fixture.nativeElement.textContent).not.toContain('Lv 99');
 

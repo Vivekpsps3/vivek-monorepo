@@ -1,6 +1,7 @@
-<section class="up-next" aria-labelledby="up-next-heading" [attr.aria-busy]="loading()">
+<section class="up-next" [class.compact]="!expanded()" aria-labelledby="up-next-heading" [attr.aria-busy]="loading()">
   <div class="heading">
-    <div><p class="eyebrow">Across the suite</p><h2 id="up-next-heading">{{ expanded() ? "Agenda" : "Up next" }}</h2></div>
+    <h2 id="up-next-heading">{{ expanded() ? "Agenda" : "Up next" }}</h2>
+    @if (!expanded()) { <a class="agenda-link" routerLink="/hub/agenda" [queryParams]="filters().length === 2 ? null : { sources: filters().join(',') }">Explore agenda</a> }
     <div class="filters" role="group" aria-label="Upcoming sources">
       @for (source of sources(); track source.id) {
         <ui-button variant="secondary" [pressed]="filters().includes(source.id)" (clicked)="toggleSource(source.id)">{{ source.label }}</ui-button>
@@ -24,12 +25,12 @@
       }
     </div>
     <p class="empty">Saved trip dates, departures, reminder due dates and exact Media release dates. Watched episodes retain their release dates; viewing and reminder completion history is unavailable.</p>
-  } @else { <a routerLink="/hub/agenda">Explore agenda</a> }
+  }
   @if (expired()) {
     <ui-state state="expired" thing="what's up next" />
   } @else {
-    @for (group of groups(); track group.title) {
-      <h3 [id]="expanded() ? 'agenda-' + group.title : null" [attr.tabindex]="expanded() ? -1 : null">{{ group.title }}</h3>
+    @for (group of groups(); track group.date) {
+      @if (group.date) { <h3 [id]="'agenda-' + group.date" tabindex="-1">{{ group.date }}</h3> }
       <ul>
         @for (row of group.rows; track row.key) {
           <li [class.done]="row.reminder?.done">
@@ -38,8 +39,10 @@
                 [disabled]="reminder.done || pending.has(reminder.id) || travelState() !== 'ready' || travelPending()"
                 (click)="markDone(reminder)"><ui-icon name="check" /></button>
             } @else { <ui-icon [name]="row.source === 'media' ? 'film' : 'calendar'" /> }
-            <span class="date-chip" [class.overdue]="row.overdue" [attr.title]="row.date">{{ dateLabel(row) }}</span>
-            <a class="event-link" [routerLink]="row.href">{{ row.title }}</a>
+            <a class="event-link" [routerLink]="row.href">
+              <span class="date-chip" [class.overdue]="row.overdue" [attr.title]="row.date">{{ dateLabel(row) }}</span>
+              <span class="event-title">{{ row.title }}</span>
+            </a>
             <span class="source">{{ row.source === 'travel' ? 'Travel' : 'Media' }}</span>
           </li>
         }

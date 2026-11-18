@@ -2,14 +2,17 @@
   <main id="hub-main">
     <ui-page-header [title]="name" [eyebrow]="today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })"><app-quick-add uiPageActions [locked]="financeState === 'locked'" /></ui-page-header>
 
-    <app-up-next
-      [ownerId]="userId ?? null" [today]="today"
-      [expanded]="expanded" [windowStart]="windowStart" [windowEnd]="windowEnd" [selectedSources]="agendaSources"
-      (windowChange)="changeAgendaWindow($event)" (sourcesChange)="changeAgendaSources($event)"
-      [travel]="travel" [travelState]="travelState" [travelPending]="travelPending" [travelUpdatedAt]="travelUpdatedAt"
-      [media]="media" [mediaState]="mediaState" [mediaPending]="mediaPending" [mediaUpdatedAt]="mediaUpdatedAt"
-      [financeState]="financeState" [financePending]="financePending" [billsDue]="billsDueThisWeek" [financeUpdatedAt]="financeUpdatedAt"
-      (retryTravel)="retryTravel()" (retryMedia)="retryMedia()" (retryFinance)="retryFinance()" />
+    <div class="arrival" [class.agenda-only]="expanded">
+      <app-up-next
+        [ownerId]="userId ?? null" [today]="today"
+        [expanded]="expanded" [windowStart]="windowStart" [windowEnd]="windowEnd" [selectedSources]="agendaSources"
+        (windowChange)="changeAgendaWindow($event)" (sourcesChange)="changeAgendaSources($event)"
+        [travel]="travel" [travelState]="travelState" [travelPending]="travelPending" [travelUpdatedAt]="travelUpdatedAt"
+        [media]="media" [mediaState]="mediaState" [mediaPending]="mediaPending" [mediaUpdatedAt]="mediaUpdatedAt"
+        [financeState]="financeState" [financePending]="financePending" [billsDue]="billsDueThisWeek" [financeUpdatedAt]="financeUpdatedAt"
+        (retryTravel)="retryTravel()" (retryMedia)="retryMedia()" (retryFinance)="retryFinance()" />
+      @if (!expanded) { <app-hub-destinations [ownerId]="userId ?? null" /> }
+    </div>
 
     @if (!expanded) {
     <div class="pair">
@@ -43,8 +46,8 @@
 
       <section class="side-panel" aria-labelledby="media-heading" [attr.aria-busy]="mediaState === 'loading' || mediaPending">
         <div class="panel-head">
-          <h2 id="media-heading"><a class="panel-title-link" routerLink="/media/">In progress</a></h2>
-          <a class="open-link" routerLink="/media/">Open Media</a>
+          <h2 id="media-heading">In progress</h2>
+          <a class="open-link media-open" routerLink="/media/">Open Media</a>
         </div>
         <ui-state
           [state]="mediaState === 'empty' ? 'ready' : mediaState"
@@ -57,22 +60,21 @@
             <ui-button href="/media/search" label="Add something" />
           }
           @if (media && mediaState !== 'empty') {
+          @let episode = nextEpisode;
           @if (!media.currently.length && !media.upcoming.length && !media.recent_reviews.length && !media.next_episodes.length) {
             <p class="figure-note">Upcoming dates are in Up next.</p>
           }
-          @if (media.currently.length) {
-            <ul class="rows">
-              @for (item of media.currently.slice(0, 3); track item.id) {
+          @if (media.currently[0]; as item) {
+            @if (item.id !== episode?.entry_id) {
+              <ul class="rows">
                 <li><a [routerLink]="'/media/item/' + item.id">{{ item.title }} <em>{{ kindLabel(item.kind) }}</em></a><strong>{{ item.progress_label || 'In progress' }}</strong></li>
-              }
-            </ul>
+              </ul>
+            }
           }
-          @if (media.next_episodes.length) {
-            <h3>Next episode</h3>
+          @for (item of episode ? [episode] : []; track item.entry_id) {
+            <h3>{{ item.state === 'upcoming' ? 'Upcoming episode' : 'Next episode' }}</h3>
             <ul class="rows">
-              @for (item of media.next_episodes.slice(0, 2); track item.entry_id) {
-                <li class="next-episode-row"><a [routerLink]="item.entry_id ? '/media/item/' + item.entry_id : '/media/'">{{ item.show_title }}</a><strong>S{{ item.season }} E{{ item.episode }}</strong>@if (isTopNext(item)) {<media-next-episode [entryId]="item.entry_id" [episodeId]="item.episode_id" [season]="item.season" [episode]="item.episode" [showTitle]="item.show_title" [compact]="true" (done)="onMediaNextDone($event, item)" (failed)="$event.reload && onMediaNextReload()"></media-next-episode>}</li>
-              }
+              <li class="next-episode-row"><a [routerLink]="item.entry_id ? '/media/item/' + item.entry_id : '/media/'">{{ item.show_title }}</a><strong>S{{ item.season }} E{{ item.episode }}<em>Series</em></strong>@if (item.state === 'next' && mediaState === 'ready') {<media-next-episode [entryId]="item.entry_id" [episodeId]="item.episode_id" [season]="item.season" [episode]="item.episode" [showTitle]="item.show_title" [compact]="true" (done)="onMediaNextDone($event, item)" (failed)="$event.reload && onMediaNextReload()"></media-next-episode>}</li>
             </ul>
           }
           @if (media.upcoming.length) {
@@ -85,12 +87,13 @@
             </details>
           }
           @if (!media.currently.length && media.recent_reviews.length) {
-            <h3>Recent notes</h3>
-            <ul class="rows media-notes">
-              @for (item of media.recent_reviews.slice(0, 2); track item.id) {
-                <li><a [routerLink]="'/media/item/' + item.id">{{ item.title }}</a><strong>{{ item.review_excerpt || (item.rating == null ? 'Unrated' : item.rating + '/10') }}</strong></li>
-              }
-            </ul>
+            <details class="media-more"><summary>Recent notes</summary>
+              <ul class="rows media-notes">
+                @for (item of media.recent_reviews.slice(0, 2); track item.id) {
+                  <li><a [routerLink]="'/media/item/' + item.id">{{ item.title }}</a><strong>{{ item.review_excerpt || (item.rating == null ? 'Unrated' : item.rating + '/10') }}</strong></li>
+                }
+              </ul>
+            </details>
           }
         }
         </ui-state>
@@ -170,35 +173,44 @@
 
       <section class="side-panel town-bar" aria-labelledby="town-heading" [attr.aria-busy]="townState === 'loading' || townPending">
         <div class="panel-head">
-          <h2 id="town-heading">{{ town?.name || 'Your town' }}</h2>
-          <a class="open-link town-open" routerLink="/town/">Open Town</a>
+          <div>
+            <h2 id="town-heading">{{ town?.name || 'Your town' }}</h2>
+            <a class="open-link town-open" routerLink="/town">Open Town</a>
+          </div>
+          <div class="town-preview" aria-hidden="true">
+            <img src="/town/inn-1.svg" alt="" width="64" height="64" loading="lazy">
+            <img src="/town/library-1.svg" alt="" width="64" height="64" loading="lazy">
+          </div>
         </div>
-        <ui-state
-          [state]="townState === 'empty' ? 'ready' : townState"
-          thing="your town"
-          [pending]="townPending"
-          [updatedAt]="townUpdatedAt"
-          (retry)="retryTown()">
-          @if (townState === 'empty') {
-            <p class="figure-note">Start your town. Pick a first habit and watch your town grow.</p>
-            <ui-button href="/town/" label="Choose a first habit" />
-          }
-          @if (town && townState !== 'empty') {
-            @if (town.next_level_xp !== null) {
-              <p class="quiet-title">Lv {{ town.level }} · {{ town.xp }} / {{ town.next_level_xp }} XP</p>
-              <progress class="town-progress" [value]="town.xp - town.level_xp_start" [max]="town.next_level_xp - town.level_xp_start"
-                role="progressbar" [attr.aria-valuemin]="town.level_xp_start" [attr.aria-valuemax]="town.next_level_xp"
-                [attr.aria-valuenow]="town.xp" [attr.aria-valuetext]="'Level ' + town.level + ', ' + town.xp + ' of ' + town.next_level_xp + ' XP'"
-                aria-label="Town XP"></progress>
-            } @else {
-              <p class="quiet-title">Lv {{ town.level }} · Max</p>
+        <details class="town-details">
+          <summary>Town progress</summary>
+          <ui-state
+            [state]="townState === 'empty' ? 'ready' : townState"
+            thing="your town"
+            [pending]="townPending"
+            [updatedAt]="townUpdatedAt"
+            (retry)="retryTown()">
+            @if (townState === 'empty') {
+              <p class="figure-note">Start your town. Pick a first habit and watch your town grow.</p>
+              <ui-button href="/town/" label="Choose a first habit" />
             }
-            <p class="figure-note">{{ town.today_done }} of {{ town.today_total }} habits done today</p>
-            @if (townStreak(town); as streak) {
-              <p class="figure-note">Longest streak: {{ streak }}</p>
+            @if (town && townState !== 'empty') {
+              @if (town.next_level_xp !== null) {
+                <p class="quiet-title">Lv {{ town.level }} · {{ town.xp }} / {{ town.next_level_xp }} XP</p>
+                <progress class="town-progress" [value]="town.xp - town.level_xp_start" [max]="town.next_level_xp - town.level_xp_start"
+                  role="progressbar" [attr.aria-valuemin]="town.level_xp_start" [attr.aria-valuemax]="town.next_level_xp"
+                  [attr.aria-valuenow]="town.xp" [attr.aria-valuetext]="'Level ' + town.level + ', ' + town.xp + ' of ' + town.next_level_xp + ' XP'"
+                  aria-label="Town XP"></progress>
+              } @else {
+                <p class="quiet-title">Lv {{ town.level }} · Max</p>
+              }
+              <p class="figure-note">{{ town.today_done }} of {{ town.today_total }} habits done today</p>
+              @if (townStreak(town); as streak) {
+                <p class="figure-note">Longest streak: {{ streak }}</p>
+              }
             }
-          }
-        </ui-state>
+          </ui-state>
+        </details>
       </section>
 
       <section class="side-panel pixels-bar" aria-labelledby="pixels-heading" [attr.aria-busy]="pixelsState === 'loading' || pixelsPending">

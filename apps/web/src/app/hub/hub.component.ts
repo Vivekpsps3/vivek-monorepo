@@ -42,6 +42,7 @@ import {
   journalKindLabel,
   mediaReleaseLabel,
 } from './hub-summary';
+import { HubDestinationsComponent } from './hub-destinations.component';
 import { QuickAddComponent } from './quick-add.component';
 import { UpNextComponent } from './up-next/up-next.component';
 import { hubGreeting, shiftDay, upNextRows, type AgendaSource } from './up-next/up-next';
@@ -68,6 +69,7 @@ interface FinanceView {
     UiButtonComponent,
     UpNextComponent,
     QuickAddComponent,
+    HubDestinationsComponent,
     NextEpisodeButtonComponent,
     RouterLink,
     UiPageHeaderComponent,
@@ -81,7 +83,7 @@ export class HubComponent implements OnInit {
   @ViewChild(QuickAddComponent) private quickAdd?: QuickAddComponent;
   onWorkspaceShortcut(event: KeyboardEvent): void { this.quickAdd?.onWorkspaceShortcut(event); }
 
-  private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -271,10 +273,8 @@ export class HubComponent implements OnInit {
     void this.loadMedia();
   }
 
-  /** The Hub's one next-episode button sits on the first aired row, in list order. */
-  isTopNext(item: MediaSummary['next_episodes'][number]): boolean {
-    if (this.mediaState !== 'ready' || !this.media) return false;
-    return this.media.next_episodes.find(row => row.state === 'next') === item;
+  get nextEpisode(): MediaSummary['next_episodes'][number] | undefined {
+    return this.media?.next_episodes.find(row => row.state === 'next') ?? this.media?.next_episodes[0];
   }
 
   onMediaNextDone(result: NextResult, item: MediaSummary['next_episodes'][number]): void {
@@ -299,11 +299,13 @@ export class HubComponent implements OnInit {
     this.media = { ...media, next_episodes };
     this.onMediaNextReload();
     this.cdr.markForCheck();
+    const generation = this.generation;
     requestAnimationFrame(() => {
-      const rowLink = document.querySelector<HTMLElement>(
+      if (generation !== this.generation || this.expanded) return;
+      const rowLink = this.host.nativeElement.querySelector<HTMLElement>(
         `.next-episode-row a[href="/media/item/${item.entry_id}"]`,
       );
-      const heading = document.querySelector<HTMLElement>('#media-heading a');
+      const heading = this.host.nativeElement.querySelector<HTMLElement>('.media-open');
       (rowLink ?? heading)?.focus();
     });
   }
@@ -408,6 +410,12 @@ export class HubComponent implements OnInit {
     this.townPending = false;
     this.pixelsPending = false;
     this.financePending = false;
+    this.travelUpdatedAt = null;
+    this.mediaUpdatedAt = null;
+    this.financeUpdatedAt = null;
+    this.townUpdatedAt = null;
+    this.pixelsUpdatedAt = null;
+    this.stripRoving = null;
     this.clearFinanceNumbers();
     this.travelState = 'loading';
     this.mediaState = 'loading';

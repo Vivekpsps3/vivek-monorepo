@@ -362,6 +362,15 @@ test('a locked Finance card drops money, counts, and names loaded while unlocked
   await expect(card).toContainText('Harbor Brokerage');
   await expect(card).toContainText('HBRX');
   await expect(card).toContainText('1 position');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const groups = await card.locator('.split > div').evaluateAll(nodes => nodes.map(node => {
+    const { top, bottom } = node.getBoundingClientRect();
+    return { top, bottom };
+  }));
+  expect(groups).toHaveLength(3);
+  expect(groups[1].top).toBeGreaterThanOrEqual(groups[0].bottom);
+  expect(groups[2].top).toBeGreaterThanOrEqual(groups[1].bottom);
+  await page.setViewportSize({ width: 1280, height: 900 });
   // Stay in this document. page.goto would drop the in-memory Finance caches.
   const documentId = await page.evaluate(() => {
     const host = window as Window & { __bundle0Document?: string };

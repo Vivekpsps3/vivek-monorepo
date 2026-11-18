@@ -8,6 +8,8 @@ import type { MediaHubSummary, TravelReminder, TravelSummary } from '../hub-deco
 import { rowDateLabel, shiftDay, upNextRows, type AgendaSource, type UpNextRow } from './up-next';
 import { browserTimeZone, isoDateInZone } from '@vivek/browser';
 
+const compactLimit = 3;
+
 @Component({
   selector: 'app-up-next',
   standalone: true,
@@ -85,18 +87,11 @@ export class UpNextComponent {
     isoDateInZone(this.today(), browserTimeZone()), this.expanded() ? this.windowStart() : undefined,
     this.expanded() ? this.windowEnd() : undefined, this.expanded()).filter(row => this.filters().includes(row.source)));
   readonly groups = computed(() => {
-    const today = isoDateInZone(this.today(), browserTimeZone());
-    if (this.expanded()) {
-      return [...new Set(this.rows().map(row => row.date))].sort().map(date => ({ title: date, rows: this.rows().filter(row => row.date === date) }));
-    }
-    const visible = this.rows().slice(0, 6);
-    return [
-      { title: 'Today', rows: visible.filter(row => row.overdue || row.date === today) },
-      { title: 'This week', rows: visible.filter(row => !row.overdue && row.date > today && row.date <= shiftDay(today, 6)) },
-      { title: 'Later', rows: visible.filter(row => !row.overdue && row.date > shiftDay(today, 6)) },
-    ].filter(group => group.rows.length > 0);
+    const rows = this.rows();
+    if (!this.expanded()) return rows.length ? [{ date: null, rows: rows.slice(0, compactLimit) }] : [];
+    return [...new Set(rows.map(row => row.date))].sort().map(date => ({ date, rows: rows.filter(row => row.date === date) }));
   });
-  readonly moreSources = computed(() => new Set(this.rows().slice(6).map(row => row.source)));
+  readonly moreSources = computed(() => new Set(this.rows().slice(compactLimit).map(row => row.source)));
   readonly empty = computed(() => this.filters().length === 2 && this.rows().length === 0 && this.sources().every(source =>
     source.state === 'ready' || source.state === 'empty') && (this.financeState() === 'ready' || this.financeState() === 'empty') && this.billsDue() === 0);
 
