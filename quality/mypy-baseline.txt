@@ -24,8 +24,6 @@ apps/server/migrate.py	index	2
 apps/server/migrations.py	arg-type	2
 apps/server/migrations.py	assignment	3
 apps/server/migrations.py	union-attr	2
-apps/server/monitor.py	arg-type	1
-apps/server/monitor.py	index	1
 apps/server/tests/test_migration.py	arg-type	3
 apps/server/tests/test_migration.py	union-attr	6
 apps/server/tests/test_security_headers.py	arg-type	2

@@ -58,7 +58,9 @@ Flask/Socket.IO/LLM backend and standalone Docker/nginx definitions are retired.
   performs hourly SQLite backups and exposes local probes to the existing
   Prometheus network. Its timer is in memory; backup file timestamps determine
   the last success after recreation. It mounts data for SQLite coordination and
-  backups for writing. The source database connection is read-only.
+  backups for writing. The source database connection is read-only. Alert mode
+  defaults to off in this same process. Off and dry-run send nothing. There is
+  no second scheduler.
 - **backup**: an on-demand `ops` profile job using the same image for immediate
   backup or verification. It does not run permanently.
 - **migrate**: an on-demand `ops` profile job. It mounts the data and backup
@@ -253,16 +255,15 @@ CI runs `pip-audit` against the runtime lock and `npm audit --omit=dev --audit-l
 
 ## Monitoring and limits
 
-The app exposes request, latency and process metrics. Maintenance checks public
-HTTPS, domain health, readiness, TLS expiry and backup age. Prometheus rules in
-ops/monitoring/site-alerts.yml cover availability, backup freshness, TLS, errors,
-and latency. /metrics and internal health endpoints are blocked at the public edge.
-Edge logs use nginx-edge's existing bounded Docker logging driver.
+The app exposes request, latency, and process metrics. Maintenance publishes local probes for public HTTPS, domain health, readiness, TLS expiry, and backup age. Those probes run inside the maintenance container. They are not an external detector. A dead host or a lost network path cannot be seen from there.
 
-Local probes cannot independently detect a dead host or a lost network path.
-Release and runner diagnostics stay in the Actions job log and the bounded Docker json-file logs from Compose. A failed deploy prints a short local container log tail. Do not copy those logs into an issue. No second logger is added. An external monitor and a notification destination are not configured, so existing alert rules are not proof that anyone is notified. Shared-origin XSS,
-resource contention with the homelab, one disk/host/router/ISP, and the existing
-runner's Docker access remain deliberate constraints, tracked in SRE-FOLLOWUPS.md.
+Independent checks use the same readiness, TLS, and backup-age labels, then stop. They do not read private domain payloads. `SITE_ALERT_MODE` defaults to `off`. `off` sends nothing. `dry-run` formats a status and sends nothing, even when a URL is present. `webhook` and `heartbeat` need an owner-supplied URL; none is hardcoded. A missing URL stays `missing_webhook` or `missing_heartbeat`. Unconfigured and unknown are not healthy. A repeated failure is not sent again. Recovery sends one recovered status and does not keep the old failure. One attempt allows at most three tries. Logs omit tokens, URLs, and credentials.
+
+`python -m apps.server.monitor --once` prints that activation status and exits. The normal maintenance command is still the metrics server and the backup loop. ops/monitoring/site-alerts.yml only records local Prometheus signals, including error and latency ratios. The file does not deliver a message. Rules are not proof that anyone is notified. No alert recipient is configured. A synthetic fixture is not activation. Real recipient delivery stays on [OPS-06](https://github.com/Vivekpsps3/vivek-monorepo/issues/277).
+
+/metrics and internal health endpoints are blocked at the public edge. Edge logs use nginx-edge's existing bounded Docker logging driver.
+
+Release and runner diagnostics stay in the Actions job log and the bounded Docker json-file logs from Compose. A failed deploy prints a short local container log tail. Do not copy those logs into an issue. No second logger is added. Shared-origin XSS, resource contention with the homelab, one disk/host/router/ISP, and the existing runner's Docker access remain deliberate constraints, tracked in SRE-FOLLOWUPS.md.
 
 ## Development
 

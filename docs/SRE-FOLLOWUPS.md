@@ -20,9 +20,12 @@ application authorization and a single private data mount are the boundaries.
   runner's host Docker privilege and the privileged release daemon remain
   trusted-code boundaries. No installed controller, sudoers, copied config tree,
   or release history file was added.
-- [ ] **External availability monitor and notification destination.** Local probes
-  and Prometheus rules exist; independent detection and proven recipient delivery
-  are not configured. Do not claim paging coverage.
+- [ ] **External notification destination.** Independent readiness, TLS, and
+  backup-age checks share labels with local probes and can format a webhook or
+  heartbeat. Synthetic tests prove failure, recovery, dry-run, and redaction.
+  No recipient is configured, and Prometheus rules do not send messages. Do not
+  claim paging coverage. Real delivery remains
+  [OPS-06](https://github.com/Vivekpsps3/vivek-monorepo/issues/277).
 - [ ] **Define availability/RTO and run replacement-host and reboot exercises.**
   One host, disk, router, ISP and Docker daemon remain shared failure domains.
   No HA or independent power/network path was introduced.
@@ -93,7 +96,7 @@ application authorization and a single private data mount are the boundaries.
 | 49–51 DNS and startup ordering | Removed backend DNS and service-start dependency chains. Host reboot exercise remains TODO. |
 | 52–53 health and recovery | DB/schema/frontend preflight, exact release readiness, local probes; running-unhealthy recovery is manual to avoid another privileged helper. |
 | 54–58 routing and request policy | One edge route, app-owned paths, compatibility redirects, correct 404s/cache policy, request/time budgets and enforced public/private document CSP. Finance origin separation still needs DNS and the edge proxy. |
-| 59–66 monitoring and logs | Metrics/probes/rules, request IDs/timing, bounded Docker logs, all-app diagnostics. External monitor and notification delivery deferred. |
+| 59–66 monitoring and logs | Metrics, local probes, shared status labels, and synthetic webhook/heartbeat proof. External recipient delivery is not activated. |
 | 67–70 schema / SQLite | Explicit consolidated schema, site Alembic revisions, foreign keys, WAL, busy timeout, local filesystem requirement. Load exercises remain a TODO. |
 | 71–72 external providers | Existing timeout/budget behavior retained; quotas, total deadlines and stress exercises remain TODOs. |
 | 73–76 ownership / docs / TLS / bootstrap | Current operations map and image/Compose bootstrap; broader TLS/host cleanup and full replacement-machine proof remain TODOs. |
