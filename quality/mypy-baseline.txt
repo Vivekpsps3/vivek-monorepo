@@ -15,7 +15,6 @@ apps/media/backend/services/followups.py	union-attr	3
 apps/media/backend/services/followups.py	var-annotated	1
 apps/media/backend/services/providers.py	var-annotated	2
 apps/media/backend/services/records.py	arg-type	5
-apps/media/backend/services/summary.py	call-overload	1
 apps/server/alembic/env.py	assignment	1
 apps/server/identity/admin.py	arg-type	3
 apps/server/identity/admin.py	var-annotated	1

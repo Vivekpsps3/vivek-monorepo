@@ -55,7 +55,7 @@ def test_release_awareness_uses_the_test_clock_and_date_precision(client, monkey
     from datetime import date
 
     from apps.media.backend.models import Release
-    from apps.media.backend.services.summary import classify_release
+    from apps.media.backend.services.when import classify_release
 
     current = date(2026, 10, 15)
 
@@ -79,8 +79,15 @@ def test_release_awareness_uses_the_test_clock_and_date_precision(client, monkey
         (None, "unknown", "unknown"): "unknown",
     }
     for key, label in expected.items():
-        assert classify_release(row(*key), current) == label
-    assert classify_release(row("2026-01-01", "year", "scheduled"), date(2026, 1, 1)) == "upcoming"
+        release = row(*key)
+        assert (
+            classify_release(release.precision, release.released_on, release.status, current)
+            == label
+        )
+    year = row("2026-01-01", "year", "scheduled")
+    assert classify_release(year.precision, year.released_on, year.status, date(2026, 1, 1)) == (
+        "upcoming"
+    )
 
     monkeypatch.setenv("MEDIA_TODAY", "2026-10-15")
     assert (
@@ -114,7 +121,9 @@ def test_release_awareness_uses_the_test_clock_and_date_precision(client, monkey
     )
     upcoming = {item["title"]: item for item in client.get("/api/summary").json()["upcoming"]}
     assert upcoming["Month"]["when"] == "this_month"
-    assert upcoming["Month"]["release_on"] == "2026-10-01"
+    assert upcoming["Month"]["release_on"] == "2026-10"
+    assert upcoming["Month"]["precision"] == "month"
+    assert "2026-10-01" not in upcoming["Month"]["release_on"]
     assert upcoming["Today"]["when"] == "today"
 
 

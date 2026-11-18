@@ -423,11 +423,40 @@
   display: block;
   margin-top: var(--space-2);
 }
+.media-page media-next-episode ui-button,
+.media-page media-next-episode ui-button .ui-btn {
+  min-height: 44px;
+}
 @media (max-width: 640px) {
   .media-page media-next-episode ui-button,
   .media-page media-next-episode ui-button .ui-btn {
     min-height: 44px;
   }
+}
+
+.media-page[data-place="now"] {
+  --data-edge: var(--teal);
+  border-inline-start: 4px solid var(--data-edge);
+}
+.media-page[data-place="calendar"] {
+  --data-edge: var(--coral);
+  border-inline-start: 4px solid var(--data-edge);
+}
+.media-page .media-grid.now-progress {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+  align-items: stretch;
+}
+.media-page .release-band {
+  margin: 0.25rem 0 0.75rem;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 4px solid var(--data-edge);
+}
+.media-page .release-link,
+.media-page input[type="month"] {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  box-sizing: border-box;
 }
 
 .media-page .rating-editor {

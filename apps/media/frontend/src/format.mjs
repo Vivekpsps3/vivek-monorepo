@@ -148,6 +148,29 @@ export function releaseLabel(release) {
   return `${name} ${Number(day)}, ${year}`;
 }
 
+/**
+ * A month or year stays a band. A stored first-of-month is not shown as a day
+ * when the precision, or the text itself, is only a month.
+ */
+export function releaseBand(event) {
+  if (!event) return "Date unknown";
+  const status = event.release_status || event.status || "";
+  const precision = event.precision || "";
+  const raw = String(event.release_on ?? event.released_on ?? "");
+  if (status === "postponed" && precision !== "day") return "Postponed";
+  if (precision === "year" || (!precision && /^\d{4}$/.test(raw))) return raw.slice(0, 4);
+  if (precision === "month" || (!precision && /^\d{4}-\d{2}$/.test(raw))) {
+    return monthLabel(raw.slice(0, 7)) || "Date unknown";
+  }
+  if (precision === "unknown" || raw === "") return "Date unknown";
+  if (precision === "day" || /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return releaseLabel({ released_on: raw, precision: "day", status });
+  }
+  if (/^\d{4}-\d{2}$/.test(raw)) return monthLabel(raw) || "Date unknown";
+  if (/^\d{4}$/.test(raw)) return raw;
+  return "Date unknown";
+}
+
 export function whenLabel(item) {
   switch (item.when) {
     case "today": return "Releases today";
