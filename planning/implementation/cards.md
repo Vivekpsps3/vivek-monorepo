@@ -1,7 +1,7 @@
 # Cards — discovery design
 
 Parent [#195](https://github.com/Vivekpsps3/vivek-monorepo/issues/195).
-Discovery leaf [DISC-02](issues/DISC-02.md) / [#265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265).
+Discovery leaf [DISC-02](completed/issues/DISC-02.md) / [#265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265).
 Evidence: [DISC-02](evidence/DISC-02.md).
 
 Status: design only, read from `origin/main` `8126d6efef2e6e0564d7dccc67e17d785204d4f9`.

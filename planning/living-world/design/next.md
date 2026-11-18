@@ -24,7 +24,8 @@ python3 planning/implementation/plan.py launch PLACE-02
 
 Clinic/Gym remain HEALTH-01–03; encrypted reflection and its single Hub link
 remain TOWN-06. Hub account/Quick add/calendar subscriptions remain HUB-01/05/06.
-Cards remains DISC-02 discovery; Sidequests awaits an owner implementation
+Cards discovery is archived in [the Cards design](../../implementation/cards.md);
+implementation stays unselected. Sidequests awaits an owner implementation
 selection and product choices. Neither proposal authorizes a new app here.
 
 Represent locked/unavailable sources honestly. Final release still requires
