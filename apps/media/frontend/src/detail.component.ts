@@ -12,10 +12,12 @@ import {
 } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
-import { ActivatedRoute, Router, RouterLink } from "@angular/router";
+import { ActivatedRoute, Router } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import {
   SESSION_CONTEXT,
+  ReturnContext,
+  ReturnLinkDirective,
   ConfirmService,
   UiBadgeComponent,
   UiButtonComponent,
@@ -74,7 +76,7 @@ import { addTag, normaliseTags, removeTag } from "./tag-model.mjs";
   imports: [
     FormsModule,
     NgTemplateOutlet,
-    RouterLink,
+    ReturnLinkDirective,
     UiBadgeComponent,
     UiButtonComponent,
     UiCardComponent,
@@ -111,6 +113,7 @@ export class DetailComponent {
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly source = inject(ReturnContext);
   private readonly destroy = inject(DestroyRef);
   private readonly confirm = inject(ConfirmService);
   private readonly drafts = inject(MediaDrafts);
@@ -885,7 +888,7 @@ export class DetailComponent {
           if (generation !== this.generation || !this.ownsSession) return;
           this.drafts.remove(item.id);
           this.saved = this.snapshot();
-          this.router.navigateByUrl("/media/library");
+          if (!this.source.back("/media/library")) void this.router.navigateByUrl("/media/library");
         },
         error: (e) => {
           if (generation === this.generation) this.error.set(errorCopy(e));

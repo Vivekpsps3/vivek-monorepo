@@ -22,7 +22,7 @@
   } @else if (state() === 'locked') {
     <div class="ui-state__banner ui-state__banner--info" role="status">
       <p class="ui-state__line"><ui-icon name="lock" /><span>{{ lockedCopy() }}</span></p>
-      <ui-button variant="primary" href="/finance/vault/unlock" [queryParams]="signInParams()" label="Unlock" />
+      <ui-button variant="primary" href="/finance/vault/unlock" [queryParams]="unlockParams()" label="Unlock" />
     </div>
   } @else {
     <ng-content />

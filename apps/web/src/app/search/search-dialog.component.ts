@@ -16,7 +16,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { formatDay } from '@vivek/browser';
-import { SESSION_CONTEXT, UiDialogComponent, UiInputComponent, UiStateComponent } from '@vivek/ui';
+import { ReturnContext, SESSION_CONTEXT, UiDialogComponent, UiInputComponent, UiStateComponent, returnPath, vaultUnlockHref } from '@vivek/ui';
 import { fetchHubSummary } from '../hub/hub-load';
 import {
   pruneSearchRecents,
@@ -59,6 +59,7 @@ export interface SearchOption {
   date: string | null;
   href: string;
   ref: SearchRecentRef | null;
+  returnSource?: string;
 }
 
 export interface SearchFinanceName {
@@ -170,6 +171,7 @@ export class SearchDialogComponent implements AfterViewChecked {
   }
 
   private readonly router = inject(Router);
+  private readonly context = inject(ReturnContext);
   private readonly finance = inject(SEARCH_FINANCE);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
@@ -340,13 +342,15 @@ export class SearchDialogComponent implements AfterViewChecked {
   }
 
   private lockedFinanceOption(): SearchOption {
+    const returnSource = returnPath(this.currentPath()) ?? '/hub';
     return {
       key: 'finance-locked',
       group: 'Finance',
       title: 'Finance results hidden: locked · Unlock',
       detail: null,
       date: null,
-      href: `/finance/vault/unlock?next=${encodeURIComponent(this.currentPath())}`,
+      href: vaultUnlockHref(returnSource),
+      returnSource,
       ref: null,
     };
   }
@@ -432,7 +436,8 @@ export class SearchDialogComponent implements AfterViewChecked {
   activate(option: SearchOption): void {
     if (option.ref) recordSearchRecent(option.ref);
     this.closed.emit();
-    void this.router.navigateByUrl(option.href);
+    const state = option.returnSource ? this.context.link(option.returnSource) : undefined;
+    void this.router.navigateByUrl(option.href, { state });
   }
 
   onClosed(): void {

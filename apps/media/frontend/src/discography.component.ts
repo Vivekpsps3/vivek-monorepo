@@ -41,6 +41,7 @@ interface Discography {
     <ui-page-header
       backLabel="← Artist"
       [backLink]="'/media/item/' + id"
+      backSource="/media/library"
       title="Browse discography"
     >
       <ui-field uiPageActions label="Release type"

@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, input } from "@angular/core";
 import { RouterLink } from "@angular/router";
+import { ReturnLinkDirective } from "./return-link.directive";
 
 @Component({
   selector: "ui-page-header",
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, ReturnLinkDirective],
   templateUrl: "./ui-page-header.component.html",
   styleUrl: "./ui-page-header.component.css",
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -16,6 +17,7 @@ export class UiPageHeaderComponent {
   /** Link shown above the eyebrow. Label keeps the existing back copy. */
   backLabel = input<string | undefined>(undefined);
   backLink = input<string | undefined>(undefined);
+  backSource = input<string | undefined>(undefined);
   /** Keeps an existing programmatic focus target, such as the library heading. */
   titleId = input<string | undefined>(undefined);
   /** Stays -1 unless a caller sets one, so the next render does not clear navigation focus. */

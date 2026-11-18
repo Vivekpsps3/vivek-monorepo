@@ -1,3 +1,4 @@
+import { vaultUnlockHref } from '@vivek/ui';
 import { Injectable, Injector, NgZone, OnDestroy, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { lockFinance } from '../crypto/lock-finance';
@@ -91,14 +92,10 @@ export class FinanceLockService implements OnDestroy {
       this.lastLockReasonSignal.set({ kind: 'auto', minutes: typeof setting === 'number' ? setting : 15 });
     }
     this.stopWatching();
+    const source = this.router.url;
     await lockFinance(this.injector);
-    if (opts.navigate === false) return;
-    const url = this.router.url || '';
-    if (url.startsWith('/finance/vault/')) {
-      await this.router.navigateByUrl('/finance/vault/unlock');
-    } else {
-      await this.router.navigateByUrl(`/finance/vault/unlock?next=${encodeURIComponent(url)}`);
-    }
+    if (opts.navigate === false || this.router.url !== source) return;
+    await this.router.navigateByUrl(vaultUnlockHref(source || ''));
   }
 
   private startWatching(): void {

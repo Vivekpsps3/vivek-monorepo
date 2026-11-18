@@ -59,3 +59,51 @@ test('Not you? Sign out goes to sign-in', async ({ page }) => {
   await page.getByRole('button', { name: 'Not you? Sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/login/);
 });
+
+test('unlock restores an exact Calendar day without copying private parameters', async ({ page }) => {
+  await syntheticVault(page);
+  const date = '2026-09-16';
+  await page.goto(`/finance/spending?t=calendar&date=${date}&merchant=Synthetic-private-label`);
+  await expect(page.getByRole('heading', { name: 'Unlock your vault' })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get('next')).toBe(`/finance/spending?t=calendar&date=${date}`);
+  await page.getByLabel('Vault passphrase', { exact: true }).fill(PASSPHRASE);
+  await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await expect(page).toHaveURL(url => url.pathname === '/finance/spending' && url.searchParams.get('date') === date);
+  await expect(page.locator(`button[data-date="${date}"]`)).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#day-detail-heading')).toContainText('Sep 16');
+  expect(new URL(page.url()).searchParams.has('merchant')).toBe(false);
+});
+
+test('Calendar Add returns to its date, and a held draft response cannot reopen after Back', async ({ page }) => {
+  const vault = await syntheticVault(page);
+  const date = '2026-09-16';
+  await vault.open(`/spending?t=calendar&date=${date}`);
+  const day = page.locator(`button[data-date="${date}"]`);
+  const add = page.getByRole('link', { name: /^Add transaction on/ });
+  await add.click();
+  const dialog = page.getByRole('dialog', { name: /Add transaction/i });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel('Date', { exact: true })).toHaveValue(date);
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(day).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#day-detail-heading')).toBeFocused();
+
+  // A network failure leaves the same draft available. Browser Back clears it.
+  await add.click();
+  await dialog.getByLabel('Category', { exact: true }).fill('Synthetic retry category');
+  await dialog.getByLabel('Amount', { exact: false }).fill('42.00');
+  const save = dialog.getByRole('button', { name: /Add transaction|Save/ });
+  vault.failNextWrites();
+  await save.click();
+  await expect(dialog.getByRole('alert')).toContainText(/couldn.t save|try again/i);
+  await expect(dialog.getByLabel('Category', { exact: true })).toHaveValue('Synthetic retry category');
+  vault.holdNextUpserts();
+  await save.click();
+  await vault.waitForHeldUpserts();
+  await page.goBack();
+  await expect(day).toHaveAttribute('aria-selected', 'true');
+  vault.releaseHeldUpserts();
+  await expect(dialog).toHaveCount(0);
+  await add.click();
+  await expect(dialog.getByLabel('Category', { exact: true })).toHaveValue('');
+});

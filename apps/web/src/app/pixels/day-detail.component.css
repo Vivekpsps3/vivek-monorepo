@@ -144,4 +144,7 @@
 
 .row--locked a {
   flex: 1;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }

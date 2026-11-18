@@ -15,7 +15,7 @@
     </thead>
     <tbody>
       @for (day of rows(); track day.date) {
-        <tr tabindex="0" (click)="choose(day.date)" (keydown.enter)="$event.preventDefault(); choose(day.date)">
+        <tr [attr.data-date]="day.date" tabindex="0" (click)="choose(day.date)" (keydown.enter)="$event.preventDefault(); choose(day.date)">
           <th scope="row">
             <time [attr.datetime]="day.date">{{ heading(day.date) }}</time>
           </th>

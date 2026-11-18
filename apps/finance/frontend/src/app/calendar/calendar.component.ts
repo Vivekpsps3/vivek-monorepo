@@ -2,6 +2,8 @@ import {
   AfterViewInit,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
+  DestroyRef,
+  inject,
   Component,
   ElementRef,
   Input,
@@ -10,7 +12,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, NavigationStart, Router, RouterLink, Scroll } from '@angular/router';
 import { Subject, combineLatest, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import { FinanceService } from '../services/finance.service';
@@ -25,9 +27,11 @@ import {
 } from '../models/transaction.model';
 import { computeCashflowSummary, monthEnd, transactionEffects } from '../crypto/client-finance';
 import { WEEK_STARTS_ON, formatDate, formatMoney, formatPercent, fromDollars, plural, todayIsoDate, weekStartIndex } from '@vivek/browser';
-import { spendingGroupKey, UNASSIGNED_ACCOUNT_FILTER } from '../utils/spending-filter.util';
+import { financeCalendarPath } from '../core/layout/finance-navigation';
 import { monthKeyFromDate, MonthSpendSummary, summarizeMonthSpend } from '../utils/spend-summary.util';
 import {
+  ReturnContext,
+  isReturnDate,
   chartColorAt,
   chartLegendBottom,
   chartSliceBorder,
@@ -79,7 +83,16 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   formatShare(value: number | null | undefined): string {
     return formatPercent(value, 0);
   }
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly context = inject(ReturnContext);
+  private readonly destroy = inject(DestroyRef);
+  private restoreFrame = 0;
   @Input() embedded = false;
+
+  get sourceState(): Record<string, unknown> {
+    return this.context.link(financeCalendarPath);
+  }
   readonly transactionEffects = transactionEffects;
   @ViewChild('categoryChart') categoryCanvas?: ElementRef<HTMLCanvasElement>;
   currentDate = new Date();
@@ -147,6 +160,27 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit() {
+    this.route.queryParamMap.pipe(takeUntil(this.destroy$)).subscribe(params => {
+      if (params.get('t') !== 'calendar') return;
+      const date = params.get('date') ?? '';
+      const month = params.get('month') ?? '';
+      const selected = isReturnDate(date) ? date : null;
+      const viewDate = selected ?? (isReturnDate(month + '-01') ? month + '-01' : null);
+      this.currentDate = viewDate ? new Date(viewDate + 'T12:00:00') : new Date();
+      this.generateCalendar();
+      if (selected) this.applySelectedDay(selected);
+      else this.clearSelectedDay();
+      this.cdr.markForCheck();
+    });
+    this.router.events.pipe(takeUntil(this.destroy$)).subscribe(event => {
+      if (event instanceof NavigationStart) {
+        cancelAnimationFrame(this.restoreFrame);
+        if (event.navigationTrigger === 'imperative') {
+          this.context.saveView('/finance/spending', this.selectedDate);
+        }
+      }
+      if (event instanceof Scroll) this.restoreView();
+    });
     combineLatest([
       this.financeService.transactions$,
       this.financeService.jobIncomes$,
@@ -171,6 +205,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    cancelAnimationFrame(this.restoreFrame);
     this.destroy$.next();
     this.destroy$.complete();
     this.categoryChart?.destroy();
@@ -198,9 +233,6 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
       v: 'all',
       month: this.monthKey,
       date: tx.date,
-      account: tx.bank_account_key || UNASSIGNED_ACCOUNT_FILTER,
-      category: spendingGroupKey(tx, 'category'),
-      merchant: spendingGroupKey(tx, 'merchant'),
       edit: tx.id,
     };
   }
@@ -315,6 +347,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
     this.applySelectedDay(day.date);
     this.focusedDate = day.date;
     this.cdr.detectChanges();
+    this.writeViewDate(day.date);
     if (window.matchMedia('(max-width: 1023px)').matches) {
       this.dayDetail?.nativeElement.scrollIntoView({ block: 'start' });
       this.dayHeading?.nativeElement.focus({ preventScroll: true });
@@ -412,25 +445,62 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   prevMonth() {
-    this.focusedDate = null;
-    this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() - 1, 1);
-    this.generateCalendar();
-    this.selectedDate = null;
-    this.selectedTransactions = [];
-    this.selectedPlans = [];
-    this.selectedIncomeOccurrences = [];
-    this.cdr.markForCheck();
+    this.shiftMonth(-1);
   }
 
   nextMonth() {
+    this.shiftMonth(1);
+  }
+
+  private shiftMonth(delta: number): void {
     this.focusedDate = null;
-    this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 1);
+    this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + delta, 1);
     this.generateCalendar();
+    this.clearSelectedDay();
+    this.writeViewDate(null);
+    this.cdr.markForCheck();
+  }
+
+  private clearSelectedDay(): void {
     this.selectedDate = null;
     this.selectedTransactions = [];
     this.selectedPlans = [];
     this.selectedIncomeOccurrences = [];
-    this.cdr.markForCheck();
+  }
+
+  private writeViewDate(date: string | null): void {
+    if (this.route.snapshot.queryParamMap.get('t') !== 'calendar') return;
+    const top = window.scrollY;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { t: 'calendar', month: this.monthKey, date },
+    }).then(done => {
+      if (done && !this.destroy.destroyed) {
+        // The router's scroll event follows activation. Keep the freshly
+        // selected phone detail or the current month controls in view.
+        cancelAnimationFrame(this.restoreFrame);
+        this.restoreFrame = requestAnimationFrame(() => {
+          if (date && window.matchMedia('(max-width: 1023px)').matches) {
+            this.dayDetail?.nativeElement.scrollIntoView({ block: 'start' });
+          } else {
+            window.scrollTo({ top, behavior: 'instant' });
+          }
+        });
+      }
+    });
+  }
+
+  private restoreView(): void {
+    const view = this.context.view('/finance/spending');
+    if (!view) return;
+    cancelAnimationFrame(this.restoreFrame);
+    this.restoreFrame = requestAnimationFrame(() => {
+      if (view.focus && isReturnDate(view.focus)) {
+        if (view.focus === this.selectedDate) this.dayHeading?.nativeElement.focus({ preventScroll: true });
+        else document.querySelector<HTMLElement>(`.calendar-grid [data-date="${view.focus}"]`)?.focus({ preventScroll: true });
+      }
+      window.scrollTo({ top: view.top, behavior: 'instant' });
+    });
   }
 
   getMonthName(): string {

@@ -109,7 +109,7 @@ test.describe('Pixels year', () => {
         await expect(grid).toBeVisible();
         await expect(page.getByRole('button', { name: 'Previous year' })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Next year' })).toBeVisible();
-        await expect(page.getByRole('link', { name: 'Finance locked · Unlock' })).toHaveAttribute('href', /\/finance\/vault\/unlock\?next=%2Fpixels$/);
+        await expect(page.getByRole('link', { name: 'Finance locked · Unlock' })).toHaveAttribute('href', /\/finance\/vault\/unlock\?next=%2Fpixels%3Fyear%3D2026$/);
         await expect(page.getByText('Active days')).toBeVisible();
         await expect(page.getByText('Longest run')).toBeVisible();
         await expect(page.getByText('Trip days')).toBeVisible();

@@ -1,8 +1,8 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ViewChild, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, NavigationStart, Router, Scroll } from '@angular/router';
 import { todayIsoDate } from '@vivek/browser';
-import { UiStateComponent, type HubCardState } from '@vivek/ui';
+import { ReturnContext, UiStateComponent, returnPath, type HubCardState } from '@vivek/ui';
 import { DayDetailComponent } from './day-detail.component';
 import { PixelsLegendComponent } from './pixels-legend.component';
 import { PixelsDataService } from './pixels-data.service';
@@ -40,6 +40,8 @@ export class YearPageComponent {
   private readonly data = inject(PixelsDataService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly context = inject(ReturnContext);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly preferences = inject(PixelsPreferences);
 
@@ -54,6 +56,13 @@ export class YearPageComponent {
   private requestId = 0;
   private loadedYear: number | null = null;
   private correcting = false;
+  private returnFrame = 0;
+  private returnFocus: string | null = null;
+  private returnView: ReturnType<ReturnContext['view']> = null;
+
+  protected unlockSource(): string {
+    return returnPath(this.router.url) ?? '/pixels';
+  }
 
   readonly screen = computed(() => yearScreenState(this.snapshot(), this.phase(), this.today));
   readonly readySnapshot = computed(() => {
@@ -78,6 +87,24 @@ export class YearPageComponent {
   });
 
   constructor() {
+    this.router.events.pipe(takeUntilDestroyed()).subscribe(event => {
+      if (event instanceof NavigationStart) {
+        cancelAnimationFrame(this.returnFrame);
+        this.returnView = null;
+        if (event.navigationTrigger === 'imperative') {
+          const date = document.activeElement?.getAttribute('data-date') ?? this.day();
+          this.context.saveView('/pixels', date);
+        }
+      }
+      if (event instanceof Scroll) {
+        this.returnView = this.context.view('/pixels');
+        this.restoreView();
+      }
+    });
+    this.destroyRef.onDestroy(() => {
+      this.requestId += 1;
+      cancelAnimationFrame(this.returnFrame);
+    });
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => {
       this.onQuery(params.get('year'), params.get('day'));
     });
@@ -100,6 +127,7 @@ export class YearPageComponent {
     if (next < 1 || next > 9999) return;
     this.correcting = false;
     this.notice.set(null);
+    this.returnFocus = null;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { year: String(next), day: null },
@@ -107,21 +135,23 @@ export class YearPageComponent {
   }
 
   selectDay(date: string): void {
-    this.day.set(date);
+    if (date === this.day()) return;
+    const replacing = this.day() !== null;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { year: String(this.year()), day: date },
+      replaceUrl: replacing,
+      state: replacing ? this.context.sourceState('/pixels') : this.context.link('/pixels'),
     });
   }
 
   clearDay(): void {
-    const date = this.day();
-    this.day.set(null);
+    if (this.context.back('/pixels')) return;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { year: String(this.year()), day: null },
+      replaceUrl: true,
     });
-    if (date) this.yearGrid?.focusDate(date);
   }
 
   reload(): void {
@@ -147,6 +177,8 @@ export class YearPageComponent {
   }
 
   private applyYear(year: number, day: string | null): void {
+    if (day === null && year === this.year()) this.returnFocus = this.day() ?? this.returnFocus;
+    else this.returnFocus = null;
     if (year !== this.year()) {
       this.snapshot.set(null);
       this.phase.set('loading');
@@ -155,6 +187,7 @@ export class YearPageComponent {
     this.year.set(year);
     this.day.set(day);
     this.load();
+    this.restoreView();
   }
 
   private load(force = false): void {
@@ -181,9 +214,26 @@ export class YearPageComponent {
       if (result.status === 'ready') {
         this.snapshot.set(result.snapshot);
         this.phase.set('ready');
+        this.restoreView();
         return;
       }
       this.phase.set(result.status);
+    });
+  }
+
+  private restoreView(): void {
+    if (!this.readySnapshot() || (!this.returnView && !this.returnFocus)) return;
+    cancelAnimationFrame(this.returnFrame);
+    this.returnFrame = requestAnimationFrame(() => {
+      const view = this.returnView;
+      this.returnView = null;
+      const focus = this.returnFocus ?? (!this.day() ? view?.focus : null);
+      this.returnFocus = null;
+      if (focus) {
+        if (this.yearGrid) this.yearGrid.focusDate(focus, true);
+        else this.host.nativeElement.querySelector<HTMLElement>(`[data-date="${focus}"]`)?.focus({ preventScroll: true });
+      }
+      if (view) window.scrollTo({ top: view.top, behavior: 'instant' });
     });
   }
 

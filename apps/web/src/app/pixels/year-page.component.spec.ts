@@ -67,7 +67,7 @@ describe('Year page', () => {
     expect(kept?.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('Finance locked');
     const link = el.querySelector('a');
     expect(link?.textContent?.trim()).toBe('Finance locked · Unlock');
-    expect(link?.getAttribute('href')).toBe('/finance/vault/unlock?next=%2Fpixels');
+    expect(link?.getAttribute('href')).toBe('/finance/vault/unlock?next=%2Fpixels%3Fyear%3D2026');
     const request = load.calls.mostRecent().args[0] as PixelsLoadRequest;
     expect(request.profile).toBeFalse();
     expect(request.includeTrips).toBeTrue();

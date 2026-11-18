@@ -1,6 +1,6 @@
 <main class="page media-page">
   @if (!item()) {
-    <a class="ui-page-header__back" routerLink="/media/library">← Library</a>
+    <a class="ui-page-header__back" uiReturnLink="/media/library">← Library</a>
   }
   @if (error()) {
     <div class="local-error" role="alert">
@@ -23,6 +23,7 @@
     <ui-page-header
       backLabel="← Library"
       backLink="/media/library"
+      backSource="/media/library"
       [title]="entry.title"
     >
       <ul class="meta-chips" aria-label="Item details">

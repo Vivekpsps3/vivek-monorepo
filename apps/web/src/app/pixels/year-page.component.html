@@ -4,6 +4,7 @@
 
 <app-year-toolbar
   [year]="year()"
+  [unlockSource]="unlockSource()"
   [financeStatus]="snapshot()?.financeStatus ?? null"
   (shift)="shiftYear($event)"
 />
@@ -14,7 +15,7 @@
   emptyTitle="No activity this year"
   emptyMessage="Squares fill in when Town, Media, or Travel records a day."
   [updatedAt]="snapshot()?.fetchedAt ?? null"
-  next="/pixels"
+  [next]="unlockSource()"
   (retry)="reload()"
 >
   @if (readySnapshot(); as snapshot) {
@@ -37,15 +38,16 @@
           [phone]="phone()"
           (picked)="selectDay($event)"
         />
-        @if (selectedDay(); as current) {
-          <app-day-detail
-            [day]="current"
-            [financeStatus]="snapshot.financeStatus"
-            [today]="today"
-            [phone]="phone()"
-            (closed)="clearDay()"
-          />
-        }
+      }
+      @if (selectedDay(); as current) {
+        <app-day-detail
+          [day]="current"
+          [financeStatus]="snapshot.financeStatus"
+          [today]="today"
+          [phone]="phone()"
+          [unlockSource]="unlockSource()"
+          (closed)="clearDay()"
+        />
       }
       <app-pixels-legend [colorBy]="preferences.colorBy()" />
     </div>

@@ -43,7 +43,7 @@ describe('VaultUnlockComponent', () => {
     expect(vault.upgradeKdfIfNeeded).toHaveBeenCalledWith('correct horse battery staple');
     // No next: the F5 default is /finance/ at top level; Karma runs framed,
     // so the embed default applies here (same self/top rule as afterAuthUrl).
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/finance/embed');
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/finance/embed', { replaceUrl: true });
     expect(fixture.componentInstance.busy).toBeFalse();
   });
 
@@ -124,7 +124,7 @@ describe('VaultUnlockComponent', () => {
       await fixture.whenStable();
       fixture.componentInstance.passphrase = 'correct horse battery staple';
       await fixture.componentInstance.unlock();
-      expect(navigate).toHaveBeenCalledWith('/finance/spending?t=calendar');
+      expect(navigate).toHaveBeenCalledWith('/finance/spending?t=calendar', { replaceUrl: true });
     });
 
     it('does not redirect again when a submitted unlock finishes after restored keys already opened Home', async () => {

@@ -99,3 +99,5 @@ export {
   type PixelApp,
   type SundayWeekScore,
 } from '../pixels/pixels-score';
+export { ReturnContext, currentVaultReturn, isReturnDate, returnPath, vaultReturnQuery, vaultUnlockHref } from './return-context';
+export { ReturnLinkDirective } from './ui-page-header/return-link.directive';

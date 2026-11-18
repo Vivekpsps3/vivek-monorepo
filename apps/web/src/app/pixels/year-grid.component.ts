@@ -159,12 +159,12 @@ export class YearGridComponent {
   }
 
   /** Keep this day as the one tab stop, then focus it after the grid repaints. */
-  focusDate(date: string): void {
+  focusDate(date: string, preventScroll = false): void {
     this.roving.set(date);
     const focus = () => {
       if (this.roving() !== date) return;
       const node = this.host.nativeElement.querySelector(`[data-date="${date}"]`) as HTMLElement | null;
-      node?.focus();
+      node?.focus({ preventScroll });
     };
     queueMicrotask(focus);
     setTimeout(focus, 0);

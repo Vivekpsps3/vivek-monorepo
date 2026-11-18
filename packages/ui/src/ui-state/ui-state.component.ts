@@ -3,6 +3,7 @@ import { UiButtonComponent } from '../ui-button/ui-button.component';
 import { UiEmptyStateComponent } from '../ui-empty-state/ui-empty-state.component';
 import { UiIconComponent, type UiIconName } from '../ui-icon/ui-icon.component';
 import { UiSkeletonComponent } from '../ui-skeleton/ui-skeleton.component';
+import { vaultReturnQuery } from '../return-context';
 import type { HubCardState } from '../hub-card-state';
 
 @Component({
@@ -82,6 +83,10 @@ export class UiStateComponent {
 
   protected signInParams(): Record<string, string> {
     return { next: this.next() };
+  }
+
+  protected unlockParams(): { next?: string } {
+    return vaultReturnQuery(this.next());
   }
 
   protected onRetry(): void {

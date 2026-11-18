@@ -1,8 +1,11 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
-import { continueAfterAuth, safeNextPath } from '@vivek/ui';
 import { VaultService } from '../crypto/vault.service';
-import { UiButtonComponent, UiCardComponent, UiInputComponent, UiPageHeaderComponent } from '@vivek/ui';
+import {
+  ReturnContext, SESSION_CONTEXT, UiButtonComponent, UiCardComponent, UiInputComponent, UiPageHeaderComponent,
+  currentVaultReturn, vaultReturnQuery,
+} from '@vivek/ui';
 
 @Component({
   selector: 'app-vault-setup',
@@ -53,26 +56,40 @@ export class VaultSetupComponent implements OnInit {
   confirm = '';
   error = '';
   busy = false;
+  private readonly destroy = inject(DestroyRef);
+  private readonly session = inject(SESSION_CONTEXT);
+  private readonly source = inject(ReturnContext);
+  private readonly owner = this.session.currentUser?.id;
+  private readonly revision = this.session.revision;
 
   constructor(
     private vault: VaultService,
     private router: Router
-  ) {}
+  ) {
+    const clear = () => {
+      this.passphrase = '';
+      this.confirm = '';
+      this.error = '';
+    };
+    this.destroy.onDestroy(clear);
+    this.session.cleared$.pipe(takeUntilDestroyed(this.destroy)).subscribe(clear);
+  }
+
+  private get active(): boolean {
+    return !this.destroy.destroyed && this.revision === this.session.revision
+      && this.owner === this.session.currentUser?.id;
+  }
 
   async ngOnInit(): Promise<void> {
     const status = await this.vault.refreshStatus();
-    if (status.exists) {
-      // Keep the current next so a setup deep link still returns afterwards.
+    if (this.active && status.exists) {
+      const next = currentVaultReturn() ?? '';
       await this.router.navigate(['/finance/vault/unlock'], {
-        queryParams: { next: safeNextPath() ?? undefined },
+        queryParams: vaultReturnQuery(next),
+        state: this.source.sourceState(next),
+        replaceUrl: true,
       });
     }
-  }
-
-  /** Same return rule as the unlock screen (F5 §1). */
-  private continueAfterUnlock(): Promise<boolean> {
-    if (safeNextPath()) return continueAfterAuth(this.router);
-    return this.router.navigateByUrl(window.self === window.top ? '/finance' : '/finance/embed');
   }
 
   submit(event: Event): void {
@@ -81,6 +98,7 @@ export class VaultSetupComponent implements OnInit {
   }
 
   async setup(): Promise<void> {
+    if (!this.active || this.busy) return;
     this.error = '';
     if (this.passphrase.length < 12) {
       this.error = 'Passphrase must be at least 12 characters.';
@@ -93,9 +111,16 @@ export class VaultSetupComponent implements OnInit {
     this.busy = true;
     try {
       await this.vault.setup(this.passphrase);
-      await this.continueAfterUnlock();
+      if (!this.active) return;
+      if (!this.vault.isUnlocked) {
+        this.error = 'Vault did not open. Try again.';
+        return;
+      }
+      this.passphrase = '';
+      this.confirm = '';
+      await this.source.finishVault();
     } catch (e: any) {
-      this.error = e?.error?.detail || e?.message || 'Vault setup failed';
+      if (this.active) this.error = e?.error?.detail || e?.message || 'Vault setup failed';
     } finally {
       this.busy = false;
     }
