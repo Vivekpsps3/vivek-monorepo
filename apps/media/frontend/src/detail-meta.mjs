@@ -94,9 +94,17 @@ export function aboutSummary(kind) {
   return phrase ? "About this " + phrase : "About this item";
 }
 
-/** Books and games lead with a progress value. Other kinds disclose it. */
+/** Progress leads the editor for every tracked kind. Artists have no progress value. */
 export function progressPrimary(kind) {
-  return kind === "book" || kind === "game";
+  return showsGenericProgress(kind);
+}
+
+/** Personal tracking, in the order the editor shows it before catalog maintenance. */
+export function editorLead(kind) {
+  const lead = [];
+  if (progressPrimary(kind)) lead.push("progress");
+  lead.push("rating", "note", "save");
+  return lead;
 }
 
 export function showsGenericProgress(kind) {
@@ -108,21 +116,13 @@ export function showsAnticipated(kind) {
 }
 
 export function moreSummary(kind) {
-  if (kind === "tv") return "Manual progress";
-  if (progressPrimary(kind)) return "Anticipation";
-  return "Progress and anticipation";
+  return showsAnticipated(kind) ? "Anticipation" : "";
 }
 
-/** Open the extra section only when it already holds a saved or drafted value. */
+/** Open anticipation only when that saved or drafted flag is already set. Progress is not inside it. */
 export function needsMoreOpen(kind, fields) {
-  if (!showsGenericProgress(kind)) return false;
-  const anticipated = fields?.anticipated === true;
-  if (progressPrimary(kind)) return anticipated;
-  const progress = fields?.progress;
-  const unit = typeof fields?.unit === "string" ? fields.unit : "";
-  const hasProgress =
-    progress !== null && progress !== undefined && progress !== "";
-  return anticipated || hasProgress || unit !== "";
+  if (!showsAnticipated(kind)) return false;
+  return fields?.anticipated === true;
 }
 
 export function dateOnly(value) {

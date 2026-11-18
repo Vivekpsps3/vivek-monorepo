@@ -171,6 +171,13 @@
 .media-page .detail-more {
   margin: 0.5rem 0 1rem;
 }
+.media-page .catalog-maintenance {
+  margin: 1.5rem 0;
+  max-width: 720px;
+}
+.media-page .catalog-maintenance h2 {
+  font-size: 1.1rem;
+}
 .media-page .detail-more > summary {
   display: flex;
   align-items: center;

@@ -61,6 +61,19 @@ import { MediaCardComponent } from "./media-card.component";
 import { nextEpisodeError } from "./next-episode.mjs";
 import { NextEpisodeUndoService } from "./next-episode-undo.service";
 import { NextEpisodeService } from "./next-episode.service";
+import { collectionHref } from "./library-filters.mjs";
+
+/** One explicit save. Undo keeps fields the person changed after it started. */
+interface SaveFlight {
+  generation: number;
+  entryId: number;
+  before: ItemFields;
+  submitted: ItemFields;
+  undone: boolean;
+  /** Set once the server has accepted this save, so Undo can compensate. */
+  landed: boolean;
+  revertEpoch: number | null;
+}
 import { halfNote, ratingOptions, segmentValue } from "./rating-model.mjs";
 import {
   RELATED_ATTEMPT_LIMIT,
@@ -102,6 +115,7 @@ export class DetailComponent {
   readonly heading = experienceTitle;
   readonly about = aboutSummary;
   readonly primaryProgress = progressPrimary;
+  readonly fallbackLibrary = collectionHref;
   readonly showMore = showsGenericProgress;
   readonly anticipatedFor = showsAnticipated;
   readonly moreLabel = moreSummary;
@@ -125,6 +139,10 @@ export class DetailComponent {
   private mutation?: Subscription;
   private progressRequest?: Subscription;
   private generation = 0;
+  /** Episode progress ignores a response from an older attempt. */
+  private progressEpoch = 0;
+  private activeSave: SaveFlight | null = null;
+  private revertSub?: Subscription;
   /** Explicit metadata retries for a pending item. Opening the page does not spend one. */
   metadataRetries = 0;
   readonly metadataRetryLimit = 3;
@@ -204,15 +222,19 @@ export class DetailComponent {
   private refreshEpisodeProgress(entryId: number): void {
     if (this.item()?.id !== entryId) return;
     const generation = this.generation;
+    const epoch = ++this.progressEpoch;
     this.progressRequest?.unsubscribe();
     this.progressRequest = this.http.get<Detail>(`/media/api/entries/${entryId}`)
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (detail) => {
-          if (generation === this.generation) this.keepDrafts(detail);
+          if (generation !== this.generation || !this.ownsSession || epoch !== this.progressEpoch) return;
+          this.keepDrafts(detail);
         },
         error: (error) => {
-          if (generation === this.generation) this.error.set(errorCopy(error));
+          if (generation === this.generation && this.ownsSession && epoch === this.progressEpoch) {
+            this.error.set(errorCopy(error));
+          }
         },
       });
   }
@@ -237,6 +259,9 @@ export class DetailComponent {
     this.linkRequest?.unsubscribe();
     this.mutation?.unsubscribe();
     this.progressRequest?.unsubscribe();
+    this.revertSub?.unsubscribe();
+    this.activeSave = null;
+    this.progressEpoch += 1;
     this.photoLoading.set(false);
     this.linking.set(false);
     this.photos.set([]);
@@ -332,17 +357,20 @@ export class DetailComponent {
     this.load(Number(this.routeId()), true);
   }
   private snapshot(): string {
+    return this.fieldSnapshot(this.fields());
+  }
+  private fieldSnapshot(fields: ItemFields): string {
     return JSON.stringify([
-      this.review,
-      this.rating,
-      this.status,
-      this.progress,
-      this.unit,
-      this.favorite,
-      this.anticipated,
-      this.tags,
-      this.tagText,
-      this.viewedOn,
+      fields.review,
+      fields.rating,
+      fields.status,
+      fields.progress,
+      fields.unit,
+      fields.favorite,
+      fields.anticipated,
+      fields.tags,
+      fields.tagText,
+      fields.viewedOn,
     ]);
   }
   private sameTags(left: string[] | undefined, right: string[] | undefined): boolean {
@@ -609,30 +637,23 @@ export class DetailComponent {
     (button ?? input).focus();
   }
   save(): void {
-    if (this.suppressSubmit || this.busy() || !this.item()) return;
+    if (this.suppressSubmit || this.busy() || !this.item() || !this.ownsSession) return;
     const generation = this.generation;
     const submitted = this.snapshot();
-    const fields = this.fields();
-    const base = this.baseFields!;
-    const body: Record<string, unknown> = {};
-    for (const key of [
-      "review",
-      "rating",
-      "status",
-      "favorite",
-      "anticipated",
-    ] as const)
-      if (fields[key] !== base[key]) body[key] = fields[key];
-    if ("review" in body) body["review_base"] = this.reviewBase;
-    if (fields.progress !== base.progress || fields.unit !== base.unit) {
-      body["progress_value"] = fields.progress;
-      body["progress_unit"] = fields.unit || null;
-    }
-    if (!this.sameTags(fields.tags, base.tags)) body["tags"] = fields.tags ?? [];
-    if (this.item()?.kind === "movie" && fields.viewedOn !== base.viewedOn) {
-      body["viewed_on"] = fields.viewedOn || null;
-    }
+    const fields = this.cloneFields(this.fields());
+    const base = this.cloneFields(this.baseFields!);
+    const body = this.changedBody(base, fields);
     if (!Object.keys(body).length) return;
+    const flight: SaveFlight = {
+      generation,
+      entryId: this.item()!.id,
+      before: base,
+      submitted: fields,
+      undone: false,
+      landed: false,
+      revertEpoch: null,
+    };
+    this.activeSave = flight;
     this.busy.set(true);
     this.error.set("");
     this.mutation?.unsubscribe();
@@ -641,7 +662,12 @@ export class DetailComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (d) => {
-          if (generation !== this.generation) return;
+          if (!this.flightLive(flight, generation)) return;
+          flight.landed = true;
+          if (flight.undone) {
+            this.revertSave(flight, d);
+            return;
+          }
           if (this.snapshot() === submitted) {
             this.adopt(d);
             if (this.tagText) this.rememberDraft();
@@ -660,12 +686,67 @@ export class DetailComponent {
           );
         },
         error: (e) => {
-          if (generation !== this.generation) return;
-          this.error.set(errorCopy(e));
+          if (!this.flightLive(flight, generation)) return;
           this.busy.set(false);
+          if (flight.undone) {
+            this.rememberDraft();
+            this.activeSave = null;
+            this.error.set(errorCopy(e));
+            return;
+          }
+          this.error.set(errorCopy(e));
           this.rememberDraft();
         },
       });
+  }
+  get canUndo(): boolean {
+    const flight = this.activeSave;
+    return !!flight && !flight.undone && flight.entryId === this.item()?.id && this.ownsSession;
+  }
+  /** Drop the in-flight or just-saved edit. A note typed after it started stays. */
+  undoSave(): void {
+    const flight = this.activeSave;
+    if (!flight || flight.undone || !this.ownsSession || this.item()?.id !== flight.entryId) return;
+    flight.undone = true;
+    const current = this.fields();
+    const kept = this.cloneFields(current);
+    const before = flight.before;
+    const submitted = flight.submitted;
+    if (current.review === submitted.review) kept.review = before.review;
+    if (current.rating === submitted.rating) kept.rating = before.rating;
+    if (current.status === submitted.status) kept.status = before.status;
+    if (current.progress === submitted.progress) kept.progress = before.progress;
+    if (current.unit === submitted.unit) kept.unit = before.unit;
+    if (current.favorite === submitted.favorite) kept.favorite = before.favorite;
+    if (current.anticipated === submitted.anticipated) kept.anticipated = before.anticipated;
+    if (current.viewedOn === submitted.viewedOn) kept.viewedOn = before.viewedOn;
+    if (current.tagText === submitted.tagText) kept.tagText = before.tagText;
+    if (this.sameTags(current.tags, submitted.tags)) {
+      kept.tags = before.tags ? [...before.tags] : before.tags;
+    }
+    this.applyFields(kept);
+    this.tagError = "";
+    const keptNote = kept.review !== flight.submitted.review;
+    this.message.set(keptNote ? "Undone. Your newer note stays on this version." : "Undone.");
+    this.focusNote();
+    this.rememberDraft();
+    if (this.busy()) return;
+    if (!flight.landed) {
+      this.activeSave = null;
+      return;
+    }
+    this.revertSave(flight);
+  }
+  showCatalog(entry: Detail): boolean {
+    const extra = entry.catalog?.extra ?? {};
+    return Boolean(
+      entry.lifecycle ||
+      entry.catalog?.overview ||
+      entry.portrait ||
+      entry.kind === "artist" ||
+      extra["metadata_pending"] ||
+      (entry.catalog?.source && entry.catalog.source !== "manual")
+    );
   }
   action(
     path: string,
@@ -674,6 +755,8 @@ export class DetailComponent {
   ): void {
     if (this.busy()) return;
     const generation = this.generation;
+    const guardsProgress = path.includes("caught-up") || path.includes("/watched");
+    const epoch = guardsProgress ? ++this.progressEpoch : 0;
     this.busy.set(true);
     this.error.set("");
     this.mutation?.unsubscribe();
@@ -682,7 +765,12 @@ export class DetailComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (d) => {
-          if (generation !== this.generation) return;
+          if (generation !== this.generation || !this.ownsSession) return;
+          if (guardsProgress && epoch !== this.progressEpoch) {
+            this.busy.set(false);
+            this.rememberDraft();
+            return;
+          }
           this.keepDrafts(d);
           if (this.childOpen) this.childOpen = false;
           if (d.operation) {
@@ -711,7 +799,12 @@ export class DetailComponent {
           this.busy.set(false);
         },
         error: (e) => {
-          if (generation !== this.generation) return;
+          if (generation !== this.generation || !this.ownsSession) return;
+          if (guardsProgress && epoch !== this.progressEpoch) {
+            this.busy.set(false);
+            this.rememberDraft();
+            return;
+          }
           this.error.set(errorCopy(e));
           this.busy.set(false);
           this.rememberDraft();
@@ -775,6 +868,7 @@ export class DetailComponent {
     if (!current || this.busy()) return;
     const generation = this.generation;
     const entryId = current.id;
+    const epoch = ++this.progressEpoch;
     this.busy.set(true);
     this.error.set("");
     this.message.set("");
@@ -784,13 +878,22 @@ export class DetailComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (result) => {
-          if (generation !== this.generation) return;
+          if (generation !== this.generation || !this.ownsSession) return;
+          if (epoch !== this.progressEpoch) {
+            this.busy.set(false);
+            this.rememberDraft();
+            return;
+          }
           this.keepDrafts(result.entry);
           this.busy.set(false);
           this.undo.offer(entryId, result);
         },
         error: (error: { status?: number; error?: { detail?: unknown } }) => {
-          if (generation !== this.generation) return;
+          if (generation !== this.generation || !this.ownsSession) return;
+          if (epoch !== this.progressEpoch) {
+            this.busy.set(false);
+            return;
+          }
           const mapped = nextEpisodeError(error?.status ?? 0, error?.error?.detail);
           this.error.set(mapped.message);
           this.busy.set(false);
@@ -957,10 +1060,167 @@ export class DetailComponent {
           if (generation !== this.generation || !this.ownsSession) return;
           this.drafts.remove(item.id);
           this.saved = this.snapshot();
-          if (!this.source.back("/media/library")) void this.router.navigateByUrl("/media/library");
+          if (!this.source.back("/media/library")) {
+            void this.router.navigateByUrl(collectionHref(item.kind));
+          }
         },
         error: (e) => {
           if (generation === this.generation) this.error.set(errorCopy(e));
+        },
+      });
+  }
+
+  private cloneFields(fields: ItemFields): ItemFields {
+    return { ...fields, tags: fields.tags ? [...fields.tags] : fields.tags };
+  }
+  private changedBody(base: ItemFields, fields: ItemFields): Record<string, unknown> {
+    const body: Record<string, unknown> = {};
+    for (const key of ["review", "rating", "status", "favorite", "anticipated"] as const) {
+      if (fields[key] !== base[key]) body[key] = fields[key];
+    }
+    if ("review" in body) body["review_base"] = this.reviewBase;
+    if (fields.progress !== base.progress || fields.unit !== base.unit) {
+      body["progress_value"] = fields.progress;
+      body["progress_unit"] = fields.unit || null;
+    }
+    if (!this.sameTags(fields.tags, base.tags)) body["tags"] = fields.tags ?? [];
+    if (this.item()?.kind === "movie" && fields.viewedOn !== base.viewedOn) {
+      body["viewed_on"] = fields.viewedOn || null;
+    }
+    return body;
+  }
+  /** The in-flight save still belongs to this item. Undo must not drop its response. */
+  private flightLive(flight: SaveFlight, generation: number): boolean {
+    return (
+      generation === this.generation &&
+      this.ownsSession &&
+      this.item()?.id === flight.entryId &&
+      (this.activeSave === flight || flight.undone)
+    );
+  }
+  private focusNote(): void {
+    queueMicrotask(() => {
+      document
+        .querySelector<HTMLTextAreaElement>('form.media-editor textarea[name="review"]')
+        ?.focus();
+    });
+  }
+  private serverFields(detail: Detail): ItemFields {
+    return {
+      review: detail.review || "",
+      rating: detail.rating,
+      status: detail.status,
+      progress: detail.progress_value,
+      unit: detail.progress_unit || "",
+      favorite: detail.favorite,
+      anticipated: detail.anticipated,
+      tags: normaliseTags(detail.tags),
+      tagText: "",
+      viewedOn: this.dayOnly(detail.viewed_on),
+    };
+  }
+  /** Keep the form, and diff the next save against the server clocks just stored. */
+  private anchorKept(detail: Detail, kept: ItemFields): void {
+    const server = this.serverFields(detail);
+    this.metadataRetries = this.pendingRetries(detail);
+    this.item.set(detail);
+    this.applyFields(kept);
+    this.baseVersion = detail.updated_at;
+    this.reviewBase = detail.review_updated_at || "";
+    this.baseFields = this.cloneFields(server);
+    this.saved = this.fieldSnapshot({ ...server, tagText: this.tagText });
+    this.rememberDraft();
+  }
+  private revertBody(
+    flight: SaveFlight,
+    current: ItemFields,
+    reviewClock: string,
+  ): Record<string, unknown> {
+    const before = flight.before;
+    const submitted = flight.submitted;
+    const body: Record<string, unknown> = {};
+    if (current.review === before.review && submitted.review !== before.review) {
+      body["review"] = before.review;
+      body["review_base"] = reviewClock;
+    }
+    if (current.rating === before.rating && submitted.rating !== before.rating) {
+      body["rating"] = before.rating;
+    }
+    if (current.status === before.status && submitted.status !== before.status) {
+      body["status"] = before.status;
+    }
+    if (current.favorite === before.favorite && submitted.favorite !== before.favorite) {
+      body["favorite"] = before.favorite;
+    }
+    if (
+      current.anticipated === before.anticipated &&
+      submitted.anticipated !== before.anticipated
+    ) {
+      body["anticipated"] = before.anticipated;
+    }
+    const progressTouched =
+      submitted.progress !== before.progress || submitted.unit !== before.unit;
+    const progressRestored = current.progress === before.progress && current.unit === before.unit;
+    if (progressTouched && progressRestored) {
+      body["progress_value"] = before.progress;
+      body["progress_unit"] = before.unit || null;
+    }
+    if (!this.sameTags(submitted.tags, before.tags) && this.sameTags(current.tags, before.tags)) {
+      body["tags"] = before.tags ?? [];
+    }
+    if (
+      this.item()?.kind === "movie" &&
+      current.viewedOn === before.viewedOn &&
+      submitted.viewedOn !== before.viewedOn
+    ) {
+      body["viewed_on"] = before.viewedOn || null;
+    }
+    return body;
+  }
+  /**
+   * The late save must not become the form. Write back only the fields Undo
+   * restored, and anchor the kept note to the clock that write returns.
+   */
+  private revertSave(flight: SaveFlight, late?: Detail): void {
+    if (flight.revertEpoch != null) return;
+    if (!this.flightLive(flight, flight.generation)) return;
+    const current = this.fields();
+    const reviewClock = late?.review_updated_at || this.reviewBase;
+    const body = this.revertBody(flight, current, reviewClock);
+    const epoch = 1;
+    flight.revertEpoch = epoch;
+    if (!Object.keys(body).length) {
+      if (late) this.anchorKept(late, current);
+      else this.rememberDraft();
+      this.busy.set(false);
+      this.activeSave = null;
+      return;
+    }
+    this.busy.set(true);
+    this.error.set("");
+    this.revertSub?.unsubscribe();
+    this.revertSub = this.http
+      .patch<Detail>(this.endpoint(), body)
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (detail) => {
+          if (flight.revertEpoch !== epoch || !this.flightLive(flight, flight.generation)) return;
+          const kept = this.fields();
+          this.anchorKept(detail, kept);
+          this.busy.set(false);
+          this.activeSave = null;
+          const keptNote = kept.review !== (detail.review || "");
+          this.message.set(
+            keptNote ? "Undone. Your newer note stays on this version." : "Undone.",
+          );
+        },
+        error: (error) => {
+          if (flight.revertEpoch !== epoch || !this.flightLive(flight, flight.generation)) return;
+          if (late) this.anchorKept(late, this.fields());
+          else this.rememberDraft();
+          this.busy.set(false);
+          this.activeSave = null;
+          this.error.set(errorCopy(error));
         },
       });
   }

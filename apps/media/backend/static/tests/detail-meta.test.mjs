@@ -6,6 +6,7 @@ import {
   dateOnly,
   episodeCode,
   episodeDateLine,
+  editorLead,
   experienceTitle,
   kindIcon,
   kindLabel,
@@ -64,17 +65,25 @@ test("detail copy, ratio, dates and disclosure follow the kind", () => {
   assert.equal(stateLabel("want"), "Want to");
   assert.equal(progressPrimary("book"), true);
   assert.equal(progressPrimary("game"), true);
-  assert.equal(progressPrimary("tv"), false);
-  assert.equal(progressPrimary("movie"), false);
-  assert.equal(moreSummary("tv"), "Manual progress");
+  assert.equal(progressPrimary("tv"), true);
+  assert.equal(progressPrimary("movie"), true);
+  assert.equal(progressPrimary("track"), true);
+  assert.equal(progressPrimary("artist"), false);
+  assert.deepEqual(editorLead("movie"), ["progress", "rating", "note", "save"]);
+  assert.deepEqual(editorLead("book"), ["progress", "rating", "note", "save"]);
+  assert.deepEqual(editorLead("track"), ["progress", "rating", "note", "save"]);
+  assert.deepEqual(editorLead("artist"), ["rating", "note", "save"]);
+  assert.equal(moreSummary("tv"), "Anticipation");
   assert.equal(moreSummary("book"), "Anticipation");
-  assert.equal(moreSummary("movie"), "Progress and anticipation");
+  assert.equal(moreSummary("movie"), "Anticipation");
+  assert.equal(moreSummary("artist"), "");
   assert.equal(needsMoreOpen("artist", { anticipated: true, progress: 4, unit: "page" }), false);
   assert.equal(needsMoreOpen("book", { anticipated: false, progress: 12, unit: "page" }), false);
   assert.equal(needsMoreOpen("book", { anticipated: true, progress: null, unit: "" }), true);
   assert.equal(needsMoreOpen("movie", { anticipated: false, progress: null, unit: "" }), false);
-  assert.equal(needsMoreOpen("movie", { anticipated: false, progress: 0, unit: "" }), true);
-  assert.equal(needsMoreOpen("tv", { anticipated: false, progress: null, unit: "episode" }), true);
+  assert.equal(needsMoreOpen("movie", { anticipated: false, progress: 0, unit: "" }), false);
+  assert.equal(needsMoreOpen("tv", { anticipated: false, progress: null, unit: "episode" }), false);
+  assert.equal(needsMoreOpen("tv", { anticipated: true, progress: null, unit: "" }), true);
   assert.equal(dateOnly("2000-01-01T12:00:00Z"), "2000-01-01");
   assert.equal(dateOnly("not-a-date"), "");
   assert.equal(dateOnly(null), "");

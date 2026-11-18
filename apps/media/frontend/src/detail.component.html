@@ -22,7 +22,7 @@
   @if (item(); as entry) {
     <ui-page-header
       backLabel="← Library"
-      backLink="/media/library"
+      [backLink]="fallbackLibrary(entry.kind)"
       backSource="/media/library"
       [title]="entry.title"
     >
@@ -61,80 +61,9 @@
           </span>
         }
       </div>
-      @if (entry.lifecycle; as lifecycle) {
-        <ui-badge>
-          {{
-            lifecycle.state === "unknown" ? "Status unknown" : lifecycle.state
-          }}
-          · {{ lifecycle.freshness }}
-          @if (lifecycle.fetched_at) {
-            · Updated {{ showDay(dayOnly(lifecycle.fetched_at)) }}
-          }
-        </ui-badge>
-      }
-      <div class="button-row">
-        @if (entry.catalog.source !== "manual" && !entry.catalog.extra["metadata_pending"]) {
-          <ui-button
-            variant="ghost"
-            [disabled]="busy()"
-            (click)="action('/refresh')"
-          >
-            Refresh metadata
-          </ui-button>
-        }
-        @if (entry.kind === "artist") {
-          <ui-button variant="ghost" (click)="openPhotos()"
-            >Choose photo</ui-button
-          >
-          @if (entry.portrait) {
-            <ui-button
-              variant="ghost"
-              [disabled]="busy()"
-              (click)="resetPhoto()"
-            >
-              Reset photo
-            </ui-button>
-          }
-        }
-      </div>
-      @if (entry.portrait; as photo) {
-        <p class="muted photo-credit">
-          <a [href]="photo.source_url" target="_blank" rel="noopener noreferrer"
-            >Photo source</a
-          >
-          · {{ photo.creator }} · {{ photo.license }}
-        </p>
-      }
-      @if (entry.catalog.extra["metadata_pending"]) {
-        <p class="muted" id="metadata-pending">
-          Metadata is still pending. This saved item stays editable.
-        </p>
-        @if (metadataRetryOpen) {
-          <div id="metadata-retry" class="button-row">
-            <ui-button variant="ghost" [disabled]="busy()" (click)="retryMetadata()">
-              Retry metadata
-            </ui-button>
-          </div>
-          <p class="muted">
-            {{ metadataRetryLimit - metadataRetries }}
-            {{ metadataRetryLimit - metadataRetries === 1 ? "attempt" : "attempts" }}
-            left. Retry does not run when you open this item.
-          </p>
-        } @else {
-          <p id="metadata-limit" tabindex="-1" role="status">
-            Metadata retry limit reached. This saved item stays editable, and opening it will not call the provider.
-          </p>
-        }
-      }
     </ui-page-header>
     @if (message()) {
       <p role="status" class="save-status">{{ message() }}</p>
-    }
-    @if (entry.catalog.overview) {
-      <details class="overview">
-        <summary>{{ about(entry.kind) }}</summary>
-        <p>{{ entry.catalog.overview }}</p>
-      </details>
     }
     @if (recovery()) {
       <ui-card role="status">
@@ -152,44 +81,6 @@
     <ui-card
       ><form class="media-editor" (ngSubmit)="save()">
         <h2>{{ heading(entry.kind) }}</h2>
-        <div class="form-row">
-          <ui-field [label]="stateField(entry.kind)"
-            ><select uiFieldControl name="status" [(ngModel)]="status">
-              @for (choice of choices(entry.kind); track choice.value) {
-                <option [value]="choice.value">{{ choice.label }}</option>
-              }
-            </select></ui-field
-          >
-          @if (entry.kind === "movie") {
-            <ui-field
-              label="Watched on"
-              hint="Leave this blank unless you remember the day. Saving does not invent a date."
-            >
-              <input
-                uiFieldControl
-                type="date"
-                name="viewedOn"
-                [(ngModel)]="viewedOn"
-              />
-            </ui-field>
-          }
-          <div class="rating-editor">
-            <p id="media-rating-label" class="rating-label">Rating</p>
-            <ui-segmented
-              label="Rating"
-              labelledBy="media-rating-label"
-              [options]="ratingChoices"
-              [value]="ratingChoice"
-              (valueChange)="chooseRating($event)"
-            />
-            @if (ratingNote) {
-              <p class="rating-note">{{ ratingNote }}</p>
-            }
-            <ui-button variant="ghost" (clicked)="clearRating()"
-              >Clear rating</ui-button
-            >
-          </div>
-        </div>
         <ng-template #progressFields>
           <div class="form-row">
             <ui-field label="Progress"
@@ -213,6 +104,22 @@
         @if (primaryProgress(entry.kind)) {
           <ng-container [ngTemplateOutlet]="progressFields" />
         }
+        <div class="rating-editor">
+          <p id="media-rating-label" class="rating-label">Rating</p>
+          <ui-segmented
+            label="Rating"
+            labelledBy="media-rating-label"
+            [options]="ratingChoices"
+            [value]="ratingChoice"
+            (valueChange)="chooseRating($event)"
+          />
+          @if (ratingNote) {
+            <p class="rating-note">{{ ratingNote }}</p>
+          }
+          <ui-button variant="ghost" (clicked)="clearRating()"
+            >Clear rating</ui-button
+          >
+        </div>
         <ui-field label="Note (optional)">
           <textarea
             uiFieldControl
@@ -223,6 +130,39 @@
             placeholder="What stayed with you?"
           ></textarea>
         </ui-field>
+        <div class="button-row" data-tracking-save>
+          <ui-button variant="primary" type="submit" [disabled]="busy()">
+            {{ busy() ? "Saving…" : "Save changes" }}
+          </ui-button>
+          @if (canUndo) {
+            <ui-button variant="ghost" (clicked)="undoSave()">Undo</ui-button>
+          }
+          @if (dirty) {
+            <span class="muted">Unsaved changes</span>
+          }
+        </div>
+        <div class="form-row">
+          <ui-field [label]="stateField(entry.kind)"
+            ><select uiFieldControl name="status" [(ngModel)]="status">
+              @for (choice of choices(entry.kind); track choice.value) {
+                <option [value]="choice.value">{{ choice.label }}</option>
+              }
+            </select></ui-field
+          >
+          @if (entry.kind === "movie") {
+            <ui-field
+              label="Watched on"
+              hint="Leave this blank unless you remember the day. Saving does not invent a date."
+            >
+              <input
+                uiFieldControl
+                type="date"
+                name="viewedOn"
+                [(ngModel)]="viewedOn"
+              />
+            </ui-field>
+          }
+        </div>
         <div class="tag-editor">
           @if (tags.length) {
             <ul class="tag-chips" aria-label="Current tags">
@@ -267,9 +207,6 @@
             (toggle)="syncMore($event)"
           >
             <summary>{{ moreLabel(entry.kind) }}</summary>
-            @if (!primaryProgress(entry.kind)) {
-              <ng-container [ngTemplateOutlet]="progressFields" />
-            }
             @if (anticipatedFor(entry.kind)) {
               <label class="check-label"
                 ><input
@@ -287,14 +224,6 @@
             ><input type="checkbox" name="favorite" [(ngModel)]="favorite" />
             Favorite</label
           >
-        </div>
-        <div class="button-row">
-          <ui-button variant="primary" type="submit" [disabled]="busy()">
-            {{ busy() ? "Saving…" : "Save changes" }}
-          </ui-button>
-          @if (dirty) {
-            <span class="muted">Unsaved changes</span>
-          }
         </div>
       </form></ui-card
     >
@@ -488,6 +417,82 @@
           </details>
         }
       </ui-card>
+    }
+    @if (showCatalog(entry)) {
+      <section class="catalog-maintenance" aria-labelledby="catalog-heading">
+        <h2 id="catalog-heading">Catalog details</h2>
+        @if (entry.lifecycle; as lifecycle) {
+          <ui-badge>
+            {{
+              lifecycle.state === "unknown" ? "Status unknown" : lifecycle.state
+            }}
+            · {{ lifecycle.freshness }}
+            @if (lifecycle.fetched_at) {
+              · Updated {{ showDay(dayOnly(lifecycle.fetched_at)) }}
+            }
+          </ui-badge>
+        }
+        <div class="button-row">
+          @if (entry.catalog.source !== "manual" && !entry.catalog.extra["metadata_pending"]) {
+            <ui-button
+              variant="ghost"
+              [disabled]="busy()"
+              (click)="action('/refresh')"
+            >
+              Refresh metadata
+            </ui-button>
+          }
+          @if (entry.kind === "artist") {
+            <ui-button variant="ghost" (click)="openPhotos()"
+              >Choose photo</ui-button
+            >
+            @if (entry.portrait) {
+              <ui-button
+                variant="ghost"
+                [disabled]="busy()"
+                (click)="resetPhoto()"
+              >
+                Reset photo
+              </ui-button>
+            }
+          }
+        </div>
+        @if (entry.portrait; as photo) {
+          <p class="muted photo-credit">
+            <a [href]="photo.source_url" target="_blank" rel="noopener noreferrer"
+              >Photo source</a
+            >
+            · {{ photo.creator }} · {{ photo.license }}
+          </p>
+        }
+        @if (entry.catalog.extra["metadata_pending"]) {
+          <p class="muted" id="metadata-pending">
+            Metadata is still pending. This saved item stays editable.
+          </p>
+          @if (metadataRetryOpen) {
+            <div id="metadata-retry" class="button-row">
+              <ui-button variant="ghost" [disabled]="busy()" (click)="retryMetadata()">
+                Retry metadata
+              </ui-button>
+            </div>
+            <p class="muted">
+              {{ metadataRetryLimit - metadataRetries }}
+              {{ metadataRetryLimit - metadataRetries === 1 ? "attempt" : "attempts" }}
+              left. Retry does not run when you open this item.
+            </p>
+          } @else {
+            <p id="metadata-limit" tabindex="-1" role="status">
+              Metadata retry limit reached. This saved item stays editable, and opening it will not call the provider.
+            </p>
+          }
+        }
+        @if (entry.catalog.overview) {
+          <details class="overview">
+            <summary>{{ about(entry.kind) }}</summary>
+            <p>{{ entry.catalog.overview }}</p>
+          </details>
+        }
+      </section>
     }
     @if (entry.music; as music) {
       <ui-card>
