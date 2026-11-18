@@ -52,8 +52,8 @@ The first Media Playwright run failed 2 and passed 115 because `getByRole('alert
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this evidence commit. `Closes #398` only. Parent #304 remains open.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/507. `Closes #398` only. Parent #304 remains open.
 - Roadmap #134 append-only status-note URL: after merge and archive.
-- Merged/activation status: not merged yet.
+- Merged/activation status: PR #507 is open. Merge waits on required checks.
 - Remaining external prerequisites: none for this leaf. MUX-03 through MUX-09 stay unbuilt. OPS-06 / #277 was not touched.
 - Next actor: required CI, then merge, then archive.
