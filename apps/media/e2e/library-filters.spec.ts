@@ -10,7 +10,7 @@ async function openLibrary(page: Page, theme: string, violations: string[], url 
   await page.addInitScript((t) => localStorage.setItem('suite-theme', t), theme);
   watchMediaConsole(page, violations);
   await page.goto(url);
-  await expectSectionHeading(page, 'Library');
+  await expectSectionHeading(page);
 }
 
 async function tagItem(request: APIRequestContext, id: number, tags: string[]) {

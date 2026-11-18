@@ -1,101 +1,34 @@
-import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, HostListener, ViewChild, inject, input } from '@angular/core';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
-import { filter } from 'rxjs';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-
-export interface UiSectionNavItem {
-  label: string;
-  shortLabel?: string;
-  ariaLabel?: string;
-  link: string;
-  exact?: boolean;
-  also?: readonly string[];
-}
+import { filter } from 'rxjs';
+import { currentSectionNavLink, type UiSectionNavItem } from './section-navigation';
 
 @Component({
   selector: 'ui-section-nav',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink],
   templateUrl: './ui-section-nav.component.html',
   styleUrl: './ui-section-nav.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class UiSectionNavComponent implements AfterViewInit {
+export class UiSectionNavComponent {
   /** Accessible name, for example "Travel sections". */
-  label = input.required<string>();
-  items = input.required<UiSectionNavItem[]>();
+  readonly label = input.required<string>();
+  readonly items = input.required<readonly UiSectionNavItem[]>();
 
-  @ViewChild('scroller') private scroller?: ElementRef<HTMLElement>;
-
-  private readonly host = inject(ElementRef<HTMLElement>);
-  private readonly destroy = inject(DestroyRef);
   private readonly router = inject(Router);
-  private readonly cdr = inject(ChangeDetectorRef);
-  private revealTimer = 0;
-  private readonly active = new Set<string>();
-  protected readonly subsetMatch = { paths: 'subset', queryParams: 'ignored', fragment: 'ignored', matrixParams: 'ignored' } as const;
-  protected readonly exactMatch = { paths: 'exact', queryParams: 'ignored', fragment: 'ignored', matrixParams: 'ignored' } as const;
+  private readonly navigationId = signal(0);
+  protected readonly links = computed(() => this.items().map(item => ({ ...item, url: this.router.parseUrl(item.link) })));
+  protected readonly current = computed(() => {
+    this.navigationId();
+    return currentSectionNavLink(this.router, this.items());
+  });
 
   constructor() {
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd),
-      takeUntilDestroyed(this.destroy),
-    ).subscribe(() => {
-      this.cdr.markForCheck();
-      this.revealSoon();
-    });
-    this.destroy.onDestroy(() => {
-      if (typeof window !== 'undefined') window.clearTimeout(this.revealTimer);
-    });
-  }
-
-  ngAfterViewInit(): void {
-    const scroller = this.scroller?.nativeElement;
-    if (!scroller || typeof document === 'undefined') return;
-    const onScroll = () => this.updateFades();
-    scroller.addEventListener('scroll', onScroll, { passive: true });
-    this.destroy.onDestroy(() => scroller.removeEventListener('scroll', onScroll));
-    this.revealSoon();
-  }
-
-  @HostListener('window:resize')
-  onResize(): void {
-    this.updateFades();
-  }
-
-  @HostListener('focusin', ['$event'])
-  onFocusIn(event: FocusEvent): void {
-    const target = event.target;
-    if (!(target instanceof HTMLElement) || !this.host.nativeElement.contains(target)) return;
-    target.scrollIntoView({ inline: 'nearest', block: 'nearest' });
-    this.updateFades();
-  }
-
-  private revealSoon(): void {
-    if (typeof document === 'undefined') return;
-    window.clearTimeout(this.revealTimer);
-    this.revealTimer = window.setTimeout(() => {
-      const active = this.host.nativeElement.querySelector('[aria-current="page"]');
-      if (active instanceof HTMLElement) active.scrollIntoView({ inline: 'nearest', block: 'nearest' });
-      this.updateFades();
-    });
-  }
-
-  protected current(item: UiSectionNavItem): boolean {
-    return this.active.has(item.link) || (item.also ?? []).some(link => this.active.has(link));
-  }
-
-  protected setActive(key: string, active: boolean): void {
-    if (active) this.active.add(key);
-    else this.active.delete(key);
-    this.cdr.markForCheck();
-  }
-
-  private updateFades(): void {
-    const scroller = this.scroller?.nativeElement;
-    if (!scroller) return;
-    const hidden = scroller.scrollWidth - scroller.clientWidth;
-    scroller.classList.toggle('is-fade-start', scroller.scrollLeft > 1);
-    scroller.classList.toggle('is-fade-end', hidden - scroller.scrollLeft > 1);
+      takeUntilDestroyed(inject(DestroyRef)),
+    ).subscribe(event => this.navigationId.set(event.id));
   }
 }

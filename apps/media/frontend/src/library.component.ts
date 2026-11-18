@@ -15,6 +15,7 @@ import {
   catchError,
   of,
   switchMap,
+  Subscription,
   tap,
 } from "rxjs";
 import { MediaCardComponent } from "./media-card.component";
@@ -58,7 +59,7 @@ import {
   styleUrl: "./library-filters.css",
   template: `<main class="page media-page">
     <ui-page-header
-      title="Library"
+      [title]="heading"
       titleId="library-heading"
       [titleTabIndex]="-1"
       [concealTitle]="true"
@@ -312,6 +313,7 @@ export class LibraryComponent {
   sort = "activity";
   tags: string[] = [];
   offset = 0;
+  private childrenRequest?: Subscription;
   private filterTimer: ReturnType<typeof setTimeout> | undefined;
   readonly data = signal<LibraryResponse | null>(null);
   readonly error = signal("");
@@ -328,6 +330,11 @@ export class LibraryComponent {
       favorite: this.favorite,
       tags: this.tags,
     };
+  }
+  get heading(): string {
+    return this.kind === "artist"
+      ? "Music"
+      : kinds.find(item => item.value === this.kind)?.label || "Library";
   }
   get count(): number {
     return filterCount(this.currentFilters());
@@ -366,7 +373,9 @@ export class LibraryComponent {
       if (
         event instanceof NavigationStart &&
         event.navigationTrigger === "imperative"
-      )
+      ) {
+        clearTimeout(this.filterTimer);
+        this.filterTimer = undefined;
         history.replaceState(
           {
             ...history.state,
@@ -374,15 +383,21 @@ export class LibraryComponent {
           },
           "",
         );
+      }
       if (event instanceof Scroll) {
         this.scrollerReady = true;
         this.restoreScroll();
       }
     });
+    let requestedKind: string | undefined;
     combineLatest([this.route.queryParamMap, this.reload])
       .pipe(
         tap(([p]) => {
           const filters = readFilters(p);
+          if (requestedKind !== filters.kind) {
+            requestedKind = filters.kind;
+            this.data.set(null);
+          }
           this.q = filters.q;
           this.kind = filters.kind;
           this.status = filters.status;
@@ -390,7 +405,14 @@ export class LibraryComponent {
           this.favorite = filters.favorite;
           this.tags = filters.tags;
           this.offset = Math.max(0, Number(p.get("offset")) || 0);
-          this.expanded.set(Number(p.get("expanded")) || null);
+          const expanded = Number(p.get("expanded")) || null;
+          if (expanded !== this.expanded()) {
+            this.childrenRequest?.unsubscribe();
+            this.children.set([]);
+            this.childrenError.set("");
+            this.childrenLoading.set(false);
+          }
+          this.expanded.set(expanded);
           if (!this.data()) this.loading.set(true);
           this.refreshing.set(true);
           this.error.set("");
@@ -555,7 +577,8 @@ export class LibraryComponent {
     this.children.set([]);
     this.childrenError.set("");
     this.childrenLoading.set(true);
-    this.http
+    this.childrenRequest?.unsubscribe();
+    this.childrenRequest = this.http
       .get<Detail>("/media/api/entries/" + item.id)
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({

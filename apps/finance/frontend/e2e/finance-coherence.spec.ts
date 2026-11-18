@@ -145,7 +145,7 @@ test('the legacy compensation link opens one canonical Jobs & pay editor with re
   expect(url.searchParams.get('history')).toBe('1');
   expect(url.searchParams.get('start')).toBe('2024-01-01');
   expect(url.searchParams.get('end')).toBe('2024-12-31');
-  await expect(page.getByRole('link', { name: 'Pay', exact: true })).toHaveClass(/on/);
+  await expect(page.getByRole('link', { name: 'Pay', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('app-income').getByRole('heading', { name: 'Jobs and pay', exact: true })).toBeVisible();
   await expect(page.locator('app-income')).toHaveCount(1);
   await expect(page.locator('app-income').getByRole('button', { name: 'Add job', exact: true })).toBeVisible();
@@ -593,7 +593,7 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
   const vault = await syntheticVault(page);
   await vault.open('/');
   const desktopNav = page.locator('ui-section-nav');
-  await expect(desktopNav.getByRole('link')).toHaveCount(5);
+  await expect(desktopNav.getByRole('link')).toHaveCount(9);
   const hub = page.getByRole('navigation', { name: 'Apps' }).getByRole('link', { name: 'Hub', exact: true });
   await expect(hub).toHaveAttribute('href', '/hub');
   await expect(hub).toBeVisible();
@@ -603,7 +603,7 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
     await page.setViewportSize({ width, height: 844 });
     const navigation = page.getByRole('navigation', { name: 'Finance sections' });
     await expect(page.locator('.mobile-tabbar')).toHaveCount(0);
-    const labels = ['Home', 'Net worth', 'Spending', 'Recurring', 'Planning'];
+    const labels = ['Home', 'Accounts', 'Holdings', 'Activity', 'Calendar', 'Bills', 'Pay', 'Planning', 'Imports'];
     const plan = navigation.getByRole('link', { name: 'Planning', exact: true });
     for (const label of labels) {
       const link = navigation.getByRole('link', { name: label, exact: true });
@@ -627,30 +627,14 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
     expect(layout.document).toBeLessThanOrEqual(layout.viewport + 1);
     expect(layout.nav.left).toBeGreaterThanOrEqual(-1);
     expect(layout.nav.right).toBeLessThanOrEqual(layout.viewport + 1);
-    expect(layout.links).toHaveLength(5);
-    await expect(page.getByRole('button', { name: 'Finance', exact: true })).toBeVisible();
+    expect(layout.links).toHaveLength(labels.length);
+    await expect(page.getByRole('button', { name: /Switch apps and destinations.*Finance/ })).toBeVisible();
     for (const link of layout.links) {
       expect(link.height).toBeGreaterThanOrEqual(44);
     }
     for (const label of labels) {
       const link = navigation.getByRole('link', { name: label, exact: true });
-      // Snap stays on until the row is focused, and it can leave the end of a
-      // link past a 320px screen. Focus turns snap off, then scroll the link
-      // fully into the row.
-      await link.evaluate(el => {
-        if (el instanceof HTMLElement) el.focus({ preventScroll: true });
-        const scroller = el.closest('.ui-section-nav__scroller');
-        if (!(scroller instanceof HTMLElement)) {
-          el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-          return;
-        }
-        const linkBox = el.getBoundingClientRect();
-        const port = scroller.getBoundingClientRect();
-        if (linkBox.left < port.left + 1) scroller.scrollLeft -= port.left - linkBox.left + 1;
-        const next = el.getBoundingClientRect();
-        const nextPort = scroller.getBoundingClientRect();
-        if (next.right > nextPort.right - 1) scroller.scrollLeft += next.right - nextPort.right + 1;
-      });
+      await expect(link).toBeInViewport({ ratio: 1 });
       const box = await link.boundingBox();
       if (!box) throw new Error(`${label} has no box`);
       const right = box.x + box.width;

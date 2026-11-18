@@ -1,36 +1,55 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './frozen-clock';
 import { openUserMenu } from '../../../../tests/e2e/user-menu.mjs';
 import { syntheticVault } from './synthetic-vault';
 
-const LABELS = ['Home', 'Net worth', 'Spending', 'Recurring', 'Planning'];
+const LABELS = ['Home', 'Accounts', 'Holdings', 'Activity', 'Calendar', 'Bills', 'Pay', 'Planning', 'Imports'];
 const VIEWPORTS = [
   { width: 390, height: 844 },
   { width: 1280, height: 800 },
 ] as const;
-const THEMES = ['light'] as const;
+const THEMES = ['light', 'dark'] as const;
 
 for (const viewport of VIEWPORTS) {
   for (const theme of THEMES) {
     test.describe(`navigation [${viewport.width} ${theme}]`, () => {
-      test.use({ viewport });
+      test.use({ viewport, hasTouch: viewport.width === 390 });
 
       test.beforeEach(async ({ page }) => {
         await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
       });
 
-      test('five tabs, same words', async ({ page }) => {
-        const vault = await syntheticVault(page);
+      test('Home opens Holdings with one action and keeps all destinations visible', async ({ page }, info) => {
+        const vault = await syntheticVault(page, { holdings: [{
+          id: 1, symbol: 'HBR', company_name: 'Harbor Index', shares: 2,
+          purchase_price: 100, current_price: 125, price_source: 'manual', position_as_of: '2026-10-10',
+        }] });
         await vault.open('/');
         const nav = page.getByRole('navigation', { name: 'Finance sections' });
         await expect(page.locator('.mobile-tabbar')).toHaveCount(0);
-        for (const label of LABELS) {
-          const link = nav.getByRole('link', { name: label, exact: true });
-          await link.scrollIntoViewIfNeeded();
-          await expect(link).toBeVisible();
-          const box = await link.boundingBox();
-          expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+        await expect(nav.getByRole('link')).toHaveText(LABELS);
+        for (const link of await nav.getByRole('link').all()) {
+          const box = (await link.boundingBox())!;
+          expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44);
+          expect(box.x).toBeGreaterThanOrEqual(0);
+          expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
         }
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        const holdings = nav.getByRole('link', { name: 'Holdings', exact: true });
+        if (viewport.width === 390) await holdings.tap();
+        else {
+          await holdings.focus();
+          await page.keyboard.press('Enter');
+        }
+        await expect(page).toHaveURL(/\/finance\/have\?t=holdings$/);
+        await expect(holdings).toHaveAttribute('aria-current', 'page');
+        await expect(page.getByRole('heading', { level: 1, name: 'Holdings' })).toBeFocused();
+        const position = page.getByRole('row').filter({ hasText: 'Harbor Index' });
+        await expect(position).toContainText(/\$\u2060?250\.00/);
+        if (viewport.width === 1280) await position.hover();
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+        await info.attach('finance-holdings', { body: await page.screenshot(), contentType: 'image/png' });
+        await page.goBack();
+        await expect(nav.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page');
       });
 
       test('document title matches the section', async ({ page }) => {
@@ -47,28 +66,30 @@ for (const viewport of VIEWPORTS) {
         }
       });
 
-      test('sub-tabs are canonical', async ({ page }) => {
+      test('direct destinations keep canonical links and one active item', async ({ page }) => {
         const vault = await syntheticVault(page);
-        await vault.open('/have');
-        await page.getByRole('link', { name: 'Holdings', exact: true }).click();
-        await expect(page).toHaveURL(/\/finance\/have\?t=holdings$/);
-        await page.getByRole('link', { name: 'Assets and debts', exact: true }).click();
-        await expect(page).toHaveURL(/\/finance\/have$/);
-        await expect(page.locator('.hub-tabs a[aria-current="page"]')).toHaveCount(1);
-
-        await vault.open('/spending');
-        await page.getByRole('link', { name: 'Calendar', exact: true }).click();
-        await expect(page).toHaveURL(/\/finance\/spending\?t=calendar$/);
-        await page.getByRole('link', { name: 'Activity', exact: true }).click();
-        await expect(page).toHaveURL(/\/finance\/spending$/);
-        await expect(page.locator('.hub-tabs a[aria-current="page"]')).toHaveCount(1);
-
-        await vault.open('/recurring');
-        await page.getByRole('link', { name: 'Bills and subscriptions', exact: true }).click();
-        await expect(page).toHaveURL(/\/finance\/recurring\?t=spend/);
-        await page.getByRole('link', { name: 'Pay', exact: true }).click();
-        await expect(page).toHaveURL(/\/finance\/recurring$/);
-        await expect(page.locator('.hub-tabs a[aria-current="page"]')).toHaveCount(1);
+        await vault.open('/');
+        const nav = page.getByRole('navigation', { name: 'Finance sections' });
+        for (const [label, href] of [
+          ['Holdings', '/finance/have?t=holdings'],
+          ['Accounts', '/finance/have'],
+          ['Calendar', '/finance/spending?t=calendar'],
+          ['Activity', '/finance/spending'],
+          ['Bills', '/finance/recurring?t=spend'],
+          ['Pay', '/finance/recurring'],
+          ['Imports', '/finance/spending?receipts=1'],
+        ]) {
+          const link = nav.getByRole('link', { name: label, exact: true });
+          await expect(link).toHaveAttribute('href', href);
+          await link.click();
+          await expect(page).toHaveURL(new URL(href, page.url()).href);
+          await expect(link).toHaveAttribute('aria-current', 'page');
+          await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
+        }
+        const receipts = page.locator('details.import-history');
+        await expect(receipts).toHaveJSProperty('open', true);
+        await expect(receipts).toBeInViewport();
+        await expect(page.locator('ui-page-header').getByRole('button', { name: 'Import', exact: true })).toBeVisible();
 
         await vault.open('/planning');
         await page.getByRole('link', { name: 'Portfolio projection', exact: true }).click();
@@ -81,7 +102,7 @@ for (const viewport of VIEWPORTS) {
       test('legacy params still resolve', async ({ page }) => {
         const vault = await syntheticVault(page);
         await vault.open('/have?t=assets');
-        await expect(page.getByRole('link', { name: 'Assets and debts', exact: true })).toHaveAttribute('aria-current', 'page');
+        await expect(page.getByRole('link', { name: 'Accounts', exact: true })).toHaveAttribute('aria-current', 'page');
 
         await vault.open('/spending?t=pay', page, '/spending?t=activity&v=income');
         await expect(page).toHaveURL(/v=income/);

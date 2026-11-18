@@ -1,6 +1,7 @@
 import { Component } from "@angular/core";
 import { RouterOutlet } from "@angular/router";
-import { UiSectionNavComponent, type UiSectionNavItem } from "@vivek/ui";
+import { UiSectionNavComponent } from "@vivek/ui";
+import { mediaSections } from "./media-navigation";
 @Component({
   selector: "media-layout",
   standalone: true,
@@ -11,11 +12,5 @@ import { UiSectionNavComponent, type UiSectionNavItem } from "@vivek/ui";
   </div>`,
 })
 export class MediaComponent {
-  readonly sections: UiSectionNavItem[] = [
-    { label: "Now", link: "/media", exact: true },
-    { label: "Library", link: "/media/library", also: ["/media/item"] },
-    { label: "Search", link: "/media/search" },
-    { label: "Calendar", link: "/media/calendar" },
-    { label: "Add", ariaLabel: "Add manually", link: "/media/add" },
-  ];
+  readonly sections = mediaSections;
 }

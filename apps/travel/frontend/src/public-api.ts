@@ -55,3 +55,5 @@ export const routes: Routes = [
 export function loadTravelSettings() {
   return import("./settings.component").then((m) => m.SettingsComponent);
 }
+
+export { travelSections } from "./travel-navigation";

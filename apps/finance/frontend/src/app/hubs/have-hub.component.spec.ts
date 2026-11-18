@@ -21,30 +21,16 @@ describe('canonical tab links', () => {
     harness = await RouterTestingHarness.create();
   });
 
-  function links(): HTMLAnchorElement[] {
-    return [...harness.routeNativeElement!.querySelectorAll('.hub-tabs a')] as HTMLAnchorElement[];
-  }
-
-  it('the default link href has no t= and exactly one link is current', async () => {
-    await harness.navigateByUrl('/finance/have', HaveHubComponent);
-    harness.detectChanges();
-    const [assets, holdings] = links();
-    expect(assets.textContent?.trim()).toBe('Assets and debts');
-    expect(assets.getAttribute('href')).not.toContain('t=');
-    expect(holdings.getAttribute('href')).toContain('t=holdings');
-    const current = links().filter(link => link.getAttribute('aria-current') === 'page');
-    expect(current.length).toBe(1);
-    expect(current[0].textContent?.trim()).toBe('Assets and debts');
-    expect(harness.routeNativeElement!.querySelector('.hub-tabs')?.getAttribute('aria-label')).toBe('Net worth sections');
-  });
-
-  it('have-hub with t=assets still shows Assets and debts', async () => {
-    await harness.navigateByUrl('/finance/have?t=assets', HaveHubComponent);
-    harness.detectChanges();
-    const current = links().filter(link => link.getAttribute('aria-current') === 'page');
-    expect(current.length).toBe(1);
-    expect(current[0].textContent?.trim()).toBe('Assets and debts');
-    expect(harness.routeDebugElement?.componentInstance).toBeInstanceOf(HaveHubComponent);
-    expect((harness.routeDebugElement?.componentInstance as HaveHubComponent).tab).toBe('assets');
+  it('shows the routed destination for canonical and legacy links', async () => {
+    for (const [suffix, title, view] of [
+      ['', 'Assets and debts', 'app-assets-liabilities'],
+      ['?t=assets', 'Assets and debts', 'app-assets-liabilities'],
+      ['?t=holdings', 'Holdings', 'app-portfolio'],
+    ]) {
+      await harness.navigateByUrl('/finance/have' + suffix, HaveHubComponent);
+      harness.detectChanges();
+      expect(harness.routeNativeElement!.querySelector('h1')?.textContent?.trim()).toBe(title);
+      expect(harness.routeNativeElement!.querySelector(view)).not.toBeNull();
+    }
   });
 });

@@ -160,8 +160,8 @@ describe('SpendingHub route compatibility', () => {
   });
 });
 
-describe('canonical tab links', () => {
-  it('the default link href has no t=, labels match, exactly one link is current', async () => {
+describe('direct spending destinations', () => {
+  it('renders the destination selected by default, calendar and receipts links', async () => {
     TestBed.configureTestingModule({
       providers: [provideRouter([{ path: 'finance/spending', component: SpendingHubComponent }])],
     });
@@ -171,16 +171,16 @@ describe('canonical tab links', () => {
     });
     await TestBed.compileComponents();
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/finance/spending', SpendingHubComponent);
-    harness.detectChanges();
-    const links = [...harness.routeNativeElement!.querySelectorAll('.hub-tabs a')] as HTMLAnchorElement[];
-    expect(links.map(link => link.textContent?.trim())).toEqual(['Activity', 'Calendar']);
-    expect(links[0].getAttribute('href')).not.toContain('t=');
-    expect(links[1].getAttribute('href')).toContain('t=calendar');
-    const current = links.filter(link => link.getAttribute('aria-current') === 'page');
-    expect(current.length).toBe(1);
-    expect(current[0].textContent?.trim()).toBe('Activity');
-    expect(harness.routeNativeElement!.querySelector('.hub-tabs')?.getAttribute('aria-label')).toBe('Spending sections');
+    for (const [suffix, title, view] of [
+      ['', 'Activity', 'app-transactions'],
+      ['?t=calendar', 'Calendar', 'app-calendar'],
+      ['?receipts=1', 'Imports', 'app-transactions'],
+    ]) {
+      await harness.navigateByUrl('/finance/spending' + suffix, SpendingHubComponent);
+      harness.detectChanges();
+      expect(harness.routeNativeElement!.querySelector('h1')?.textContent?.trim()).toBe(title);
+      expect(harness.routeNativeElement!.querySelector(view)).not.toBeNull();
+    }
   });
 });
 
@@ -196,16 +196,12 @@ describe('SpendingHubComponent heading (F1)', () => {
     fixture.detectChanges();
   });
 
-  it('renders one h1 "Spending" above the tabs', () => {
+  it('renders one accessible Activity heading', () => {
     const el: HTMLElement = fixture.nativeElement;
     const headings = el.querySelectorAll('h1');
     expect(headings.length).toBe(1);
-    expect(headings[0].textContent?.trim()).toBe('Spending');
+    expect(headings[0].textContent?.trim()).toBe('Activity');
     expect(headings[0].classList.contains('ui-page-header__title--concealed')).toBe(true);
-    const header = el.querySelector('ui-page-header');
-    const tabs = el.querySelector('nav.hub-tabs');
-    expect(header).not.toBeNull();
-    expect(tabs).not.toBeNull();
-    expect(header!.compareDocumentPosition(tabs!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
   });
 });

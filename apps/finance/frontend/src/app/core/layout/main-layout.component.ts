@@ -4,7 +4,7 @@ import { ApiHealthService } from '../../services/api-health.service';
 import { AuthUser } from '@vivek/auth';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { Subject, filter, takeUntil, firstValueFrom } from 'rxjs';
-import { UiButtonComponent, UiCardComponent, UiDialogComponent, UiIconComponent, UiIconName, UiSectionNavComponent } from '@vivek/ui';
+import { UiButtonComponent, UiCardComponent, UiDialogComponent, UiIconComponent, UiSectionNavComponent, currentSectionNavLink } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
 import { VaultService } from '../../crypto/vault.service';
 import { FinanceLockService } from '../finance-lock.service';
@@ -15,19 +15,7 @@ import { UserMenuContent } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService, MarketRefreshState } from '../../services/market-refresh-coordinator.service';
 
-export interface NavItem {
-  path: string;
-  label: string;
-  icon: UiIconName;
-  exact: boolean;
-}
-
-interface NavGroup {
-  label: string;
-  icon: UiIconName;
-  adminOnly?: boolean;
-  items: NavItem[];
-}
+import { financeSections } from './finance-navigation';
 
 @Component({
   selector: 'app-main-layout',
@@ -55,6 +43,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private readonly injector = inject(Injector);
   private destroy$ = new Subject<void>();
   private routePath = '';
+  private activeSection: string | undefined;
   private routeEnterTimer?: ReturnType<typeof setTimeout>;
   routeEntering = false;
 
@@ -67,42 +56,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   readonly marketRefreshDisclosure = this.marketRefresh.disclosure;
   priceSymbols: readonly string[] = [];
 
-  /** One label set at every width (D3): Home, Net worth, Spending, Recurring, Planning. */
-  readonly navGroups: NavGroup[] = [
-    {
-      label: 'Home',
-      icon: 'dashboard',
-      items: [{ path: '/finance/', label: 'Home', icon: 'dashboard', exact: true }],
-    },
-    {
-      label: 'Net worth',
-      icon: 'scale',
-      items: [
-        { path: '/finance/have', label: 'Net worth', icon: 'scale', exact: false },
-      ],
-    },
-    {
-      label: 'Spending',
-      icon: 'transactions',
-      items: [
-        { path: '/finance/spending', label: 'Spending', icon: 'transactions', exact: false },
-      ],
-    },
-    {
-      label: 'Recurring',
-      icon: 'wallet',
-      items: [
-        { path: '/finance/recurring', label: 'Recurring', icon: 'wallet', exact: false },
-      ],
-    },
-    {
-      label: 'Planning',
-      icon: 'trending',
-      items: [
-        { path: '/finance/planning', label: 'Planning', icon: 'trending', exact: false },
-      ],
-    },
-  ];
+  readonly sections = financeSections;
 
   ngOnInit() {
     this.userMenu.template.set(this.userMenuActions);
@@ -126,9 +80,12 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
       .pipe(takeUntil(this.destroy$))
       .subscribe(event => {
-        const path = event.urlAfterRedirects.split('?')[0].split('#')[0];
-        if (path !== this.routePath) {
+        const path = event.urlAfterRedirects.split(/[?#]/)[0];
+        const section = currentSectionNavLink(this.router, financeSections);
+        if (path !== this.routePath || section !== this.activeSection) {
           this.routePath = path;
+          this.activeSection = section;
+          document.getElementById('main-content')?.scrollTo(0, 0);
           this.routeEntering = true;
           if (this.routeEnterTimer) clearTimeout(this.routeEnterTimer);
           this.routeEnterTimer = setTimeout(() => {
@@ -168,18 +125,6 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       }
       target.focus({ preventScroll: true });
     });
-  }
-
-  get isAdmin(): boolean {
-    return this.user?.role === 'admin';
-  }
-
-  get visibleNavGroups(): NavGroup[] {
-    return this.navGroups.filter(group => !group.adminOnly || this.isAdmin);
-  }
-
-  get sectionNavItems(): { label: string; link: string; exact?: boolean }[] {
-    return this.visibleNavGroups.map(g => ({ label: g.label, link: g.items[0].path, exact: g.items[0].exact }));
   }
 
   lockVault(): void {

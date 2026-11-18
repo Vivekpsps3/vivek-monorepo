@@ -22,7 +22,7 @@ for (const [width, theme, zoom] of [
     await addItem(request, { kind: 'book', title: longTitle, creator: 'Coastal Geography Society', rating: 10, favorite: true });
     await addItem(request, { kind: 'book', title: unbrokenTitle, creator: 'MaritimeArchiveResidentsAndResearchers' });
     await page.goto('/media/library?kind=book&sort=title');
-    await expectSectionHeading(page, 'Library');
+    await expectSectionHeading(page, 'Books');
     if (zoom) await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
     const grid = page.locator('.media-grid');
     for (const title of [shortTitle, longTitle, unbrokenTitle]) {
@@ -91,4 +91,56 @@ test('a held library response cannot repopulate cards after the collection filte
   await expect(page.getByRole('link', { name: 'Harbor collection marker', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Tide collection marker', exact: true })).toBeVisible();
   await expect(search).toHaveValue('Tide');
+});
+
+test('a late category read cannot publish after switching and retry only reads the selected category', async ({ page, request }) => {
+  await addItem(request, { kind: 'movie', title: 'Harbor Matinee' });
+  await addItem(request, { kind: 'book', title: 'Harbor Logbook' });
+  await addItem(request, { kind: 'game', title: 'Harbor Tactics' });
+  const arrived = deferred();
+  const release = deferred();
+  const sent = deferred();
+  const reads: string[] = [];
+  await page.route('**/media/api/library?*', async route => {
+    const kind = new URL(route.request().url()).searchParams.get('kind') || '';
+    reads.push(kind);
+    if (kind === 'book') {
+      const response = await route.fetch();
+      arrived.resolve();
+      await release.promise;
+      await route.fulfill({ response }).catch(() => {});
+      sent.resolve();
+      return;
+    }
+    if (kind === 'game' && reads.filter(value => value === 'game').length === 1) {
+      await route.fulfill({ status: 503, json: {} });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/media/library?kind=movie');
+  await expect(page.getByRole('link', { name: 'Harbor Matinee', exact: true })).toBeVisible();
+  const sections = page.getByRole('navigation', { name: 'Media sections' });
+  const books = sections.getByRole('link', { name: 'Books', exact: true });
+  const games = sections.getByRole('link', { name: 'Games', exact: true });
+  await books.click();
+  try {
+    await arrived.promise;
+    await expect(books).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('status').filter({ hasText: 'Loading your library' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Harbor Matinee', exact: true })).toHaveCount(0);
+    await games.click();
+    await expect(page.getByRole('button', { name: 'Retry library' })).toBeVisible();
+    await expect(games).toHaveAttribute('aria-current', 'page');
+  } finally {
+    release.resolve();
+    await sent.promise;
+  }
+  await expect(page.getByRole('link', { name: 'Harbor Logbook', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retry library' }).click();
+  await expect(page.getByRole('link', { name: 'Harbor Tactics', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Games', exact: true })).toBeFocused();
+  await expect(page).toHaveURL(/kind=game$/);
+  expect(reads).toEqual(['movie', 'book', 'game', 'game']);
 });

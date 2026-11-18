@@ -3,8 +3,10 @@ import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs';
-import { UiIconComponent, UiStateComponent, UserMenuContent, safeNextPathFrom } from '@vivek/ui';
-import { startFinanceTripSpend } from '../../../finance/frontend/src/public-api';
+import { UiIconComponent, UiStateComponent, UserMenuContent, currentSectionNavLink, safeNextPathFrom, type UiSectionNavItem } from '@vivek/ui';
+import { financeSections, startFinanceTripSpend } from '../../../finance/frontend/src/public-api';
+import { mediaSections } from '../../../media/frontend/src/public-api';
+import { travelSections } from '../../../travel/frontend/src/public-api';
 import { SessionService } from './platform/session.service';
 import { HealthChipComponent } from './hub/health-chip.component';
 import { SearchDialogComponent } from './search/search-dialog.component';
@@ -54,23 +56,31 @@ export class PrivateLayoutComponent {
   closeSearch(): void {
     this.searchOpen.set(false);
   }
-  readonly apps = [
-    { label: 'Hub', href: '/hub', exact: true },
-    { label: 'Finance', href: '/finance', exact: false },
-    { label: 'Travel', href: '/travel', exact: false },
-    { label: 'Media', href: '/media', exact: false },
-    { label: 'Town', href: '/town', exact: false },
-    { label: 'Pixels', href: '/pixels', exact: false },
-  ] as const;
-
   @ViewChild('userMenu') private userMenu?: ElementRef<HTMLElement>;
   @ViewChild('userButton') private userButton?: ElementRef<HTMLButtonElement>;
   @ViewChild('switcher') private switcher?: ElementRef<HTMLElement>;
   @ViewChild('switcherButton') private switcherButton?: ElementRef<HTMLButtonElement>;
 
   private readonly router = inject(Router);
+  readonly apps = [
+    { label: 'Hub', href: '/hub', sections: [{ label: 'Agenda', link: '/hub/agenda' }] },
+    { label: 'Finance', href: '/finance', sections: financeSections },
+    { label: 'Travel', href: '/travel', sections: travelSections },
+    { label: 'Media', href: '/media', sections: mediaSections },
+    { label: 'Town', href: '/town', sections: [
+      { label: 'Reading Hall', link: '/town/library' },
+      { label: 'World', link: '/town/world' },
+    ] },
+    { label: 'Pixels', href: '/pixels', sections: [{ label: 'Life', link: '/pixels/life' }] },
+  ].map((app: { label: string; href: string; sections: readonly UiSectionNavItem[] }) => ({
+    ...app,
+    destinations: app.sections
+      .filter(item => item.link !== app.href)
+      .map(item => ({ ...item, url: this.router.parseUrl(item.link) })),
+  }));
+  protected readonly activeDestination = signal<string | undefined>(undefined);
   private readonly change = inject(ChangeDetectorRef);
-  private lastFocusedPath = '';
+  private lastFocusedPlace = '';
   /** Drops a heading-focus retry when a newer navigation starts. */
   private focusAttempt = 0;
   private focusTimer: ReturnType<typeof setTimeout> | undefined;
@@ -95,10 +105,14 @@ export class PrivateLayoutComponent {
       this.closeSwitcher(false);
       this.tripSpend.sync();
       this.change.markForCheck();
+      const app = this.currentApp;
+      const destination = app && currentSectionNavLink(this.router, app.sections);
+      this.activeDestination.set(destination);
       const path = event.urlAfterRedirects.split(/[?#]/)[0];
-      if (path === this.lastFocusedPath) return;
-      this.lastFocusedPath = path;
-      this.focusArrivedHeading(path);
+      const place = destination ? `${path} ${destination}` : path;
+      if (place === this.lastFocusedPlace) return;
+      this.lastFocusedPlace = place;
+      this.focusArrivedHeading(place, path);
     });
   }
 
@@ -109,13 +123,13 @@ export class PrivateLayoutComponent {
    * Wait for that close, focus the heading, confirm once, then stop. A longer
    * loop steals focus from the next keyboard or menu action.
    */
-  private focusArrivedHeading(path: string): void {
+  private focusArrivedHeading(place: string, path: string): void {
     clearTimeout(this.focusTimer);
     const attempt = ++this.focusAttempt;
     const started = performance.now();
     let confirm = false;
     const tick = (): void => {
-      if (attempt !== this.focusAttempt || path !== this.lastFocusedPath) return;
+      if (attempt !== this.focusAttempt || place !== this.lastFocusedPlace) return;
       if (this.menuOpen() || this.switcherOpen()) return;
       const dialogOpen = !!document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]');
       const heading = document.querySelector<HTMLElement>('#workspace-content main h1');
@@ -182,9 +196,19 @@ export class PrivateLayoutComponent {
     this.change.detectChanges();
   }
 
+  onSwitcherLink(): void {
+    // Let RouterLink handle the click before removing the link from the DOM.
+    queueMicrotask(() => {
+      if (this.switcherOpen()) this.closeSwitcher();
+    });
+  }
+
   closeSwitcher(restoreFocus = true): void {
     this.switcherOpen.set(false);
-    if (restoreFocus) this.switcherButton?.nativeElement.focus();
+    if (restoreFocus) {
+      this.paintMenus();
+      this.switcherButton?.nativeElement.focus({ preventScroll: true });
+    }
   }
 
   onMenuAction(event: MouseEvent): void {
@@ -193,7 +217,7 @@ export class PrivateLayoutComponent {
 
   onSwitcherKey(event: KeyboardEvent): void {
     if (!this.switcherOpen()) return;
-    const items = [...(this.switcher?.nativeElement.querySelectorAll<HTMLAnchorElement>('a') ?? [])];
+    const items = [...(this.switcher?.nativeElement.querySelectorAll<HTMLAnchorElement>('.app-switcher__menu a') ?? [])];
     if (!items.length) return;
     const index = items.indexOf(document.activeElement as HTMLAnchorElement);
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -214,11 +238,6 @@ export class PrivateLayoutComponent {
       items[items.length - 1]?.focus();
       return;
     }
-    if (event.key !== 'Tab') return;
-    const active = document.activeElement;
-    const leavingForward = !event.shiftKey && active === items[items.length - 1];
-    const leavingBackward = !!event.shiftKey && (active === items[0] || active === this.switcherButton?.nativeElement);
-    if (leavingForward || leavingBackward) this.closeSwitcher(false);
   }
 
   @HostListener('document:click', ['$event'])
@@ -235,7 +254,6 @@ export class PrivateLayoutComponent {
       event.preventDefault();
       event.stopPropagation();
       this.closeSwitcher();
-      this.paintMenus();
       return;
     }
     if (!this.menuOpen()) return;
@@ -245,13 +263,19 @@ export class PrivateLayoutComponent {
     this.paintMenus();
   }
 
-  get appName(): string {
-    const section = this.router.url.split(/[?#]/)[0].split('/')[1] ?? '';
-    return ({ hub: 'Hub', finance: 'Finance', travel: 'Travel', media: 'Media', town: 'Town', pixels: 'Pixels' } as Record<string, string>)[section] || 'Apps';
+  private get currentApp() {
+    const path = this.router.url.split(/[?#]/)[0];
+    return this.apps.find(app => path === app.href || path.startsWith(app.href + '/'));
   }
 
-  get home(): string {
-    return this.appName === 'Apps' || this.appName === 'Hub' ? '/hub' : `/${this.appName.toLowerCase()}/`;
+  get appName(): string {
+    return this.currentApp?.label ?? 'Apps';
+  }
+
+  get switcherLabel(): string {
+    return this.currentApp
+      ? `Switch apps and destinations. Current app ${this.appName}`
+      : 'Switch apps and destinations';
   }
 
   /**
