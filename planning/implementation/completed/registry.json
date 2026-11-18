@@ -1,6 +1,6 @@
 {
   "validated_on": "2026-11-18",
-  "base_sha": "fe1a8377306bf5091ac834fd62b190aab4255513",
+  "base_sha": "8e9ad566367158c1c61285d990bcec7d6288c9d0",
   "tasks": [
     {
       "id": "MED-11",
@@ -1705,6 +1705,29 @@
       ],
       "merged_pr": 503,
       "merge_sha": "fe1a8377306bf5091ac834fd62b190aab4255513"
+    },
+    {
+      "id": "MUX-01",
+      "title": "Separate the library into visible media-type collections",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 397,
+      "dependencies": [
+        "NAV-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ],
+      "merged_pr": 505,
+      "merge_sha": "8e9ad566367158c1c61285d990bcec7d6288c9d0"
     }
   ],
   "td_coverage": {
