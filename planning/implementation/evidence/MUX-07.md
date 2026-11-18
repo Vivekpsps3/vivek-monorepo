@@ -47,8 +47,8 @@ Playwright used cached Chromium 1248. This worktree has no installed `.venv` or 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/517. The PR body uses the leaf keyword only for #403. Parent #304 remains open.
 - Roadmap #134 append-only status-note URL: after merge and archive.
-- Merged/activation status: local gates above passed on `0ec98d106a4e78c2a4d89270b48847cd39962a26`. Parent #304 remains open.
+- Merged/activation status: PR #517 is open. Local gates passed on `0ec98d106a4e78c2a4d89270b48847cd39962a26`. Merge waits on required checks.
 - Remaining external prerequisites: none for this leaf. MUX-08 and MUX-09 stay unbuilt. OPS-06 / #277 was not touched. No Town minigame was added.
-- Next actor: commit this evidence, push, open the PR, wait for required checks, merge, then archive. Parent #304 remains open.
+- Next actor: wait for required checks, merge, then archive. Parent #304 remains open.
