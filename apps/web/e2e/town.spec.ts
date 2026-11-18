@@ -268,7 +268,10 @@ test('TF5 Hub card stays free of Treasury and answers loading, retry, expiry, em
   const summary = await (await page.request.get('/api/town/summary?tz=America%2FLos_Angeles')).json() as {
     level: number; xp: number; level_xp_start: number; next_level_xp: number; name: string;
   };
+  const progress = town.locator('summary', { hasText: 'Town progress' });
   const bar = town.getByRole('progressbar', { name: 'Town XP' });
+  await expect(bar).toBeHidden();
+  await progress.press('Enter');
   await expect(bar).toHaveAttribute('aria-valuemin', String(summary.level_xp_start));
   await expect(bar).toHaveAttribute('aria-valuemax', String(summary.next_level_xp));
   await expect(bar).toHaveAttribute('aria-valuenow', String(summary.xp));
@@ -295,13 +298,15 @@ test('TF5 Hub card stays free of Treasury and answers loading, retry, expiry, em
   }));
   expect(JSON.parse(credited).id).toBeGreaterThan(0);
   await page.reload();
-  await expect(town.getByRole('progressbar', { name: 'Town XP' })).toHaveAttribute('aria-valuenow', String(summary.xp + 10));
+  await progress.click();
+  await expect(bar).toHaveAttribute('aria-valuenow', String(summary.xp + 10));
 
   await page.route('**/api/town/summary**', route => route.fulfill({
     status: 503, contentType: 'application/json', body: '{}',
   }));
   await page.goto('/hub');
-  await expect(town).toContainText("Couldn't load your town.");
+  await progress.click();
+  await expect(town.getByText("Couldn't load your town.")).toBeVisible();
   const retry = town.getByRole('button', { name: 'Retry' });
   expect((await retry.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   await retry.focus();
@@ -314,12 +319,14 @@ test('TF5 Hub card stays free of Treasury and answers loading, retry, expiry, em
     status: 401, contentType: 'application/json', body: JSON.stringify({ detail: 'expired' }),
   }));
   await page.goto('/hub');
-  await expect(town).toContainText('Your session ended. Sign in again to see your town.');
+  await progress.click();
+  await expect(town.getByText('Your session ended. Sign in again to see your town.')).toBeVisible();
   await expect(town.getByRole('progressbar', { name: 'Town XP' })).toHaveCount(0);
   await page.unroute('**/api/town/summary**');
 
   expect((await request.post('/e2e/reset?seed=town-empty')).ok()).toBeTruthy();
   await page.goto('/hub');
+  await progress.click();
   const start = town.getByRole('link', { name: 'Choose a first habit' });
   await expect(town).toContainText('Start your town');
   await expect(town).not.toContainText('habits done today');

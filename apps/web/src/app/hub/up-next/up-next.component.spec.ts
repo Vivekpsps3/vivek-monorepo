@@ -122,15 +122,17 @@ describe('Up next reminder actions and source states', () => {
     expect(fixture.nativeElement.textContent).not.toContain('2 bills');
     expect(fixture.nativeElement.textContent).toContain('Bills hidden: Finance is locked');
   });
-  it('caps the merged list at six, groups the dates and links to the owning app for hidden rows', () => {
+  it('shows three chronological actions and keeps an owning-app link for later rows', () => {
     fixture.componentRef.setInput('travel', { next_trip: null, up_next: Array.from({ length: 7 }, (_, index) => ({
       ...event, id: index + 1, kind: 'trip_start', reminder: null, overdue: false, time: null,
       date: index === 0 ? '2026-12-25' : index === 1 ? '2026-12-26' : '2027-01-03', title: `Trip ${index + 1}`,
     })) });
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelectorAll('li').length).toBe(6);
-    expect([...fixture.nativeElement.querySelectorAll('h3')].map(node => (node as HTMLElement).textContent)).toEqual(['Today', 'This week', 'Later']);
+    const links = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.event-title'));
+    expect(links.map(link => link.textContent?.trim())).toEqual(['Trip 1', 'Trip 2', 'Trip 3']);
+    expect(fixture.nativeElement.textContent).toContain('Tomorrow');
     expect(fixture.nativeElement.querySelector('.more a').getAttribute('href')).toBe('/travel/calendar');
+    expect(fixture.nativeElement.textContent).not.toContain('Trip 4');
     expect(fixture.nativeElement.textContent).not.toContain('Trip 7');
   });
 
