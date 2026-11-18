@@ -427,7 +427,16 @@ def test_compilation_collaboration_feature_and_unknown_stay_distinct(client, mon
         "Guest Passing",
         "Compilation Single",
     ]
+    assert [album["title"] for album in north_group["albums"]] == ["Both Names", "Guest Passing"]
+    assert north_group["albums"][0]["songs"] == []
+    assert [song["title"] for song in north_group["songs"]] == ["Compilation Single"]
+    assert all(album["title"] != "Shared Title" for album in north_group["albums"])
+    assert [album["title"] for album in various_group["albums"]] == ["Shared Title"]
+    assert various_group["albums"][0]["songs"] == []
+    assert various_group["songs"] == []
     assert [child["title"] for child in south_group["saved_children"]] == ["Both Names"]
+    assert [album["title"] for album in south_group["albums"]] == ["Both Names"]
+    assert south_group["albums"][0]["id"] == north_group["albums"][0]["id"]
     assert GUEST not in {source_id for _source, source_id, _title in _artists(client)}
     assert (
         client.get(f"/api/music-groups/{_artist_catalog(client, SIMILAR_A)}").json()[
@@ -741,3 +750,177 @@ def test_failed_grouping_does_not_change_owner_rows(client, monkeypatch):
         with pytest.raises(HTTPException) as hidden:
             records.saved_artist_group(db, 2, catalog_id)
         assert hidden.value.status_code == 404
+
+
+def _groups(client, **params):
+    response = client.get("/api/music-groups", params=params)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_default_collection_nests_one_album_without_following(client, monkeypatch):
+    """One saved album is one artist group, not a second copy of the album."""
+    artist = client.post(
+        "/api/library",
+        json={"kind": "artist", "title": "Quiet Voice", "status": "following"},
+    )
+    assert artist.status_code == 200, artist.text
+    album = client.post(
+        "/api/library",
+        json={
+            "kind": "album",
+            "title": "Only Pressing",
+            "artist_identity": {
+                "source": "manual",
+                "source_id": "person-only",
+                "name": "Only Voice",
+            },
+        },
+    )
+    assert album.status_code == 200, album.text
+    rated = client.patch(f"/api/entries/{album.json()['id']}", json={"rating": 8})
+    assert rated.status_code == 200, rated.text
+    loose = client.post(
+        "/api/library",
+        json={
+            "kind": "track",
+            "title": "Loose Single",
+            "artist_identity": {
+                "source": "manual",
+                "source_id": "person-only",
+                "name": "Only Voice",
+            },
+            "rating": 3,
+        },
+    )
+    assert loose.status_code == 200, loose.text
+    stranger = client.post(
+        "/api/library",
+        json={
+            "kind": "album",
+            "title": "Other Pressing",
+            "artist_identity": {
+                "source": "manual",
+                "source_id": "person-only-other",
+                "name": "Only Voice",
+            },
+        },
+    )
+    assert stranger.status_code == 200, stranger.text
+    nested = client.post(
+        f"/api/entries/{artist.json()['id']}/albums",
+        json={"title": "Quiet Pressing", "year": 2004},
+    )
+    assert nested.status_code == 200, nested.text
+    quiet_album = next(
+        row for row in nested.json()["music"]["saved_children"] if row["kind"] == "album"
+    )
+    song = client.post(
+        f"/api/entries/{artist.json()['id']}/albums/{quiet_album['id']}/tracks",
+        json={"title": "Quiet Single"},
+    )
+    assert song.status_code == 200, song.text
+    song_id = next(
+        row["id"]
+        for row in song.json()["music"]["saved_children"]
+        if row["title"] == "Quiet Single"
+    )
+    scored = client.patch(f"/api/entries/{quiet_album['id']}", json={"rating": 7})
+    assert scored.status_code == 200, scored.text
+    song_score = client.patch(f"/api/entries/{song_id}", json={"rating": 2})
+    assert song_score.status_code == 200, song_score.text
+    catalog = client.post(
+        "/api/library",
+        json={
+            "kind": "artist",
+            "title": "Quiet Catalog",
+            "status": "following",
+            "artist_identity": {
+                "source": "musicbrainz",
+                "source_id": "abababab-abab-4bab-8bab-abababababab",
+                "name": "Quiet Catalog",
+            },
+        },
+    )
+    assert catalog.status_code == 200, catalog.text
+    catalog_score = client.patch(f"/api/entries/{catalog.json()['id']}", json={"rating": 1})
+    assert catalog_score.status_code == 200, catalog_score.text
+    favorite = client.patch(f"/api/entries/{loose.json()['id']}", json={"favorite": True})
+    assert favorite.status_code == 200, favorite.text
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("a collection read called a provider")
+
+    monkeypatch.setattr(providers, "lookup_detail", refuse)
+    monkeypatch.setattr(providers, "musicbrainz_artist_catalog", refuse)
+    with client.app.state.database.sessionmaker() as db:
+        before = db.query(MusicLink).count()
+    page = _groups(client, sort="title")
+    with client.app.state.database.sessionmaker() as db:
+        assert db.query(MusicLink).count() == before
+    titles = [item["title"] for item in page["items"]]
+    assert titles.count("Only Voice") == 2
+    assert titles.count("Quiet Voice") == 1
+    assert titles.count("Quiet Catalog") == 1
+    quiet = next(item for item in page["items"] if item["title"] == "Quiet Voice")
+    only_groups = [item for item in page["items"] if item["title"] == "Only Voice"]
+    assert len(only_groups) == 2
+    assert {item["catalog_id"] for item in only_groups} == {
+        item["catalog_id"] for item in only_groups
+    }
+    assert len({item["catalog_id"] for item in only_groups}) == 2
+    pressing = next(
+        item
+        for item in only_groups
+        if any(album["title"] == "Only Pressing" for album in item["albums"])
+    )
+    other = next(item for item in only_groups if item is not pressing)
+    assert pressing["followed"] is False
+    assert pressing["entry_id"] is None
+    assert [album["title"] for album in pressing["albums"]] == ["Only Pressing"]
+    assert pressing["albums"][0]["id"] == album.json()["id"]
+    assert pressing["albums"][0]["rating"] == 8
+    assert pressing["albums"][0]["songs"] == []
+    assert [song["title"] for song in pressing["songs"]] == ["Loose Single"]
+    assert pressing["songs"][0]["rating"] == 3
+    assert pressing["songs"][0]["id"] != pressing["albums"][0]["id"]
+    assert [album["title"] for album in other["albums"]] == ["Other Pressing"]
+    assert other["albums"][0]["id"] != pressing["albums"][0]["id"]
+    assert quiet["followed"] is True
+    assert quiet["entry_id"] == artist.json()["id"]
+    assert quiet["rating"] is None
+    assert [album["title"] for album in quiet["albums"]] == ["Quiet Pressing"]
+    assert quiet["albums"][0]["rating"] == 7
+    assert [track["title"] for track in quiet["albums"][0]["songs"]] == ["Quiet Single"]
+    assert quiet["albums"][0]["songs"][0]["rating"] == 2
+    assert quiet["songs"] == []
+    assert client.get(f"/api/entries/{artist.json()['id']}").json()["rating"] is None
+    followed = _groups(client, status="following", sort="title")
+    assert [item["title"] for item in followed["items"]] == ["Quiet Catalog", "Quiet Voice"]
+    empty = next(item for item in followed["items"] if item["title"] == "Quiet Catalog")
+    assert empty["source"] == "musicbrainz"
+    assert empty["entry_id"] == catalog.json()["id"]
+    assert empty["rating"] == 1
+    assert empty["saved_count"] == 0
+    assert empty["albums"] == []
+    assert empty["songs"] == []
+    listening = _groups(client, status="completed")
+    assert listening["items"] == []
+    assert listening["total"] == 0
+    unfollowed = _groups(client, status="unfollowed", sort="title")
+    assert [item["title"] for item in unfollowed["items"]] == ["Only Voice", "Only Voice"]
+    named = _groups(client, q="loose single")
+    assert [item["catalog_id"] for item in named["items"]] == [pressing["catalog_id"]]
+    favorites = _groups(client, favorite=True)
+    assert [item["catalog_id"] for item in favorites["items"]] == [pressing["catalog_id"]]
+    ranked = _groups(client, sort="rating")
+    assert ranked["items"][0]["title"] == "Quiet Catalog"
+    assert ranked["items"][0]["rating"] == 1
+    assert all(item["rating"] is None for item in ranked["items"][1:])
+    assert pressing["albums"][0]["rating"] == 8
+    with client.app.state.database.sessionmaker() as db:
+        hidden, hidden_total = records.list_saved_artist_groups(
+            db, 2, None, None, "title", 0, 24, False, None
+        )
+    assert hidden == []
+    assert hidden_total == 0

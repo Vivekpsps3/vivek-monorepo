@@ -27,7 +27,7 @@ test('each collection shows its own saved items and All items stays deliberate',
   await page.goto('/media/library?kind=artist&status=following&sort=title');
   await expect(page.getByRole('link', { name: 'Harbor Ensemble', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Harbor Field Guide', exact: true })).toHaveCount(0);
-  await expect(page.getByText('Music. Artists you follow', { exact: false })).toBeVisible();
+  await expect(page.getByText('Music. Artists you have saved', { exact: false })).toBeVisible();
 
   const reads: string[] = [];
   page.on('request', (req) => {

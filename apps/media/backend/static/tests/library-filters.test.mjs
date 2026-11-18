@@ -129,6 +129,8 @@ test("an impossible status is a visible normalization, not a silent empty read",
     null,
   );
   assert.equal(collectionKey("album"), "music");
+  assert.match(collectionSummary("artist"), /^Music\. Artists you have saved/);
+  assert.equal(emptyLibraryCopy("artist", false).title, "No artists in your music yet");
   assert.match(collectionSummary("book"), /^Books\./);
   assert.equal(collectionSummary(""), "All activity: movies, series, books, music, and games.");
   assert.equal(emptyLibraryCopy("movie", false).title, "No movies saved yet");

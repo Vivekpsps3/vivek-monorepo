@@ -218,6 +218,9 @@ export class DetailComponent {
   routeId(): string {
     return this.route.snapshot.paramMap.get("id") || "0";
   }
+  libraryReturn(): Record<string, unknown> {
+    return this.source.link("/media/library");
+  }
   load(id: number, force = false): void {
     // A second param emission for the item already on screen used to cancel
     // the form and drop a save that had just been edited.

@@ -9,7 +9,7 @@ from typing import Any, NamedTuple, NoReturn
 
 from fastapi import HTTPException
 from sqlalchemy import and_, case, func, or_
-from sqlalchemy.orm import Session, aliased, contains_eager
+from sqlalchemy.orm import Session, aliased, contains_eager, joinedload
 
 from apps.media.backend.models import (
     CatalogItem,
@@ -2729,6 +2729,279 @@ def music_state(db: Session, entry: UserEntry) -> dict:
     }
 
 
+def _grouped_artist_ids(db: Session, user_id: int) -> list[int]:
+    """Canonical artists this user follows or has saved music under. No provider read."""
+    child_catalog = aliased(CatalogItem)
+    saved_albums = (
+        db.query(MusicLink.parent_catalog_id.label("artist_id"))
+        .join(UserEntry, UserEntry.catalog_id == MusicLink.child_catalog_id)
+        .join(child_catalog, child_catalog.id == UserEntry.catalog_id)
+        .filter(
+            UserEntry.user_id == user_id,
+            child_catalog.kind == "album",
+            MusicLink.relation.in_(_ALBUM_RELATIONS),
+        )
+    )
+    direct_tracks = (
+        db.query(MusicLink.parent_catalog_id.label("artist_id"))
+        .join(UserEntry, UserEntry.catalog_id == MusicLink.child_catalog_id)
+        .join(child_catalog, child_catalog.id == UserEntry.catalog_id)
+        .filter(
+            UserEntry.user_id == user_id,
+            child_catalog.kind == "track",
+            MusicLink.relation == _DIRECT_TRACK,
+        )
+    )
+    track_link = aliased(MusicLink)
+    through_albums = (
+        db.query(MusicLink.parent_catalog_id.label("artist_id"))
+        .join(track_link, track_link.parent_catalog_id == MusicLink.child_catalog_id)
+        .join(UserEntry, UserEntry.catalog_id == track_link.child_catalog_id)
+        .join(child_catalog, child_catalog.id == UserEntry.catalog_id)
+        .filter(
+            UserEntry.user_id == user_id,
+            child_catalog.kind == "track",
+            MusicLink.relation.in_(_ALBUM_RELATIONS),
+            track_link.relation.in_(_TRACK_RELATIONS),
+        )
+    )
+    owned = (
+        db.query(UserEntry.catalog_id.label("artist_id"))
+        .join(CatalogItem, CatalogItem.id == UserEntry.catalog_id)
+        .filter(UserEntry.user_id == user_id, CatalogItem.kind == "artist")
+    )
+    union = saved_albums.union(direct_tracks, through_albums, owned).subquery()
+    rows = (
+        db.query(CatalogItem.id)
+        .join(union, union.c.artist_id == CatalogItem.id)
+        .filter(CatalogItem.kind == "artist")
+        .all()
+    )
+    return [row.id for row in rows]
+
+
+def _load_group_children(
+    db: Session, user_id: int, child_ids_by_artist: dict[int, set[int]]
+) -> dict[int, list[UserEntry]]:
+    wanted = {entry_id for ids in child_ids_by_artist.values() for entry_id in ids}
+    by_id: dict[int, UserEntry] = {}
+    if wanted:
+        rows = (
+            db.query(UserEntry)
+            .options(joinedload(UserEntry.catalog))
+            .filter(UserEntry.user_id == user_id, UserEntry.id.in_(wanted))
+            .all()
+        )
+        by_id = {row.id: row for row in rows}
+    ordered: dict[int, list[UserEntry]] = {}
+    for artist_id, ids in child_ids_by_artist.items():
+        children = [by_id[entry_id] for entry_id in ids if entry_id in by_id]
+        children.sort(
+            key=lambda entry: (
+                0 if entry.catalog.kind == "album" else 1,
+                entry.catalog.year is None,
+                entry.catalog.year or 0,
+                entry.catalog.title.casefold(),
+                entry.id,
+            )
+        )
+        ordered[artist_id] = children
+    return ordered
+
+
+def _nests_for_page(
+    db: Session, children_by_artist: dict[int, list[UserEntry]]
+) -> dict[int, dict[str, list]]:
+    """Albums once, their saved songs inside, and songs whose album is not saved."""
+    albums_by_artist: dict[int, list[UserEntry]] = {}
+    tracks_by_artist: dict[int, list[UserEntry]] = {}
+    album_catalog_ids: set[int] = set()
+    track_catalog_ids: set[int] = set()
+    for artist_id, children in children_by_artist.items():
+        albums = [child for child in children if child.catalog.kind == "album"]
+        tracks = [child for child in children if child.catalog.kind == "track"]
+        albums_by_artist[artist_id] = albums
+        tracks_by_artist[artist_id] = tracks
+        album_catalog_ids.update(album.catalog_id for album in albums)
+        track_catalog_ids.update(track.catalog_id for track in tracks)
+    links: list[MusicLink] = []
+    if album_catalog_ids and track_catalog_ids:
+        links = (
+            db.query(MusicLink)
+            .filter(
+                MusicLink.relation.in_(_TRACK_RELATIONS),
+                MusicLink.parent_catalog_id.in_(album_catalog_ids),
+                MusicLink.child_catalog_id.in_(track_catalog_ids),
+            )
+            .all()
+        )
+    by_pair: dict[tuple[int, int], MusicLink] = {}
+    for link in links:
+        key = (link.parent_catalog_id, link.child_catalog_id)
+        current = by_pair.get(key)
+        if current is None or (link.position or 0, link.id) < (current.position or 0, current.id):
+            by_pair[key] = link
+    nests: dict[int, dict[str, list]] = {}
+    for artist_id, albums in albums_by_artist.items():
+        tracks = tracks_by_artist.get(artist_id, [])
+        songs_by_album: dict[int, list[tuple[int, int, UserEntry]]] = {
+            album.catalog_id: [] for album in albums
+        }
+        placed: set[int] = set()
+        album_ids = {album.catalog_id for album in albums}
+        for track in tracks:
+            for album_id in album_ids:
+                matched = by_pair.get((album_id, track.catalog_id))
+                if matched is None:
+                    continue
+                songs_by_album[album_id].append((matched.position or 0, track.id, track))
+                placed.add(track.id)
+        album_rows = []
+        for album in albums:
+            ordered = sorted(songs_by_album[album.catalog_id], key=lambda item: (item[0], item[1]))
+            card = entry_card(album)
+            card["songs"] = [entry_card(item[2]) for item in ordered]
+            album_rows.append(card)
+        loose = [track for track in tracks if track.id not in placed]
+        loose.sort(key=lambda entry: (entry.catalog.title.casefold(), entry.id))
+        nests[artist_id] = {
+            "albums": album_rows,
+            "songs": [entry_card(track) for track in loose],
+        }
+    return nests
+
+
+def _entry_has_tags(entry: UserEntry | None, tags: list[str]) -> bool:
+    if entry is None:
+        return False
+    stored = loads(entry.tags, [])
+    if not isinstance(stored, list):
+        return False
+    keys = {tag.casefold() for tag in stored if isinstance(tag, str)}
+    return all(tag.casefold() in keys for tag in tags)
+
+
+def _group_stamp(
+    entry: UserEntry | None, children: list[UserEntry], catalog: CatalogItem, field: str
+) -> float:
+    values = []
+    if entry is not None:
+        values.append(getattr(entry, field))
+    values.extend(getattr(child, field) for child in children)
+    if not values:
+        values.append(getattr(catalog, field))
+    stamps = [value.timestamp() for value in values if value is not None]
+    return max(stamps) if stamps else 0.0
+
+
+def _artist_group_payload(
+    catalog: CatalogItem,
+    owned: UserEntry | None,
+    children: list[UserEntry],
+    nest: dict[str, list] | None,
+) -> dict:
+    shape = nest or {"albums": [], "songs": []}
+    return {
+        "catalog_id": catalog.id,
+        "title": catalog.title,
+        "source": catalog.source,
+        "followed": owned is not None and artist_is_followed(owned),
+        "entry_id": None if owned is None else owned.id,
+        "rating": None if owned is None else owned.rating,
+        "saved_count": len(children),
+        "albums": shape["albums"],
+        "songs": shape["songs"],
+        "saved_children": [entry_card(child) for child in children],
+    }
+
+
+def list_saved_artist_groups(
+    db: Session,
+    user_id: int,
+    query: str | None,
+    status: str | None,
+    sort: str,
+    offset: int,
+    limit: int,
+    favorite: bool,
+    tags: list[str] | None,
+) -> tuple[list[dict], int]:
+    """One page of artist groups. A read does not follow, write, or import a catalog."""
+    if status:
+        if status in STATUSES:
+            return [], 0
+        choice(status, ARTIST_STATUSES, "Status")
+    artist_ids = _grouped_artist_ids(db, user_id)
+    if not artist_ids:
+        return [], 0
+    catalogs = {
+        row.id: row for row in db.query(CatalogItem).filter(CatalogItem.id.in_(artist_ids)).all()
+    }
+    owned = {
+        row.catalog_id: row
+        for row in db.query(UserEntry)
+        .filter(UserEntry.user_id == user_id, UserEntry.catalog_id.in_(list(catalogs)))
+        .all()
+    }
+    child_map = _saved_child_ids(db, user_id, list(catalogs))
+    children_of = _load_group_children(db, user_id, child_map)
+    needle = query.strip().casefold() if query and query.strip() else ""
+    chosen: list[tuple[CatalogItem, UserEntry | None, list[UserEntry]]] = []
+    for artist_id, catalog in catalogs.items():
+        entry = owned.get(artist_id)
+        children = children_of.get(artist_id, [])
+        followed = entry is not None and artist_is_followed(entry)
+        if status == "following" and not followed:
+            continue
+        if status == "unfollowed" and followed:
+            continue
+        if favorite and not (
+            (entry is not None and entry.favorite) or any(child.favorite for child in children)
+        ):
+            continue
+        if tags and not (
+            _entry_has_tags(entry, tags) or any(_entry_has_tags(child, tags) for child in children)
+        ):
+            continue
+        if needle:
+            names = [catalog.title, *(child.catalog.title for child in children)]
+            names.extend(child.catalog.creator or "" for child in children)
+            if not any(needle in name.casefold() for name in names):
+                continue
+        chosen.append((catalog, entry, children))
+
+    def sort_key(item: tuple[CatalogItem, UserEntry | None, list[UserEntry]]):
+        catalog, entry, children = item
+        title = catalog.title_sort or catalog.title.casefold()
+        ident = catalog.id
+        if sort == "title":
+            return (title, ident)
+        if sort == "rating":
+            rating = None if entry is None else entry.rating
+            return (rating is None, -(rating or 0), title, ident)
+        if sort == "release":
+            years = [
+                child.catalog.year
+                for child in children
+                if child.catalog.kind == "album" and child.catalog.year is not None
+            ]
+            year = max(years) if years else None
+            return (year is None, -(year or 0), title, ident)
+        if sort == "added":
+            return (-_group_stamp(entry, children, catalog, "created_at"), ident)
+        return (-_group_stamp(entry, children, catalog, "updated_at"), -ident)
+
+    chosen.sort(key=sort_key)
+    total = len(chosen)
+    window = chosen[offset : offset + limit]
+    nests = _nests_for_page(db, {catalog.id: children for catalog, _entry, children in window})
+    items = [
+        _artist_group_payload(catalog, entry, children, nests.get(catalog.id))
+        for catalog, entry, children in window
+    ]
+    return items, total
+
+
 def saved_artist_group(db: Session, user_id: int, catalog_id: int) -> dict:
     """Saved albums and songs for one canonical artist. Does not follow or import."""
     catalog = db.get(CatalogItem, catalog_id)
@@ -2742,14 +3015,8 @@ def saved_artist_group(db: Session, user_id: int, catalog_id: int) -> dict:
     children = _saved_group_entries(db, user_id, catalog.id)
     if owned is None and not children:
         fail_missing()
-    return {
-        "catalog_id": catalog.id,
-        "title": catalog.title,
-        "followed": owned is not None and artist_is_followed(owned),
-        "entry_id": None if owned is None else owned.id,
-        "saved_count": len(children),
-        "saved_children": [entry_card(child) for child in children],
-    }
+    nest = _nests_for_page(db, {catalog.id: children}).get(catalog.id)
+    return _artist_group_payload(catalog, owned, children, nest)
 
 
 def detail(db: Session, entry: UserEntry) -> dict:
