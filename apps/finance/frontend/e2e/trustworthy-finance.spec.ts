@@ -325,7 +325,8 @@ test('Fidelity market values survive an interrupted replacement and explicit ref
   await vault.open('/have?t=holdings');
   await expectQuoteRequests(vault, ['VOO']);
   await expectHoldingPrice(vault, 'VOO', 125);
-  await page.getByRole('button', { name: 'Import from Fidelity', exact: true }).click();
+  await page.getByRole('button', { name: 'Holdings actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Import from Fidelity', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: /Import from Fidelity/ });
   await dialog.locator('input[type=file]').setInputFiles({
     name: 'positions.csv', mimeType: 'text/csv', buffer: Buffer.from(
@@ -347,11 +348,13 @@ test('Fidelity market values survive an interrupted replacement and explicit ref
   await page.getByRole('link', { name: 'Home', exact: true }).first().click();
   await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,025.00'));
   await vault.open('/have?t=holdings');
-  await page.getByRole('button', { name: /Resume/ }).first().click();
+  await page.getByText('Finish your Fidelity import', { exact: true }).click();
+  await page.getByRole('button', { name: 'Resume Fidelity import', exact: true }).click();
   await expect(page.locator('.summary-card')).toContainText(moneyText('$340.00'));
   await expect(page.locator('app-portfolio')).toContainText(/unavailable|unknown/i);
   expect(vault.quoteRequests.map(symbol => symbol.toUpperCase())).toEqual(['VOO']);
-  await page.getByRole('button', { name: 'Refresh prices', exact: true }).click();
+  await page.getByRole('button', { name: 'Holdings actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Refresh prices', exact: true }).click();
   await expect.poll(() => vault.quoteRequests.slice(1).map(symbol => symbol.toUpperCase()).sort()).toEqual(['SPAXX', 'VOO']);
   await expect(page.locator('.summary-card')).toContainText(moneyText('$12,750.00'));
   expect(vault.data('assets')[0].current_value).toBe(1000);

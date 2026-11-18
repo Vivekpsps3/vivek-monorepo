@@ -1,6 +1,5 @@
 import {
   FidelityCommitResult,
-  FidelityImportOption,
   FidelityPreviewResult,
   FidelityPreviewRow,
   Holding,
@@ -98,13 +97,6 @@ interface CsvRecord {
   lineNo: number;
 }
 
-const FIDELITY_OPTION: FidelityImportOption = {
-  slug: 'fidelity',
-  name: 'Fidelity',
-  hint: 'Fidelity positions CSV. Market price and market value are optional; imports preview each valuation source before activating account replacements.',
-  file_extensions: ['.csv'],
-};
-
 const HEADER_ALIASES: Record<string, string[]> = {
   account_number: ['account number', 'account'],
   account_name: ['account name', 'account title', 'name'],
@@ -118,10 +110,6 @@ const HEADER_ALIASES: Record<string, string[]> = {
 };
 
 const REQUIRED_HEADERS = ['account_number', 'symbol', 'quantity'];
-
-export function listClientBrokerageImports(): FidelityImportOption[] {
-  return [FIDELITY_OPTION];
-}
 
 export function buildFidelityImportPreview(filename: string, content: string): FidelityPreviewResult {
   const parsed = parseFidelityCsv(content);
@@ -175,7 +163,7 @@ export function buildFidelityImportPreview(filename: string, content: string): F
   }
 
   return {
-    broker: FIDELITY_OPTION.name,
+    broker: 'Fidelity',
     filename,
     accounts,
     rows,

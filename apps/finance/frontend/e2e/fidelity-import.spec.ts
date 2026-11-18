@@ -40,7 +40,8 @@ for (const width of [390]) {
         });
         await vault.open('/have?t=holdings');
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-        await page.getByRole('button', { name: 'Import from Fidelity', exact: true }).click();
+        await page.getByRole('button', { name: 'Holdings actions', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Import from Fidelity', exact: true }).click();
         return { vault, dialog: page.getByRole('dialog', { name: 'Import from Fidelity', exact: true }) };
       }
 
@@ -60,7 +61,8 @@ for (const width of [390]) {
           const portfolio = page.locator('app-portfolio');
           await expect(portfolio.getByText('EXISTING', { exact: true }).first()).toBeVisible();
           await expect(portfolio.getByText('MANUAL', { exact: true }).first()).toBeVisible();
-          await page.getByRole('button', { name: 'Import from Fidelity', exact: true }).click();
+          await page.getByRole('button', { name: 'Holdings actions', exact: true }).click();
+          await page.getByRole('menuitem', { name: 'Import from Fidelity', exact: true }).click();
           await expect(dialog.getByRole('alert')).toHaveCount(0);
         }
       });

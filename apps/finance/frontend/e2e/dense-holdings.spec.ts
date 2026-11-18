@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
 import { openUserMenu } from '../../../../tests/e2e/user-menu.mjs';
 import { expect, type Page, test } from './frozen-clock';
@@ -50,10 +51,22 @@ for (const [width, theme, zoom] of [
     await expect(rows).toHaveCount(8);
     for (const row of positions) await expect(rows.filter({ hasText: row.symbol })).toHaveCount(1);
     const harbor = rows.filter({ hasText: 'HARBOR' });
-    await expect(harbor.locator('[data-label="Value"]')).toHaveText(moneyText('$249.12'));
+    const harborValue = harbor.locator('[data-label="Value"]');
+    await expect(harborValue).toHaveText(moneyText('$249.12'));
+    if (!zoom && width >= 390) {
+      await expect(harbor.getByText('HARBOR', { exact: true })).toBeInViewport({ ratio: 1 });
+      await expect(harborValue).toBeInViewport({ ratio: 1 });
+      await info.attach('holdings-first-screen', { body: await page.screenshot(), contentType: 'image/png' });
+    }
     await expect(harbor).toContainText('Position date');
     await expect(rows.filter({ hasText: 'TIDE' })).toContainText('Stale');
-    await expect(rows.filter({ hasText: 'UNLISTED' }).locator('[data-label="Value"]')).toHaveText('Unavailable');
+    const unknown = rows.filter({ hasText: 'UNLISTED' });
+    await expect(unknown.locator('[data-label="Value"]')).toHaveText('Unavailable');
+    await expect(unknown).toContainText('Cost basis Unknown');
+    await expect(page.locator('app-portfolio .summary-card')).toContainText('Known portfolio value');
+    await expect(page.locator('app-portfolio .summary-card')).toContainText('1 position');
+    await expect(page.locator('app-portfolio .summary-card')).toContainText('1 with no date');
+    await expect(page.locator('app-portfolio .summary-card')).toContainText('1 stale quote');
     await expectNoOverflow(page);
     await expect(page.locator('app-portfolio .summary-card')).not.toContainText('UNLISTED');
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
@@ -77,11 +90,24 @@ for (const [width, theme, zoom] of [
     await search.fill('TIDE');
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText(moneyText('$51.16'));
+    await search.fill('nonexistent market position');
+    await expect(page.getByText('No matching holdings', { exact: true })).toBeVisible();
+    await expect(page.getByText('No holdings yet', { exact: true })).toHaveCount(0);
     await search.fill('');
     await expect(rows).toHaveCount(8);
     expect(vault.mutations).toHaveLength(0);
 
     if (width === 390 && theme === 'light') {
+      const tide = rows.filter({ hasText: 'TIDE' });
+      vault.failQuote('TIDE');
+      await tide.getByRole('button', { name: 'Refresh price for TIDE' }).tap();
+      await expect(page.getByText('TIDE price could not be refreshed. Its prior price remains available.')).toBeVisible();
+      await expect(tide).toContainText('Stale · 14 days old');
+      await expect(tide.locator('[data-label="Value"]')).toHaveText(moneyText('$51.16'));
+      expect(vault.data('holdings').find(row => row.symbol === 'TIDE')).toMatchObject({
+        current_price: 25.58, quote_date: '2026-10-01',
+      });
+      expect(vault.mutations).toHaveLength(0);
       await edit.tap();
       dialog = page.getByRole('dialog', { name: 'Edit holding' });
       await dialog.getByRole('textbox', { name: 'Shares' }).fill('3');
@@ -98,6 +124,77 @@ for (const [width, theme, zoom] of [
     }
   });
 }
+
+test('Holdings tools and account search keep provenance and saved nicknames', async ({ page }, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await configure(page, 'dark');
+  const vault = await syntheticVault(page, {
+    brokerage_accounts: [
+      { id: 21, broker_slug: 'fidelity', broker_name: 'Fidelity', account_mask: 'SYN1', nickname: 'Harbor account' },
+      { id: 22, broker_slug: 'fidelity', broker_name: 'Fidelity', account_mask: 'SYN2', nickname: 'Harbor account' },
+    ],
+    holdings: [
+      { ...positions[0], brokerage_account_id: 21 },
+      { ...positions[1], brokerage_account_id: 22 },
+      ...positions.slice(2),
+    ],
+  });
+  await vault.open('/have?t=holdings');
+  const accountTables = page.getByRole('table', { name: 'Harbor account holdings', exact: true });
+  await expect(accountTables).toHaveCount(2);
+  await expect(accountTables.first().getByText('HARBOR', { exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(accountTables.first().locator('[data-label="Value"]')).toBeInViewport({ ratio: 1 });
+
+  const search = page.getByRole('searchbox', { name: 'Search holdings' });
+  await search.fill(' HARBOR ACCOUNT ');
+  await expect(accountTables).toHaveCount(2);
+  await expect(page.getByRole('table', { name: 'Manual holdings' })).toHaveCount(0);
+  await search.fill('Coastal Transport');
+  await expect(accountTables).toHaveCount(1);
+  await expect(accountTables).toContainText('Brokerage position');
+
+  const tools = page.getByRole('button', { name: 'Holdings actions', exact: true });
+  expect(Math.min((await tools.boundingBox())!.width, (await tools.boundingBox())!.height)).toBeGreaterThanOrEqual(44);
+  await tools.focus();
+  await page.keyboard.press('Enter');
+  const menu = page.getByRole('menu', { name: 'Holdings actions', exact: true });
+  const importAction = menu.getByRole('menuitem', { name: 'Import from Fidelity', exact: true });
+  await expect(importAction).toBeFocused();
+  await expectNoOverflow(page);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await info.attach('holdings-actions', { body: await page.screenshot(), contentType: 'image/png' });
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(tools).toBeFocused();
+  await tools.tap();
+  const exportAction = menu.getByRole('menuitem', { name: 'Export CSV', exact: true });
+  const [download] = await Promise.all([page.waitForEvent('download'), exportAction.tap()]);
+  expect(download.suggestedFilename()).toBe('holdings.csv');
+  const csv = await readFile(await download.path(), 'utf8');
+  expect(csv).toContain('"Cost Basis","Current Price","Market Value","Gain","Price Source","Position As Of","Quote Date"');
+  expect(csv).toContain('HARBOR');
+  expect(csv).toContain('live_eod');
+  expect(csv).not.toContain('TIDE');
+  expect(vault.mutations).toHaveLength(0);
+
+  const rename = page.getByRole('button', { name: 'Rename account Harbor account', exact: true });
+  await rename.tap();
+  const dialog = page.getByRole('dialog', { name: 'Rename account', exact: true });
+  const nickname = dialog.getByRole('textbox', { name: 'Account nickname' });
+  await expect(nickname).toBeFocused();
+  await nickname.fill('Harbor tax account');
+  vault.failNextWrites();
+  await dialog.getByRole('button', { name: 'Save nickname' }).tap();
+  await expect(dialog.getByRole('alert')).toBeVisible();
+  await expect(nickname).toHaveValue('Harbor tax account');
+  await dialog.getByRole('button', { name: 'Save nickname' }).tap();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Rename account Harbor tax account', exact: true })).toBeFocused();
+  await expect(page.getByRole('table', { name: 'Harbor tax account holdings', exact: true })).toBeVisible();
+  expect(vault.data('brokerage_accounts').find(account => account.id === 21)?.nickname).toBe('Harbor tax account');
+  expect(vault.data('brokerage_accounts').find(account => account.id === 22)?.nickname).toBe('Harbor account');
+  expect(vault.data('holdings')).toHaveLength(8);
+});
 
 for (const [width, theme, incomplete] of [[390, 'dark', true], [1280, 'light', false], [1280, 'dark', false]] as const) {
   test('Holdings mix keeps quote truth at ' + width + ' ' + theme, async ({ page }, info) => {
@@ -152,34 +249,42 @@ for (const [width, theme, incomplete] of [[390, 'dark', true], [1280, 'light', f
   });
 }
 
-test('a held Holdings row refresh cannot publish after a vault lock', async ({ page }) => {
-  await configure(page, 'light');
-  const holding = positions[0];
-  const vault = await syntheticVault(page, { holdings: [holding] });
-  const second = await page.context().newPage();
-  await vault.open('/have?t=holdings');
-  await vault.open('/have?t=holdings', second);
-  let release!: () => void;
-  const held = new Promise<void>(done => { release = done; });
-  await page.route('**/api/market/price/HARBOR?*', async route => {
-    await held;
-    await route.fulfill({ json: { symbol: 'HARBOR', valid: true, price: 450, quote_date: '2026-10-14' } }).catch(() => {});
+for (const refresh of ['row', 'all'] as const) {
+  test(`a held Holdings ${refresh} refresh cannot publish after a vault lock`, async ({ page }) => {
+    await configure(page, 'light');
+    const holding = positions[0];
+    const vault = await syntheticVault(page, { holdings: [holding] });
+    const second = await page.context().newPage();
+    await vault.open('/have?t=holdings');
+    await vault.open('/have?t=holdings', second);
+    let release!: () => void;
+    const held = new Promise<void>(done => { release = done; });
+    await page.route('**/api/market/price/HARBOR?*', async route => {
+      await held;
+      await route.fulfill({ json: { symbol: 'HARBOR', valid: true, price: 450, quote_date: '2026-10-14' } }).catch(() => {});
+    });
+    const pending = page.waitForRequest('**/api/market/price/HARBOR?*');
+    if (refresh === 'row') {
+      await page.getByRole('button', { name: 'Refresh price for HARBOR' }).tap();
+    } else {
+      await page.getByRole('button', { name: 'Holdings actions', exact: true }).tap();
+      await page.getByRole('menuitem', { name: 'Refresh prices', exact: true }).tap();
+      await expect(page.getByText('Refreshing prices…', { exact: true })).toBeVisible();
+    }
+    await pending;
+    await page.getByRole('button', { name: 'Edit HARBOR' }).tap();
+    const draft = page.getByRole('dialog', { name: 'Edit holding' });
+    await draft.getByRole('textbox', { name: 'Shares' }).fill('243');
+    const menu = await openUserMenu(second);
+    await menu.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+    await expect(page).toHaveURL(/\/vault\/unlock/);
+    release();
+    await expect(draft).toHaveCount(0);
+    await expect(page.getByText(/HARBOR price (refreshed|could not be refreshed)|Updated .*holding price|Saved prices remain available/)).toHaveCount(0);
+    await page.getByLabel('Vault passphrase').fill(SYNTHETIC_VAULT_PASSPHRASE);
+    await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+    await expect(page.getByRole('table', { name: 'Manual holdings' })).toContainText(moneyText('$249.12'));
+    expect(vault.data('holdings')[0]).toMatchObject({ shares: 2, current_price: 124.56 });
+    expect(vault.mutations).toHaveLength(0);
   });
-  const pending = page.waitForRequest('**/api/market/price/HARBOR?*');
-  await page.getByRole('button', { name: 'Refresh price for HARBOR' }).tap();
-  await pending;
-  await page.getByRole('button', { name: 'Edit HARBOR' }).tap();
-  const draft = page.getByRole('dialog', { name: 'Edit holding' });
-  await draft.getByRole('textbox', { name: 'Shares' }).fill('243');
-  const menu = await openUserMenu(second);
-  await menu.getByRole('button', { name: 'Lock Finance', exact: true }).click();
-  await expect(page).toHaveURL(/\/vault\/unlock/);
-  release();
-  await expect(draft).toHaveCount(0);
-  await expect(page.getByText(/HARBOR price (refreshed|could not be refreshed)/)).toHaveCount(0);
-  await page.getByLabel('Vault passphrase').fill(SYNTHETIC_VAULT_PASSPHRASE);
-  await page.getByRole('button', { name: 'Unlock', exact: true }).click();
-  await expect(page.getByRole('table', { name: 'Manual holdings' })).toContainText(moneyText('$249.12'));
-  expect(vault.data('holdings')[0]).toMatchObject({ shares: 2, current_price: 124.56 });
-  expect(vault.mutations).toHaveLength(0);
-});
+}

@@ -7,7 +7,6 @@ import {
   BankImportFilePreview,
   BankImportOption,
   FidelityCommitResult,
-  FidelityImportOption,
   FidelityPreviewResult,
   FidelityPreviewRow,
   ImportCommitResult,
@@ -30,7 +29,6 @@ import {
   buildFidelityImportPreview,
   commitFidelityImportRows,
   getResumableFidelityStages,
-  listClientBrokerageImports,
   resumeFidelityImportStage,
 } from '../utils/fidelity-import.util';
 
@@ -108,10 +106,6 @@ export class FinanceImportService {
 
   commitBank(rows: ImportPreviewRow[]): Promise<ImportCommitResult> {
     return commitBankImportRows(this.store, rows);
-  }
-
-  listBrokerages(): FidelityImportOption[] {
-    return listClientBrokerageImports();
   }
 
   async previewFidelity(file: File): Promise<FidelityPreviewResult> {

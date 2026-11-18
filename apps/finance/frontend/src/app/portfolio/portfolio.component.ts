@@ -28,6 +28,7 @@ import {
   holdingGain,
   holdingGainPercent,
   holdingMarketValue,
+  hasUnvaluedPositions,
   actualQuoteDate,
   portfolioDateSummary,
   quoteFreshness,
@@ -54,6 +55,8 @@ import {
   UiButtonComponent,
   UiCardComponent,
   UiEmptyStateComponent,
+  UiMenuComponent,
+  UiMenuItemDirective,
   UiPageHeaderComponent,
   UiDataTableComponent,
   UiDialogComponent,
@@ -74,6 +77,8 @@ import { PluralPipe } from '../shared/pipes/plural.pipe';
     UiCardComponent,
     UiBadgeComponent,
     UiEmptyStateComponent,
+    UiMenuComponent,
+    UiMenuItemDirective,
     UiDataTableComponent,
     UiDialogComponent,
   ],
@@ -86,6 +91,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   holdings: Holding[] = [];
   filteredHoldings: Holding[] = [];
   searchTerm = '';
+  readonly manualGroupLabel = 'Manual / Unassigned';
   showModal = false;
   saving = false;
   loading = false;
@@ -112,7 +118,9 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   // Nickname editing
   editingNicknameFor: number | null = null;
-  nicknameDraft: string = '';
+  nicknameDraft = '';
+  nicknameSaveError = '';
+  savingNickname = false;
 
   private destroy$ = new Subject<void>();
   private destroyed = false;
@@ -126,29 +134,16 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    this.loading = true;
     this.marketRefresh.status$.pipe(takeUntil(this.destroy$)).subscribe(state => {
       this.refreshingPrices = state.phase === 'refreshing';
       this.cdr.markForCheck();
     });
-    this.financeService.isLoading$.pipe(takeUntil(this.destroy$)).subscribe();
     this.financeService.holdings$.pipe(takeUntil(this.destroy$)).subscribe(data => {
       this.holdings = data;
       this.applyFilter();
       this.cdr.markForCheck();
     });
-    this.financeService.getHoldings().pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => {
-        this.loading = false;
-        this.holdingsLoadError = null;
-        this.cdr.markForCheck();
-      },
-      error: error => {
-        this.loading = false;
-        this.holdingsLoadError = error?.message || 'The app could not load holdings. Try again.';
-        this.cdr.markForCheck();
-      },
-    });
+    this.retryLoadHoldings();
     this.loadResumableFidelityStages();
   }
 
@@ -178,23 +173,29 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  refreshAllPrices() {
+  async refreshAllPrices(): Promise<void> {
+    const session = this.financeService.sessionToken;
     this.refreshingPrices = true;
-    void this.marketRefresh.refreshNow().then(result => {
-        if (!this.destroyed) {
-        this.refreshingPrices = false;
-        if (result.phase === 'complete') this.toastService.success(
+    try {
+      const result = await this.marketRefresh.refreshNow();
+      if (this.destroyed || session !== this.financeService.sessionToken) return;
+      if (result.phase === 'complete') {
+        this.toastService.success(
           `Updated ${plural(result.updatedHoldings, 'holding price')} and ${plural(result.updatedEmployerValuations, 'employer valuation')}`
         );
-        else this.toastService.error('Some prices could not be refreshed. Saved prices remain available; see the refresh details above.');
-        this.cdr.markForCheck();
-        }
-      }).catch(() => {
-        if (this.destroyed) return;
-        this.refreshingPrices = false;
+      } else {
+        this.toastService.error('Some prices could not be refreshed. Saved prices remain available.');
+      }
+    } catch {
+      if (!this.destroyed && session === this.financeService.sessionToken) {
         this.toastService.error('Prices could not be refreshed. Saved prices remain available.');
+      }
+    } finally {
+      if (!this.destroyed && session === this.financeService.sessionToken) {
+        this.refreshingPrices = false;
         this.cdr.markForCheck();
-      });
+      }
+    }
   }
 
   refreshHoldingPrice(h: Holding) {
@@ -434,44 +435,34 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     return value == null ? 'Unavailable' : formatMoney(fromDollars(value), { sign: 'always' });
   }
 
-  /** Grouped view for better account breakdown.
-   *  Fidelity gets special treatment with sub-accounts.
-   */
   get accountGroups() {
-    const brokerageSubs: { [key: string]: Holding[] } = {};
+    const accounts = new Map<number, Holding[]>();
     const manual: Holding[] = [];
-
-    for (const h of this.filteredHoldings) {
-      if (h.brokerage_account_id != null) {
-        // Key by account id so nicknames don't accidentally merge different accounts
-        const key = `ba-${h.brokerage_account_id}`;
-        if (!brokerageSubs[key]) brokerageSubs[key] = [];
-        brokerageSubs[key].push(h);
+    for (const holding of this.filteredHoldings) {
+      if (holding.brokerage_account_id == null) {
+        manual.push(holding);
       } else {
-        manual.push(h);
+        const id = Number(holding.brokerage_account_id);
+        const group = accounts.get(id);
+        if (group) group.push(holding);
+        else accounts.set(id, [holding]);
       }
     }
 
-    const fidelityGroups = Object.keys(brokerageSubs).map(key => {
-      const hs = brokerageSubs[key];
-      const first = hs[0];
-      const label = first?.account_display || 'Brokerage Account';
-      return {
-        label,
-        holdings: hs,
-        totalValue: hs.reduce((sum, h) => sum + (h.value || 0), 0),
-        unvaluedCount: hs.filter(h => h.value == null || !Number.isFinite(Number(h.value))).length,
-        brokerageAccountId: first?.brokerage_account_id || null,
-      };
-    }).sort((a, b) => a.label.localeCompare(b.label));
+    const brokerage = Array.from(accounts, ([brokerageAccountId, holdings]) => ({
+      brokerageAccountId,
+      label: holdings[0].account_display || 'Brokerage account',
+      ...this.summarizeGroup(holdings),
+    })).sort((a, b) => a.label.localeCompare(b.label));
+    return { brokerage, manual: this.summarizeGroup(manual) };
+  }
 
+  private summarizeGroup(holdings: Holding[]) {
     return {
-      fidelity: fidelityGroups,
-      fidelityTotal: fidelityGroups.reduce((s, g) => s + g.totalValue, 0),
-      fidelityHasUnvalued: fidelityGroups.some(g => g.unvaluedCount > 0),
-      manual,
-      manualTotal: manual.reduce((s, h) => s + (h.value || 0), 0),
-      manualUnvaluedCount: manual.filter(h => h.value == null || !Number.isFinite(Number(h.value))).length,
+      holdings,
+      hasUnvalued: hasUnvaluedPositions(holdings),
+      totalValue: holdings.some(holding => holdingMarketValue(holding) != null)
+        ? totalPortfolioValue(holdings) : null,
     };
   }
 
@@ -501,7 +492,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   }
 
   positionDateSummary(): string {
-    return portfolioDateSummary(this.holdings.map(h => (h as Holding & { position_as_of?: string | null }).position_as_of));
+    return portfolioDateSummary(this.holdings.map(h => h.position_as_of));
   }
 
   quoteDateSummary(): string {
@@ -516,12 +507,12 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     return this.dateLabel(this.quoteDate(h));
   }
 
-  get hasMissingValues(): boolean {
-    return this.missingValueCount > 0;
-  }
-
   get missingValueCount(): number {
     return this.holdings.filter(h => holdingMarketValue(h) == null).length;
+  }
+
+  get staleQuoteCount(): number {
+    return this.holdings.filter(holding => quoteFreshness(holding) === 'Stale').length;
   }
 
   get provisionalPositionCount(): number {
@@ -559,22 +550,19 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     });
   }
 
-  applyFilter() {
-    if (!this.searchTerm) {
-      this.filteredHoldings = this.holdings;
-    } else {
-      const term = this.searchTerm.toLowerCase();
-      this.filteredHoldings = this.holdings.filter(h => h.symbol.toLowerCase().includes(term));
-    }
+  applyFilter(searchTerm = this.searchTerm): void {
+    this.searchTerm = searchTerm;
+    const term = searchTerm.trim().toLowerCase();
+    this.filteredHoldings = term ? this.holdings.filter(holding => [
+      holding.symbol,
+      holding.company_name,
+      holding.account_display,
+      holding.brokerage_account_id == null ? this.manualGroupLabel : null,
+    ].some(label => label?.toLowerCase().includes(term))) : this.holdings;
   }
 
-  onSearchChange() {
-    this.applyFilter();
-  }
-
-  /** F16: where a holding came from, for the details row. */
   holdingSource(h: Holding): string {
-    return h.brokerage_account_id != null ? 'Fidelity' : 'Manual';
+    return h.brokerage_account_id != null ? 'Brokerage position' : 'Manual';
   }
 
   async deleteHolding(h: Holding) {
@@ -634,39 +622,43 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         h.value ?? 'Unavailable',
         this.getGain(h) ?? 'Unavailable',
         h.price_source ?? '',
-        this.dateLabel((h as Holding & { position_as_of?: string | null }).position_as_of),
+        this.dateLabel(h.position_as_of),
         this.quoteDateLabel(h),
       ])
     );
   }
 
-  trackByHoldingId(_: number, h: Holding) {
-    return h.id;
-  }
-
-  startEditNickname(accountId: number | null | undefined, currentLabel: string) {
-    if (!accountId) return;
+  startEditNickname(accountId: number, currentLabel: string): void {
     this.editingNicknameFor = accountId;
-    this.nicknameDraft = currentLabel || '';
-    this.cdr.markForCheck();
+    this.nicknameDraft = currentLabel;
+    this.nicknameSaveError = '';
   }
 
-  cancelEditNickname() {
+  cancelEditNickname(): void {
+    if (this.savingNickname) return;
     this.editingNicknameFor = null;
     this.nicknameDraft = '';
-    this.cdr.markForCheck();
+    this.nicknameSaveError = '';
   }
 
-  saveNickname() {
-    if (!this.editingNicknameFor) return;
+  saveNickname(): void {
     const id = this.editingNicknameFor;
-    this.financeService.setAccountNickname(id, this.nicknameDraft.trim() || null).subscribe({
-      next: () => {
-        this.editingNicknameFor = null;
-        this.nicknameDraft = '';
-        this.cdr.markForCheck();
-      },
-    });
+    if (id === null || this.savingNickname) return;
+    this.savingNickname = true;
+    this.nicknameSaveError = '';
+    this.financeService.setAccountNickname(id, this.nicknameDraft.trim() || null)
+      .pipe(takeUntil(this.destroy$)).subscribe({
+        next: () => {
+          this.savingNickname = false;
+          this.cancelEditNickname();
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.savingNickname = false;
+          this.nicknameSaveError = 'The nickname could not be saved. Try again.';
+          this.cdr.markForCheck();
+        },
+      });
   }
 
   // Fidelity import (replaces positions for accounts in CSV)
@@ -679,15 +671,6 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.fidelityAccountReplacements = [];
     this.selectedFidelityAccounts.clear();
     this.cdr.markForCheck();
-    this.financeService.getBrokerageImports().pipe(takeUntil(this.destroy$)).subscribe({
-      next: (opts) => {
-        // auto select fidelity if present
-        if (opts.length) {
-          // no selected slug needed, we hard use 'fidelity' route
-        }
-        this.cdr.markForCheck();
-      },
-    });
   }
 
   closeFidelityImportModal() {

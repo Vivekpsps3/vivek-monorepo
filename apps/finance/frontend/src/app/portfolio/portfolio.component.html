@@ -5,75 +5,76 @@
 
     <div uiPageActions class="header-actions">
       <ui-button variant="primary" (clicked)="openAddModal()">Add holding</ui-button>
-      <ui-button
-        variant="secondary"
-        [disabled]="refreshingPrices || holdings.length === 0"
-        ariaLabel="Refresh prices"
-        (clicked)="refreshAllPrices()"
-      >
-        @if (refreshingPrices) {
-          <span class="spinner-inline" aria-hidden="true"></span>
-        }
-        Refresh prices
-      </ui-button>
-      <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
+      <ui-menu label="Holdings actions">
+        <button uiMenuItem (select)="openFidelityImportModal()">Import from Fidelity</button>
+        <button uiMenuItem [disabled]="!filteredHoldings.length" (select)="exportToCsv()">Export CSV</button>
+        <button uiMenuItem [disabled]="refreshingPrices || !holdings.length" (select)="refreshAllPrices()">Refresh prices</button>
+      </ui-menu>
     </div>
   </ui-page-header>
-  @for (stage of resumableFidelityStages; track stage.id) {
-    <ui-card class="resume-stage" [headingLevel]="2" [title]="'Finish your Fidelity import'">
-      <ui-button uiCardActions variant="primary" size="sm" (clicked)="resumeFidelityStage(stage)" [disabled]="fidelityImportCommitting">
-        @if (fidelityImportCommitting) { <span class="spinner-inline" aria-hidden="true"></span> }
-        Resume Fidelity import
-      </ui-button>
-      <p>{{ stage.filename }} · {{ stage.expected_row_count | plural:'staged position' }} · {{ stage.account_masks.length | plural:'account' }}</p>
-      <p>Your existing holdings stay until the replacement is verified. Resume to finish importing.</p>
+
+  @if (holdings.length) {
+    <ui-card class="summary-card">
+      @let missing = missingValueCount;
+      @let stale = staleQuoteCount;
+      @let provisional = provisionalPositionCount;
+      <div class="summary">
+        <div>
+          <span class="label">{{ missing && missing < holdings.length ? 'Known portfolio value' : 'Portfolio value' }}</span>
+          <strong class="big-number stat-display">{{ missing === holdings.length ? 'Unavailable' : (getTotalValue() | money) }}</strong>
+        </div>
+        <div>
+          <span class="label">Unrealized gain</span>
+          <strong class="big-number stat-display" [class.positive]="totalGainIsPositive()" [class.negative]="totalGainIsNegative()">{{ totalGainDisplay() }}</strong>
+        </div>
+      </div>
+      <div class="source-dates">
+        <p>Position dates <strong>{{ positionDateSummary() }}</strong></p>
+        <p>Quote dates <strong>{{ quoteDateSummary() }}</strong></p>
+      </div>
+      @if (missing || stale || provisional) {
+        <p class="hint">
+          @if (missing) { Market value unavailable for {{ missing | plural:'position' }}. }
+          @if (stale) { {{ stale | plural:'stale quote' }}. }
+          @if (provisional) { {{ provisional | plural:'position' }} with provisional values from cost basis. }
+        </p>
+      }
     </ui-card>
   }
-
-  @if (holdings.length > 0) {
-  <ui-card class="summary-card">
-    <div class="summary">
-      <div>
-        <div class="label">{{ hasMissingValues ? 'Known portfolio value' : 'Portfolio value' }}</div>
-        <div class="big-number stat-display">{{ getTotalValue() | money }}</div>
-        <div class="source-dates">
-          <p>Position dates <strong>{{ positionDateSummary() }}</strong></p>
-          <p>Quote dates <strong>{{ quoteDateSummary() }}</strong></p>
-        </div>
-        @if (provisionalPositionCount) {
-          <p class="hint">{{ provisionalPositionCount | plural:'position' }} currently use provisional cost-basis values.</p>
-        }
-      </div>
-      <div>
-        <div class="label">Unrealized gain</div>
-        @if (getTotalGain() == null) {
-          <div class="big-number stat-display">Unavailable</div>
-          <p class="hint">At least one position has an unknown basis or market value.</p>
-        } @else {
-          <div class="big-number stat-display" [class.positive]="totalGainIsPositive()" [class.negative]="totalGainIsNegative()">
-            {{ totalGainDisplay() }}
-          </div>
-        }
-      </div>
-    </div>
-    @if (hasMissingValues) {
-      <p class="hint">Market value unavailable for {{ missingValueCount | plural:'position' }}. The portfolio value is incomplete.</p>
-    }
-  </ui-card>
+  @if (refreshingPrices) {
+    <p class="hint refresh-status" role="status">
+      <span class="spinner-inline" aria-hidden="true"></span> Refreshing prices…
+    </p>
   }
 
-  <ui-card [title]="'Holdings'" [headingLevel]="2">
-    <div uiCardActions class="table-actions table-actions--toolbar">
+  @if (resumableFidelityStages.length) {
+    <details class="account-section">
+      <summary class="section-header">Finish your Fidelity import</summary>
+      @for (stage of resumableFidelityStages; track stage.id) {
+        <ui-card class="resume-stage" [headingLevel]="2" [title]="stage.filename">
+          <ui-button uiCardActions variant="secondary" (clicked)="resumeFidelityStage(stage)" [disabled]="fidelityImportCommitting">
+            Resume Fidelity import
+          </ui-button>
+          <p>{{ stage.expected_row_count | plural:'staged position' }} · {{ stage.account_masks.length | plural:'account' }}</p>
+          <p>Your existing holdings stay until the replacement is verified.</p>
+        </ui-card>
+      }
+    </details>
+  }
+
+  <ui-card class="positions-card" title="Positions" [headingLevel]="2">
+    @if (holdings.length) {
+      <div uiCardActions class="search-toolbar">
         <input name="searchTerm"
           type="search"
-          [(ngModel)]="searchTerm"
-          (input)="onSearchChange()"
-          placeholder="Search symbol..."
+          [ngModel]="searchTerm"
+          (ngModelChange)="applyFilter($event)"
+          placeholder="Symbol, name, or account"
           class="search-input"
           aria-label="Search holdings"
         />
-        <ui-button variant="secondary" size="sm" (clicked)="exportToCsv()">Export CSV</ui-button>
-    </div>
+      </div>
+    }
 
     <div *ngIf="loading" class="loading-overlay" role="status">
       <span class="spinner-inline" aria-hidden="true"></span> Loading holdings…
@@ -94,8 +95,8 @@
           <thead>
             <tr>
               <th scope="col">Symbol</th>
-              <th scope="col" class="num">Shares</th>
               <th scope="col" class="num">Value</th>
+              <th scope="col" class="num">Shares</th>
               <th scope="col" class="num">Gain</th>
               <th scope="col">Price</th>
               <th scope="col">Actions</th>
@@ -109,10 +110,14 @@
                   @if (h.company_name) {
                     <small class="company-sub">{{ h.company_name }}</small>
                   }
-                  <small class="holding-details">Cost basis {{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }} · Position date {{ dateLabel(h.position_as_of) }} · {{ holdingSource(h) }}</small>
+                  <small class="holding-details">
+                    Cost basis {{ h.cost_basis_status === 'unknown' || h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }}
+                    @if (h.cost_basis_status === 'provisional' && h.purchase_price !== null) { (provisional) }
+                    · Position date {{ dateLabel(h.position_as_of) }} · {{ holdingSource(h) }}
+                  </small>
                 </td>
-                <td class="num">{{ h.shares }}</td>
                 <td class="num">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
+                <td class="num">{{ h.shares }}</td>
                 <td class="num" [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">
                   {{ gainDisplay(h) }}
                   <small class="gain-pct" [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</small>
@@ -139,84 +144,61 @@
         </ui-data-table>
       </ng-template>
 
-      @if (accountGroups.fidelity.length > 0) {
+      @let groups = accountGroups;
+      @for (group of groups.brokerage; track group.brokerageAccountId) {
         <details class="account-section" open>
           <summary class="section-header">
-            <strong>Fidelity</strong>
-            <span class="section-total">{{ accountGroups.fidelityHasUnvalued ? 'Known ' : '' }}{{ accountGroups.fidelityTotal | money }}</span>
+            <strong>{{ group.label }}</strong>
+            <span class="section-total">{{ group.totalValue === null ? 'Unavailable' : (group.hasUnvalued ? 'Known ' : '') + (group.totalValue | money) }}</span>
           </summary>
-
-          @for (group of accountGroups.fidelity; track group.label) {
-            <details class="account-sub" open>
-              <summary>
-                <span class="account-label">
-                  @if (editingNicknameFor === group.brokerageAccountId) {
-                    <input name="nicknameDraft"
-                      type="text"
-                      class="nickname-input"
-                      [(ngModel)]="nicknameDraft"
-                      aria-label="Account nickname"
-                      (click)="$event.stopPropagation()"
-                      (keydown)="$event.stopPropagation()"
-                      (keyup.enter)="saveNickname()"
-                      (blur)="saveNickname()"
-                    />
-                    <ui-button
-                      variant="ghost"
-                      size="sm"
-                      (clicked)="cancelEditNickname(); $event.stopImmediatePropagation()"
-                    >
-                      Cancel
-                    </ui-button>
-                  } @else {
-                    {{ group.label }}
-                    <ui-button
-                      variant="ghost"
-                      size="sm"
-                      ariaLabel="Edit account nickname"
-                      (clicked)="startEditNickname(group.brokerageAccountId, group.label); $event.stopImmediatePropagation()"
-                    >
-                      Rename
-                    </ui-button>
-                  }
-                </span>
-                <span class="sub-total">{{ group.unvaluedCount ? 'Known ' : '' }}{{ group.totalValue | money }}</span>
-              </summary>
-
-              <div class="sub-table">
-                <ng-container *ngTemplateOutlet="holdingsTable; context: { rows: group.holdings, label: group.label + ' holdings' }" />
-              </div>
-            </details>
-          }
+          <ng-container *ngTemplateOutlet="holdingsTable; context: { rows: group.holdings, label: group.label + ' holdings' }" />
+          <div class="account-footer">
+            <ui-button variant="ghost" size="sm" [ariaLabel]="'Rename account ' + group.label" (clicked)="startEditNickname(group.brokerageAccountId, group.label)">
+              Rename account
+            </ui-button>
+          </div>
         </details>
       }
 
-      <!-- Manual / Unassigned -->
-      @if (accountGroups.manual.length > 0) {
+      @if (groups.manual.holdings.length) {
         <div class="account-section">
           <div class="section-header">
-            <strong>Manual / Unassigned</strong>
-            <span class="section-total">{{ accountGroups.manualUnvaluedCount ? 'Known ' : '' }}{{ accountGroups.manualTotal | money }}</span>
+            <strong>{{ manualGroupLabel }}</strong>
+            <span class="section-total">{{ groups.manual.totalValue === null ? 'Unavailable' : (groups.manual.hasUnvalued ? 'Known ' : '') + (groups.manual.totalValue | money) }}</span>
           </div>
-
-          <ng-container *ngTemplateOutlet="holdingsTable; context: { rows: accountGroups.manual, label: 'Manual holdings' }" />
+          <ng-container *ngTemplateOutlet="holdingsTable; context: { rows: groups.manual.holdings, label: 'Manual holdings' }" />
         </div>
       }
-
     </div>
 
     <ng-template #empty>
       @if (!loading && !holdingsLoadError) {
-        <ui-empty-state [title]="'No holdings yet'" message="Add a position by hand or import a Fidelity positions file.">
-          <div class="empty-actions">
-            <ui-button variant="primary" (clicked)="openAddModal()">Add holding</ui-button>
-            <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
-          </div>
-        </ui-empty-state>
+        @if (holdings.length) {
+          <ui-empty-state title="No matching holdings" message="Search by symbol, company name, or account." />
+        } @else {
+          <ui-empty-state title="No holdings yet" message="Add a position by hand or import a Fidelity positions file." />
+        }
       }
     </ng-template>
   </ui-card>
 </div>
+
+<ui-dialog scrollTarget=".main-content" [open]="editingNicknameFor !== null" labelledBy="holding-nickname-title" (closed)="cancelEditNickname()">
+  <h3 id="holding-nickname-title">Rename account</h3>
+  <form class="holding-form" (ngSubmit)="saveNickname()">
+    <div class="form-group">
+      <label for="holding-nickname">Account nickname</label>
+      <input id="holding-nickname" name="nickname" [(ngModel)]="nicknameDraft" data-dialog-initial-focus />
+    </div>
+    @if (nicknameSaveError) {
+      <p class="import-error" role="alert">{{ nicknameSaveError }}</p>
+    }
+    <div class="form-actions">
+      <ui-button type="submit" variant="primary" [disabled]="savingNickname">Save nickname</ui-button>
+      <ui-button variant="secondary" [disabled]="savingNickname" (clicked)="cancelEditNickname()">Cancel</ui-button>
+    </div>
+  </form>
+</ui-dialog>
 
 <ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="holding-modal-title" (closed)="closeModal()">
     <h3 id="holding-modal-title">{{ editingId ? 'Edit holding' : 'Add holding' }}</h3>
