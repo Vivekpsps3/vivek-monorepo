@@ -561,6 +561,8 @@ def test_openlibrary_detail_does_not_invent_a_day():
     assert work["year"] == 1965
     assert work["releases"][0]["precision"] == "year"
     assert work["creator"] == "Frank Herbert"
+    assert "authors" not in work["extra"]
+    assert "series" not in work["extra"]
     assert work["artwork_url"].endswith("/99-M.jpg")
     assert vague["releases"] == []
     assert vague["year"] is None
@@ -571,6 +573,43 @@ def test_openlibrary_detail_does_not_invent_a_day():
         "status": "released",
     }
     assert missing is None
+
+
+def test_openlibrary_detail_stores_only_canonical_author_and_series_keys():
+    pages = {
+        "/works/OL9W.json": {
+            "title": "Keyed Glass",
+            "authors": [
+                {"author": {"key": "/authors/OL10A"}, "name": "Ada Writer"},
+                {"name": "Someone Else"},
+                {"key": "/authors/OL10A"},
+            ],
+            "series": ["Harbor Cycle", {"name": "Harbor Cycle"}, "/series/OL55S"],
+            "by_statement": "by a cataloger",
+        },
+        "/works/OL8W.json": {
+            "title": "Statement Only",
+            "by_statement": "by the printer",
+            "series": ["A Similar Name"],
+        },
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = pages.get(request.url.path)
+        if body is None:
+            return httpx.Response(404)
+        return httpx.Response(200, json=body)
+
+    with _http(handler) as http:
+        keyed = openlibrary_detail(http, "OL9W")
+        plain = openlibrary_detail(http, "OL8W")
+    assert keyed is not None and plain is not None
+    assert keyed["creator"] == "Ada Writer"
+    assert keyed["extra"]["authors"] == [{"id": "openlibrary:OL10A", "name": "Ada Writer"}]
+    assert keyed["extra"]["series"] == [{"id": "openlibrary:OL55S"}]
+    assert plain["creator"] == "by the printer"
+    assert "authors" not in plain["extra"]
+    assert "series" not in plain["extra"]
 
 
 def test_game_detail_names_platforms_and_skips_metacritic(monkeypatch):

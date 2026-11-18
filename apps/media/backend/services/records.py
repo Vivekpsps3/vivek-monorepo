@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 import time
 from collections.abc import Callable, Sequence
 from datetime import UTC, date, datetime
@@ -24,6 +25,7 @@ from apps.media.backend.models import (
     utc_now,
 )
 from apps.media.backend.services.clock import today
+from apps.media.backend.services.textutil import excerpt
 from apps.media.backend.services.validate import (
     ARTIST_STATUSES,
     KINDS,
@@ -132,6 +134,47 @@ def entry_card(entry: UserEntry) -> dict:
     }
 
 
+_AUTHOR_ID = re.compile(r"^openlibrary:OL[1-9]\d{0,12}A$")
+_SERIES_ID = re.compile(r"^openlibrary:OL[1-9]\d{0,12}S$")
+
+
+def _link_name(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = " ".join(value.split())
+    return text[:300] or None
+
+
+def _book_identity(raw: object, pattern: re.Pattern[str]) -> dict | None:
+    """A canonical Open Library id. A display name never becomes an id."""
+    if not isinstance(raw, dict):
+        return None
+    ident = raw.get("id")
+    if not isinstance(ident, str) or pattern.fullmatch(ident) is None:
+        return None
+    return {"id": ident, "name": _link_name(raw.get("name"))}
+
+
+def _first_identity(raw: object, pattern: re.Pattern[str]) -> dict | None:
+    rows = raw if isinstance(raw, list) else [raw] if isinstance(raw, dict) else []
+    for item in rows:
+        found = _book_identity(item, pattern)
+        if found is not None:
+            return found
+    return None
+
+
+def book_links(catalog: CatalogItem) -> dict:
+    """Author and series links already stored on the catalog. This does not guess."""
+    extra = loads(catalog.extra, {})
+    if not isinstance(extra, dict):
+        return {"author": None, "series": None}
+    return {
+        "author": _first_identity(extra.get("authors"), _AUTHOR_ID),
+        "series": _first_identity(extra.get("series"), _SERIES_ID),
+    }
+
+
 def library_cards(db: Session, entries: list[UserEntry]) -> list[dict]:
     """Read only card facts for this page, without hydrating detail relationships."""
     from apps.media.backend.services.metadata import lifecycle_payload
@@ -164,6 +207,9 @@ def library_cards(db: Session, entries: list[UserEntry]) -> list[dict]:
             card.update(progress.get(entry.catalog_id, _EMPTY_SHOW))
         elif kind == "artist":
             card["saved_count"] = counts.get(entry.catalog_id, 0)
+        elif kind == "book":
+            card.update(book_links(entry.catalog))
+            card["note"] = excerpt(entry.review, 160) or None
         elif kind == "track":
             extra = loads(entry.catalog.extra, {})
             raw = (

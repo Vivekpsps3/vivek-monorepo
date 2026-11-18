@@ -47,6 +47,7 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
     status: ['want', 'anticipating', 'in_progress', 'completed', 'paused', 'dropped', 'following', 'unfollowed'],
     sort: ['activity', 'title', 'rating', 'newest'], fav: flag,
     offset: value => /^(?:0|[1-9]\d{0,6})$/.test(value),
+    face: ['spine', 'text'],
   },
   '/media/calendar': { month },
   '/media/add': {},

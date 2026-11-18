@@ -64,7 +64,16 @@ export interface MediaCard {
   rating: number | null;
   saved_count?: number;
   artist_groups?: ArtistGroupSummary[];
+  progress_value?: number | null;
+  progress_unit?: string | null;
   progress_label?: string | null;
+  /** Canonical author id. A creator string is not an author link. */
+  author?: { id: string; name: string | null } | null;
+  /** Canonical series id. A similar title is not a series. */
+  series?: { id: string; name: string | null } | null;
+  /** Excerpt of the saved note. The full note stays on the entry. */
+  note?: string | null;
+  anticipated?: boolean;
   lifecycle?: Lifecycle;
   caught_up?: boolean;
   metadata_incomplete?: boolean;

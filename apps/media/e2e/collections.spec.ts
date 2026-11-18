@@ -117,7 +117,7 @@ test('reload and back keep the collection, sort, page and favorite filter', asyn
   await page.reload();
   await expect(page).toHaveURL(/kind=book&sort=title&offset=24|kind=book&offset=24&sort=title/);
   await expect(page).toHaveURL(/offset=24/);
-  await expect(page.getByText('Shelf 24', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Shelf 24', exact: true })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/kind=book/);
   await expect(page).toHaveURL(/sort=title/);
@@ -198,7 +198,7 @@ async function expectCollectionChrome(
   await page.goto('/media/library?kind=book&sort=title');
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
   await expect(page.locator('main')).toHaveAttribute('data-collection', 'book');
-  await expect(page.getByText('Books. What you want to read', { exact: false })).toBeVisible();
+  await expect(page.getByText('Books. Current, read, and to-read shelves', { exact: false })).toBeVisible();
   const books = sections(page).getByRole('link', { name: 'Books', exact: true });
   await expect(books).toHaveAttribute('aria-current', 'page');
   const box = await books.boundingBox();

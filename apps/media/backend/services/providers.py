@@ -1786,6 +1786,76 @@ def itunes_detail(http: httpx.Client, source_id: str) -> dict | None:
     }
 
 
+_OL_AUTHOR_KEY = re.compile(r"^/authors/(OL[1-9]\d{0,12}A)$")
+_OL_SERIES_KEY = re.compile(r"^/series/(OL[1-9]\d{0,12}S)$")
+
+
+def _openlibrary_key(value: object) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, dict):
+        key = value.get("key")
+        if isinstance(key, str) and key.strip():
+            return key.strip()
+    return None
+
+
+def _openlibrary_person_name(value: object) -> str | None:
+    if not isinstance(value, dict) or not isinstance(value.get("name"), str):
+        return None
+    text = " ".join(value["name"].split())
+    if not text or text.startswith("/"):
+        return None
+    return text[:300]
+
+
+def _openlibrary_links(item: dict) -> tuple[list[str], list[dict], list[dict]]:
+    """Names stay names. Only /authors/OL…A and /series/OL…S become identities."""
+    names: list[str] = []
+    authors: list[dict] = []
+    seen_authors: set[str] = set()
+    raw_authors = item.get("authors")
+    for author in raw_authors if isinstance(raw_authors, list) else []:
+        if isinstance(author, str) and author.strip() and not author.strip().startswith("/"):
+            label = " ".join(author.split())[:300]
+            if label and label not in names:
+                names.append(label)
+            continue
+        nested = author.get("author") if isinstance(author, dict) else None
+        key = _openlibrary_key(nested) or _openlibrary_key(author)
+        name = _openlibrary_person_name(author) or _openlibrary_person_name(nested)
+        if name and name not in names:
+            names.append(name)
+        matched = _OL_AUTHOR_KEY.fullmatch(key or "")
+        if matched is None or f"openlibrary:{matched.group(1)}" in seen_authors:
+            continue
+        ident = f"openlibrary:{matched.group(1)}"
+        seen_authors.add(ident)
+        row = {"id": ident}
+        if name:
+            row["name"] = name
+        authors.append(row)
+    if not names and isinstance(item.get("by_statement"), str):
+        statement = " ".join(item["by_statement"].split())[:300]
+        if statement:
+            names.append(statement)
+    series: list[dict] = []
+    seen_series: set[str] = set()
+    raw_series = item.get("series")
+    for entry in raw_series if isinstance(raw_series, list) else []:
+        matched = _OL_SERIES_KEY.fullmatch(_openlibrary_key(entry) or "")
+        if matched is None or f"openlibrary:{matched.group(1)}" in seen_series:
+            continue
+        ident = f"openlibrary:{matched.group(1)}"
+        seen_series.add(ident)
+        row = {"id": ident}
+        name = _openlibrary_person_name(entry)
+        if name:
+            row["name"] = name
+        series.append(row)
+    return names, authors, series
+
+
 def _openlibrary_record(source_id: str) -> tuple[str, str] | None:
     text = source_id.strip()
     if not text or "/" in text or len(text) > 40:
@@ -1815,25 +1885,23 @@ def openlibrary_detail(http: httpx.Client, source_id: str) -> dict | None:
     description = item.get("description")
     if isinstance(description, dict):
         description = description.get("value")
-    authors = []
-    for author in item.get("authors") or []:
-        if isinstance(author, dict) and isinstance(author.get("name"), str):
-            authors.append(author["name"])
-        elif isinstance(author, str):
-            authors.append(author)
-    if not authors and isinstance(item.get("by_statement"), str):
-        authors.append(item["by_statement"])
+    names, authors, series = _openlibrary_links(item)
     dated = item.get("first_publish_date") or item.get("publish_date")
     year, releases = _loose_release(dated if isinstance(dated, str) else None)
     covers = item.get("covers") if isinstance(item.get("covers"), list) else []
     cover = covers[0] if covers and isinstance(covers[0], int) else None
     row = _detail_base("openlibrary", source_id.strip(), "book", title.strip(), "official")
-    row["creator"] = authors[0] if authors else None
+    row["creator"] = names[0] if names else None
     row["year"] = year
     row["overview"] = plain_text(description, 4000) if isinstance(description, str) else None
     row["artwork_url"] = f"https://covers.openlibrary.org/b/id/{cover}-M.jpg" if cover else None
     row["releases"] = releases
-    row["extra"] = {"record": record}
+    extra: dict = {"record": record}
+    if authors:
+        extra["authors"] = authors
+    if series:
+        extra["series"] = series
+    row["extra"] = extra
     return row
 
 
