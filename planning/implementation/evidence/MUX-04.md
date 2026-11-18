@@ -46,8 +46,8 @@ Node 20.20.2. Playwright 1.64.1 with cached Chromium 1248. This worktree has no 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/511. `Closes #400` only. Parent #304 remains open.
 - Roadmap #134 append-only status-note URL: after merge and archive.
-- Merged/activation status: local gates passed on `f1322a27a32527de180052a156afa46429ed125b`. Merge waits on the pull request and required checks.
+- Merged/activation status: PR #511 is open. Local gates passed on `f1322a27a32527de180052a156afa46429ed125b`. Merge waits on required checks.
 - Remaining external prerequisites: none for this leaf. MUX-05 through MUX-09 stay unbuilt. OPS-06 / #277 was not touched. Now and Calendar styling stay with MUX-09.
 - Next actor: open the pull request, wait for required checks, merge, then archive. Parent #304 remains open.
