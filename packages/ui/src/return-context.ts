@@ -61,6 +61,8 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/settings/account': {},
   '/settings/profile': {},
   '/settings/appearance': {},
+  '/settings/game': {},
+  '/settings/connections': {},
   '/settings/finance': {},
   '/settings/travel': {},
   '/settings/calendars': {},

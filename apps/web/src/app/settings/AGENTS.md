@@ -1,7 +1,9 @@
 # Settings
 
 The [registry](settings.registry.ts) owns mounted sections. Link existing app-owned
-editors and security/export controls rather than copying their forms.
+editors and security/export controls rather than copying their forms. Keep the
+grouped index at `/settings` and its deep links in the document manifest.
+Flight schedules mount the Travel-owned settings editor used by transport.
 
 [Calendar subscriptions](calendar-section.component.ts) manage the identity-owned
 `/api/account/calendar-feeds` lifecycle. Raw URLs are one-time disclosures: keep

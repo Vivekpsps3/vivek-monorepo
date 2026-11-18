@@ -5,7 +5,8 @@ provideHttpClientTesting,
 } from "@angular/common/http/testing";
 import { TestBed } from "@angular/core/testing";
 import { provideRouter } from "@angular/router";
-import { SESSION_CONTEXT,ToastService } from "@vivek/ui";
+import { BehaviorSubject, Subject } from "rxjs";
+import { SESSION_CONTEXT, ToastService } from "@vivek/ui";
 import { SettingsComponent } from "./settings.component";
 
 function settingsBody(hoursPerDay = "8") {
@@ -22,6 +23,8 @@ describe("SettingsComponent PTO settings (TPTO2A)", () => {
   let httpMock: HttpTestingController;
 
   function setup(hoursPerDay = "8") {
+    const users = new BehaviorSubject<{ id: number } | null>({ id: 1 });
+    const cleared = new Subject<void>();
     TestBed.configureTestingModule({
       imports: [SettingsComponent],
       providers: [
@@ -30,7 +33,11 @@ describe("SettingsComponent PTO settings (TPTO2A)", () => {
         provideRouter([]),
         {
           provide: SESSION_CONTEXT,
-          useValue: { currentUser: { id: 1 } },
+          useValue: {
+            get currentUser() { return users.value; },
+            user$: users,
+            cleared$: cleared,
+          },
         },
       ],
     });
@@ -40,7 +47,7 @@ describe("SettingsComponent PTO settings (TPTO2A)", () => {
     httpMock.expectOne("/travel/api/settings").flush(settingsBody(hoursPerDay));
     fixture.detectChanges();
     const component = fixture.componentInstance as SettingsComponent;
-    return { fixture, component };
+    return { fixture, component, users, cleared };
   }
 
   afterEach(() => httpMock?.verify());
@@ -62,4 +69,27 @@ describe("SettingsComponent PTO settings (TPTO2A)", () => {
     expect(toast.success).toHaveBeenCalledWith("Hours in a workday saved.");
   });
 
+  it("clears pending key work when the signed-in owner changes", () => {
+    const { component, users } = setup();
+    component.key = "synthetic-old-owner-key";
+    component.save();
+    const pending = httpMock.expectOne("/travel/api/settings/flightaware");
+    users.next({ id: 2 });
+    expect(pending.cancelled).toBeTrue();
+    expect(component.key).toBe("");
+    expect(component.data()).toBeNull();
+    expect(component.saving()).toBeFalse();
+    expect(component.message()).toBe("");
+  });
+
+  it("clears visible settings and cancels a pending status read on session clearing", () => {
+    const { component, cleared } = setup();
+    component.load();
+    const pending = httpMock.expectOne("/travel/api/settings");
+    cleared.next();
+    expect(pending.cancelled).toBeTrue();
+    expect(component.data()).toBeNull();
+    expect(component.key).toBe("");
+    expect(component.hours).toBe("");
+  });
 });

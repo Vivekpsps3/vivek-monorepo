@@ -4,13 +4,14 @@ import {
   ElementRef,
   Input,
   OnInit,
+  ViewChild,
   inject,
   output,
   signal,
 } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
-import { Subject, Subscription, debounceTime, timeout } from "rxjs";
+import { Subject, Subscription, debounceTime, filter, merge, take, timeout } from "rxjs";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import {
   Candidate,
@@ -27,9 +28,12 @@ import {
   useSchedule,
 } from "./flight-model.mjs";
 import { travelError } from "./travel.models";
+import { SettingsComponent } from "./settings.component";
 import { fieldErrors } from "./validate.mjs";
 import {
+  SESSION_CONTEXT,
   UiButtonComponent,
+  UiDialogComponent,
   UiCardComponent,
   UiFieldComponent,
   UiFieldControlDirective,
@@ -39,7 +43,9 @@ import {
   standalone: true,
   imports: [
     FormsModule,
+    SettingsComponent,
     UiButtonComponent,
+    UiDialogComponent,
     UiCardComponent,
     UiFieldComponent,
     UiFieldControlDirective,
@@ -127,9 +133,14 @@ import {
           </ui-button>
         </ui-card>
       }
-      <ui-button variant="ghost" type="button" (click)="manual()">
-        Edit times manually
-      </ui-button>
+      <div class="button-row">
+        <ui-button variant="ghost" type="button" (click)="manual()">
+          Edit times manually
+        </ui-button>
+        <ui-button variant="secondary" type="button" (clicked)="openConnection()">
+          FlightAware settings
+        </ui-button>
+      </div>
     }
     <div class="form-row">
       <ui-field label="From"
@@ -235,7 +246,19 @@ import {
         Cancel
       </ui-button>
     </div>
-  </form>`,
+  </form>
+  <ui-dialog
+    [open]="connectionOpen()"
+    [closeOnBackdrop]="false"
+    labelledBy="flight-connection-heading"
+    (closed)="closeConnection()"
+  >
+    <h2 id="flight-connection-heading" tabindex="-1" data-dialog-initial-focus>FlightAware settings</h2>
+    @if (connectionOpen()) {
+      <travel-settings presentation="dialog" />
+    }
+    <ui-button variant="secondary" type="button" (clicked)="closeConnection()">Back to transport</ui-button>
+  </ui-dialog>`,
 })
 export class TransportEditorComponent implements OnInit {
   @Input()
@@ -248,6 +271,9 @@ export class TransportEditorComponent implements OnInit {
   saveError = "";
   readonly submitted = output<Record<string, unknown>>();
   readonly cancelled = output<void>();
+  private readonly session = inject(SESSION_CONTEXT);
+  private readonly ownerId = this.session.currentUser?.id;
+  private sessionActive = true;
   private readonly http = inject(HttpClient);
   private readonly destroy = inject(DestroyRef);
   private readonly host = inject(ElementRef<HTMLElement>);
@@ -255,6 +281,8 @@ export class TransportEditorComponent implements OnInit {
   private explained = false;
   private readonly changes = new Subject<void>();
   private pending?: Subscription;
+  @ViewChild(SettingsComponent) private settings?: SettingsComponent;
+  readonly connectionOpen = signal(false);
   values: Record<string, unknown> = {
     mode: "",
     role: "outbound",
@@ -274,7 +302,34 @@ export class TransportEditorComponent implements OnInit {
     this.changes
       .pipe(debounceTime(400), takeUntilDestroyed())
       .subscribe(() => this.lookup());
+    merge(
+      this.session.cleared$,
+      this.session.user$.pipe(filter(user => user?.id !== this.ownerId)),
+    ).pipe(take(1), takeUntilDestroyed()).subscribe(() => {
+      this.sessionActive = false;
+      this.pending?.unsubscribe();
+      this.connectionOpen.set(false);
+      this.values = {};
+      this.flightDate = "";
+      this.overrides = [];
+      this.filled = [];
+      this.fields.set({});
+      this.looking.set(false);
+      this.problem.set("");
+      this.candidates.set([]);
+      this.selected.set(null);
+    });
     this.destroy.onDestroy(() => this.pending?.unsubscribe());
+  }
+  openConnection(): void {
+    if (!this.sessionActive || this.connectionOpen()) return;
+    this.pending?.unsubscribe();
+    this.looking.set(false);
+    this.connectionOpen.set(true);
+  }
+  async closeConnection(): Promise<void> {
+    if (this.settings && !(await this.settings.canLeave())) return;
+    if (!this.destroy.destroyed) this.connectionOpen.set(false);
   }
   ngOnInit(): void {
     if (this.initial) {
@@ -314,6 +369,7 @@ export class TransportEditorComponent implements OnInit {
     if (this.values["mode"] === "flight") this.changes.next();
   }
   lookup(): void {
+    if (!this.sessionActive || this.connectionOpen()) return;
     const query = lookupQuery(
       String(this.values["number"] || ""),
       this.flightDate,

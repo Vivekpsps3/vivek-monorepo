@@ -1,4 +1,6 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../../../tests/e2e/fixtures';
+import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import { openTripAdd } from './dates.mjs';
 
 const morning = {
@@ -115,4 +117,92 @@ test('a missing key, a timeout, and no match stay distinct and editable', async 
   await expect(problem).toContainText('No matching flight on that date');
   await page.getByLabel('Departure local date and time').fill('2026-11-02T09:15');
   await expect(page.getByRole('button', { name: 'Save transport', exact: true })).toBeEnabled();
+});
+
+const settingsViews = [
+  { name: 'phone', viewport: { width: 390, height: 844 }, theme: 'dark', hasTouch: true },
+  { name: 'desktop', viewport: { width: 1280, height: 800 }, theme: 'light', hasTouch: false },
+];
+
+for (const view of settingsViews) {
+  test.describe(view.name, () => {
+    test.use({ viewport: view.viewport, hasTouch: view.hasTouch, reducedMotion: 'reduce' });
+
+    test(`FlightAware settings returns to the editable trip at ${view.viewport.width}px in ${view.theme}`, async ({ page }) => {
+      await page.route('**/travel/api/flights/lookup', route => route.fulfill({
+        status: 503,
+        json: { code: 'provider_unconfigured' },
+      }));
+      await page.goto('/travel/trips/new');
+      await chooseColorTheme(page, view.theme);
+      await page.getByLabel('Departure date', { exact: true }).fill('2026-11-02');
+      await page.getByLabel('Return date').fill('2026-11-04');
+      await page.getByLabel('Destination city').fill('Tokyo');
+      await page.getByRole('button', { name: 'Add transport' }).click();
+      const transport = page.getByRole('dialog', { name: 'Add transport' });
+      await transport.getByRole('combobox', { name: 'Mode', exact: true }).selectOption('flight');
+      await transport.getByLabel('Flight number').fill('UA 837');
+      await expect(transport.getByText(/Add a FlightAware AeroAPI key/)).toBeVisible();
+      await transport.getByLabel('Departure local date and time').fill('2026-11-02T09:15');
+      const settingsTrigger = transport.getByRole('button', { name: 'FlightAware settings' });
+      if (view.hasTouch) await settingsTrigger.tap();
+      else await settingsTrigger.press('Enter');
+      const settings = page.getByRole('dialog', { name: 'FlightAware settings' });
+      await expect(settings.getByRole('heading', { name: 'FlightAware settings' })).toBeFocused();
+      const back = settings.getByRole('button', { name: 'Back to transport' });
+      expect((await back.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+      const result = await new AxeBuilder({ page }).analyze();
+      expect(result.violations.filter(issue =>
+        issue.id === 'color-contrast' || issue.impact === 'serious' || issue.impact === 'critical',
+      )).toEqual([]);
+      await page.screenshot({ path: test.info().outputPath(`flight-settings-${view.name}.png`) });
+      await settings.getByLabel('New FlightAware API key').fill('synthetic-key-nav-04');
+      await settings.getByRole('button', { name: 'Back to transport' }).click();
+      const confirm = page.getByRole('dialog', { name: 'Leave this key draft?' });
+      await confirm.getByRole('button', { name: 'Keep editing' }).click();
+      await expect(settings.getByLabel('New FlightAware API key')).toHaveValue('synthetic-key-nav-04');
+      await settings.getByRole('button', { name: 'Back to transport' }).click();
+      await confirm.getByRole('button', { name: 'Leave settings' }).click();
+      await expect(settings).toHaveCount(0);
+      await expect(settingsTrigger).toBeFocused();
+      await expect(transport.getByLabel('Flight number')).toHaveValue('UA 837');
+      await expect(transport.getByLabel('Departure date')).toHaveValue('2026-11-02');
+      await expect(transport.getByLabel('Departure local date and time')).toHaveValue('2026-11-02T09:15');
+      await expect(page).toHaveURL(/\/travel\/trips\/new$/);
+      const browserState = await page.evaluate(() => JSON.stringify([
+        history.state, Object.entries(localStorage), Object.entries(sessionStorage),
+      ]));
+      for (const value of ['synthetic-key-nav-04', 'UA 837', 'Tokyo']) expect(browserState).not.toContain(value);
+      await transport.getByRole('button', { name: 'Save transport', exact: true }).click();
+      await expect(page.getByLabel('Destination city')).toHaveValue('Tokyo');
+      await expect(page.getByText('flight · →')).toBeVisible();
+    });
+  });
+}
+
+test('opening FlightAware settings cancels a held lookup in an existing trip editor', async ({ page, request }) => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  let held;
+  const started = new Promise(resolve => { held = resolve; });
+  await page.route('**/travel/api/flights/lookup', async route => {
+    held();
+    await gate;
+    await route.fulfill({ json: { flights: [morning] } }).catch(() => {});
+  });
+  try {
+    await openFlight(page, request);
+    await page.getByLabel('Flight number').fill('UA 837');
+    await started;
+    await page.getByRole('button', { name: 'FlightAware settings' }).click();
+    const settings = page.getByRole('dialog', { name: 'FlightAware settings' });
+    await expect(settings).toBeVisible();
+    release();
+    await settings.getByRole('button', { name: 'Back to transport' }).click();
+    await expect(page.getByLabel('Flight number')).toHaveValue('UA 837');
+    await expect(page.getByRole('heading', { name: 'Flight schedule', exact: true })).toHaveCount(0);
+    await expect(page.getByText('Finding the flight schedule…')).toHaveCount(0);
+  } finally {
+    release();
+  }
 });

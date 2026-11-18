@@ -44,6 +44,7 @@ export const routes: Routes = [
       {
         path: "settings",
         title: "Travel · Settings",
+        data: { presentation: "page" },
         canDeactivate: [leave],
         loadComponent: () =>
           import("./settings.component").then((m) => m.SettingsComponent),
