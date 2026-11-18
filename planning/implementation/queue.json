@@ -459,27 +459,6 @@
       ]
     },
     {
-      "id": "MUX-07",
-      "title": "Unify provider search and manual Media capture",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 403,
-      "dependencies": [
-        "MUX-01",
-        "STYLE-02"
-      ],
-      "conflict_groups": [
-        "media-collections",
-        "media-records"
-      ],
-      "verification_profiles": [
-        "docs",
-        "media_front"
-      ]
-    },
-    {
       "id": "MUX-08",
       "title": "Simplify detail editing and restore the exact collection on return",
       "parent_issues": [

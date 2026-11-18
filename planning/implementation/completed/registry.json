@@ -1842,6 +1842,29 @@
       ],
       "merged_pr": 515,
       "merge_sha": "7f55790a3d6c3ac92e4dc3c77cbcc581be86c35c"
+    },
+    {
+      "id": "MUX-07",
+      "title": "Unify provider search and manual Media capture",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 403,
+      "dependencies": [
+        "MUX-01",
+        "STYLE-02"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ],
+      "merged_pr": 517,
+      "merge_sha": "ea4e8f4a02530e5afdad8f33545cf9a565c97d6d"
     }
   ],
   "td_coverage": {
