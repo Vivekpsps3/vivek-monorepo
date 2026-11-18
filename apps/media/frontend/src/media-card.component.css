@@ -35,24 +35,24 @@
   font-variant-numeric: tabular-nums;
 }
 
-.media-card:not(.media-card--poster) {
+.media-card:not(.media-card--poster):not(.media-card--box) {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   column-gap: var(--space-3);
   align-items: start;
 }
 
-.media-card:not(.media-card--poster) .media-art {
+.media-card:not(.media-card--poster):not(.media-card--box) .media-art {
   grid-column: 1;
   grid-row: 1;
 }
 
-.media-card:not(.media-card--poster) .media-card-copy {
+.media-card:not(.media-card--poster):not(.media-card--box) .media-card-copy {
   grid-column: 2;
   grid-row: 1;
 }
 
-.media-card:not(.media-card--poster) .card-actions {
+.media-card:not(.media-card--poster):not(.media-card--box) .card-actions {
   grid-column: 2;
   grid-row: 2;
   min-width: 0;
@@ -162,6 +162,92 @@
 }
 
 .media-card--poster .card-actions {
+  width: 100%;
+  min-width: 0;
+}
+
+.media-card--box {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  background:
+    linear-gradient(var(--wood), var(--wood)) top / 100% 0.55rem no-repeat,
+    var(--card-bg);
+}
+
+.box-face {
+  display: flex;
+  aspect-ratio: 1 / 1;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-top: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--wood) 55%, var(--border));
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--wood) 18%, var(--surface-2));
+  color: var(--text);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  text-align: center;
+  text-decoration: none;
+}
+
+.box-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.box-title-face {
+  padding: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.box-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.box-copy h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.box-copy h3 a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  color: var(--text);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.box-copy h3 a:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.box-status,
+.box-progress,
+.box-note,
+.box-marks {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.box-status {
+  font-weight: 650;
+}
+
+.media-card--box .card-actions {
   width: 100%;
   min-width: 0;
 }

@@ -54,7 +54,7 @@ test('each collection shows its own saved items and All items stays deliberate',
   for (const [name, title, summary] of [
     ['Movies', 'Harbor Matinee', 'Movies. Films you want to watch'],
     ['Series', 'Harbor Season', 'Series. Shows and the episodes'],
-    ['Games', 'Harbor Tactics', 'Games. What you want to play'],
+    ['Games', 'Harbor Tactics', 'Games. This cabinet is your Media library, not a Town minigame'],
   ] as const) {
     await sections(page).getByRole('link', { name, exact: true }).click();
     await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();

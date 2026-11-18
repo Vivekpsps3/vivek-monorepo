@@ -103,7 +103,7 @@ test('the town allowlist selects habit journeys and profile settings', () => {
   for (const name of [
     'pixels-year.spec.ts', 'pixels-detail.spec.ts', 'pixels-life.spec.ts', 'pixels-settings.spec.ts',
     'hub-pixels.spec.ts', 'world.spec.ts',
-    'town.spec.ts', 'town-checkin.spec.ts', 'town-dialogs.spec.ts',
+    'town.spec.ts', 'town-checkin.spec.ts', 'town-dialogs.spec.ts', 'town-media-boundary.spec.ts',
   ]) {
     assert.equal(selects(town, name), true, name);
   }
