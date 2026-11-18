@@ -1865,6 +1865,29 @@
       ],
       "merged_pr": 517,
       "merge_sha": "ea4e8f4a02530e5afdad8f33545cf9a565c97d6d"
+    },
+    {
+      "id": "MUX-08",
+      "title": "Simplify detail editing and restore the exact collection on return",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 404,
+      "dependencies": [
+        "MUX-01",
+        "NAV-02"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ],
+      "merged_pr": 521,
+      "merge_sha": "c14616b014e1b64138f635372cf2db03840fea37"
     }
   ],
   "td_coverage": {

@@ -459,27 +459,6 @@
       ]
     },
     {
-      "id": "MUX-08",
-      "title": "Simplify detail editing and restore the exact collection on return",
-      "parent_issues": [
-        304
-      ],
-      "kind": "implementation",
-      "issue": 404,
-      "dependencies": [
-        "MUX-01",
-        "NAV-02"
-      ],
-      "conflict_groups": [
-        "media-collections",
-        "media-records"
-      ],
-      "verification_profiles": [
-        "docs",
-        "media_front"
-      ]
-    },
-    {
       "id": "MUX-09",
       "title": "Style Now and Calendar without duplicating their saved queries",
       "parent_issues": [
