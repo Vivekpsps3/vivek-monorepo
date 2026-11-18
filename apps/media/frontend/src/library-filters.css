@@ -63,14 +63,16 @@
   line-height: 1.3;
 }
 
-.music-views {
+.music-views,
+.book-signs {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   margin: 0 0 var(--space-4);
 }
 
-.music-views a {
+.music-views a,
+.book-signs a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -86,12 +88,14 @@
   text-decoration: none;
 }
 
-.music-views a[aria-current="page"] {
+.music-views a[aria-current="page"],
+.book-signs a[aria-current="page"] {
   border-color: var(--data-edge);
   box-shadow: inset 0 -3px 0 var(--data-edge);
 }
 
-.music-views a:focus-visible {
+.music-views a:focus-visible,
+.book-signs a:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }

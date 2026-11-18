@@ -45,7 +45,7 @@ export function collectionSummary(kind) {
     case "tv":
       return "Series. Shows and the episodes you are watching. Caught up and ended stay different facts.";
     case "book":
-      return "Books. What you want to read, are reading, or have read.";
+      return "Books. Current, read, and to-read shelves, as covers and spines or as a text list. A page or percent appears only when you record one.";
     case "artist":
       return "Music. Artists you have saved, with their albums and then their songs. Saving music does not follow the artist.";
     case "album":
@@ -86,7 +86,11 @@ export function emptyLibraryCopy(kind, filtered) {
           "Search for a show or add one of your own. Caught up is where you are in the episodes. Ended is whether the show finished.",
       };
     case "book":
-      return { title: "No books saved yet", message: "Search for a book or add one of your own." };
+      return {
+        title: "No books saved yet",
+        message:
+          "Search for a book or add one of your own. Current, read, and to-read stay empty until you put a book there. A missing cover still shows the title.",
+      };
     case "artist":
       return {
         title: "No artists in your music yet",

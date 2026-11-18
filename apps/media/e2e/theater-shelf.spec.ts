@@ -259,7 +259,9 @@ test('empty shelves say what is missing and other collections stay rows', async 
   await addItem(request, { kind: 'book', title: 'Margin Notes', status: 'want' });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/media/library?kind=book&sort=title');
-  await expect(card(page, 'Margin Notes').locator('article')).not.toHaveClass(/media-card--poster/);
+  await expect(page.locator('media-book-shelf')).toBeVisible();
+  await expect(page.locator('media-card, .media-card--poster')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'To read', exact: true })).toBeVisible();
   await page.goto('/media/library?sort=title');
   await expect(page.locator('.media-card--poster')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Paper Lantern', exact: true })).toBeVisible();

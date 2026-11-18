@@ -21,6 +21,8 @@ import {
   tap,
 } from "rxjs";
 import { formatDay } from "@vivek/browser";
+import { BookShelfComponent } from "./book-shelf.component";
+import { noteExcerpt } from "./books.mjs";
 import { MediaCardComponent } from "./media-card.component";
 import { NextEpisodeButtonComponent } from "./next-episode-button.component";
 import { NextResult } from "./next-episode.service";
@@ -71,6 +73,7 @@ const LIBRARY = "/media/library";
   imports: [
     FormsModule,
     RouterLink,
+    BookShelfComponent,
     MediaCardComponent,
     NextEpisodeButtonComponent,
     UiButtonComponent,
@@ -315,6 +318,51 @@ const LIBRARY = "/media/library";
             </ui-empty-state>
           }
         </div>
+      } @else if (collection === "book") {
+        <nav class="book-signs" aria-label="Book shelves">
+          @for (sign of bookSigns; track sign.status) {
+            <a
+              [routerLink]="['/media/library']"
+              [queryParams]="shelfParams(sign.status)"
+              [attr.aria-current]="status === sign.status ? 'page' : null"
+              >{{ sign.label }}</a
+            >
+          }
+        </nav>
+        <nav class="book-signs" aria-label="Book presentation">
+          <a
+            [routerLink]="['/media/library']"
+            [queryParams]="faceParams('spine')"
+            [attr.aria-current]="face === 'spine' ? 'page' : null"
+            >Covers and spines</a
+          >
+          <a
+            [routerLink]="['/media/library']"
+            [queryParams]="faceParams('text')"
+            [attr.aria-current]="face === 'text' ? 'page' : null"
+            >Text</a
+          >
+        </nav>
+        @if (library.items.length) {
+          <media-book-shelf
+            [items]="library.items"
+            [status]="status"
+            [face]="face"
+            [linkState]="source()"
+            (saved)="onBookSaved($event)"
+          />
+        } @else {
+          <ui-empty-state [title]="emptyTitle" [message]="emptyMessage">
+            @if (filtered) {
+              <ui-button variant="ghost" (click)="clearAllFilters()">
+                Clear filters
+              </ui-button>
+            } @else if (kind) {
+              <ui-button variant="ghost" href="/media/library" label="All items" />
+            }
+            <ui-button variant="primary" href="/media/search" label="Search Media" />
+          </ui-empty-state>
+        }
       } @else {
       <div
         class="media-grid"
@@ -449,6 +497,12 @@ export class LibraryComponent {
   }
   readonly kinds = kinds;
   readonly musicViews = MUSIC_VIEWS;
+  readonly bookSigns = [
+    { status: "", label: "All shelves" },
+    { status: "in_progress", label: "Current" },
+    { status: "completed", label: "Read" },
+    { status: "want", label: "To read" },
+  ];
   readonly notice = signal("");
   private seen: LibraryView | null = null;
   q = "";
@@ -457,6 +511,7 @@ export class LibraryComponent {
   favorite = false;
   sort = "activity";
   tags: string[] = [];
+  face: "spine" | "text" = "spine";
   offset = 0;
   private childrenRequest?: Subscription;
   private groupRequest?: Subscription;
@@ -499,6 +554,48 @@ export class LibraryComponent {
   }
   viewParams(kind: string) {
     return collectionQuery(this.currentFilters(), kind);
+  }
+  shelfParams(status: string) {
+    return {
+      ...collectionQuery(this.currentFilters(), "book"),
+      status: status || null,
+      face: this.face === "text" ? "text" : null,
+    };
+  }
+  faceParams(face: "spine" | "text") {
+    return {
+      ...collectionQuery(this.currentFilters(), "book"),
+      status: this.status || null,
+      offset: this.offset || null,
+      face: face === "text" ? "text" : null,
+    };
+  }
+  onBookSaved(detail: Detail): void {
+    if (
+      !this.active ||
+      this.session.currentUser?.id !== this.shelfOwner ||
+      this.collection !== "book"
+    ) {
+      return;
+    }
+    const library = this.data();
+    if (!library) return;
+    const note = noteExcerpt(detail.review);
+    this.data.set({
+      ...library,
+      items: library.items.map((item) =>
+        item.id === detail.id
+          ? {
+              ...item,
+              status: detail.status,
+              progress_value: detail.progress_value,
+              progress_unit: detail.progress_unit,
+              progress_label: detail.progress_label ?? null,
+              note,
+            }
+          : item,
+      ),
+    });
   }
   get count(): number {
     return filterCount(this.currentFilters());
@@ -675,6 +772,7 @@ export class LibraryComponent {
           this.sort = filters.sort;
           this.favorite = filters.favorite;
           this.tags = filters.tags;
+          this.face = p.get("face") === "text" ? "text" : "spine";
           this.offset = Math.max(0, Number(p.get("offset")) || 0);
           const expanded = Number(p.get("expanded")) || null;
           if (expanded !== this.expanded()) {
@@ -802,7 +900,10 @@ export class LibraryComponent {
     this.filterTimer = undefined;
     this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: toQueryParams(this.currentFilters()),
+      queryParams: {
+        ...toQueryParams(this.currentFilters()),
+        face: this.collection === "book" && this.face === "text" ? "text" : null,
+      },
       onSameUrlNavigation: "reload",
     });
   }
@@ -821,6 +922,7 @@ export class LibraryComponent {
     this.sort = filters.sort;
     this.favorite = filters.favorite;
     this.tags = filters.tags;
+    this.face = new URLSearchParams(window.location.search).get("face") === "text" ? "text" : "spine";
     const search = document.getElementById("library-q");
     if (search instanceof HTMLInputElement) search.value = filters.q;
     const root = document.getElementById("library-filters");
