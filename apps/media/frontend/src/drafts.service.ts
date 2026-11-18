@@ -6,6 +6,7 @@ import {
   MAX_TAGS,
   normaliseTags,
 } from "./tag-model.mjs";
+import { recordedViewing } from "./theater.mjs";
 export interface ItemFields {
   review: string;
   rating: number | null;
@@ -18,6 +19,8 @@ export interface ItemFields {
   tags?: string[];
   /** Uncommitted tag-field text. It is not a tag until Enter. */
   tagText?: string;
+  /** Optional film date. Drafts written before this field omit it. */
+  viewedOn?: string;
 }
 export interface ItemDraft {
   base: string;
@@ -78,7 +81,8 @@ export class MediaDrafts {
         return null;
       const tags = draftTags(fields);
       const tagText = draftTagText(fields);
-      if (tags === null || tagText === null) return null;
+      const viewedOn = draftViewedOn(fields);
+      if (tags === null || tagText === null || viewedOn === null) return null;
       return {
         base: draft.base,
         fields: {
@@ -91,6 +95,7 @@ export class MediaDrafts {
           anticipated: fields.anticipated,
           ...(tags !== undefined ? { tags } : {}),
           ...(tagText !== undefined ? { tagText } : {}),
+          ...(viewedOn !== undefined ? { viewedOn } : {}),
         },
       };
     } catch {
@@ -137,4 +142,9 @@ function draftTagText(fields: {
   const value = fields.tagText;
   if (typeof value !== "string" || value.length > 500) return null;
   return value;
+}
+
+function draftViewedOn(fields: { viewedOn?: unknown }): string | undefined | null {
+  if (!Object.prototype.hasOwnProperty.call(fields, "viewedOn")) return undefined;
+  return recordedViewing(fields.viewedOn);
 }

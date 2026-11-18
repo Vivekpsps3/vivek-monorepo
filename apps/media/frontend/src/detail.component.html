@@ -142,6 +142,19 @@
               }
             </select></ui-field
           >
+          @if (entry.kind === "movie") {
+            <ui-field
+              label="Watched on"
+              hint="Leave this blank unless you remember the day. Saving does not invent a date."
+            >
+              <input
+                uiFieldControl
+                type="date"
+                name="viewedOn"
+                [(ngModel)]="viewedOn"
+              />
+            </ui-field>
+          }
           <div class="rating-editor">
             <p id="media-rating-label" class="rating-label">Rating</p>
             <ui-segmented

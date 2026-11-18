@@ -41,9 +41,9 @@ export function collectionKey(kind) {
 export function collectionSummary(kind) {
   switch (kind) {
     case "movie":
-      return "Movies. Films you want to watch, are watching, or have watched.";
+      return "Movies. Films you want to watch, are watching, or have watched. A date is shown only when you recorded one.";
     case "tv":
-      return "Series. Shows and the episodes you are watching.";
+      return "Series. Shows and the episodes you are watching. Caught up and ended stay different facts.";
     case "book":
       return "Books. What you want to read, are reading, or have read.";
     case "artist":
@@ -74,9 +74,17 @@ export function emptyLibraryCopy(kind, filtered) {
   }
   switch (kind) {
     case "movie":
-      return { title: "No movies saved yet", message: "Search for a film or add one of your own." };
+      return {
+        title: "No movies saved yet",
+        message:
+          "Search for a film or add one of your own. A planned film stays planned until you record that you watched it, and a date stays blank until you enter one.",
+      };
     case "tv":
-      return { title: "No series saved yet", message: "Search for a show or add one of your own." };
+      return {
+        title: "No series saved yet",
+        message:
+          "Search for a show or add one of your own. Caught up is where you are in the episodes. Ended is whether the show finished.",
+      };
     case "book":
       return { title: "No books saved yet", message: "Search for a book or add one of your own." };
     case "artist":

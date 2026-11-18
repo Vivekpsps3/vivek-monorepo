@@ -91,7 +91,7 @@ def library(
     rows, total = records.list_library(
         db, user_id, kind, status, q, sort, offset, limit, favorite, tags=selected or None
     )
-    # Continuation is served by /summary for Now; filters only need this page.
+    # Show continuation on this page comes from the same episode rows as detail.
     return {
         "items": records.library_cards(db, rows),
         "total": total,

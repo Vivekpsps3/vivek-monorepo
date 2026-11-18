@@ -1,0 +1,53 @@
+# MUX-04 — Style movie and series collections with useful progress
+
+- Leaf #400. Tracking parent #304. Roadmap #134.
+- Branch `agent/mux-04`. Worktree `/home/vivek/.grok/worktrees/deployments-vivek-monorepo/subagent-01a1ee89-3d85-7a91-b597-f7822f425704`.
+- Base main `189a1780480a22c6d44b65c62152f9c4f91a6cd4` (archive merge of #510). Tested source SHA `f1322a27a32527de180052a156afa46429ed125b`. This evidence commit does not change that source.
+- MUX-01 is on this base: implementation #505 merge `8e9ad566367158c1c61285d990bcec7d6288c9d0`. STYLE-03 is PR #496. MUX-03 is on this base and was not reimplemented: implementation #509 merge `901306724fe358e97e73b0f4b2721431e996cd33`, archive #510 merge `189a1780480a22c6d44b65c62152f9c4f91a6cd4`. Movies, Series, Books, Music, Games, and All items stay. Open PR #500 (`agent/nav-03`) edits Hub and Town only. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/400#issuecomment-6978228753
+
+## Acceptance
+
+| Row | Executed proof | Result |
+| --- | --- | --- |
+| MUX-04-A1 | `test_caught_up_ongoing_show_regains_the_next_episode` with `MEDIA_TODAY` 2026-11-01 marks the one aired episode of ongoing Lantern Hour. The library card is caught up and `continuation` is null. A future episode (2099) stays caught up with `continuation.state` `upcoming`. An aired episode dated 2026-11-01 clears caught up, returns `continuation` next season 1 episode 3, and leaves lifecycle `ongoing`. Posting the earlier upcoming episode id returns 409 and `watched_count` stays 1. `test_empty_ended_and_planned_series_keep_lifecycle_off_the_episode` keeps an empty ended show at episode count 0, caught up false, and continuation null; a finished ended show stays caught up with lifecycle ended; a manual `planned` raw value stays `ongoing` in storage. Playwright `films and series keep recorded progress` marks Lantern Hour caught up, adds a future episode (still Caught up, air line for 2099), then an aired episode and shows `Next S1E3` with `Watched S1E3`. Lifecycle stays Ongoing. Last Reel stays Ended and Caught up with no next button. Blank Season says `No episodes logged`. All four viewports. | PASS |
+| MUX-04-A2 | `test_watched_and_planned_films_do_not_invent_a_viewing_date` with `MEDIA_TODAY` 2026-10-01 completes Paper Lantern with `viewed_on` null, `completed_on` 2026-10-01, and no watch experience. `completed_on` is absent from the response. Patching `viewed_on` 2024-03-02 stores one watch experience and leaves the stamp. Clearing it nulls `finished_on`. Planned Unscreened stays `want` when a date is stored. Invalid `tomorrow` is 422. Promoting Undated Screening to completed leaves `viewed_on` null. A book patch that includes `viewed_on` is 422 and does not change status. Another principal is 404. Node `a watched film and a planned film differ without inventing a date` keeps Planned off any date and shows a date only for a completed film with a real day. Playwright shows Paper Lantern as Planned with no `.poster-date` even though 2024-01-15 is stored, Velvet Screening as Watched with Mar 2, 2024, and Quiet Projector as Watched with no date. No `progressbar`. Books and All items stay row cards. | PASS |
+| MUX-04-LIFE | `a stale library response cannot undo a mark, and Movies ignore a late series save` holds the library GET, marks S1E1, and still shows `Watched S1E2` after the stale body arrives. The API episode stays watched. A held next POST that is released after navigating to Movies leaves Lobby Card Planned and does not paint a series fact on Movies. Series then matches the API. `a failed film date stays on the form and sign-out clears the draft` keeps the newer typed day 2024-04-05 when an older patch returns, then a 502 leaves that day on the form and the stored date at 2024-03-02, with a `media-item-draft:` key. Logout plus a 401 save removes the draft and lands on `/auth/login`. The book `viewed_on` rejection and the other-owner 404 are in the film test above. `test_library_queries` still forbids per-card `episode_state` and keeps a book page at 3 selects. | PASS |
+| MUX-04-VIEW | The same progress journey runs at 390×844 light keyboard, 390×844 night touch, 1280×800 light touch, and 1280×800 night keyboard, with reduced motion. Title links and the next-episode control are at least 44px. Keyboard uses focus and Enter. Touch uses tap. Undo returns focus to the Lantern Hour title link. Axe on `main` reports no serious or critical violations. `expectCleanMediaPage` stays clean. Empty Movies and Series use the existing titles and say what is missing. `movie and series URLs keep sort and filters` keeps `kind`, `sort=title`, and `status=want` across the Series click, then a series URL without status shows the ongoing show and a 390 reload keeps kind and sort. Screenshots for each matrix cell are attached to the Playwright report and are not committed. | PASS |
+
+Synthetic titles only: Paper Lantern, Velvet Screening, Quiet Projector, Unscreened, Undated Screening, Margin Notes, Lantern Hour, Blank Season, Last Reel, Quiet Reel, Blueprint, Late Reel, Lobby Card, Glass Hour. No real viewing history or provider credentials.
+
+## Deletion and compatibility
+
+| Candidate | Previous consumers | Surviving owner | Disposition and proof |
+| --- | --- | --- | --- |
+| `_library_episode_flags` | Library cards for shows on the current page | `_library_show_progress` in `records.py`, still page-scoped episode rows plus `EpisodeProgress` | Replaced. It does not call `episode_state`. Book pages stay at 3 selects. `test_library_queries` passed inside the media coverage gate. Detail still uses `episode_state`. |
+| Generic row card as the only library layout | Every collection, including Now | `media-card` row layout remains the default. Poster layout is opt-in for Movies and Series | Row cards keep one `mediaCardActions` slot. Now, books, music, games, and All items stay rows. The full Media Playwright suite, including Now and next-episode, passed. The 3px `--data-edge` from STYLE-03 stays on both layouts. |
+
+- Feature replacement at base `189a1780480a22c6d44b65c62152f9c4f91a6cd4`. Production files `journal.py`, `records.py`, `detail.component.html`, `detail.component.ts`, `drafts.service.ts`, `library-filters.css`, `library-filters.mjs`, `library.component.ts`, `media-card.component.css`, `media-card.component.ts`, `media.models.ts`, `theater.mjs`, and `theater.d.mts`: 7108 lines before, 7801 after. Diff adds 791 and deletes 98 physical lines (net +693). Tests add 733 (`theater.test.mjs` 76, `test_theater_shelf.py` 215, `theater-shelf.spec.ts` 438, `library-filters.test.mjs` +4). `apps/media/AGENTS.md` adds 1 and deletes 1. `docs/MEDIA.md` adds 3 and deletes 3. This evidence file is separate. The positive production delta is the poster shelf, a recorded watch date, and page-scoped show continuation. It is not a simplification.
+- One progress store. `viewed_on` is the existing watch `Experience.finished_on`. `completed_on` remains the completion stamp and is not shown as a viewing date. Marking a film watched does not write a date. Continuation on the series page comes from the episodes on that page. The summary `next_episodes` cap of 4 stays the Now and Hub source. No second catalog and no new crypto protocol.
+- Movies and Series keep the MUX-01 URL: kind, sort, page, and filters. Next-episode and Undo stay `NextEpisodeService` and `NextEpisodeUndoService`. A caught-up ongoing or unknown show still offers the waiting control. An ended or canceled caught-up show, and a show with no episodes, does not. A late library response from an older epoch is dropped. Leaving Series before a mark returns does not paint that result onto Movies.
+
+## Verification
+
+Node 20.20.2. Playwright 1.64.1 with cached Chromium 1248. This worktree has no `.venv` or `node_modules`; gates used the symlinks to `/home/vivek/Deployments/vivek-monorepo/.venv` and `node_modules`. Python gates used `PATH=".venv/bin:$PATH"`. Karma used `CHROME_BIN` pointed at that Chromium. The first Karma run failed with no Chrome binary. The rerun passed. The first full Media Playwright run failed one race test because a series search stayed in the URL when opening Movies. The test clears that search before the Movies assertion. The rerun of that test passed, then the full suite passed. Browser retries and coverage floors were unchanged. Media coverage printed 72.98% against floor 68.7% (rose from 69.70%; suggested floor 71.98% was not pinned). The production bundle reported the existing initial-size warning at 669.33 kB.
+
+| Exact command | Final result |
+| --- | --- |
+| `PATH=".venv/bin:$PATH" make test-fast` | PASS on the implementation tree and again with this evidence file present. Doc paths, planning validation (110 active packets, 24 parents, 77 completed), blame ignore, shared boundaries, finance UX F1, 135 unittest OK, e2e discovery media files=22, 21 Node script tests. |
+| `PATH=".venv/bin:$PATH" make lint-python` | PASS. 245 files already formatted. Ruff 90 matches the baseline. Suppressions 6. |
+| `PATH=".venv/bin:$PATH" make typecheck-python` | PASS. mypy 80 findings match the baseline. |
+| `PATH=".venv/bin:$PATH" ./scripts/coverage-gate.sh media` | PASS. 101 passed. 72.98% >= 68.7%. |
+| `node --test apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs` | PASS. 44 tests, 0 failed. |
+| `make lint-web` | PASS. ESLint baselines matched. Engine purity OK. |
+| `make typecheck-web` | PASS. Seven TypeScript projects. |
+| `CHROME_BIN="$HOME/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome" npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS. 415 of 415. Statements 72.66% (5780/7954). |
+| `make build-frontends` | PASS. Release `f9b3ebd535ffa195ffb7f0b72b4250c7c6cf52ffd1584fc89aa9d1e0db6af15b`. |
+| `npx playwright test --config apps/media/e2e/playwright.config.ts --reporter=line` | PASS. 133 passed, 0 failed (1.0m), including the four theater viewports, empty shelves, URL filters, the stale library response, the film-date draft, Now, collections, music, next-episode, and Hub. |
+
+## Handoff
+
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/511. `Closes #400` only. Parent #304 remains open.
+- Roadmap #134 append-only status-note URL: after merge and archive.
+- Merged/activation status: PR #511 is open. Local gates passed on `f1322a27a32527de180052a156afa46429ed125b`. Merge waits on required checks.
+- Remaining external prerequisites: none for this leaf. MUX-05 through MUX-09 stay unbuilt. OPS-06 / #277 was not touched. Now and Calendar styling stay with MUX-09.
+- Next actor: open the pull request, wait for required checks, merge, then archive. Parent #304 remains open.

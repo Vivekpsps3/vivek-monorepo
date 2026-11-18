@@ -134,6 +134,10 @@ test("an impossible status is a visible normalization, not a silent empty read",
   assert.match(collectionSummary("book"), /^Books\./);
   assert.equal(collectionSummary(""), "All activity: movies, series, books, music, and games.");
   assert.equal(emptyLibraryCopy("movie", false).title, "No movies saved yet");
+  assert.equal(emptyLibraryCopy("tv", false).title, "No series saved yet");
+  assert.match(emptyLibraryCopy("tv", false).message, /Caught up/);
+  assert.match(collectionSummary("movie"), /^Movies\. Films you want to watch/);
+  assert.match(collectionSummary("tv"), /^Series\. Shows and the episodes/);
   assert.equal(emptyLibraryCopy("book", true).title, "Nothing in this collection matches");
   assert.deepEqual(statusChoices("artist").map((item) => item.value), ["following", "unfollowed"]);
   assert.equal(statusChoices("book").some((item) => item.value === "following"), false);
