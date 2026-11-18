@@ -154,7 +154,7 @@ test('LOCAL1: verify-fast owns each gate once and the release manifest is not a 
   assert.equal(verify.includes('test-frontend-quick'), false);
   assert.equal(make.get('test').join('\n').includes('test-frontend-quick'), false);
 
-  const launched = spawnSync('python3', ['planning/implementation/plan.py', 'launch', 'OPS-05'], {
+  const launched = spawnSync('python3', ['planning/implementation/plan.py', 'launch', 'TOWN-07'], {
     cwd: root,
     encoding: 'utf8',
   });
