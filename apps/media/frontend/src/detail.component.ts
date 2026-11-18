@@ -163,6 +163,7 @@ export class DetailComponent {
   tags: string[] = [];
   tagText = "";
   tagError = "";
+  viewedOn = "";
   episode = { season_number: 1, episode_number: 1, title: "", air_date: "" };
   moreOpen = false;
   @ViewChild("tagInput") private tagInput?: ElementRef<HTMLInputElement>;
@@ -291,6 +292,7 @@ export class DetailComponent {
       anticipated: this.anticipated,
       tags: this.tags,
       tagText: this.tagText,
+      viewedOn: this.viewedOn,
     };
   }
   @HostListener("input")
@@ -336,6 +338,7 @@ export class DetailComponent {
       this.anticipated,
       this.tags,
       this.tagText,
+      this.viewedOn,
     ]);
   }
   private sameTags(left: string[] | undefined, right: string[] | undefined): boolean {
@@ -398,6 +401,7 @@ export class DetailComponent {
     this.favorite = d.favorite;
     this.anticipated = d.anticipated;
     this.tags = normaliseTags(d.tags);
+    this.viewedOn = this.dayOnly(d.viewed_on);
     this.tagText = keepComposer ? composer : "";
     this.tagError = "";
     this.saved = this.snapshot();
@@ -425,6 +429,7 @@ export class DetailComponent {
     this.anticipated = fields.anticipated;
     if (fields.tags) this.tags = [...fields.tags];
     if (fields.tagText !== undefined) this.tagText = fields.tagText;
+    if (fields.viewedOn !== undefined) this.viewedOn = fields.viewedOn;
   }
   artIcon(kind: string): UiIconName {
     return kindIcon(kind) as UiIconName;
@@ -618,6 +623,9 @@ export class DetailComponent {
       body["progress_unit"] = fields.unit || null;
     }
     if (!this.sameTags(fields.tags, base.tags)) body["tags"] = fields.tags ?? [];
+    if (this.item()?.kind === "movie" && fields.viewedOn !== base.viewedOn) {
+      body["viewed_on"] = fields.viewedOn || null;
+    }
     if (!Object.keys(body).length) return;
     this.busy.set(true);
     this.error.set("");

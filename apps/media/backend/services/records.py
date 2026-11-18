@@ -8,13 +8,14 @@ from datetime import UTC, date, datetime
 from typing import Any, NamedTuple, NoReturn
 
 from fastapi import HTTPException
-from sqlalchemy import and_, case, func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, aliased, contains_eager, joinedload
 
 from apps.media.backend.models import (
     CatalogItem,
     Episode,
     EpisodeProgress,
+    Experience,
     MusicLink,
     Release,
     SeasonProgress,
@@ -140,7 +141,9 @@ def library_cards(db: Session, entries: list[UserEntry]) -> list[dict]:
     user_id = entries[0].user_id
     shows = [entry.catalog_id for entry in entries if entry.catalog.kind == "tv"]
     artists = [entry.catalog_id for entry in entries if entry.catalog.kind == "artist"]
-    flags = _library_episode_flags(db, user_id, shows)
+    movie_ids = [entry.id for entry in entries if entry.catalog.kind == "movie"]
+    viewings = _recorded_viewings(db, user_id, movie_ids)
+    progress = _library_show_progress(db, user_id, shows)
     lifecycles = (
         {
             row.catalog_id: row
@@ -154,11 +157,11 @@ def library_cards(db: Session, entries: list[UserEntry]) -> list[dict]:
     for entry in entries:
         card = entry_card(entry)
         kind = entry.catalog.kind
-        if kind == "tv":
+        if kind == "movie":
+            card["viewed_on"] = viewings.get(entry.id)
+        elif kind == "tv":
             card["lifecycle"] = lifecycle_payload(lifecycles.get(entry.catalog_id))
-            card.update(
-                flags.get(entry.catalog_id, {"caught_up": False, "metadata_incomplete": True})
-            )
+            card.update(progress.get(entry.catalog_id, _EMPTY_SHOW))
         elif kind == "artist":
             card["saved_count"] = counts.get(entry.catalog_id, 0)
         elif kind == "track":
@@ -177,36 +180,108 @@ def library_cards(db: Session, entries: list[UserEntry]) -> list[dict]:
     return cards
 
 
-def _library_episode_flags(db: Session, user_id: int, catalog_ids: list[int]) -> dict[int, dict]:
-    if not catalog_ids:
+_EMPTY_SHOW = {
+    "caught_up": False,
+    "metadata_incomplete": True,
+    "episode_count": 0,
+    "watched_count": 0,
+    "continuation": None,
+}
+
+
+def _recorded_viewings(db: Session, user_id: int, entry_ids: list[int]) -> dict[int, str]:
+    """Latest user-recorded film date. completed_on is not a viewing date."""
+    if not entry_ids:
         return {}
-    released = and_(Episode.season_number > 0, Episode.air_date <= today())
-    unknown = and_(Episode.season_number > 0, Episode.air_date.is_(None))
-    unwatched = and_(
-        released, or_(EpisodeProgress.watched.is_(None), EpisodeProgress.watched.is_(False))
-    )
     rows = (
-        db.query(
-            Episode.catalog_id,
-            func.sum(case((released, 1), else_=0)),
-            func.sum(case((unknown, 1), else_=0)),
-            func.sum(case((unwatched, 1), else_=0)),
+        db.query(Experience.entry_id, Experience.finished_on)
+        .filter(
+            Experience.user_id == user_id,
+            Experience.entry_id.in_(entry_ids),
+            Experience.kind == "watch",
+            Experience.finished_on.is_not(None),
         )
-        .outerjoin(
-            EpisodeProgress,
-            and_(EpisodeProgress.episode_id == Episode.id, EpisodeProgress.user_id == user_id),
-        )
-        .filter(Episode.catalog_id.in_(catalog_ids))
-        .group_by(Episode.catalog_id)
         .all()
     )
-    return {
-        catalog_id: {
-            "caught_up": bool(aired and not undated and not remaining),
-            "metadata_incomplete": bool(undated),
+    latest: dict[int, date] = {}
+    for entry_id, finished in rows:
+        if finished is None:
+            continue
+        current = latest.get(entry_id)
+        if current is None or finished > current:
+            latest[entry_id] = finished
+    return {entry_id: finished.isoformat() for entry_id, finished in latest.items()}
+
+
+def _library_show_progress(db: Session, user_id: int, catalog_ids: list[int]) -> dict[int, dict]:
+    """Page-scoped episode facts. This is not a second progress store."""
+    if not catalog_ids:
+        return {}
+    current = today()
+    episodes = (
+        db.query(Episode)
+        .filter(Episode.catalog_id.in_(catalog_ids))
+        .order_by(Episode.catalog_id, Episode.season_number, Episode.episode_number, Episode.id)
+        .all()
+    )
+    ids = [episode.id for episode in episodes]
+    watched: set[int] = set()
+    if ids:
+        watched = {
+            row.episode_id
+            for row in db.query(EpisodeProgress.episode_id)
+            .filter(
+                EpisodeProgress.user_id == user_id,
+                EpisodeProgress.episode_id.in_(ids),
+                EpisodeProgress.watched.is_(True),
+            )
+            .all()
         }
-        for catalog_id, aired, undated, remaining in rows
-    }
+    grouped: dict[int, list[Episode]] = {catalog_id: [] for catalog_id in catalog_ids}
+    for episode in episodes:
+        grouped.setdefault(episode.catalog_id, []).append(episode)
+    found: dict[int, dict] = {}
+    for catalog_id, rows in grouped.items():
+        regular = [episode for episode in rows if episode.season_number > 0]
+        undated = any(episode.air_date is None for episode in regular)
+        remaining = [
+            episode
+            for episode in regular
+            if episode.air_date is not None
+            and episode.air_date <= current
+            and episode.id not in watched
+        ]
+        future = [
+            episode
+            for episode in regular
+            if episode.air_date is not None
+            and episode.air_date > current
+            and episode.id not in watched
+        ]
+        aired = [
+            episode
+            for episode in regular
+            if episode.air_date is not None and episode.air_date <= current
+        ]
+        chosen = remaining[0] if remaining else future[0] if future else None
+        continuation = None
+        if chosen is not None and chosen.air_date is not None:
+            continuation = {
+                "episode_id": chosen.id,
+                "season": chosen.season_number,
+                "episode": chosen.episode_number,
+                "title": chosen.title,
+                "air_date": iso(chosen.air_date),
+                "state": "next" if chosen.air_date <= current else "upcoming",
+            }
+        found[catalog_id] = {
+            "caught_up": bool(aired) and not undated and not remaining,
+            "metadata_incomplete": not rows or undated,
+            "episode_count": len(regular),
+            "watched_count": sum(1 for episode in regular if episode.id in watched),
+            "continuation": continuation,
+        }
+    return found
 
 
 def _saved_child_ids(db: Session, user_id: int, artist_ids: list[int]) -> dict[int, set[int]]:
@@ -704,6 +779,8 @@ def create_manual(db: Session, user_id: int, body: dict) -> UserEntry:
         apply_catalog_fields(catalog, {"year": body.get("year")}, fill_blanks_only=False)
     db.add(catalog)
     db.flush()
+    if kind == "tv":
+        note_manual_lifecycle(db, catalog, raw_extra.get("lifecycle"))
     store_release(db, catalog, body)
     entry = new_entry(db, user_id, catalog, body)
     if artist is not None:
@@ -712,6 +789,77 @@ def create_manual(db: Session, user_id: int, body: dict) -> UserEntry:
             _link_known_artist(db, artist, catalog)
         _link_canonical_artists(db, catalog)
     return entry
+
+
+def note_manual_lifecycle(db: Session, catalog: CatalogItem, raw) -> None:
+    """Record a show's production lifecycle when a manual save names one.
+
+    Personal watch progress stays on the entry and its episodes. Provider
+    refresh still owns later reconciliation.
+    """
+    if catalog.kind != "tv" or not isinstance(raw, str) or not raw.strip():
+        return
+    from apps.media.backend.services.metadata import normalize_lifecycle
+
+    text = raw.strip()[:80]
+    row = db.query(SeriesLifecycle).filter(SeriesLifecycle.catalog_id == catalog.id).one_or_none()
+    if row is None:
+        row = SeriesLifecycle(catalog_id=catalog.id, completeness="unknown")
+        db.add(row)
+    row.lifecycle = normalize_lifecycle(text)
+    row.raw_value = text
+    row.source = catalog.source
+    row.source_id = catalog.source_id
+    row.fetched_at = utc_now()
+    row.freshness = "fresh"
+    if not row.completeness:
+        row.completeness = "unknown"
+    db.flush()
+
+
+def record_viewing(db: Session, entry: UserEntry, value) -> bool:
+    """Store a film date the person supplied. Never copies completed_on."""
+    if entry.catalog.kind != "movie":
+        fail("A viewing date belongs on a film.")
+    when = parse_date(value, "Watched on")
+    rows = (
+        db.query(Experience)
+        .filter(
+            Experience.user_id == entry.user_id,
+            Experience.entry_id == entry.id,
+            Experience.kind == "watch",
+        )
+        .order_by(Experience.id)
+        .all()
+    )
+    dated = [row.finished_on for row in rows if row.finished_on is not None]
+    current = max(dated) if dated else None
+    if when == current:
+        return False
+    if when is None:
+        changed = False
+        for row in rows:
+            if row.finished_on is not None:
+                row.finished_on = None
+                changed = True
+        return changed
+    if rows:
+        rows[0].finished_on = when
+        for extra in rows[1:]:
+            if extra.finished_on is not None:
+                extra.finished_on = None
+    else:
+        db.add(
+            Experience(
+                user_id=entry.user_id,
+                entry_id=entry.id,
+                kind="watch",
+                finished_on=when,
+                spoiler=False,
+                created_at=utc_now(),
+            )
+        )
+    return True
 
 
 def _metadata_pending(catalog: CatalogItem) -> bool:
@@ -1978,8 +2126,13 @@ def _entry_snapshot(entry: UserEntry) -> tuple:
 def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
     if assert_review_base(entry, body):
         return entry
+    if "viewed_on" in body:
+        if entry.catalog.kind != "movie":
+            fail("A viewing date belongs on a film.")
+        parse_date(body.get("viewed_on"), "Watched on")
     previous_status = entry.status
     before = _entry_snapshot(entry)
+    viewing_changed = False
     before_review = entry.review
     records_release = any(
         key in body for key in ("release_on", "release_precision", "release_status", "releases")
@@ -2032,6 +2185,8 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
         fail("Percent progress is between 0 and 100.")
     if entry.review != before_review:
         entry.review_updated_at = utc_now()
+    if "viewed_on" in body:
+        viewing_changed = record_viewing(db, entry, body.get("viewed_on"))
     apply_completion_day(entry, entry.catalog.kind, previous_status)
     fill_only = entry.catalog.source != "manual"
     apply_catalog_fields(
@@ -2044,7 +2199,7 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
         fill_blanks_only=fill_only,
     )
     store_release(db, entry.catalog, body)
-    if _entry_snapshot(entry) != before or records_release:
+    if _entry_snapshot(entry) != before or records_release or viewing_changed:
         entry.updated_at = utc_now()
     db.flush()
     return entry
@@ -3050,6 +3205,11 @@ def detail(db: Session, entry: UserEntry) -> dict:
         ],
         "show": show,
         "music": music_state(db, entry) if entry.catalog.kind in {"artist", "album"} else None,
+        **(
+            {"viewed_on": _recorded_viewings(db, entry.user_id, [entry.id]).get(entry.id)}
+            if entry.catalog.kind == "movie"
+            else {}
+        ),
     }
 
 

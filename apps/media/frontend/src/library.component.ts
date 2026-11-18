@@ -20,9 +20,15 @@ import {
   Subscription,
   tap,
 } from "rxjs";
+import { formatDay } from "@vivek/browser";
 import { MediaCardComponent } from "./media-card.component";
+import { NextEpisodeButtonComponent } from "./next-episode-button.component";
+import { NextResult } from "./next-episode.service";
+import { NextEpisodeUndoService } from "./next-episode-undo.service";
+import { seriesShelf } from "./theater.mjs";
 import {
   ReturnContext,
+  SESSION_CONTEXT,
   UiButtonComponent,
   UiDialogComponent,
   UiEmptyStateComponent,
@@ -37,6 +43,7 @@ import {
   ArtistGroup,
   ArtistGroupPage,
   ArtistGroupSummary,
+  Continuation,
   Detail,
   MediaCard,
 } from "./media.models";
@@ -65,6 +72,7 @@ const LIBRARY = "/media/library";
     FormsModule,
     RouterLink,
     MediaCardComponent,
+    NextEpisodeButtonComponent,
     UiButtonComponent,
     UiDialogComponent,
     UiFieldComponent,
@@ -308,10 +316,31 @@ const LIBRARY = "/media/library";
           }
         </div>
       } @else {
-      <div class="media-grid" [attr.aria-busy]="refreshing()">
+      <div
+        class="media-grid"
+        [class.theater-shelf]="shelfLayout() === 'poster'"
+        [attr.aria-busy]="refreshing()"
+      >
         @for (item of library.items; track item.id) {
           <section>
-            <media-card [item]="item" [source]="source()" />
+            <media-card [item]="item" [source]="source()" [layout]="shelfLayout()">
+              @if (showShelfAction(item)) {
+                <div mediaCardActions class="theater-actions">
+                  @if (airLine(item); as air) {
+                    <p class="poster-air">{{ air }}</p>
+                  }
+                  <media-next-episode
+                    [entryId]="item.id"
+                    [episodeId]="shelfEpisodeId(item)"
+                    [season]="item.continuation?.season ?? 0"
+                    [episode]="item.continuation?.episode ?? 0"
+                    [showTitle]="item.title"
+                    (done)="onShelfDone($event, item.id)"
+                    (failed)="onShelfFailed($event)"
+                  />
+                </div>
+              }
+            </media-card>
             @if (item.kind === "artist") {
               <ui-button
                 variant="ghost"
@@ -404,6 +433,10 @@ export class LibraryComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroy = inject(DestroyRef);
+  private readonly session = inject(SESSION_CONTEXT);
+  private readonly shelfOwner = this.session.currentUser?.id ?? null;
+  private progressEpoch = 0;
+  private focusAfterLoad: number | null = null;
   readonly reload = new BehaviorSubject(0);
   private readonly context = inject(ReturnContext);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -505,7 +538,93 @@ export class LibraryComponent {
   artistGroupParams(group: ArtistGroupSummary) {
     return { ...collectionQuery(this.currentFilters(), "artist"), group: group.catalog_id };
   }
+  shelfLayout(): "poster" | "row" {
+    return this.collection === "movie" || this.collection === "tv" ? "poster" : "row";
+  }
+  showShelfAction(item: MediaCard): boolean {
+    if (this.collection !== "tv" || item.kind !== "tv") return false;
+    const shelf = seriesShelf(item);
+    if (shelf.progress === "next" || shelf.progress === "upcoming") return true;
+    return (
+      shelf.progress === "caught-up" &&
+      shelf.lifecycle !== "ended" &&
+      shelf.lifecycle !== "canceled"
+    );
+  }
+  shelfEpisodeId(item: MediaCard): number | null {
+    const row = item.continuation;
+    return row && row.state === "next" ? row.episode_id : null;
+  }
+  airLine(item: MediaCard): string {
+    const row = item.continuation;
+    if (!row || row.state !== "upcoming") return "";
+    if (!row.air_date) return "Air date not announced";
+    const day = formatDay(row.air_date);
+    return day ? `Airs ${day}` : "Air date not announced";
+  }
+  onShelfDone(result: NextResult & { entry?: Detail }, entryId: number): void {
+    if (!this.shelfCurrent()) return;
+    const library = this.data();
+    if (!library) return;
+    this.progressEpoch += 1;
+    const items = library.items.map((item) =>
+      item.id === entryId ? this.advancedShow(item, result) : item,
+    );
+    this.data.set({ ...library, items });
+    this.focusTitle(entryId);
+  }
+  onShelfFailed(event: { reload: boolean }): void {
+    if (!this.shelfCurrent() || !event.reload) return;
+    this.reload.next(this.reload.value + 1);
+  }
+  private shelfCurrent(): boolean {
+    return (
+      this.active &&
+      this.shelfOwner != null &&
+      this.session.currentUser?.id === this.shelfOwner &&
+      this.collection === "tv"
+    );
+  }
+  private advancedShow(item: MediaCard, result: NextResult & { entry?: Detail }): MediaCard {
+    const show = result.entry?.show;
+    if (!show) return item;
+    const upcoming = show.next_episode ? null : show.upcoming_episodes?.[0];
+    const chosen = show.next_episode ?? upcoming ?? null;
+    const continuation: Continuation | null = chosen
+      ? {
+          episode_id: chosen.id,
+          season: chosen.season_number,
+          episode: chosen.episode_number,
+          title: chosen.title,
+          air_date: chosen.air_date,
+          state: chosen.released ? "next" : "upcoming",
+        }
+      : null;
+    return {
+      ...item,
+      caught_up: show.caught_up,
+      metadata_incomplete: show.metadata_incomplete,
+      episode_count: show.episode_count,
+      watched_count: show.watched_count,
+      continuation,
+    };
+  }
+  private focusTitle(entryId: number): void {
+    requestAnimationFrame(() => {
+      if (!this.active) return;
+      this.host.nativeElement
+        .querySelector<HTMLElement>(`a[data-media-item="${entryId}"]`)
+        ?.focus();
+    });
+  }
   constructor() {
+    inject(NextEpisodeUndoService).restored$
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe((entryId) => {
+        if (!this.shelfCurrent()) return;
+        this.focusAfterLoad = entryId;
+        this.reload.next(this.reload.value + 1);
+      });
     // Router Back is deferred with setTimeout(0). A paused test clock does not
     // run that timer, so the URL changes while the State control keeps the
     // pending value. Sync from the browser URL in the popstate event itself.
@@ -597,6 +716,7 @@ export class LibraryComponent {
         switchMap(() => {
           if (suppressRead) return EMPTY;
           const requested = this.kind;
+          const epoch = this.progressEpoch;
           let params = new HttpParams()
             .set("q", this.q)
             .set("kind", this.kind)
@@ -610,12 +730,13 @@ export class LibraryComponent {
             requested === "artist" ? "/media/api/music-groups" : "/media/api/library";
           if (requested === "artist") params = params.delete("kind");
           return this.http.get<LibraryResponse | ArtistGroupPage>(url, { params }).pipe(
-            map((body) => ({ requested, body })),
+            map((body) => ({ requested, body, epoch })),
             catchError((e) => {
               if (this.kind === requested) this.error.set(errorCopy(e));
               return of({
                 requested,
                 body: null as LibraryResponse | ArtistGroupPage | null,
+                epoch,
               });
             }),
           );
@@ -623,7 +744,9 @@ export class LibraryComponent {
         takeUntilDestroyed(),
       )
       .subscribe((result) => {
-        if (!result || result.requested !== this.kind) return;
+        if (!result || result.requested !== this.kind || result.epoch !== this.progressEpoch) {
+          return;
+        }
         const data = result.body;
         this.loading.set(false);
         this.refreshing.set(false);
@@ -660,6 +783,11 @@ export class LibraryComponent {
         this.artistGroups.set([]);
         this.focusedGroup.set(null);
         this.data.set(library);
+        if (this.focusAfterLoad != null) {
+          const focusId = this.focusAfterLoad;
+          this.focusAfterLoad = null;
+          this.focusTitle(focusId);
+        }
         const expanded = library.items.find((item) => item.id === this.expanded());
         if (expanded) this.loadChildren(expanded);
         if (!expanded) this.restoreScroll();

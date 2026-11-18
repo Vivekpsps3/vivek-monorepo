@@ -17,6 +17,15 @@ export interface Lifecycle {
   freshness: string;
   fetched_at?: string | null;
   completeness: string;
+  raw_value?: string | null;
+}
+export interface Continuation {
+  episode_id: number;
+  season: number;
+  episode: number;
+  title: string | null;
+  air_date: string | null;
+  state: "next" | "upcoming";
 }
 export interface ArtistGroupSummary {
   catalog_id: number;
@@ -59,6 +68,11 @@ export interface MediaCard {
   lifecycle?: Lifecycle;
   caught_up?: boolean;
   metadata_incomplete?: boolean;
+  /** A date the person recorded for a film. Absent means this card is not a film. */
+  viewed_on?: string | null;
+  episode_count?: number;
+  watched_count?: number;
+  continuation?: Continuation | null;
 }
 export interface Episode {
   id: number;

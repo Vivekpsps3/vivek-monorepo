@@ -34,3 +34,134 @@
   margin-block: var(--space-1);
   font-variant-numeric: tabular-nums;
 }
+
+.media-card:not(.media-card--poster) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-3);
+  align-items: start;
+}
+
+.media-card:not(.media-card--poster) .media-art {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.media-card:not(.media-card--poster) .media-card-copy {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.media-card:not(.media-card--poster) .card-actions {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+}
+
+.card-actions:not(:has(*)) {
+  display: none;
+}
+
+.media-card--poster {
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  background: var(--card-bg);
+}
+
+.poster-art {
+  display: flex;
+  aspect-ratio: 2 / 3;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--data-edge) 32%, var(--surface-2)),
+    var(--surface-2)
+  );
+  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
+
+.poster-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.poster-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.poster-copy h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.poster-copy h2 a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  color: var(--text);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.poster-copy h2 a:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.poster-fact {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font-weight: 650;
+  line-height: var(--leading-tight);
+}
+
+.media-card--poster[data-tone="watched"] .poster-fact,
+.media-card--poster[data-tone="continue"] .poster-fact,
+.media-card--poster[data-tone="caught-up"] .poster-fact,
+.media-card--poster[data-tone="watching"] .poster-fact,
+.media-card--poster[data-tone="upcoming"] .poster-fact {
+  border-style: solid;
+  border-color: var(--data-edge);
+  background: color-mix(in srgb, var(--data-edge) 14%, var(--card-bg));
+}
+
+.poster-lifecycle {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.3;
+}
+
+.poster-date {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.media-card--poster .card-actions {
+  width: 100%;
+  min-width: 0;
+}

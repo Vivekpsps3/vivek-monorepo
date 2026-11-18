@@ -10,7 +10,7 @@
 Ordinary saved reads must remain bounded and database-only: do not contact providers
 or repair saved state during a GET. Keep provider I/O outside write transactions.
 Preserve source identity, MusicBrainz release-group versus pressing, and isolation of
-notes, ratings, progress and Undo across owners. Public metadata is not a personal save.
+notes, ratings, progress and Undo across owners. A film date is a watch experience the person recorded. completed_on is not that date. Public metadata is not a personal save.
 An album or song save groups under a canonical artist id and does not follow that
 artist or import a discography. The Music page lists those groups: albums, then
 the songs on each saved album, with a song whose album is not saved kept separate.
