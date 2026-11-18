@@ -109,7 +109,9 @@ for (const [width, theme, zoom] of [
       });
       vault.failQuote('UNLISTED');
       await unknown.getByRole('button', { name: 'Refresh price for UNLISTED' }).tap();
-      await expect(page.getByText('UNLISTED price could not be refreshed.', { exact: true })).toBeVisible();
+      const quoteError = page.getByRole('alert').getByText('UNLISTED price could not be refreshed.');
+      await expect(quoteError).toBeVisible();
+      await expect(quoteError).not.toContainText('prior price');
       await expect(unknown.locator('[data-label="Price"]')).toContainText('Unavailable');
       expect(vault.mutations).toHaveLength(0);
       await edit.tap();
