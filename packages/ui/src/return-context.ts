@@ -6,7 +6,7 @@ import { SESSION_CONTEXT } from './session-context';
 
 const spendingTabs = ['activity', 'calendar', 'review', 'imports', 'spend', 'pay'];
 const flag = ['1'];
-const month = (value: string) => /^(?:\d{4}-(?:0[1-9]|1[0-2])|all)$/.test(value);
+const month = (value: string) => /^(?!0000)\d{4}-(?:0[1-9]|1[0-2])$/.test(value);
 
 export function isReturnDate(value: string): boolean {
   if (!/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -21,7 +21,7 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/finance/embed': {},
   '/finance/have': { t: ['sheet', 'balance', 'assets', 'liabilities', 'holdings'] },
   '/finance/spending': {
-    t: spendingTabs, v: ['all', 'income', 'spending'], month,
+    t: spendingTabs, v: ['all', 'income', 'spending'], month: value => value === 'all' || month(value),
     date: isReturnDate, from: isReturnDate, through: isReturnDate,
     periodStart: isReturnDate, periodEnd: isReturnDate, priorStart: isReturnDate, priorEnd: isReturnDate, add: flag, receipts: flag,
   },
@@ -39,6 +39,7 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/pixels': { year: value => /^(?!0+$)\d{1,4}$/.test(value), day: isReturnDate },
   '/pixels/life': {},
   '/hub': {},
+  '/hub/admin': {},
   '/hub/agenda': { date: isReturnDate, sources: ['', 'travel', 'media', 'travel,media', 'media,travel'] },
   '/media': {},
   '/media/library': {
@@ -47,17 +48,22 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
     sort: ['activity', 'title', 'rating', 'newest'], fav: flag,
     offset: value => /^(?:0|[1-9]\d{0,6})$/.test(value),
   },
-  '/media/calendar': {},
+  '/media/calendar': { month },
+  '/media/add': {},
   '/media/search': {},
   '/travel': {},
-  '/travel/trips': {},
+  '/travel/calendar': { month },
+  '/travel/trips/new': {},
+  '/travel/settings': {},
   '/travel/pto': {},
   '/settings': {},
   '/settings/account': {},
   '/settings/profile': {},
   '/settings/appearance': {},
   '/settings/finance': {},
-  '/settings/connectors': {},
+  '/settings/travel': {},
+  '/settings/calendars': {},
+  '/settings/about': {},
 };
 
 const financeAliases = new Set([

@@ -6,6 +6,10 @@ describe('return context', () => {
       '/finance/spending?t=calendar&month=2026-11&date=2026-11-18',
       '/pixels?year=2024&day=2024-02-29',
       '/media/library?kind=artist&sort=title&offset=24',
+      '/media/calendar?month=2026-11',
+      '/travel/calendar?month=2026-11',
+      '/settings/calendars',
+      '/finance/spending?month=all',
     ]) {
       expect(returnPath(path)).withContext(path).toBe(path);
     }
@@ -22,6 +26,7 @@ describe('return context', () => {
     for (const path of [
       '//example.test', '/finance/%2F%2Fexample.test', '/finance/vault/unlock?next=/pixels',
       '/finance/vault/setup', '/auth/login', '/finance/not-an-app-route',
+      '/travel/trips', '/settings/connectors',
     ]) {
       expect(vaultUnlockHref(path)).withContext(path).toBe('/finance/vault/unlock');
     }
