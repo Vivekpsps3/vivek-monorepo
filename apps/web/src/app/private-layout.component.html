@@ -1,31 +1,39 @@
 <a class="skip-link" href="#workspace-content">Skip to content</a>
 <header class="suite-header">
   <div class="suite-header__inner">
-    <div class="app-switcher">
-      <nav class="app-switcher__bar" aria-label="Apps">
+    <nav class="app-switcher__bar" aria-label="Apps" #switcher (keydown)="onSwitcherKey($event)">
+      <div class="app-switcher__overview">
         @for (app of apps; track app.href) {
-          <a [routerLink]="app.href" routerLinkActive="is-current" ariaCurrentWhenActive="page"
-            [routerLinkActiveOptions]="{ exact: app.exact }">{{ app.label }}</a>
-        }
-      </nav>
-      <div class="app-switcher__compact" #switcher (keydown)="onSwitcherKey($event)">
-        <button #switcherButton class="app-switcher__toggle" type="button"
-          [attr.aria-expanded]="switcherOpen()" aria-controls="app-switcher-menu"
-          (click)="toggleSwitcher()">
-          <ui-icon name="grid" />
-          <span>{{ appName }}</span>
-          <ui-icon name="chevron-down" />
-        </button>
-        @if (switcherOpen()) {
-          <nav id="app-switcher-menu" class="app-switcher__menu" aria-label="Apps">
-            @for (app of apps; track app.href) {
-              <a [routerLink]="app.href" routerLinkActive="is-current" ariaCurrentWhenActive="page"
-                [routerLinkActiveOptions]="{ exact: app.exact }" (click)="closeSwitcher(false)">{{ app.label }}</a>
-            }
-          </nav>
+          <a [routerLink]="app.href" routerLinkActive="is-current" ariaCurrentWhenActive="location"
+            [routerLinkActiveOptions]="{ paths: 'subset', queryParams: 'ignored', matrixParams: 'ignored', fragment: 'ignored' }">{{ app.label }}</a>
         }
       </div>
-    </div>
+      <button #switcherButton class="app-switcher__toggle" type="button"
+        [attr.aria-label]="switcherLabel" [attr.aria-expanded]="switcherOpen()"
+        aria-controls="app-switcher-menu" (click)="toggleSwitcher()">
+        <ui-icon name="grid" />
+        <span class="app-switcher__current">{{ appName }}</span>
+        <ui-icon name="chevron-down" />
+      </button>
+      @if (switcherOpen()) {
+        <div id="app-switcher-menu" class="app-switcher__menu" role="group" aria-label="App destinations">
+          @for (app of apps; track app.href) {
+            <div class="app-switcher__group" role="group" [attr.aria-label]="app.label">
+              <a class="app-switcher__home" [routerLink]="app.href"
+                [attr.aria-current]="appName === app.label && (activeDestination() === app.href || !activeDestination()) ? 'location' : null"
+                (click)="onSwitcherLink()">{{ app.label }}</a>
+              <div class="app-switcher__destinations">
+                @for (item of app.destinations; track item.link) {
+                  <a [routerLink]="item.url" [attr.aria-label]="item.ariaLabel ?? null"
+                    [attr.aria-current]="activeDestination() === item.link ? 'page' : null"
+                    (click)="onSwitcherLink()">{{ item.label }}</a>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </nav>
     <div class="suite-header__end">
       <button class="btn btn-ghost search-toggle" type="button" aria-label="Search"
         aria-keyshortcuts="Control+K Meta+K" (click)="openSearch()">

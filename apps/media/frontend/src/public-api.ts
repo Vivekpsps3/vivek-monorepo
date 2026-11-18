@@ -65,3 +65,5 @@ export const routes: Routes = [
 export { NextEpisodeButtonComponent } from "./next-episode-button.component";
 export type { NextResult } from "./next-episode.service";
 export { NextEpisodeUndoService } from "./next-episode-undo.service";
+
+export { mediaSections } from "./media-navigation";

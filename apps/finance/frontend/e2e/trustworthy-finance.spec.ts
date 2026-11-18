@@ -129,8 +129,9 @@ test('Spending opens on Activity without review controls and Home has no review 
   });
 
   await vault.open('/spending');
-  await expect(page.getByRole('link', { name: 'Activity', exact: true })).toHaveClass(/on/);
-  await expect(page.getByRole('link', { name: 'Imports', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Activity', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('app-spending-hub').getByRole('link', { name: 'Imports', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Finance sections' }).getByRole('link', { name: 'Imports', exact: true })).toHaveAttribute('href', '/finance/spending?receipts=1');
   await expect(page.locator('app-transactions')).toBeVisible();
   await expect(page.locator(nativeHoverTitleSelector)).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Review', exact: true })).toHaveCount(0);
@@ -250,11 +251,12 @@ test('summaries include transactions beyond 5,000 while visible rows remain pagi
   expect(await page.locator('tbody tr').count()).toBeLessThan(5_101);
 });
 
-test('legacy spending links translate to Activity filters and five navigation hubs remain accessible', async ({ page }) => {
+test('legacy spending links translate to Activity filters and direct destinations stay accessible', async ({ page }) => {
   const vault = await syntheticVault(page, seed());
   await vault.open('/spending?t=pay', page, '/spending?t=activity&v=income');
-  await expect(page.getByRole('navigation', { name: 'Spending sections', exact: true })).toContainText('Activity');
-  await expect(page.getByRole('navigation', { name: 'Spending sections', exact: true })).not.toContainText('Imports');
+  const nav = page.getByRole('navigation', { name: 'Finance sections' });
+  await expect(nav.getByRole('link', { name: 'Activity', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(nav.getByRole('link', { name: 'Imports', exact: true })).toHaveAttribute('href', '/finance/spending?receipts=1');
   await expect(page).toHaveURL(/v=income/);
   await expect(page.getByRole('heading', { name: 'Work income', exact: true })).toBeVisible();
   await vault.open('/spending?t=spend', page, '/spending?t=activity&v=spending');

@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute } from '@angular/router';
 import { AssetsLiabilitiesComponent } from '../assets-liabilities/assets-liabilities.component';
 import { PortfolioComponent } from '../portfolio/portfolio.component';
 import { UiPageHeaderComponent } from '@vivek/ui';
@@ -7,14 +8,10 @@ import { UiPageHeaderComponent } from '@vivek/ui';
 @Component({
   selector: 'app-have-hub',
   standalone: true,
-  imports: [RouterLink, AssetsLiabilitiesComponent, PortfolioComponent, UiPageHeaderComponent],
+  imports: [AssetsLiabilitiesComponent, PortfolioComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
-      <ui-page-header [title]="'What you have'" [concealTitle]="true" />
-      <nav class="hub-tabs" aria-label="Net worth sections">
-        <a [routerLink]="[]" [queryParams]="{ t: null }" [class.on]="tab === 'assets'" [attr.aria-current]="tab === 'assets' ? 'page' : null">Assets and debts</a>
-        <a [routerLink]="[]" [queryParams]="{ t: 'holdings' }" [class.on]="tab === 'holdings'" [attr.aria-current]="tab === 'holdings' ? 'page' : null">Holdings</a>
-      </nav>
+      <ui-page-header [title]="tab === 'holdings' ? 'Holdings' : 'Assets and debts'" [concealTitle]="true" />
       @if (tab === 'holdings') {
         <app-portfolio [embedded]="true" />
       } @else {
@@ -44,11 +41,12 @@ import { UiPageHeaderComponent } from '@vivek/ui';
 })
 export class HaveHubComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private destroy = inject(DestroyRef);
   private cdr = inject(ChangeDetectorRef);
   tab = 'assets';
 
   ngOnInit(): void {
-    this.route.queryParamMap.subscribe(params => {
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroy)).subscribe(params => {
       this.tab = params.get('t') === 'holdings' ? 'holdings' : 'assets';
       this.cdr.markForCheck();
     });

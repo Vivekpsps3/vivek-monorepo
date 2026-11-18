@@ -1,6 +1,7 @@
 import { Component } from "@angular/core";
 import { RouterOutlet } from "@angular/router";
-import { UiSectionNavComponent, type UiSectionNavItem } from "@vivek/ui";
+import { UiSectionNavComponent } from "@vivek/ui";
+import { travelSections } from "./travel-navigation";
 @Component({
   standalone: true,
   imports: [RouterOutlet, UiSectionNavComponent],
@@ -10,9 +11,5 @@ import { UiSectionNavComponent, type UiSectionNavItem } from "@vivek/ui";
   </div>`,
 })
 export class TravelLayoutComponent {
-  readonly sections: UiSectionNavItem[] = [
-    { label: "Trips", link: "/travel", exact: true, also: ["/travel/trips"] },
-    { label: "Calendar", link: "/travel/calendar" },
-    { label: "PTO", link: "/travel/pto" },
-  ];
+  readonly sections = travelSections;
 }

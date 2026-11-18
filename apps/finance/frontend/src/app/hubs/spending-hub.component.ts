@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { TransactionsComponent } from '../transactions/transactions.component';
 import { CalendarComponent } from '../calendar/calendar.component';
 import { UiPageHeaderComponent } from '@vivek/ui';
@@ -60,14 +60,10 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
 @Component({
   selector: 'app-spending-hub',
   standalone: true,
-  imports: [RouterLink, TransactionsComponent, CalendarComponent, UiPageHeaderComponent],
+  imports: [TransactionsComponent, CalendarComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
-      <ui-page-header [title]="'Spending'" [concealTitle]="true" />
-      <nav class="hub-tabs" aria-label="Spending sections">
-        <a [routerLink]="[]" [queryParams]="{ t: null, v: activityView === 'all' ? null : activityView }" [class.on]="tab === 'activity'" [attr.aria-current]="tab === 'activity' ? 'page' : null">Activity</a>
-        <a [routerLink]="[]" [queryParams]="{ t: 'calendar' }" [class.on]="tab === 'calendar'" [attr.aria-current]="tab === 'calendar' ? 'page' : null">Calendar</a>
-      </nav>
+      <ui-page-header [title]="tab === 'calendar' ? 'Calendar' : receiptsOpen ? 'Imports' : 'Activity'" [concealTitle]="true" />
       @switch (tab) {
         @case ('calendar') { <app-calendar [embedded]="true" /> }
         @case ('activity') {

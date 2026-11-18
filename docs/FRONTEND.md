@@ -21,7 +21,7 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 | `/vault/unlock` | Unlock encrypted finance vault — auth only, outside Finance local navigation |
 | `/` | Finance Home: net worth and current-month cashflow, with source/holdings detail |
 | `/have` | Assets, debts, and holdings (`?t=holdings`) |
-| `/spending` | Activity (default; `?t=activity&v=all|spending|income`), Calendar (`?t=calendar`), and Imports (`?t=imports`); old Review links and legacy `?t=pay` / `?t=spend` links open Activity |
+| `/spending` | Activity (default; `?t=activity&v=all|spending|income`), Calendar (`?t=calendar`), and Imports (`?receipts=1`); old Review links and legacy `?t=pay` / `?t=spend` links open Activity |
 | `/recurring` | Jobs & pay or bills & subscriptions (`?t=pay`, `?t=spend`) |
 | `/planning` | Retirement & goals (`?t=path&tool=overview|simulation|retirement-target|savings-goal|debt-payoff`), portfolio projection (`?t=growth`), and stock research (`?t=stocks`) |
 | `/hub/admin` | Suite admin: app health, people, and what needs attention. Not inside Finance. |
@@ -31,7 +31,7 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 | `/investment-insights`, `/stock-lab` | Redirect to `/planning`, opening Growth or Stocks respectively |
 | `/charts` | Redirects to `/` |
 
-Finance paths above are relative to `/finance`; `/auth/*` and `/hub/admin` are root routes. Public `/` is the portfolio. The root `<base href="/">` and Angular router own all navigation. `PrivateLayoutComponent` keeps one Hub control and a username button visible. Its dropdown holds account settings, admin stats when authorized, theme selection and sign-out. Travel settings also live there on Travel routes. Finance contributes its guide, vault lock and confirmed clear-data actions while its unlocked layout is active; those actions are removed when that layout is destroyed. Finance's `MainLayoutComponent` provides local navigation only. The root dev proxy is `apps/web/proxy.conf.cjs`; all APIs use the same FastAPI process. Hash bookmarks translate once at startup into known canonical routes. Unknown assets and unknown page paths return 404 rather than an arbitrary shell.
+Finance paths above are relative to `/finance`; `/auth/*` and `/hub/admin` are root routes. Public `/` is the portfolio. The root `<base href="/">` and Angular router own all navigation. `PrivateLayoutComponent` owns one app switcher with direct Hub and app links at wide widths and a named disclosure at narrow widths. The disclosure links to individual destinations. Finance, Media and Travel own the lists used by both their local navigation and this disclosure. The account button stays visible. Its dropdown holds account settings, admin stats when authorized, theme selection and sign-out. Travel settings also live there on Travel routes. Finance contributes its guide, vault lock and confirmed clear-data actions while its unlocked layout is active; those actions are removed when that layout is destroyed. The Finance bar links directly to Accounts, Holdings, Activity, Calendar, Bills, Pay, Planning and Imports. Media exposes Movies, Series, Books, Music and Games alongside Now, Calendar, Search, Add and All items. Existing legacy URLs still use the app's route behavior. The root dev proxy is `apps/web/proxy.conf.cjs`; all APIs use the same FastAPI process. Hash bookmarks translate once at startup into known canonical routes. Unknown assets and unknown page paths return 404 rather than an arbitrary shell.
 
 ## Browser icons
 
@@ -74,10 +74,10 @@ Locale money and local-date helpers live in `@vivek/browser` (`packages/browser`
 
 | Viewport | Navigation | Tables / dense data |
 |----------|------------|---------------------|
-| 390×844 | Compact header and a fixed bottom tab bar. `data-viewport="mobile"` | One vertical scroll. Tables become labeled cards. Dialogs are bottom sheets |
-| 844×390 | Same phone shell, landscape | Same |
-| 768×1024 | Phone shell through 768px | Card tables |
-| 1024×768 | Desktop grid nav | Dense tables |
+| 390×844 | Compact app switcher and a wrapping app-local row | One vertical scroll. Tables become labeled cards. Dialogs are bottom sheets |
+| 844×390 | Wide switcher, wrapping app destinations | Same |
+| 768×1024 | Wide switcher, wrapping app destinations | Card tables |
+| 1024×768 | Wide app switcher and local destinations | Dense tables |
 | 1280×800+ | Full labels | Dense tables |
 
 Do **not** add a service worker that caches decrypted finance plaintext.
@@ -114,7 +114,7 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 
 ## Home behavior
 
-- Home begins with two clickable summaries in one divided section: current net worth, and this month's income and spending. The income summary is followed by a source list that adds to the monthly total, including recorded deposits, projected paychecks, dated compensation and stock-sale proceeds, undated estimates, and the aggregate overlap adjustment. It then shows a first-steps list for an empty vault and charts. Detailed holdings stay on What you have; Home keeps the holdings / assets / debts split and compact balance, position, and quote source dates, and retains the allocation chart.
+- Home begins with two clickable summaries in one divided section: current net worth, and this month's income and spending. The income summary is followed by a source list that adds to the monthly total, including recorded deposits, projected paychecks, dated compensation and stock-sale proceeds, undated estimates, and the aggregate overlap adjustment. It then shows a first-steps list for an empty vault and charts. Detailed holdings open directly from the Finance destination bar; Home keeps the holdings / assets / debts split and compact balance, position, and quote source dates, and retains the allocation chart.
 - **What you have** is the current net worth total.
 - **This month** is one cashflow total: posted activity, job pay and recorded share-sale proceeds, plus bills that are not already posted. Posted and projected income within 20% count once; the visible negative adjustment explains the amount removed and is not assigned to a specific deposit or payday. A bill within four days and 2% (or $1) of a posted purchase counts once. Without a payday schedule, job pay remains a date-unknown estimate; configured schedules show paycheck dates only from the saved first payday forward.
 - Transactions do not change net worth. Jobs, bills, and subscriptions stay editable on Recurring and still do not change net worth.

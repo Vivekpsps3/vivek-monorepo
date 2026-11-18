@@ -140,3 +140,5 @@ export type { RecoveryRestorePlan, RestoreMode, RestorePreviewRow } from './app/
 export async function prepareFinanceRestore(injector: Injector, file: Blob, password: string, mode: 'merge' | 'replace', signal: AbortSignal) {
   return (await import('./app/crypto/recovery-restore')).openFinanceRestore(injector, file, password, mode, signal);
 }
+
+export { financeSections } from './app/core/layout/finance-navigation';

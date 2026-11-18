@@ -20,6 +20,8 @@ opaque during motion and use the shared frame-shadow tokens. Resolve cascade
 ownership instead of stacking specificity overrides. Migrate consumers and remove their old selectors.
 Menus must hide their panel and update expanded state before focus returns, so
 the next keyboard command sees the closed state.
+Section navigation wraps its real links. Its current-state match prefers a matching
+query-backed view over the default path and ignores unrelated query parameters.
 The compact data table owns dense cell spacing and the narrow row layout. Keep
 column headers and row identity in semantic table markup; let the table attach
 narrow labels. A shared selector change requires inspecting actual consuming apps.

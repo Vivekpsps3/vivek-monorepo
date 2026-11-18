@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, OnInit, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, forkJoin, of } from 'rxjs';
 import { IncomeComponent } from '../income/income.component';
@@ -39,14 +39,10 @@ export interface CommitmentRow {
   standalone: true,
   imports: [
     AppDatePipe,
-    MoneyPipe, CommonModule, FormsModule, RouterLink, UiButtonComponent, UiBadgeComponent, UiEmptyStateComponent, UiPageHeaderComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent],
+    MoneyPipe, CommonModule, FormsModule, UiButtonComponent, UiBadgeComponent, UiEmptyStateComponent, UiPageHeaderComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent],
   template: `
     <div class="page recurring-page">
-      <ui-page-header [title]="'Recurring'" [concealTitle]="true" />
-      <nav class="hub-tabs" aria-label="Recurring sections">
-        <a [routerLink]="[]" [queryParams]="{ t: null }" queryParamsHandling="merge" [class.on]="tab === 'pay'" [attr.aria-current]="tab === 'pay' ? 'page' : null">Pay</a>
-        <a [routerLink]="[]" [queryParams]="{ t: 'spend' }" queryParamsHandling="merge" [class.on]="tab === 'spend'" [attr.aria-current]="tab === 'spend' ? 'page' : null">Bills and subscriptions</a>
-      </nav>
+      <ui-page-header [title]="tab === 'spend' ? 'Bills and subscriptions' : 'Pay'" [concealTitle]="true" />
       @if (tab === 'spend') {
         <section class="commitments" aria-labelledby="commitments-title">
           <header class="commitments__header">
@@ -290,9 +286,9 @@ export class RecurringHubComponent implements OnInit {
       const kind = params.get('kind');
       const status = params.get('status');
       const order = params.get('order');
-      if (kind === 'bill' || kind === 'subscription' || kind === 'all') this.typeFilter = kind;
-      if (status === 'active' || status === 'inactive' || status === 'all') this.statusFilter = status;
-      if (order === 'latest' || order === 'soonest') this.dateOrder = order;
+      this.typeFilter = kind === 'bill' || kind === 'subscription' ? kind : 'all';
+      this.statusFilter = status === 'active' || status === 'inactive' ? status : 'all';
+      this.dateOrder = order === 'latest' ? 'latest' : 'soonest';
       this.cdr.markForCheck();
     });
     this.loadCommitments();

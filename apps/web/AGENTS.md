@@ -10,8 +10,7 @@ it on lock, sign-out, and owner change.
 Read guidance for [Town/Health](src/app/town/AGENTS.md),
 [World](src/app/world/AGENTS.md) or [Pixels](src/app/pixels/AGENTS.md) when editing them.
 
-A source can be locked, empty, stale, expired or unavailable. Keep those states
-honest and independent; failure of one card must not remove other usable cards.
+Keep locked, empty, stale, expired and unavailable source states independent.
 Invalidate old owner/route work before publication, clear private snapshots on lock,
 and dispose subscriptions/listeners with the actual consumer lifetime. Cancellation
 must not leave a promise that can still mutate shared state.
@@ -32,7 +31,7 @@ commands route Quick add to app editors with a browser-local transaction date.
 Health checks are admin-only, owner-bound and visibility-throttled. Share source
 responses and test request counts; bounded reuse must preserve result semantics.
 
-Verify navigation, refresh, history and keyboard/focus.
-Use [FRONTEND](../../docs/FRONTEND.md) for shell/UI ownership and root gates for root
-Karma plus affected browser journeys. [e2e](e2e/) includes Town, Pixels and World;
-listing tests alone does not prove execution.
+The app switcher reuses canonical app-local destinations and respects app guards.
+Verify navigation, refresh, history and keyboard focus.
+See [FRONTEND](../../docs/FRONTEND.md) for shell ownership. Run root Karma and
+affected [browser journeys](e2e/), including Town, Pixels and World.

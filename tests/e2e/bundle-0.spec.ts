@@ -203,8 +203,8 @@ for (const fontSize of [21, 22]) {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/media');
     const links = page.locator('.ui-section-nav__link');
-    await expect(links).toHaveCount(5);
-    // Exercise overflowing labels independently of which system font CI has.
+    await expect(links).toHaveCount(10);
+    // Stress the wrapping row independently of which system font CI has.
     await links.evaluateAll((elements, size) => {
       for (const element of elements) (element as HTMLElement).style.fontSize = `${size}px`;
     }, fontSize);
@@ -213,7 +213,7 @@ for (const fontSize of [21, 22]) {
       if (index > 0) await page.keyboard.press('Tab');
       await expect(links.nth(index)).toBeFocused();
       const ring = await links.nth(index).evaluate(element => {
-        const scroller = element.closest('.ui-section-nav__scroller')!;
+        const scroller = element.closest('.ui-section-nav__links')!;
         const style = getComputedStyle(element);
         const pad = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
         const box = element.getBoundingClientRect();
@@ -221,12 +221,14 @@ for (const fontSize of [21, 22]) {
         return {
           left: box.left - pad - viewport.left,
           right: viewport.right - box.right - pad,
-          mask: getComputedStyle(scroller).maskImage,
+          top: box.top - pad - viewport.top,
+          bottom: viewport.bottom - box.bottom - pad,
         };
       });
       expect(ring.left).toBeGreaterThanOrEqual(-1);
       expect(ring.right).toBeGreaterThanOrEqual(-1);
-      expect(ring.mask).toBe('none');
+      expect(ring.top).toBeGreaterThanOrEqual(-1);
+      expect(ring.bottom).toBeGreaterThanOrEqual(-1);
     }
   });
 }
@@ -247,8 +249,8 @@ for (const width of [390, 1280]) {
           route.name === 'hub' ? '.hub' : route.name === 'settings' ? '.settings-shell' : route.name.startsWith('media') ? '.media-page' : '.travel-page';
         const pageStart = await contentStart(page, pageSelector);
         expect(Math.abs(pageStart - headerStart), `${route.path} content ${pageStart} vs header ${headerStart}`).toBeLessThanOrEqual(1);
-        if (await page.locator('.ui-section-nav__scroller').count()) {
-          const navStart = await contentStart(page, '.ui-section-nav__scroller');
+        if (await page.locator('.ui-section-nav__links').count()) {
+          const navStart = await contentStart(page, '.ui-section-nav__links');
           expect(Math.abs(navStart - headerStart), `${route.path} section nav ${navStart} vs header ${headerStart}`).toBeLessThanOrEqual(1);
         }
         const axe = await new AxeBuilder({ page }).analyze();
@@ -272,24 +274,12 @@ for (const width of [390, 1280]) {
         if (route.name === 'media' && width === 390) {
           await page.goto('/media/add');
           await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1, { timeout: 20_000 });
-          const nav = page.locator('.ui-section-nav__scroller');
+          const nav = page.locator('.ui-section-nav__links');
           await expect(nav).toBeVisible();
-          await expect.poll(async () => nav.evaluate(el => {
-            const active = el.querySelector('[aria-current="page"]');
-            if (!(active instanceof HTMLElement)) return 'missing active item';
-            const activeBox = active.getBoundingClientRect();
-            const navBox = el.getBoundingClientRect();
-            const inView = activeBox.left >= navBox.left - 1 && activeBox.right <= navBox.right + 1;
-            const style = getComputedStyle(el);
-            const mask = style.maskImage && style.maskImage !== 'none' ? style.maskImage : style.webkitMaskImage;
-            const faded = (el.classList.contains('is-fade-start') || el.classList.contains('is-fade-end'))
-              && /gradient/i.test(mask);
-            const overflow = el.scrollWidth - el.clientWidth;
-            const detail = `scroll ${el.scrollLeft} overflow ${overflow} inView ${inView} fade ${el.className} mask ${mask}`;
-            if (!inView) return detail;
-            if (overflow > 1 && !(el.scrollLeft > 1 && faded)) return detail;
-            return 'ok';
-          })).toBe('ok');
+          const active = nav.locator('[aria-current="page"]');
+          await expect(active).toHaveAccessibleName('Add manually');
+          await expect(active).toBeInViewport({ ratio: 1 });
+          await expect.poll(() => nav.evaluate(el => el.scrollWidth - el.clientWidth)).toBe(0);
         }
       }
     });
@@ -304,7 +294,7 @@ test('app switcher lists every app and supports the keyboard', async ({ page }) 
   for (const name of ['Hub', 'Finance', 'Travel', 'Media', 'Town', 'Pixels']) {
     await expect(bar.getByRole('link', { name, exact: true })).toBeVisible();
   }
-  await expect(page.locator('.app-switcher__toggle')).toBeHidden();
+  await expect(bar.getByRole('button', { name: /Switch apps and destinations/ })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   const toggle = page.locator('.app-switcher__toggle');
@@ -320,11 +310,11 @@ test('app switcher lists every app and supports the keyboard', async ({ page }) 
   await page.keyboard.press('ArrowDown');
   await expect(menu.getByRole('link', { name: 'Hub', exact: true })).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  await expect(menu.getByRole('link', { name: 'Finance', exact: true })).toBeFocused();
+  await expect(menu.getByRole('link', { name: 'Agenda', exact: true })).toBeFocused();
   await page.keyboard.press('ArrowUp');
   await expect(menu.getByRole('link', { name: 'Hub', exact: true })).toBeFocused();
   await page.keyboard.press('End');
-  await expect(menu.getByRole('link', { name: 'Pixels', exact: true })).toBeFocused();
+  await expect(menu.getByRole('link', { name: 'Life', exact: true })).toBeFocused();
   await page.keyboard.press('Home');
   await expect(menu.getByRole('link', { name: 'Hub', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');

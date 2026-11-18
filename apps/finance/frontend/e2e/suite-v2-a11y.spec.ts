@@ -31,12 +31,12 @@ const seed = {
 
 const routes: Array<{ path: string; h1: string }> = [
   { path: '/', h1: 'Home' },
-  { path: '/have?t=assets', h1: 'What you have' },
-  { path: '/have?t=holdings', h1: 'What you have' },
-  { path: '/spending?t=activity', h1: 'Spending' },
-  { path: '/spending?t=calendar', h1: 'Spending' },
-  { path: '/recurring?t=pay', h1: 'Recurring' },
-  { path: '/recurring?t=spend', h1: 'Recurring' },
+  { path: '/have?t=assets', h1: 'Assets and debts' },
+  { path: '/have?t=holdings', h1: 'Holdings' },
+  { path: '/spending?t=activity', h1: 'Activity' },
+  { path: '/spending?t=calendar', h1: 'Calendar' },
+  { path: '/recurring?t=pay', h1: 'Pay' },
+  { path: '/recurring?t=spend', h1: 'Bills and subscriptions' },
   { path: '/planning?t=path', h1: 'Planning' },
   { path: '/planning?t=growth', h1: 'Planning' },
   { path: '/planning?t=stocks', h1: 'Planning' },
@@ -85,9 +85,10 @@ for (const width of [390, 1280]) {
         const vault = await syntheticVault(page, seed);
         await vault.open('/');
         const sections: Array<{ tab: string; h1: string }> = [
-          { tab: 'Net worth', h1: 'What you have' },
-          { tab: 'Spending', h1: 'Spending' },
-          { tab: 'Recurring', h1: 'Recurring' },
+          { tab: 'Accounts', h1: 'Assets and debts' },
+          { tab: 'Holdings', h1: 'Holdings' },
+          { tab: 'Activity', h1: 'Activity' },
+          { tab: 'Pay', h1: 'Pay' },
           { tab: 'Planning', h1: 'Planning' },
           { tab: 'Home', h1: 'Home' },
         ];
@@ -100,14 +101,14 @@ for (const width of [390, 1280]) {
         await expectCleanPage(page, violations);
       });
 
-      test('switching a sub-tab keeps focus on the tab link', async ({ page }) => {
+      test('an app destination on the same route focuses its heading', async ({ page }) => {
         const violations = watchConsole(page);
         const vault = await syntheticVault(page, seed);
         await vault.open('/spending?t=activity');
-        const calendar = page.locator('app-spending-hub nav.hub-tabs').getByRole('link', { name: 'Calendar' });
+        const calendar = page.getByRole('navigation', { name: 'Finance sections' }).getByRole('link', { name: 'Calendar' });
         await calendar.click();
         await expect(page.locator('app-calendar')).toBeVisible();
-        await expect(calendar).toBeFocused();
+        await expect(page.getByRole('heading', { level: 1, name: 'Calendar' })).toBeFocused();
         await expectCleanPage(page, violations);
       });
 

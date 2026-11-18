@@ -119,7 +119,7 @@ describe('RecurringHubComponent', () => {
 });
 
 describe('RecurringHubComponent heading (F1)', () => {
-  it('renders one h1 "Recurring" and keeps the Bills h2', async () => {
+  it('renders one Bills and subscriptions h1 and keeps the visible h2', async () => {
     const params = new BehaviorSubject({ get: (key: string) => ({ t: 'spend' } as Record<string, string>)[key] ?? null, keys: ['t'] });
     const finance = jasmine.createSpyObj('FinanceService', ['getFixedExpenses', 'getSubscriptions'], {
       fixedExpenses$: new BehaviorSubject<FixedExpense[]>([]).asObservable(),
@@ -140,7 +140,7 @@ describe('RecurringHubComponent heading (F1)', () => {
     const el: HTMLElement = fixture.nativeElement;
     const headings = el.querySelectorAll('h1');
     expect(headings.length).toBe(1);
-    expect(headings[0].textContent?.trim()).toBe('Recurring');
+    expect(headings[0].textContent?.trim()).toBe('Bills and subscriptions');
     expect(headings[0].classList.contains('ui-page-header__title--concealed')).toBe(true);
     const bills = el.querySelector('h2#commitments-title');
     expect(bills).not.toBeNull();
@@ -159,8 +159,8 @@ function componentRow(kind: 'bill' | 'subscription', record: FixedExpense | Subs
   return { id: item.id, kind, name: item.name, category: item.category, date: item.next_due_date, account: item.payment_account || null, autopay: null, frequency: item.frequency, amount: item.amount, monthlyAmount: item.monthly_amount, active: item.is_active, subscription: item };
 }
 
-describe('canonical tab links', () => {
-  it('the default link href has no t=, labels match, exactly one link is current', async () => {
+describe('direct recurring destinations', () => {
+  it('renders Pay and Bills for canonical and legacy links', async () => {
     const harnessFinance = jasmine.createSpyObj('FinanceService', ['getFixedExpenses', 'getSubscriptions'], {
       fixedExpenses$: new BehaviorSubject<FixedExpense[]>([]),
       subscriptions$: new BehaviorSubject<Subscription[]>([]),
@@ -182,16 +182,17 @@ describe('canonical tab links', () => {
     });
     await TestBed.compileComponents();
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/finance/recurring', RecurringHubComponent);
-    harness.detectChanges();
-    const links = [...harness.routeNativeElement!.querySelectorAll('.hub-tabs a')] as HTMLAnchorElement[];
-    expect(links.map(link => link.textContent?.trim())).toEqual(['Pay', 'Bills and subscriptions']);
-    expect(links[0].getAttribute('href')).not.toContain('t=');
-    expect(links[1].getAttribute('href')).toContain('t=spend');
-    const current = links.filter(link => link.getAttribute('aria-current') === 'page');
-    expect(current.length).toBe(1);
-    expect(current[0].textContent?.trim()).toBe('Pay');
-    expect(harness.routeNativeElement!.querySelector('.hub-tabs')?.getAttribute('aria-label')).toBe('Recurring sections');
+    for (const [suffix, title, view] of [
+      ['', 'Pay', 'app-income'],
+      ['?t=spend', 'Bills and subscriptions', '.commitments'],
+      ['?t=bills', 'Bills and subscriptions', '.commitments'],
+      ['?t=subs', 'Bills and subscriptions', '.commitments'],
+    ]) {
+      await harness.navigateByUrl('/finance/recurring' + suffix, RecurringHubComponent);
+      harness.detectChanges();
+      expect(harness.routeNativeElement!.querySelector('h1')?.textContent?.trim()).toBe(title);
+      expect(harness.routeNativeElement!.querySelector(view)).not.toBeNull();
+    }
   });
 });
 

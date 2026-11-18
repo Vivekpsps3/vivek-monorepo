@@ -9,6 +9,10 @@
     </div>
   </ui-page-header>
 
+  @if (receiptsOpen) {
+    <ng-container *ngTemplateOutlet="receiptHistory" />
+  }
+
   <section class="month-hero" aria-labelledby="period-eyebrow">
     <p class="section-eyebrow" id="period-eyebrow">{{ periodEyebrow }}</p>
     <div class="month-summary-row">
@@ -409,6 +413,12 @@
     </ng-template>
   </ui-card>
 
+  @if (!receiptsOpen) {
+    <ng-container *ngTemplateOutlet="receiptHistory" />
+  }
+</div>
+
+<ng-template #receiptHistory>
   <details class="import-history ledger-receipts" [open]="receiptsDetailsOpen" (toggle)="onReceiptsToggle($event)">
     <summary>Import history ({{ importReceipts.length }})</summary>
     @if (importReceipts.length) {
@@ -457,7 +467,7 @@
       <ui-empty-state [title]="'No import receipts yet'" message="Import a statement to record its outcome and any confirmed coverage." />
     }
   </details>
-</div>
+</ng-template>
 
 <ui-dialog scrollTarget=".main-content" [open]="importWorkflow.showImportModal" labelledBy="import-modal-title" panelClass="ui-dialog-panel--wide tx-sheet" (closed)="importWorkflow.closeImportModal()">
     <h3 id="import-modal-title">Import from bank</h3>
