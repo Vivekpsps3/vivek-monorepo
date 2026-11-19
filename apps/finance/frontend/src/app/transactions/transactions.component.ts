@@ -563,9 +563,12 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     };
   }
 
+  private get activityRows(): Transaction[] {
+    return this.allTransactionsLoaded || this.allTransactions.length ? this.allTransactions : this.transactions;
+  }
+
   get matchingTransactions(): Transaction[] {
-    const source = this.allTransactionsLoaded ? this.allTransactions : (this.allTransactions.length ? this.allTransactions : this.transactions);
-    return filterTransactionActivity(source, this.activityFilters);
+    return filterTransactionActivity(this.activityRows, this.activityFilters);
   }
 
   /** Scheduled work income is only summarized over an explicit, finite date scope. */
@@ -1179,7 +1182,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
 
   private removeTransaction(id: number, session: number): void {
     if (!this.isCurrent(session) || this.deleting.has(id)) return;
-    const tx = this.allTransactions.find(row => row.id === id);
+    const tx = this.activityRows.find(row => row.id === id);
     if (!tx) return;
     // Keep the exact encrypted-ledger record in the recovery action's memory.
     const backup = { ...tx };
