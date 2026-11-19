@@ -152,6 +152,7 @@ class TransportIn(BaseModel):
     status: TransportStatus = "planned"
     notes: str | None = None
     fa_ident: str | None = None
+    fa_flight_id: str | None = None
     fa_status: str | None = None
     fa_aircraft: str | None = None
     fa_gate_origin: str | None = None
@@ -193,6 +194,11 @@ class TransportIn(BaseModel):
     @classmethod
     def code_text(cls, value: str | None) -> str | None:
         return _blank(value, 40)
+
+    @field_validator("fa_flight_id")
+    @classmethod
+    def flight_id_text(cls, value: str | None) -> str | None:
+        return _blank(value, 80)
 
     @field_validator(
         "depart_tz",

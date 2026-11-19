@@ -15,16 +15,19 @@ import { Subject, Subscription, debounceTime, filter, merge, take, timeout } fro
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import {
   Candidate,
-  Clock,
   arrivalNote,
+  clearPrivateDraft,
+  clockLabel,
   decideCandidates,
   editManually,
   fillPreview,
   flightProblem,
   invalidateCandidate,
-  localClock,
   lookupQuery,
+  lookupStillCurrent,
   overridesFromSaved,
+  scheduleChangeNote,
+  scheduleNotice,
   useSchedule,
 } from "./flight-model.mjs";
 import { travelError } from "./travel.models";
@@ -119,6 +122,9 @@ import {
         <ui-card class="flight-preview">
           <h3>Flight schedule</h3>
           <p>{{ flight.origin_iata }} → {{ flight.destination_iata }}</p>
+          @if (notice(flight)) {
+            <p>{{ notice(flight) }}</p>
+          }
           <p>
             Scheduled departure:
             {{ clock(flight.scheduled_out, flight.origin_timezone) }}
@@ -127,7 +133,18 @@ import {
             Scheduled arrival:
             {{ clock(flight.scheduled_in, flight.destination_timezone) }}
           </p>
-          <p>{{ arrivalNote(flight) }} · {{ flight.status }}</p>
+          @if (arrivalNote(flight) || flight.status) {
+            <p>
+              {{ arrivalNote(flight) }}
+              @if (arrivalNote(flight) && flight.status) {
+                ·
+              }
+              {{ flight.status }}
+            </p>
+          }
+          @if (flight.actual_ident && flight.actual_ident !== flight.ident) {
+            <p>Operated as {{ flight.actual_ident }}</p>
+          }
           <ui-button variant="ghost" type="button" (click)="useFlight()">
             Use flight schedule
           </ui-button>
@@ -293,6 +310,8 @@ export class TransportEditorComponent implements OnInit {
   flightDate = "";
   overrides: string[] = [];
   private filled: string[] = [];
+  private epoch = 0;
+  private fetchedAt = "";
   readonly looking = signal(false);
   readonly problem = signal("");
   readonly candidates = signal<Candidate[]>([]);
@@ -307,22 +326,26 @@ export class TransportEditorComponent implements OnInit {
       this.session.user$.pipe(filter(user => user?.id !== this.ownerId)),
     ).pipe(take(1), takeUntilDestroyed()).subscribe(() => {
       this.sessionActive = false;
+      this.epoch += 1;
       this.pending?.unsubscribe();
       this.connectionOpen.set(false);
-      this.values = {};
-      this.flightDate = "";
-      this.overrides = [];
-      this.filled = [];
+      const cleared = clearPrivateDraft();
+      this.values = cleared.values;
+      this.flightDate = cleared.flightDate;
+      this.overrides = cleared.overrides;
+      this.filled = cleared.filled;
       this.fields.set({});
       this.looking.set(false);
       this.problem.set("");
       this.candidates.set([]);
       this.selected.set(null);
+      this.fetchedAt = "";
     });
     this.destroy.onDestroy(() => this.pending?.unsubscribe());
   }
   openConnection(): void {
     if (!this.sessionActive || this.connectionOpen()) return;
+    this.epoch += 1;
     this.pending?.unsubscribe();
     this.looking.set(false);
     this.connectionOpen.set(true);
@@ -359,6 +382,7 @@ export class TransportEditorComponent implements OnInit {
     this.filled = [];
   }
   invalidate(): void {
+    this.epoch += 1;
     this.pending?.unsubscribe();
     this.looking.set(false);
     this.values = invalidateCandidate(this.values, this.filled, this.overrides);
@@ -375,18 +399,25 @@ export class TransportEditorComponent implements OnInit {
       this.flightDate,
     );
     if (!query || this.values["mode"] !== "flight") return;
+    const epoch = ++this.epoch;
     this.pending?.unsubscribe();
     this.looking.set(true);
     this.problem.set("");
     this.pending = this.http
       .post<{
         flights: Candidate[];
+        incomplete?: boolean;
+        fetched_at?: string;
       }>("/travel/api/flights/lookup", query)
-      .pipe(timeout(5000))
+      .pipe(timeout(20000))
       .subscribe({
         next: (r) => {
+          if (!this.sessionActive || !lookupStillCurrent(epoch, this.epoch)) return;
           this.looking.set(false);
-          const choice = decideCandidates(r.flights, this.flightDate);
+          this.fetchedAt = r.fetched_at || "";
+          const choice = decideCandidates(r.flights, this.flightDate, {
+            incomplete: Boolean(r.incomplete),
+          });
           if (choice.kind === "preview" && choice.flight)
             this.choose(choice.flight);
           else if (choice.kind === "choose") {
@@ -400,6 +431,7 @@ export class TransportEditorComponent implements OnInit {
           }
         },
         error: (e) => {
+          if (!this.sessionActive || !lookupStillCurrent(epoch, this.epoch)) return;
           this.looking.set(false);
           this.problem.set(flightProblem(e).message || travelError(e));
         },
@@ -408,10 +440,12 @@ export class TransportEditorComponent implements OnInit {
   choose(candidate: Candidate): void {
     this.selected.set(candidate);
     this.candidates.set([]);
+    const note = scheduleChangeNote(this.values, candidate);
     const result = fillPreview(this.values, candidate, this.overrides);
     this.values = result.values;
     this.filled = result.filled;
     this.overrides = result.overrides;
+    if (note) this.problem.set(note);
   }
   useFlight(): void {
     const flight = this.selected();
@@ -421,11 +455,11 @@ export class TransportEditorComponent implements OnInit {
     this.filled = result.filled;
     this.overrides = [];
   }
+  notice(flight: Candidate): string {
+    return scheduleNotice(flight, this.fetchedAt);
+  }
   clock(iso: string, zone: string): string {
-    const value: Clock | null = localClock(iso, zone);
-    return value
-      ? value.day + " " + value.time + " " + value.zone
-      : "Time unavailable";
+    return clockLabel(iso, zone) || "Time unavailable";
   }
   save(): void {
     if (this.saving) return;

@@ -135,6 +135,8 @@ class Transport(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="planned")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     fa_ident: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # FlightAware flight ids do not fit in fa_ident. Null when the schedule has none.
+    fa_flight_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     fa_status: Mapped[str | None] = mapped_column(String(80), nullable=True)
     fa_aircraft: Mapped[str | None] = mapped_column(String(40), nullable=True)
     fa_gate_origin: Mapped[str | None] = mapped_column(String(20), nullable=True)

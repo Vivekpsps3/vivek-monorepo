@@ -123,6 +123,7 @@ def transport_out(row: Transport) -> dict:
         "sort_order": row.sort_order,
         "category": category_for_transport(row.role, row.mode),
         "fa_ident": row.fa_ident,
+        "fa_flight_id": row.fa_flight_id,
         "fa_status": row.fa_status,
         "fa_aircraft": row.fa_aircraft,
         "fa_gate_origin": row.fa_gate_origin,

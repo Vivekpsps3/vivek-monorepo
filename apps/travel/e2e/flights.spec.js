@@ -101,13 +101,15 @@ test('a missing key, a timeout, and no match stay distinct and editable', async 
   const problem = page.locator('.local-error');
   await expect(problem).toContainText('Add a FlightAware AeroAPI key in Settings');
   await expect(page.getByLabel('Departure local date and time')).toBeEnabled();
+  await page.getByLabel('Departure local date and time').fill('2026-11-02T09:15');
   mode = 'timeout';
   await page.clock.pauseAt(new Date('2026-11-01T12:01:00Z'));
   try {
     await page.getByRole('button', { name: 'Retry flight schedule' }).click();
     await pendingTimeout;
-    await page.clock.runFor(5000);
+    await page.clock.runFor(20000);
     await expect(problem).toContainText('FlightAware took too long');
+    await expect(page.getByLabel('Departure local date and time')).toHaveValue('2026-11-02T09:15');
   } finally {
     releaseTimeout();
     await page.clock.resume();
@@ -117,6 +119,49 @@ test('a missing key, a timeout, and no match stay distinct and editable', async 
   await expect(problem).toContainText('No matching flight on that date');
   await page.getByLabel('Departure local date and time').fill('2026-11-02T09:15');
   await expect(page.getByRole('button', { name: 'Save transport', exact: true })).toBeEnabled();
+});
+
+test('a published schedule stays unlabeled and saves one leg', async ({ page, request }) => {
+  await page.route('**/travel/api/flights/lookup', route => route.fulfill({ json: {
+    incomplete: false,
+    fetched_at: '2026-11-19T15:00:00+00:00',
+    flights: [{
+      source: 'schedules',
+      ident: 'UAL837',
+      ident_iata: 'UA837',
+      origin_iata: 'SFO',
+      destination_iata: 'NRT',
+      scheduled_out: '2027-05-19T18:00:00Z',
+      scheduled_in: '2027-05-20T22:30:00Z',
+      fa_flight_id: null,
+    }],
+  } }));
+  const created = await request.post('/travel/api/trips', { data: {
+    title: 'Advance flight', start_date: '2027-05-19', end_date: '2027-05-21',
+    stays: [{ city: 'Tokyo', arrive_on: '2027-05-19', leave_on: '2027-05-21' }],
+  } });
+  expect(created.ok(), await created.text()).toBeTruthy();
+  const trip = await created.json();
+  await page.goto('/travel/trips/' + trip.id);
+  await openTripAdd(page, 'Transport');
+  await page.getByRole('combobox', { name: 'Mode', exact: true }).selectOption('flight');
+  await page.getByLabel('Departure date').fill('2027-05-19');
+  await page.getByLabel('Flight number').fill('UA 837');
+  const card = page.locator('.flight-preview');
+  await expect(card).toContainText('Published timetable, not live status.');
+  await expect(card).toContainText('Fetched 2026-11-19T15:00:00+00:00');
+  await expect(card).toContainText('2027-05-19 18:00');
+  await expect(card).not.toContainText('UTC');
+  await expect(card).not.toContainText('America/Los_Angeles');
+  await page.getByLabel('Departure local date and time').fill('2027-05-19T09:15');
+  await page.getByRole('button', { name: 'Save transport', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'UA 837', exact: true })).toBeVisible();
+  const detail = await request.get('/travel/api/trips/' + trip.id);
+  expect(detail.ok()).toBeTruthy();
+  const body = await detail.json();
+  expect(body.transports).toHaveLength(1);
+  expect(body.transports[0].depart_at).toContain('2027-05-19T09:15');
+  expect(body.transports[0].fa_scheduled_out).toBe('2027-05-19T18:00:00Z');
 });
 
 const settingsViews = [

@@ -13,7 +13,7 @@ def touch(trip) -> None:
 def _fa_fetched(body) -> datetime | None:
     if body.fa_fetched_at is not None:
         return body.fa_fetched_at
-    if body.fa_ident:
+    if body.fa_ident or body.fa_flight_id:
         return datetime.now(UTC)
     return None
 
@@ -37,6 +37,7 @@ def apply_transport(row: Transport, body) -> None:
     row.status = body.status
     row.notes = body.notes
     row.fa_ident = body.fa_ident
+    row.fa_flight_id = body.fa_flight_id
     row.fa_status = body.fa_status
     row.fa_aircraft = body.fa_aircraft
     row.fa_gate_origin = body.fa_gate_origin

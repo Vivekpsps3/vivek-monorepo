@@ -37,6 +37,17 @@ from apps.server.town.constants import HABIT_NAME_MAX, LOT_UNLOCK_LV, SLOT_DEFAU
 
 PARENT = "site_calendar_feeds_v1"
 REVISION = "site_town_ownership_v1"
+
+
+def _added_columns(diff) -> set[str]:
+    names = set()
+    for item in diff:
+        if item[0] != "add_column":
+            raise AssertionError(item)
+        names.add(f"{item[2]}.{item[3].name}")
+    return names
+
+
 TABLES = ("habits", "habit_checkins", "habit_cadences")
 CHECKS = {
     "ck_habits_building_style": "building_style IN ('forge', 'garden', 'cottage')",
@@ -148,9 +159,9 @@ def test_upgrade_preserves_multi_owner_history_and_is_the_only_head(tmp_path: Pa
     digest = _digest(before)
     _upgrade_to(database, REVISION)
     assert current_revision(database) == REVISION
-    assert head_revision() == REVISION
-    assert ScriptDirectory.from_config(_cfg(database)).get_heads() == [REVISION]
-    assert model_diff(database) == []
+    assert head_revision() == "site_flight_occurrence_v1"
+    assert ScriptDirectory.from_config(_cfg(database)).get_heads() == ["site_flight_occurrence_v1"]
+    assert _added_columns(model_diff(database)) == {"transports.fa_flight_id"}
     after = _snapshot(database)
     assert after == before
     assert _digest(after) == digest
@@ -219,7 +230,7 @@ def test_upgrade_preserves_multi_owner_history_and_is_the_only_head(tmp_path: Pa
         assert "fk_habit_checkins_owner" not in checkins[0]
     _upgrade_to(database, REVISION)
     assert _snapshot(database) == before
-    assert model_diff(database) == []
+    assert _added_columns(model_diff(database)) == {"transports.fa_flight_id"}
 
 
 @pytest.mark.parametrize(
