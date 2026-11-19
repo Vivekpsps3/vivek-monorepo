@@ -12,6 +12,8 @@ describe('return context', () => {
       '/finance/spending?month=all',
       '/finance/pay?month=2026-10&history=1&year=custom&start=2024-02-29&end=2024-12-31',
       '/finance/bills?kind=subscription&status=active&order=latest',
+      '/finance/imports?start=bank',
+      '/finance/imports?start=fidelity',
       '/finance/planning/retirement',
       '/finance/spending?date=2024-02-29&pixelsDay=2024-02-29',
     ]) {
@@ -26,6 +28,9 @@ describe('return context', () => {
       .toBe('/finance/spending?date=2024-02-29');
     expect(returnPath('/finance/pay?month=invalid&history=1&year=0000&start=2024-02-30&end=2024-12-31&name=private'))
       .toBe('/finance/pay?history=1&end=2024-12-31');
+    expect(returnPath('/finance/imports?start=bank&reattach=4&reattach_file=statement.csv&account=private'))
+      .toBe('/finance/imports?start=bank');
+    expect(returnPath('/finance/imports?start=other')).toBe('/finance/imports');
     expect(returnPath('/finance/bills?kind=bill&kind=subscription&order=private&status=inactive&edit=42#private'))
       .toBe('/finance/bills?status=inactive');
     expect(returnPath('/media/library?kind=artist&kind=book&q=private&tag=private&offset=24&expanded=42'))

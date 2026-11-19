@@ -141,4 +141,4 @@ export async function prepareFinanceRestore(injector: Injector, file: Blob, pass
   return (await import('./app/crypto/recovery-restore')).openFinanceRestore(injector, file, password, mode, signal);
 }
 
-export { financeBillsPath, financeSections, pixelsDayActivityPath } from './app/core/layout/finance-navigation';
+export { financeBillsPath, financeImportsPath, financeSections, pixelsDayActivityPath } from './app/core/layout/finance-navigation';

@@ -1,0 +1,25 @@
+<div class="page imports-page">
+  <ui-page-header title="Imports" [concealTitle]="true" />
+
+  <section class="imports-section" aria-labelledby="bank-import-heading">
+    <h2 id="bank-import-heading">Bank statements</h2>
+    <app-transactions [embedded]="true" [historyOnly]="true" />
+  </section>
+
+  <section class="imports-section" aria-labelledby="brokerage-import-heading">
+    <h2 id="brokerage-import-heading">Brokerage positions</h2>
+    <p class="imports-note">Your existing positions stay until a replacement is verified.</p>
+    <app-portfolio [embedded]="true" [importSurface]="true" [openFidelity]="start === 'fidelity'" />
+  </section>
+
+  <section class="imports-section" aria-labelledby="recovery-heading">
+    <h2 id="recovery-heading">Recovery and security</h2>
+    <p class="imports-note">Encrypted backup and restore use the same vault recovery. CSV export is a separate copy of the rows you can see.</p>
+    <div class="recovery-actions">
+      <a routerLink="/settings/finance">Encrypted recovery backup</a>
+      <a routerLink="/settings/finance">Restore encrypted backup</a>
+      <a routerLink="/settings/finance">Change vault passphrase</a>
+      <ui-button variant="secondary" (clicked)="lockFinance()">Lock Finance</ui-button>
+    </div>
+  </section>
+</div>

@@ -130,7 +130,7 @@ Calendar combines posted activity, dated job pay, fixed bills, and subscription 
 
 ### Spending: Imports
 
-Supported browser parsers are Capital One, Chase, American Express, Citi, Bank of America, and X Money (`capital_one`, `chase`, `amex`, `citi`, `bank_of_america`, `x_money`). Users attach multiple CSVs, choose a bank independently per file, preview diagnostics, map each source to a confirmed account, select rows, and commit encrypted transactions.
+The Imports page at `/finance/imports` is where bank and Fidelity imports, receipts, resume and undo live. Older spending import links redirect there. Activity and Holdings keep their own export and contextual import actions. Supported browser parsers are Capital One, Chase, American Express, Citi, Bank of America, and X Money (`capital_one`, `chase`, `amex`, `citi`, `bank_of_america`, `x_money`). Users attach multiple CSVs, choose a bank independently per file, preview diagnostics, map each source to a confirmed account, select rows, and commit encrypted transactions.
 
 Preview reports parsed, new, duplicate, skipped, and error rows by filename. Deduplication checks saved data and the other selected files. Valid files can proceed despite another file's parse failures. Failed commits preserve selection; retry checks saved keys again. Stable source-account keys keep same-mask accounts distinct, and renames target an explicit account ID.
 

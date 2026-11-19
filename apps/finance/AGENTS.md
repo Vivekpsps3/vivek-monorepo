@@ -15,6 +15,7 @@ Start with the existing owner:
   remote lock delivery, including Settings-only tabs.
 - [Import service](frontend/src/app/services/finance-import.service.ts) and existing
   bank/brokerage import modules own preview, deduplication, receipts and Undo.
+  The Imports page is the history and recovery surface; those actions stay here.
 - [Public API](frontend/src/public-api.ts) is the cross-app entry point. Consumers
   receive narrow projections; they must not instantiate private stores or copy math.
   The private shell starts one trip-spend producer from that API when a vault is

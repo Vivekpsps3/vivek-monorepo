@@ -78,7 +78,7 @@ for (const viewport of VIEWPORTS) {
           ['Activity', '/finance/spending'],
           ['Bills', '/finance/bills'],
           ['Pay', '/finance/pay'],
-          ['Imports', '/finance/spending?receipts=1'],
+          ['Imports', '/finance/imports'],
         ]) {
           const link = nav.getByRole('link', { name: label, exact: true });
           await expect(link).toHaveAttribute('href', href);
@@ -87,9 +87,8 @@ for (const viewport of VIEWPORTS) {
           await expect(link).toHaveAttribute('aria-current', 'page');
           await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
         }
-        const receipts = page.locator('details.import-history');
-        await expect(receipts).toHaveJSProperty('open', true);
-        await expect(receipts).toBeInViewport();
+        await expect(page.getByRole('heading', { level: 1, name: 'Imports', exact: true })).toBeVisible();
+        await expect(page.locator('section.import-history')).toBeVisible();
         await expect(page.locator('ui-page-header').getByRole('button', { name: 'Import', exact: true })).toBeVisible();
 
         await vault.open('/planning');
@@ -133,6 +132,14 @@ for (const viewport of VIEWPORTS) {
         await vault.open('/investment-insights', page, '/planning/projection');
         await vault.open('/stock-lab', page, '/planning/research');
         await expect(page.getByRole('heading', { level: 1, name: 'Stock research' })).toBeVisible();
+
+        await vault.open('/spending?receipts=1', page, '/imports');
+        await expect(page.getByRole('heading', { level: 1, name: 'Imports', exact: true })).toBeVisible();
+        await vault.open('/spending?t=imports&add=1', page, '/imports?start=bank');
+        await expect(page.getByRole('dialog', { name: 'Import from bank', exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await vault.open('/spending?t=calendar&receipts=1');
+        await expect(page.getByRole('heading', { level: 1, name: 'Calendar', exact: true })).toBeVisible();
       });
 
       test('guide', async ({ page }) => {

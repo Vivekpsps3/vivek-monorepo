@@ -4,15 +4,23 @@
     [title]="typeFilter === 'income' ? 'Income' : typeFilter === 'expense' ? 'Spending' : 'Activity'">
 
     <div uiPageActions class="header-actions">
-      <ui-button variant="primary" (clicked)="openAddModal()">Add transaction</ui-button>
-      <ui-button variant="secondary" (clicked)="openImportModal()">Import</ui-button>
+      @if (historyOnly) {
+        <ui-button variant="secondary" (clicked)="openImportModal()">Import</ui-button>
+        <ui-button variant="secondary" (clicked)="exportToCsv()">Export activity CSV</ui-button>
+      } @else {
+        <ui-button variant="primary" (clicked)="openAddModal()">Add transaction</ui-button>
+        <ui-button variant="secondary" (clicked)="openImportModal()">Import</ui-button>
+        <a class="import-history-link" routerLink="/finance/imports">Import history</a>
+      }
     </div>
   </ui-page-header>
 
-  @if (receiptsOpen) {
+  @if (historyOnly) {
+    @if (listError) {
+      <p class="import-error" role="alert">{{ listError }}</p>
+    }
     <ng-container *ngTemplateOutlet="receiptHistory" />
-  }
-
+  } @else {
   <section class="month-hero" aria-labelledby="period-eyebrow">
     <p class="section-eyebrow" id="period-eyebrow">{{ periodEyebrow }}</p>
     <div class="month-summary-row">
@@ -408,9 +416,6 @@
       }
     </ng-template>
   </ui-card>
-
-  @if (!receiptsOpen) {
-    <ng-container *ngTemplateOutlet="receiptHistory" />
   }
 </div>
 
@@ -422,8 +427,8 @@
 </ng-template>
 
 <ng-template #receiptHistory>
-  <details class="import-history ledger-receipts" [open]="receiptsDetailsOpen" (toggle)="onReceiptsToggle($event)">
-    <summary>Import history ({{ importReceipts.length }})</summary>
+  <section class="import-history ledger-receipts" aria-labelledby="import-history-heading">
+    <h3 id="import-history-heading">Import history ({{ importReceipts.length }})</h3>
     @if (importReceipts.length) {
       @for (receipt of importReceipts; track receipt.id) {
         <article class="import-history-row">
@@ -469,7 +474,7 @@
     } @else {
       <ui-empty-state [title]="'No import receipts yet'" message="Import a statement to record its outcome and any confirmed coverage." />
     }
-  </details>
+  </section>
 </ng-template>
 
 <ui-dialog scrollTarget=".main-content" [open]="importWorkflow.showImportModal" labelledBy="import-modal-title" panelClass="ui-dialog-panel--wide tx-sheet" (closed)="importWorkflow.closeImportModal()">

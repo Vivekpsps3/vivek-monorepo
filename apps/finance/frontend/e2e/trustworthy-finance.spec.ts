@@ -131,7 +131,7 @@ test('Spending opens on Activity without review controls and Home has no review 
   await vault.open('/spending');
   await expect(page.getByRole('link', { name: 'Activity', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('app-spending-hub').getByRole('link', { name: 'Imports', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('navigation', { name: 'Finance sections' }).getByRole('link', { name: 'Imports', exact: true })).toHaveAttribute('href', '/finance/spending?receipts=1');
+  await expect(page.getByRole('navigation', { name: 'Finance sections' }).getByRole('link', { name: 'Imports', exact: true })).toHaveAttribute('href', '/finance/imports');
   await expect(page.locator('app-transactions')).toBeVisible();
   await expect(page.locator(nativeHoverTitleSelector)).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Review', exact: true })).toHaveCount(0);
@@ -257,7 +257,7 @@ test('legacy spending links translate to Activity filters and direct destination
   await vault.open('/spending?t=pay', page, '/spending?t=activity&v=income');
   const nav = page.getByRole('navigation', { name: 'Finance sections' });
   await expect(nav.getByRole('link', { name: 'Activity', exact: true })).toHaveAttribute('aria-current', 'page');
-  await expect(nav.getByRole('link', { name: 'Imports', exact: true })).toHaveAttribute('href', '/finance/spending?receipts=1');
+  await expect(nav.getByRole('link', { name: 'Imports', exact: true })).toHaveAttribute('href', '/finance/imports');
   await expect(page).toHaveURL(/v=income/);
   await expect(page.getByRole('heading', { name: 'Work income', exact: true })).toBeVisible();
   await vault.open('/spending?t=spend', page, '/spending?t=activity&v=spending');
@@ -351,8 +351,13 @@ test('Fidelity market values survive an interrupted replacement and explicit ref
   await page.getByRole('link', { name: 'Home', exact: true }).first().click();
   await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,025.00'));
   await vault.open('/have?t=holdings');
-  await page.getByText('Finish your Fidelity import', { exact: true }).click();
+  await page.getByRole('link', { name: 'Finish your Fidelity import', exact: true }).click();
+  await expect(page).toHaveURL(/\/finance\/imports$/);
+  expect(vault.data('holdings')).toHaveLength(1);
   await page.getByRole('button', { name: 'Resume Fidelity import', exact: true }).click();
+  await expect.poll(() => vault.data('holdings').map(row => String(row.symbol).toUpperCase()).sort()).toEqual(['SPAXX', 'VOO']);
+  expect(vault.quoteRequests.map(symbol => symbol.toUpperCase())).toEqual(['VOO']);
+  await page.getByRole('navigation', { name: 'Finance sections' }).getByRole('link', { name: 'Holdings', exact: true }).click();
   await expect(page.locator('.summary-card')).toContainText(moneyText('$340.00'));
   await expect(page.locator('app-portfolio')).toContainText(/unavailable|unknown/i);
   expect(vault.quoteRequests.map(symbol => symbol.toUpperCase())).toEqual(['VOO']);
@@ -389,7 +394,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
     'Transaction Date,Post Date,Description,Category,Type,Amount,Memo',
     `${date},${date},${description},Food,Sale,-10,`,
   ].join('\n'));
-  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
+  await vault.open('/spending?t=imports', page, '/imports');
 
   const importButton = page.getByRole('button', { name: 'Import', exact: true });
   await importButton.click();
@@ -451,7 +456,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
 
 test('bank imports require account identity, resume one receipt, and undo retains edited records', async ({ page }) => {
   const vault = await syntheticVault(page);
-  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
+  await vault.open('/spending?t=imports', page, '/imports');
   await page.locator('.header-actions').getByRole('button', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   await dialog.locator('input[type=file]').setInputFiles({
@@ -487,7 +492,8 @@ test('bank imports require account identity, resume one receipt, and undo retain
   await editor.getByLabel('Merchant (optional)', { exact: true }).fill('Coffee shop');
   await editor.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(editor).toBeHidden();
-  await page.getByText(/Import history \(/).click();
+  await page.getByRole('link', { name: 'Import history', exact: true }).click();
+  await expect(page).toHaveURL(/\/finance\/imports/);
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await page.getByRole('dialog', { name: 'Undo this import?' }).getByRole('button', { name: 'Undo import', exact: true }).click();
   // The unedited rows disappear before the receipt is marked withdrawn. Waiting

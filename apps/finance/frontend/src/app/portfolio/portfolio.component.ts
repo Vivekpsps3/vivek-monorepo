@@ -3,11 +3,14 @@ import {
   ChangeDetectorRef,
   Component,
   Input,
+  OnChanges,
   OnDestroy,
   OnInit,
+  SimpleChanges,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import {
@@ -63,6 +66,7 @@ import {
 } from '@vivek/ui';
 import { MoneyPipe } from '@vivek/ui';
 import { PluralPipe } from '../shared/pipes/plural.pipe';
+import { bindLockSnapshots } from '../crypto/lock-finance';
 
 @Component({
   selector: 'app-portfolio',
@@ -81,13 +85,17 @@ import { PluralPipe } from '../shared/pipes/plural.pipe';
     UiMenuItemDirective,
     UiDataTableComponent,
     UiDialogComponent,
+    RouterLink,
   ],
   templateUrl: './portfolio.component.html',
   styleUrl: './portfolio.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class PortfolioComponent implements OnInit, OnDestroy {
+export class PortfolioComponent implements OnInit, OnChanges, OnDestroy {
   @Input() embedded = false;
+  /** Resume and import actions without the positions table. */
+  @Input() importSurface = false;
+  @Input() openFidelity = false;
   holdings: Holding[] = [];
   filteredHoldings: Holding[] = [];
   searchTerm = '';
@@ -124,6 +132,8 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
   private destroyed = false;
+  private openedFidelityLink = false;
+  private readonly releaseLockSnapshots = bindLockSnapshots(() => this.clearFidelityDraft());
 
   constructor(
     private financeService: FinanceService,
@@ -147,10 +157,30 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.loadResumableFidelityStages();
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['openFidelity'] && !this.openFidelity) this.openedFidelityLink = false;
+    if (!this.importSurface || !this.openFidelity || this.openedFidelityLink || this.showFidelityImportModal) return;
+    this.openedFidelityLink = true;
+    this.openFidelityImportModal();
+  }
+
   ngOnDestroy() {
     this.destroyed = true;
+    this.releaseLockSnapshots();
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  private clearFidelityDraft(): void {
+    this.closeFidelityImportModal();
+    this.fidelityImportParsing = false;
+    this.fidelityImportCommitting = false;
+    this.fidelityAccountReplacements = [];
+    this.cdr.markForCheck();
+  }
+
+  private sameFidelitySession(session: number): boolean {
+    return !this.destroyed && session === this.financeService.sessionToken;
   }
 
   private emptyHolding(): HoldingCreate {
@@ -533,15 +563,18 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   }
 
   resumeFidelityStage(stage: FidelityStageRecord) {
+    const session = this.financeService.sessionToken;
     this.fidelityImportCommitting = true;
     this.financeService.resumeFidelityImportStage(stage.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: result => {
+        if (!this.sameFidelitySession(session)) return;
         this.fidelityImportCommitting = false;
         this.toastService.success(fidelityImportToast(result.inserted));
         this.loadResumableFidelityStages();
         this.cdr.markForCheck();
       },
       error: () => {
+        if (!this.sameFidelitySession(session)) return;
         this.fidelityImportCommitting = false;
         this.toastService.error('Fidelity import is still staged. Resume it after resolving the issue.');
         this.loadResumableFidelityStages();
@@ -804,8 +837,9 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       'Replace',
       'Cancel'
     );
-    if (!ok) return;
+    if (!ok || this.destroyed) return;
 
+    const session = this.financeService.sessionToken;
     this.fidelityImportCommitting = true;
     this.cdr.markForCheck();
     this.financeService
@@ -813,6 +847,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res: FidelityCommitResult) => {
+          if (!this.sameFidelitySession(session)) return;
           this.fidelityImportCommitting = false;
           this.closeFidelityImportModal();
           this.toastService.success(fidelityImportToast(res.inserted));
@@ -820,6 +855,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
           this.cdr.markForCheck();
         },
         error: () => {
+          if (!this.sameFidelitySession(session)) return;
           this.fidelityImportCommitting = false;
           this.toastService.error('Replacement is staged and can be resumed after the interruption.');
           this.loadResumableFidelityStages();

@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import type { Routes } from '@angular/router';
-import { legacyPayDestination } from './core/layout/finance-navigation';
+import { legacyPayDestination, redirectLegacyImports } from './core/layout/finance-navigation';
 import { redirectLegacyPlanningQuery } from './planning/planning-destinations';
 import { MainLayoutComponent } from './core/layout/main-layout.component';
 import { authGuard } from '@vivek/ui';
@@ -36,7 +36,14 @@ export const routes: Routes = [
       {
         path: 'spending',
         title: 'Spending · Finance',
+        canActivate: [redirectLegacyImports],
+        runGuardsAndResolvers: 'paramsOrQueryParamsChange',
         loadComponent: () => import('./hubs/spending-hub.component').then(m => m.SpendingHubComponent),
+      },
+      {
+        path: 'imports',
+        title: 'Imports · Finance',
+        loadComponent: () => import('./imports/imports.component').then(m => m.ImportsComponent),
       },
       {
         path: 'bills',
