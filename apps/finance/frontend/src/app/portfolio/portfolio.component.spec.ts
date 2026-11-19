@@ -9,7 +9,7 @@ function componentWithFinance(overrides: Record<string, unknown> = {}) {
   const finance = jasmine.createSpyObj('FinanceService', [
     'refreshAllHoldingPrices', 'lookupSharePrice', 'getHoldingImportStages', 'getHoldings',
     'resumeFidelityImportStage',
-    'previewFidelityImport', 'getBrokerageAccounts', 'commitFidelityImport', 'getBrokerageImports',
+    'previewFidelityImport', 'getBrokerageAccounts', 'commitFidelityImport',
   ]);
   Object.assign(finance, overrides);
   finance.refreshAllHoldingPrices.and.returnValue(of({ holdings: [], updated: 0, failed: 0 }));
@@ -17,7 +17,6 @@ function componentWithFinance(overrides: Record<string, unknown> = {}) {
   finance.getHoldings.and.returnValue(of([]));
   finance.resumeFidelityImportStage.and.returnValue(of({ inserted: 1, status: 'activated' }));
   finance.getBrokerageAccounts.and.returnValue(of([]));
-  finance.getBrokerageImports.and.returnValue(of([]));
   const market = jasmine.createSpyObj<MarketRefreshCoordinatorService>('MarketRefreshCoordinatorService', ['refreshNow', 'refreshSymbol']);
   const idle: MarketRefreshState = {
     phase: 'idle', automatic: false, totalSymbols: 0, completedSymbols: 0,

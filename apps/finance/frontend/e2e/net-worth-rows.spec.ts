@@ -41,7 +41,7 @@ test('holdings retain the details in one row per position', async ({ page }) => 
   await expect(page.getByText('Unrealized gain')).toBeVisible();
 
   const table = page.getByRole('table', { name: 'Manual holdings' });
-  await expect(table.getByRole('columnheader')).toHaveText(['Symbol', 'Shares', 'Value', 'Gain', 'Price', 'Actions']);
+  await expect(table.getByRole('columnheader')).toHaveText(['Symbol', 'Value', 'Shares', 'Gain', 'Price', 'Actions']);
   await expect(table.locator('tbody tr')).toHaveCount(1);
-  await expect(table).toContainText(moneyText('Cost basis $100.00 · Position date Jan 1 · Manual'));
+  await expect(table.locator('.holding-details')).toHaveText(moneyText('Cost basis $100.00 · Position date Jan 1 · Manual'), { useInnerText: true });
 });

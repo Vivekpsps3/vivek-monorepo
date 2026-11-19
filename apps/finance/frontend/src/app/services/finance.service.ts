@@ -46,7 +46,6 @@ import {
   CategoryRenameResult,
   FixedExpense,
   FixedExpenseCreate,
-  FidelityImportOption,
   FidelityPreviewResult,
   FidelityPreviewRow,
   FidelityCommitResult,
@@ -946,10 +945,6 @@ export class FinanceService {
     rows: ImportPreviewRow[]
   ): Observable<ImportCommitResult> {
     return from(this.financeImports.commitBank(rows)).pipe(tap(() => this.refreshAfterImport()));
-  }
-
-  getBrokerageImports(): Observable<FidelityImportOption[]> {
-    return of(this.financeImports.listBrokerages());
   }
 
   previewFidelityImport(file: File): Observable<FidelityPreviewResult> {

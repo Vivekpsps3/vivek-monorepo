@@ -95,8 +95,15 @@ test.describe('empty states behavior', () => {
     expect(await page.locator('.net-worth-hero').count()).toBe(0);
 
     await vault.open('/have?t=holdings');
-    const actions = page.locator('.empty-actions').first();
-    await expect(actions.getByRole('button')).toHaveText(['Add holding', 'Import from Fidelity']);
+    await expect(page.getByRole('button', { name: 'Add holding', exact: true })).toHaveCount(1);
+    const holdingsActions = page.getByRole('button', { name: 'Holdings actions', exact: true });
+    await holdingsActions.click();
+    const menu = page.getByRole('menu', { name: 'Holdings actions', exact: true });
+    await expect(menu.getByRole('menuitem')).toHaveText(['Import from Fidelity', 'Export CSV', 'Refresh prices']);
+    await expect(menu.getByRole('menuitem', { name: 'Import from Fidelity' })).toBeEnabled();
+    await expect(menu.getByRole('menuitem', { name: 'Export CSV' })).toBeEnabled();
+    await expect(menu.getByRole('menuitem', { name: 'Refresh prices' })).toBeDisabled();
+    await holdingsActions.click();
 
     await vault.open('/spending');
     const spendActions = page.locator('app-spending-hub .empty-actions').first();
@@ -158,17 +165,23 @@ test.describe('empty states behavior', () => {
   });
 });
 
-test.describe('empty states [390 light] stacked actions', () => {
+test.describe('empty Holdings actions on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('holdings actions stack full width', async ({ page }) => {
+  test('Add and the action menu fit and preserve 44px targets', async ({ page }) => {
     const vault = await syntheticVault(page, {});
     await vault.open('/have?t=holdings');
-    const buttons = page.locator('.empty-actions').first().getByRole('button');
-    await expect(buttons).toHaveCount(2);
-    for (let i = 0; i < 2; i += 1) {
-      const box = await buttons.nth(i).boundingBox();
-      expect(box?.width ?? 0).toBeGreaterThanOrEqual(300);
+    const buttons = page.locator('app-portfolio .header-actions').getByRole('button');
+    await expect(buttons).toHaveText(['Add holding', 'Holdings actions']);
+    for (const button of await buttons.all()) {
+      await expect(button).toBeInViewport({ ratio: 1 });
+      const box = await button.boundingBox();
+      expect(Math.min(box!.width, box!.height)).toBeGreaterThanOrEqual(44);
     }
+    const add = buttons.first();
+    await add.click();
+    await expect(page.getByRole('dialog', { name: 'Add holding', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(add).toBeFocused();
   });
 });

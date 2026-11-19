@@ -559,13 +559,6 @@ export interface NetWorth {
 }
 
 
-export interface FidelityImportOption {
-  slug: string;
-  name: string;
-  hint: string;
-  file_extensions: string[];
-}
-
 export interface FidelityPreviewRow {
   account_mask: string;
   account_display: string;
