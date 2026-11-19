@@ -11,7 +11,6 @@ describe('SpendingHub route compatibility', () => {
     expect(normalizeSpendingHubRoute(convertToParamMap({}))).toEqual({
       tab: 'activity',
       activityView: 'all',
-      receiptsOpen: false,
       queryParams: null,
     });
   });
@@ -33,7 +32,6 @@ describe('SpendingHub route compatibility', () => {
     expect(normalizeSpendingHubRoute(params)).toEqual({
       tab: 'activity',
       activityView: 'all',
-      receiptsOpen: false,
       queryParams: {
         t: 'activity',
         v: 'all',
@@ -88,7 +86,6 @@ describe('SpendingHub route compatibility', () => {
 
     expect(state.tab).toBe('activity');
     expect(state.activityView).toBe('spending');
-    expect(state.receiptsOpen).toBeFalse();
     expect(state.queryParams).toEqual({
       review: null,
       periodStart: null,
@@ -104,7 +101,6 @@ describe('SpendingHub route compatibility', () => {
     expect(normalizeSpendingHubRoute(convertToParamMap({ t: 'pay' }))).toEqual({
       tab: 'activity',
       activityView: 'income',
-      receiptsOpen: false,
       queryParams: {
         t: 'activity',
         v: 'income',
@@ -121,47 +117,29 @@ describe('SpendingHub route compatibility', () => {
     expect(normalizeSpendingHubRoute(convertToParamMap({ t: 'calendar', v: 'income' }))).toEqual({
       tab: 'calendar',
       activityView: 'income',
-      receiptsOpen: false,
       queryParams: null,
     });
   });
 
-  it('rewrites an Imports link to Activity with receipts open and leaves the import action in place', () => {
-    const state = normalizeSpendingHubRoute(convertToParamMap({
-      t: 'imports',
-      add: '1',
-      reattach: '4',
-      reattach_file: 'statement.csv',
-      v: 'spending',
-    }));
-
-    expect(state).toEqual({
+  it('leaves import links for the spending route guard', () => {
+    expect(normalizeSpendingHubRoute(convertToParamMap({
+      t: 'imports', add: '1', reattach: '4', reattach_file: 'statement.csv', v: 'spending',
+    }))).toEqual({
       tab: 'activity',
       activityView: 'spending',
-      receiptsOpen: true,
-      queryParams: {
-        t: 'activity',
-        receipts: '1',
-        review: null,
-        periodStart: null,
-        periodEnd: null,
-        priorStart: null,
-        priorEnd: null,
-        group: null,
-        dimension: null,
-      },
+      queryParams: null,
     });
     expect(normalizeSpendingHubRoute(convertToParamMap({ t: 'activity', receipts: '1' }))).toEqual({
       tab: 'activity',
       activityView: 'all',
-      receiptsOpen: true,
       queryParams: null,
     });
+    expect(normalizeSpendingHubRoute(convertToParamMap({ t: 'calendar', receipts: '1' })).tab).toBe('calendar');
   });
 });
 
 describe('direct spending destinations', () => {
-  it('renders the destination selected by default, calendar and receipts links', async () => {
+  it('renders Activity and Calendar from the spending route', async () => {
     TestBed.configureTestingModule({
       providers: [provideRouter([{ path: 'finance/spending', component: SpendingHubComponent }])],
     });
@@ -174,7 +152,6 @@ describe('direct spending destinations', () => {
     for (const [suffix, title, view] of [
       ['', 'Activity', 'app-transactions'],
       ['?t=calendar', 'Calendar', 'app-calendar'],
-      ['?receipts=1', 'Imports', 'app-transactions'],
     ]) {
       await harness.navigateByUrl('/finance/spending' + suffix, SpendingHubComponent);
       harness.detectChanges();

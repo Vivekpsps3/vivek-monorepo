@@ -55,7 +55,7 @@ test('receipt coverage and quote_date stay on the Los Angeles day when UTC is al
   await expect.poll(() => vault.data('holdings')[0]?.quote_date).toBe(LA_TODAY);
   expect(vault.data('holdings')[0].quote_date).not.toBe(UTC_TODAY);
 
-  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
+  await vault.open('/spending?t=imports', page, '/imports');
   await page.getByRole('button', { name: 'Import', exact: true }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   await dialog.locator('input[type=file]').setInputFiles({

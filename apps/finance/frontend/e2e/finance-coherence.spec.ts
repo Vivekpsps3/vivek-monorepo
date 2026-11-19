@@ -479,7 +479,7 @@ test('import account mapping refreshes the exact account label in another mounte
   };
   const vault = await syntheticVault(page, { transactions: [legacy] });
   const second = await page.context().newPage();
-  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
+  await vault.open('/spending?t=imports', page, '/imports');
   await vault.open('/spending?t=activity', second);
   const secondRow = second.getByRole('row').filter({ hasText: 'Coffee shop' });
   await expect(secondRow).not.toContainText('Daily card');
@@ -516,7 +516,7 @@ test('receipt coverage is saved and undo refreshes mounted Activity and Home tab
   });
   const activityTab = await page.context().newPage();
   const homeTab = await page.context().newPage();
-  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
+  await vault.open('/spending?t=imports', page, '/imports');
   await vault.open('/spending?t=activity', activityTab);
   await vault.open('/', homeTab);
   const homeMonth = homeTab.locator('.home-tile--activity');
@@ -543,9 +543,7 @@ test('receipt coverage is saved and undo refreshes mounted Activity and Home tab
     account_key: 'card', start_date: coverageStart, end_date: coverageEnd, confirmed: true,
   });
 
-  // t=imports rewrites to receipts=1, which opens the disclosure. Wait for the
-  // row instead of clicking the summary: that click toggles a panel the route
-  // already opened and hides Undo again.
+  // Import history stays open on the imports page, so Undo is already visible.
   const receipt = page.locator('.ledger-receipts .import-history-row').filter({ hasText: 'confirmed-coverage.csv' });
   const undo = receipt.getByRole('button', { name: 'Undo', exact: true });
   await expect(undo).toBeVisible();

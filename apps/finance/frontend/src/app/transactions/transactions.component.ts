@@ -94,8 +94,8 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   readonly transactionEffects = transactionEffects;
   @Input() embedded = false;
   @Input() typeFilter: 'all' | 'income' | 'expense' = 'all';
-  @Input() receiptsOpen = false;
-  receiptsDetailsOpen = false;
+  /** Receipt history and bank import only. The Activity ledger stays on Spending. */
+  @Input() historyOnly = false;
   readonly activityViewOptions: UiSelectOption[] = [
     { value: 'all', label: 'All' },
     { value: 'spending', label: 'Spending' },
@@ -237,19 +237,23 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
       this.cdr.markForCheck();
     });
 
-    this.financeService.getJobIncomes().pipe(takeUntil(this.destroy$)).subscribe({
-      next: rows => {
-        this.jobIncomes = rows;
-        this.jobIncomeLoading = false;
-        this.jobIncomeLoadError = false;
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        this.jobIncomeLoading = false;
-        this.jobIncomeLoadError = true;
-        this.cdr.markForCheck();
-      },
-    });
+    if (!this.historyOnly) {
+      this.financeService.getJobIncomes().pipe(takeUntil(this.destroy$)).subscribe({
+        next: rows => {
+          this.jobIncomes = rows;
+          this.jobIncomeLoading = false;
+          this.jobIncomeLoadError = false;
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.jobIncomeLoading = false;
+          this.jobIncomeLoadError = true;
+          this.cdr.markForCheck();
+        },
+      });
+    } else {
+      this.jobIncomeLoading = false;
+    }
 
     merge(
       this.financeService.transactions$.pipe(tap(rows => { this.transactions = rows; })),
@@ -280,7 +284,6 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['receiptsOpen']) this.receiptsDetailsOpen = this.receiptsOpen;
     if (changes['typeFilter'] && !changes['typeFilter'].firstChange) {
       this.visibleRowCount = this.pageSize;
       this.applyFilterAndSort();
@@ -301,12 +304,15 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     });
   }
 
-  onReceiptsToggle(event: Event): void {
-    const details = event.target as HTMLDetailsElement | null;
-    if (details) this.receiptsDetailsOpen = details.open;
-  }
-
   private applyRouteQuery(params: any): void {
+    if (this.historyOnly) {
+      const reattach = params.get('reattach') || '';
+      this.reattachReceiptId = /^\d{1,16}$/.test(reattach) ? Number(reattach) : null;
+      this.reattachReceiptFilename = params.get('reattach_file') || null;
+      const openBank = params.get('start') === 'bank' || (params.get('add') === '1' && !params.has('date'));
+      if (openBank && !this.showImportModal) this.startImportWizard();
+      return;
+    }
     const isInitial = !this.queryInitialized;
     this.searchTerm = params.get('q') || '';
     if (params.has('month')) {
@@ -351,6 +357,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private syncQueryParams(replaceUrl = false): void {
+    if (this.historyOnly) return;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
@@ -675,11 +682,15 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
 
   openImportModal() {
     if (this.importWorkflow.importCommitting) return;
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { t: null, receipts: '1', add: '1' },
-      queryParamsHandling: 'merge',
-    });
+    if (this.historyOnly) {
+      void this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: { start: 'bank' },
+        queryParamsHandling: 'merge',
+      });
+      return;
+    }
+    void this.router.navigate(['/finance/imports'], { queryParams: { start: 'bank' } });
   }
 
   viewImportedTransactions(receipt: ImportReceipt): void {
@@ -695,8 +706,8 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
 
   reattachCorrectedCsv(receipt: ImportReceipt): void {
     const filename = this.receiptFirstParseFilename(receipt);
-    void this.router.navigate(['/finance/spending'], {
-      queryParams: { t: null, receipts: '1', add: '1', reattach: receipt.id, reattach_file: filename },
+    void this.router.navigate(['/finance/imports'], {
+      queryParams: { start: 'bank', reattach: receipt.id, reattach_file: filename },
     });
   }
 

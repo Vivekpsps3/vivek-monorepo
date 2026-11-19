@@ -54,6 +54,7 @@ export class TransactionsImportWorkflow implements OnDestroy {
   private nextImportFileId = 1;
   private releaseImportLock: () => void;
   private importPreviewRequest?: Subscription;
+  private importCommitRequest?: Subscription;
   private destroy$ = new Subject<void>();
   private importContextRefresh$ = new Subject<void>();
 
@@ -268,10 +269,11 @@ export class TransactionsImportWorkflow implements OnDestroy {
   closeImportModal(): boolean {
     if (this.importCommitting) return false;
     this.discardImportPlaintext();
-    if (this.route.snapshot?.queryParamMap.get('add') === '1') {
+    const params = this.route.snapshot?.queryParamMap;
+    if (params?.get('add') === '1' || params?.get('start') === 'bank' || params?.has('reattach')) {
       void this.router.navigate([], {
         relativeTo: this.route,
-        queryParams: { add: null, reattach: null, reattach_file: null },
+        queryParams: { add: null, start: null, reattach: null, reattach_file: null },
         queryParamsHandling: 'merge',
         replaceUrl: true,
       });
@@ -438,7 +440,8 @@ export class TransactionsImportWorkflow implements OnDestroy {
     }
     this.importCommitting = true;
     this.importError = '';
-    this.financeService
+    this.importCommitRequest?.unsubscribe();
+    this.importCommitRequest = this.financeService
       .commitBankImports(rows, {
         bank_slugs: Array.from(new Set(this.importFiles.map(file => file.bank_slug))),
         filenames: this.importFiles.map(file => file.file.name),
@@ -581,6 +584,9 @@ export class TransactionsImportWorkflow implements OnDestroy {
   /** Lock and cancel drop the file and the preview. The mapping profile stays encrypted. */
   discardImportPlaintext(): void {
     this.importPreviewRequest?.unsubscribe();
+    this.importCommitRequest?.unsubscribe();
+    this.importCommitRequest = undefined;
+    this.importCommitting = false;
     this.importParsing = false;
     this.showImportModal = false;
     this.importStep = 'upload';

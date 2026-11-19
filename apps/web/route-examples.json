@@ -45,6 +45,13 @@
       "query": "month=2026-10"
     },
     {
+      "id": "finance-imports",
+      "path": "finance/imports",
+      "owner": "finance",
+      "status": "mounted",
+      "query": "start=bank"
+    },
+    {
       "id": "finance-portfolio",
       "path": "finance/portfolio",
       "owner": "finance",

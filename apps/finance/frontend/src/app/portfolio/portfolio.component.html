@@ -4,16 +4,40 @@
     [title]="'Holdings'">
 
     <div uiPageActions class="header-actions">
-      <ui-button variant="primary" (clicked)="openAddModal()">Add holding</ui-button>
-      <ui-menu label="Holdings actions">
-        <button uiMenuItem (select)="openFidelityImportModal()">Import from Fidelity</button>
-        <button uiMenuItem (select)="exportToCsv()">Export CSV</button>
-        <button uiMenuItem [disabled]="refreshingPrices || !holdings.length" (select)="refreshAllPrices()">Refresh prices</button>
-      </ui-menu>
+      @if (importSurface) {
+        <ui-button variant="primary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
+        <ui-button variant="secondary" (clicked)="exportToCsv()">Export holdings CSV</ui-button>
+      } @else {
+        <ui-button variant="primary" (clicked)="openAddModal()">Add holding</ui-button>
+        <ui-menu label="Holdings actions">
+          <button uiMenuItem (select)="openFidelityImportModal()">Import from Fidelity</button>
+          <button uiMenuItem (select)="exportToCsv()">Export CSV</button>
+          <button uiMenuItem [disabled]="refreshingPrices || !holdings.length" (select)="refreshAllPrices()">Refresh prices</button>
+        </ui-menu>
+      }
     </div>
   </ui-page-header>
 
-  @if (holdings.length) {
+  @if (importSurface) {
+    @if (resumableFidelityStages.length) {
+      @for (stage of resumableFidelityStages; track stage.id) {
+        <ui-card class="resume-stage" [headingLevel]="2" [title]="stage.filename">
+          <ui-button uiCardActions variant="secondary" (clicked)="resumeFidelityStage(stage)" [disabled]="fidelityImportCommitting">
+            @if (fidelityImportCommitting) { <span class="spinner-inline" aria-hidden="true"></span> }
+            Resume Fidelity import
+          </ui-button>
+          <p>{{ stage.expected_row_count | plural:'staged position' }} · {{ stage.account_masks.length | plural:'account' }}</p>
+          <p>Your existing holdings stay until the replacement is verified.</p>
+        </ui-card>
+      }
+    } @else {
+      <p class="fidelity-resume-empty">No Fidelity import is waiting. Existing positions stay until a replacement is verified.</p>
+    }
+  } @else if (resumableFidelityStages.length) {
+    <a class="fidelity-resume-link" routerLink="/finance/imports">Finish your Fidelity import</a>
+  }
+
+  @if (!importSurface && holdings.length) {
     <ui-card class="summary-card">
       @let missing = missingValueCount;
       @let stale = staleQuoteCount;
@@ -41,28 +65,13 @@
       }
     </ui-card>
   }
-  @if (refreshingPrices) {
+  @if (!importSurface && refreshingPrices) {
     <p class="hint refresh-status" role="status">
       <span class="spinner-inline" aria-hidden="true"></span> Refreshing prices…
     </p>
   }
 
-  @if (resumableFidelityStages.length) {
-    <details class="account-section">
-      <summary class="section-header">Finish your Fidelity import</summary>
-      @for (stage of resumableFidelityStages; track stage.id) {
-        <ui-card class="resume-stage" [headingLevel]="2" [title]="stage.filename">
-          <ui-button uiCardActions variant="secondary" (clicked)="resumeFidelityStage(stage)" [disabled]="fidelityImportCommitting">
-            @if (fidelityImportCommitting) { <span class="spinner-inline" aria-hidden="true"></span> }
-            Resume Fidelity import
-          </ui-button>
-          <p>{{ stage.expected_row_count | plural:'staged position' }} · {{ stage.account_masks.length | plural:'account' }}</p>
-          <p>Your existing holdings stay until the replacement is verified.</p>
-        </ui-card>
-      }
-    </details>
-  }
-
+  @if (!importSurface) {
   <ui-card class="positions-card" title="Positions" [headingLevel]="2">
     @if (holdings.length) {
       <div uiCardActions class="search-toolbar">
@@ -182,6 +191,7 @@
       }
     </ng-template>
   </ui-card>
+  }
 </div>
 
 <ui-dialog scrollTarget=".main-content" [open]="editingNicknameFor !== null" labelledBy="holding-nickname-title" (closed)="cancelEditNickname()">

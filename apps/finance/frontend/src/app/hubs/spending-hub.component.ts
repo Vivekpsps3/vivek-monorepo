@@ -11,7 +11,6 @@ export type SpendingActivityView = 'all' | 'spending' | 'income';
 export interface SpendingHubRouteState {
   tab: SpendingTab;
   activityView: SpendingActivityView;
-  receiptsOpen: boolean;
   queryParams: Record<string, string | null> | null;
 }
 
@@ -21,24 +20,18 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
   const requested = params.get('t') || '';
   const legacyView = requested === 'pay' ? 'income' : requested === 'spend' ? 'spending' : null;
   const isReviewLink = requested === 'review';
-  const isImportsLink = requested === 'imports';
   const view = params.get('v');
   const activityView: SpendingActivityView = legacyView || (view === 'income' || view === 'spending' ? view : 'all');
   const tab: SpendingTab = requested === 'calendar' ? 'calendar' : 'activity';
-  const receiptsOpen = params.get('receipts') === '1' || isImportsLink;
   const hasObsoleteReviewParams = obsoleteReviewParams.some(key => params.has(key));
-  const shouldNormalize = isReviewLink || !!legacyView || hasObsoleteReviewParams || isImportsLink;
+  const shouldNormalize = isReviewLink || !!legacyView || hasObsoleteReviewParams;
 
-  if (!shouldNormalize) return { tab, activityView, receiptsOpen, queryParams: null };
+  if (!shouldNormalize) return { tab, activityView, queryParams: null };
 
   const queryParams: Record<string, string | null> = {};
   if (isReviewLink || legacyView) {
     queryParams['t'] = 'activity';
     queryParams['v'] = legacyView || activityView;
-  }
-  if (isImportsLink) {
-    queryParams['t'] = 'activity';
-    queryParams['receipts'] = '1';
   }
   if ((isReviewLink || requested === 'activity' || !!legacyView)
     && !/^\d{4}-\d{2}$/.test(params.get('month') || '')
@@ -54,7 +47,7 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
     }
   }
   for (const key of obsoleteReviewParams) queryParams[key] = null;
-  return { tab, activityView, receiptsOpen, queryParams };
+  return { tab, activityView, queryParams };
 }
 
 @Component({
@@ -64,7 +57,7 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
   template: `
     <div class="page">
       <ui-page-header
-        [title]="tab === 'calendar' ? 'Calendar' : receiptsOpen ? 'Imports' : 'Activity'"
+        [title]="tab === 'calendar' ? 'Calendar' : 'Activity'"
         [concealTitle]="true"
         backLabel="Back to Pixels day"
         [backLink]="tab === 'activity' ? pixelsSource : undefined"
@@ -73,7 +66,7 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
       @switch (tab) {
         @case ('calendar') { <app-calendar [embedded]="true" /> }
         @case ('activity') {
-          <app-transactions [embedded]="true" [typeFilter]="activityTypeFilter" [receiptsOpen]="receiptsOpen" />
+          <app-transactions [embedded]="true" [typeFilter]="activityTypeFilter" />
         }
       }
     </div>
@@ -92,7 +85,6 @@ export class SpendingHubComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   tab: SpendingTab = 'activity';
   activityView: SpendingActivityView = 'all';
-  receiptsOpen = false;
   pixelsSource: string | undefined;
 
   get activityTypeFilter(): 'all' | 'income' | 'expense' {
@@ -104,7 +96,6 @@ export class SpendingHubComponent implements OnInit {
       const state = normalizeSpendingHubRoute(params);
       this.tab = state.tab;
       this.activityView = state.activityView;
-      this.receiptsOpen = state.receiptsOpen;
       const day = params.get('pixelsDay') || '';
       this.pixelsSource = isReturnDate(day) ? `/pixels?year=${day.slice(0, 4)}&day=${day}` : undefined;
       if (state.queryParams) {

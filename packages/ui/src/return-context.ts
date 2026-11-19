@@ -31,6 +31,7 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
     date: isReturnDate, from: isReturnDate, through: isReturnDate, pixelsDay: isReturnDate,
     periodStart: isReturnDate, periodEnd: isReturnDate, priorStart: isReturnDate, priorEnd: isReturnDate, add: flag, receipts: flag,
   },
+  '/finance/imports': { start: ['bank', 'fidelity'] },
   '/finance/bills': {
     kind: ['all', 'bill', 'subscription'], status: ['all', 'active', 'inactive'], order: ['latest', 'soonest'],
   },

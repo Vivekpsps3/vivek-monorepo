@@ -46,7 +46,7 @@ test('CSV1 maps signed and debit-credit files, commits the selected rows, and re
     '15/10/2026;Store return;;9.00;Savings;Shopping',
   ].join('\n');
   const vault = await syntheticVault(page);
-  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
+  await vault.open('/spending?t=imports', page, '/imports');
   const dialog = await openImport(page);
   await addCustomFile(dialog, 'signed.csv', signed);
   await choose(dialog, 'Date column for signed.csv', 'Date');
@@ -111,7 +111,7 @@ test('CSV1 maps signed and debit-credit files, commits the selected rows, and re
 
 test('CSV2 shows actionable currency and mapping errors and commits only the corrected rows', async ({ page }) => {
   const vault = await syntheticVault(page);
-  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
+  await vault.open('/spending?t=imports', page, '/imports');
   let dialog = await openImport(page);
   await addCustomFile(dialog, 'empty.csv', 'Date,Description,Amount\n');
   await choose(dialog, 'Date column for empty.csv', 'Date');
@@ -168,7 +168,7 @@ test('CSV3 resumes a failed custom import and undo keeps the edited row', async 
     `${day},Source book,-20.00,Checking`,
   ].join('\n');
   const vault = await syntheticVault(page);
-  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
+  await vault.open('/spending?t=imports', page, '/imports');
   const dialog = await openImport(page);
   await addCustomFile(dialog, 'custom.csv', csv);
   await choose(dialog, 'Date column for custom.csv', 'Date');
@@ -198,7 +198,8 @@ test('CSV3 resumes a failed custom import and undo keeps the edited row', async 
   await editor.getByLabel('Merchant (optional)', { exact: true }).fill('Coffee shop');
   await editor.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(editor).toBeHidden();
-  await page.getByText(/Import history \(/).click();
+  await page.getByRole('link', { name: 'Import history', exact: true }).click();
+  await expect(page).toHaveURL(/\/finance\/imports/);
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await page.getByRole('dialog', { name: 'Undo this import?' }).getByRole('button', { name: 'Undo import', exact: true }).click();
   await expect.poll(() => vault.data('import_batches').find(row => row.status === 'withdrawn')?.undo_summary != null).toBe(true);

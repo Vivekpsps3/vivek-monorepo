@@ -1,6 +1,22 @@
 import { convertToParamMap } from '@angular/router';
 import { routes } from '../../app.routes';
-import { legacyPayDestination } from './finance-navigation';
+import { legacyImportsDestination, legacyPayDestination, redirectLegacyImports } from './finance-navigation';
+
+describe('legacy Imports destination', () => {
+  it('sends receipt and import links to the imports page and keeps Calendar', () => {
+    expect(legacyImportsDestination(convertToParamMap({ receipts: '1' }))).toBe('/finance/imports');
+    expect(legacyImportsDestination(convertToParamMap({
+      t: 'imports', add: '1', reattach: '4', reattach_file: 'statement.csv', account: 'private',
+    }))).toBe('/finance/imports?start=bank&reattach=4&reattach_file=statement.csv');
+    expect(legacyImportsDestination(convertToParamMap({
+      t: 'activity', receipts: '1', start: 'fidelity', reattach_file: 'a/b.csv',
+    }))).toBe('/finance/imports?start=fidelity');
+    expect(legacyImportsDestination(convertToParamMap({ t: 'calendar', receipts: '1' }))).toBeNull();
+    expect(legacyImportsDestination(convertToParamMap({ t: 'activity' }))).toBeNull();
+    expect(legacyImportsDestination(undefined)).toBeNull();
+    expect(redirectLegacyImports({} as never, {} as never)).toBeTrue();
+  });
+});
 
 describe('legacy Pay destination', () => {
   const redirect = (path: string) => {

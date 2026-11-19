@@ -176,6 +176,31 @@ describe('TransactionsImportWorkflow F9', () => {
     expect(commit.calls.mostRecent().args[0]).toEqual([row]);
   });
 
+  it('drops a late bank commit result after the draft is cleared', () => {
+    const result = new Subject<{ inserted: number; skipped: number; batch_id: number }>();
+    const { workflow, toast } = makeWorkflow({ commitBankImports: () => result.asObservable() });
+    const row = previewRow({ dedupe_key: 'row', description: 'Coffee', amount: 1, kind: 'purchase', status: 'new' });
+    workflow.importFiles = [{ id: 1, bank_slug: 'chase', file: new File(['a,b'], 'statement.csv') }];
+    workflow.importPreviews = [{
+      id: 1, bank_slug: 'chase', filename: 'statement.csv', error: null,
+      preview: {
+        bank: 'Chase', filename: 'statement.csv', rows: [row], skipped: [], errors: [],
+        summary: { total_parsed: 1, new: 1, duplicate: 0, skipped: 0, errors: 0 },
+      },
+    }];
+    workflow.importSelected = new Set(['row']);
+    workflow.showImportModal = true;
+    workflow.commitImport();
+    expect(workflow.importCommitting).toBeTrue();
+    workflow.discardImportPlaintext();
+    result.next({ inserted: 1, skipped: 0, batch_id: 1 });
+    result.complete();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(workflow.importFiles).toEqual([]);
+    expect(workflow.showImportModal).toBeFalse();
+    workflow.ngOnDestroy();
+  });
+
   it('CSV3 drops custom CSV text when the vault locks', async () => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({

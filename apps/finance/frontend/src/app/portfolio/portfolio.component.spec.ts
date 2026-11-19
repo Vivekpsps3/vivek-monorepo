@@ -1,8 +1,8 @@
 import { ConfirmService } from '@vivek/ui';
-import { of,throwError } from 'rxjs';
+import { of,Subject,throwError } from 'rxjs';
 import { Holding } from '../models/transaction.model';
 import { MarketRefreshCoordinatorService,MarketRefreshState } from '../services/market-refresh-coordinator.service';
-import { buildFidelityImportPreview } from '../utils/fidelity-import.util';
+import { buildFidelityImportPreview, type FidelityStageRecord } from '../utils/fidelity-import.util';
 import { PortfolioComponent } from './portfolio.component';
 
 function componentWithFinance(overrides: Record<string, unknown> = {}) {
@@ -80,6 +80,23 @@ describe('PortfolioComponent', () => {
     component.resumeFidelityStage(stage);
     expect(finance.resumeFidelityImportStage).toHaveBeenCalledWith(77);
     expect(toast.success).toHaveBeenCalledWith('Imported 1 Fidelity position');
+    component.ngOnDestroy();
+  });
+
+  it('ignores a late Fidelity resume after the vault session changes', () => {
+    const { component, finance, toast } = componentWithFinance();
+    const result = new Subject<{ inserted: number; status: string }>();
+    finance.resumeFidelityImportStage.and.returnValue(result.asObservable());
+    finance.sessionToken = 1;
+    component.resumeFidelityStage({
+      id: 77, source: 'fidelity', filename: 'positions.csv', status: 'interrupted',
+      account_masks: ['Z1'], expected_row_count: 1, account_replacements: [], created_at: '2026-10-11T00:00:00Z',
+    } as FidelityStageRecord);
+    finance.sessionToken = 2;
+    result.next({ inserted: 1, status: 'activated' });
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    component.ngOnDestroy();
   });
 
   describe('Fidelity import', () => {
