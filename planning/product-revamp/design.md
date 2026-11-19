@@ -115,10 +115,12 @@ discovery/refresh is explicit. Now and Calendar retain existing continuation and
 episode/date behavior under coherent theatrical/shelf/record styling.
 
 **Travel.** New trip starts with Flight/date, Calendar booking import or Manual.
-Flight lookup proposes a leg and source/timezone-labeled fields. A draft may have
+Flight lookup proposes a leg and source/timezone-labeled fields. A published
+schedule with no airport timezone stays unlabeled. A draft may have
 one known leg and no guessed return. After preview, choose an existing trip or
 create a draft, add return/destination and confirm dates/PTO. Advanced schedules,
-operational updates and historical reads use explicit capabilities and one bounded
+operational updates and historical reads use the [TUX-02 adapter
+contract](../implementation/issues/TUX-02.md) and one bounded
 request budget. Calendar import accepts supported flight VEVENTs with preview and
 dedupe; arbitrary email/document parsing is outside this release. Trip detail is a
 styled local-time itinerary with contextual add/edit, maps/text fallback and memories.

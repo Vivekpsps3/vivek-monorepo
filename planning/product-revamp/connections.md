@@ -121,23 +121,34 @@ projections. A local-only vault has a useful disconnected state on phone.
 
 ## Flight lookup and travel capture
 
-Existing code calls FlightAware's near-departure flights endpoint. FlightAware also
-documents a future schedules endpoint. Investigate using the appropriate endpoint
-and entitlement before assuming scraping or replacing the provider. Official
-sources: [AeroAPI capabilities](https://www.flightaware.com/commercial/aeroapi/),
-[future schedule identifiers](https://support.flightaware.com/hc/en-us/articles/33161341318935-Why-Is-A-Frequently-Used-Endpoint-Returning-A-Null-Value).
+TUX-01 keeps FlightAware AeroAPI v4 and selects the contract on
+[TUX-02](../implementation/issues/TUX-02.md). The app can configure an API key
+for `https://aeroapi.flightaware.com/aeroapi`. It cannot select a sunset v2/v3
+key, a tier, or another host. There is no scraper and no second provider.
 
-The feasibility plan must compare: date coverage, airline/codeshare matching,
-airports/time zones, scheduled vs estimated vs actual times, available fields,
-rate/cost limits, configuration and caching. Do not promise a paid entitlement or
-buy a service. A provider/API study should use official documentation and synthetic
-fixtures first. If exploring website extraction, inspect the actual source's terms,
-stability and available data; do not promise arbitrary web scraping will fill every field.
+A departure months ahead, while the schedules end stays within one calendar
+year, uses `GET /schedules/{date_start}/{date_end}` with the airline and flight
+number. A later exclusive end is unsupported. Near departure uses
+`GET /flights/{ident}` from 10 days ago through the formable two-day window.
+The UTC day exactly two days ahead uses schedules. Dates before 2011-01-01 are
+unsupported. Older dates on or after that day use `GET /history/flights/{ident}`
+when the account includes historical data. Personal tier excludes historical
+flights. A missing key is external configuration. This discovery records no
+production integration result.
+
+Schedules can return a published timetable without `fa_flight_id`, airport
+time zones, or estimated and actual times. The adapter leaves those null. One
+lookup is one page (`max_pages=1`) inside the existing 20-second timeout, with
+no response cache. Published fees and tier limits are in the TUX-02 contract.
+Manual entry remains available. Official sources:
+[AeroAPI capabilities](https://www.flightaware.com/commercial/aeroapi/),
+[OpenAPI 4.17.1](https://www.flightaware.com/commercial/aeroapi/resources/aeroapi-openapi.yml),
+[future schedule identifiers](https://support.flightaware.com/hc/en-us/articles/33161341318935-Why-Is-A-Frequently-Used-Endpoint-Returning-A-Null-Value).
 
 The end-to-end request has one declared budget; release database transaction
 ownership before I/O. A retry must preserve chosen candidates and manual overrides.
-No match, unsupported date range, missing key, rejected key, throttle, timeout and
-suite-session failure have distinct remedies. Preview shows provenance and fetch
+No match, unsupported date range, missing key, rejected key, historical
+entitlement, throttle, timeout and suite-session failure have distinct remedies. Preview shows provenance and fetch
 time. User approval of inferred fields precedes saving a leg/trip.
 
 Flight identity and occurrence matter: future schedules may not have the same
