@@ -1,5 +1,7 @@
 """FlightAware lookup, map search, and local settings."""
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -99,7 +101,7 @@ def lookup_flight(
         raise APIError(
             503,
             "provider_unconfigured",
-            "Add a FlightAware AeroAPI key in Settings. You can still type the flight yourself.",
+            "Add a FlightAware AeroAPI key in Settings. Type the times yourself.",
         )
     release_for_provider_io(db)
     try:
@@ -114,7 +116,13 @@ def lookup_flight(
             exc.message,
             retry_after=exc.retry_after,
         ) from exc
-    return {"ident": body.ident, "depart_on": body.depart_on, "flights": flights}
+    return {
+        "ident": body.ident,
+        "depart_on": body.depart_on,
+        "flights": flights.flights,
+        "incomplete": flights.incomplete,
+        "fetched_at": datetime.now(UTC).isoformat(),
+    }
 
 
 @router.get("/places/search")

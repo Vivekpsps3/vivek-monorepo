@@ -6,7 +6,7 @@ export const SCHEDULE_FIELDS = [
 ];
 
 export const PROVIDER_FIELDS = [
-  "fa_ident", "fa_status", "fa_aircraft",
+  "fa_ident", "fa_flight_id", "fa_status", "fa_aircraft",
   "fa_gate_origin", "fa_gate_destination",
   "fa_terminal_origin", "fa_terminal_destination",
   "fa_baggage_claim",
@@ -81,13 +81,49 @@ function dayShift(from, to) {
 }
 
 export function arrivalNote(flight) {
-  const depart = localClock(flight?.scheduled_out, flight?.origin_timezone)?.day;
-  const arrive = localClock(flight?.scheduled_in, flight?.destination_timezone)?.day;
+  const originZone = flight?.origin_timezone || "";
+  const destZone = flight?.destination_timezone || "";
+  const depart = localClock(flight?.scheduled_out, originZone)?.day;
+  const arrive = localClock(flight?.scheduled_in, destZone)?.day;
   const shift = dayShift(depart, arrive);
-  if (shift > 1) return "Arrives a later local day";
-  if (shift === 1) return "Arrives the next local day";
-  if (shift < 0) return "Arrives on an earlier local date";
+  const local = Boolean(originZone || destZone);
+  if (shift > 1) return local ? "Arrives a later local day" : "Arrives a later day";
+  if (shift === 1) return local ? "Arrives the next local day" : "Arrives the next day";
+  if (shift < 0) return local ? "Arrives on an earlier local date" : "Arrives on an earlier date";
   return "";
+}
+
+/** A missing airport zone stays unlabeled. UTC is not shown as if it were local. */
+export function clockLabel(iso, timeZone) {
+  const value = localClock(iso, timeZone || "");
+  if (!value) return "";
+  if (!timeZone) return `${value.day} ${value.time}`;
+  return `${value.day} ${value.time} ${value.zone}`;
+}
+
+export function scheduleNotice(flight, fetchedAt) {
+  if (flight?.source !== "schedules") return "";
+  const when = text(fetchedAt);
+  if (!when) return "Published timetable, not live status.";
+  return `Published timetable, not live status. Fetched ${when}.`;
+}
+
+export function scheduleChangeNote(current, flight) {
+  const previous = text(current?.fa_scheduled_out);
+  const next = text(flight?.scheduled_out);
+  if (previous && next && previous !== next) {
+    return "The scheduled departure changed. Your edited time is unchanged.";
+  }
+  return "";
+}
+
+export function lookupStillCurrent(startedEpoch, currentEpoch) {
+  return startedEpoch === currentEpoch;
+}
+
+/** Owner change drops the in-memory flight draft, including provider fields. */
+export function clearPrivateDraft() {
+  return { values: {}, overrides: [], filled: [], flightDate: "", selected: null };
 }
 
 export function previewModel(flight) {
@@ -119,7 +155,8 @@ export function scheduleValues(flight) {
     arrive_at: view.scheduledIn?.stamp || "",
     depart_tz: flight?.origin_timezone || "",
     arrive_tz: flight?.destination_timezone || "",
-    fa_ident: text(flight?.ident),
+    fa_ident: text(flight?.actual_ident || flight?.ident),
+    fa_flight_id: text(flight?.fa_flight_id),
     fa_status: text(flight?.status),
     fa_aircraft: text(flight?.aircraft_type),
     fa_gate_origin: text(flight?.gate_origin),
@@ -138,9 +175,14 @@ export function scheduleValues(flight) {
   };
 }
 
-export function decideCandidates(flights, departOn) {
+export function decideCandidates(flights, departOn, options = {}) {
   const list = (Array.isArray(flights) ? flights : []).filter((flight) => flight && typeof flight === "object");
   const day = list.filter((flight) => departureDay(flight) === departOn);
+  const incomplete = Boolean(options.incomplete);
+  if (incomplete && (day.length || list.length)) {
+    const shown = day.length ? day : list;
+    return { kind: "choose", flights: shown, note: "Choose the matching flight." };
+  }
   if (day.length === 1) return { kind: "preview", flight: day[0], flights: day, note: "" };
   if (day.length > 1) return { kind: "choose", flights: day, note: "" };
   if (list.length) {
@@ -200,7 +242,9 @@ export function invalidateCandidate(values, filled, overrides) {
 
 export function overridesFromSaved(item) {
   if (!item) return [];
-  const hasProvider = Boolean(item.fa_ident || item.fa_scheduled_out || item.fa_scheduled_in);
+  const hasProvider = Boolean(
+    item.fa_ident || item.fa_flight_id || item.fa_scheduled_out || item.fa_scheduled_in,
+  );
   if (!hasProvider) return SCHEDULE_FIELDS.filter((key) => text(item[key]));
   const depart = text(item.depart_at).slice(0, 16);
   const arrive = text(item.arrive_at).slice(0, 16);
@@ -213,7 +257,7 @@ export function overridesFromSaved(item) {
 }
 
 export function savedProvenance(item) {
-  if (!item || (!item.fa_ident && !item.fa_scheduled_out && !item.fa_scheduled_in)) return "";
+  if (!item || (!item.fa_ident && !item.fa_flight_id && !item.fa_scheduled_out && !item.fa_scheduled_in)) return "";
   return overridesFromSaved(item).length ? "Edited by you" : "FlightAware schedule";
 }
 
@@ -222,23 +266,37 @@ export function flightProblem(error) {
   const status = Number(error?.status || body?.status) || 0;
   const code = text(body?.code || error?.code);
   const name = text(error?.name);
-  if (name === "TimeoutError" || code === "provider_timeout") {
+  if (
+    name === "TimeoutError" ||
+    code === "provider_timeout" ||
+    code === "timeout" ||
+    status === 504
+  ) {
     return { kind: "timeout", message: "FlightAware took too long. Type the times yourself." };
   }
   if (code === "schedule_unavailable") {
     return {
       kind: "future",
-      message: "FlightAware only returns flights from 10 days ago through 2 days ahead. Type the times yourself.",
+      message: "FlightAware has no schedule for that date. Type the times yourself.",
     };
   }
   if (code === "provider_unconfigured") {
     return {
       kind: "missing_key",
-      message: "Add a FlightAware AeroAPI key in Settings. You can still type the flight yourself.",
+      message: "Add a FlightAware AeroAPI key in Settings. Type the times yourself.",
+    };
+  }
+  if (code === "provider_entitlement") {
+    return {
+      kind: "entitlement",
+      message: "This FlightAware account does not include historical flights. Type the times yourself.",
     };
   }
   if (code === "provider_auth") {
-    return { kind: "bad_key", message: "FlightAware rejected the API key. You can still type the flight yourself." };
+    return {
+      kind: "bad_key",
+      message: "FlightAware rejected the API key. Type the times yourself. This is not a suite sign-in failure.",
+    };
   }
   if (code === "provider_throttled" || status === 429) {
     return { kind: "throttled", message: "FlightAware rate limit reached. Try again shortly." };

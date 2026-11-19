@@ -3,7 +3,7 @@ const TRANSPORT_FIELDS = [
   "role", "mode", "status", "carrier", "number", "depart_place", "arrive_place",
   "depart_at", "arrive_at", "depart_tz", "arrive_tz", "confirmation", "seat",
   "cost", "currency", "paid", "notes",
-  "fa_ident", "fa_status", "fa_aircraft", "fa_gate_origin", "fa_gate_destination",
+  "fa_ident", "fa_flight_id", "fa_status", "fa_aircraft", "fa_gate_origin", "fa_gate_destination",
   "fa_terminal_origin", "fa_terminal_destination", "fa_baggage_claim",
   "fa_delay_departure_seconds", "fa_delay_arrival_seconds",
   "fa_scheduled_out", "fa_estimated_out", "fa_actual_out",

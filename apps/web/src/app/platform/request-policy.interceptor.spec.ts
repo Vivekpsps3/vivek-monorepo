@@ -20,4 +20,20 @@ describe('Suite request policy', () => {
     expect(failed).toBeTrue();
     expect(cancelled).toBeTrue();
   }));
+
+  it('keeps a flight lookup open through the shared travel budget until 20 seconds', fakeAsync(() => {
+    let failed = false;
+    const subscription = requestPolicyInterceptor(
+      new HttpRequest('POST', '/travel/api/flights/lookup', {}),
+      () => NEVER,
+    );
+    const pending = subscription.subscribe({ error: () => failed = true });
+    tick(12_000);
+    expect(failed).toBeFalse();
+    tick(7_999);
+    expect(failed).toBeFalse();
+    tick(1);
+    expect(failed).toBeTrue();
+    pending.unsubscribe();
+  }));
 });

@@ -41,6 +41,7 @@ LATER_THAN_BIRTHDAY = {
     "remove_fk:habit_checkins:None:habit_id",
     "add_fk:habit_checkins:fk_habit_checkins_owner:habit_id,user_id",
     "add_constraint:habits:uq_habits_id_user:id,user_id",
+    "add_column:transports.fa_flight_id",
 }
 
 

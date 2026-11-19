@@ -74,7 +74,12 @@ def test_flight_provider_errors_are_typed_and_keep_the_prefix(tmp_path, monkeypa
     assert APIError in application.exception_handlers
 
     def reject(_ident, _depart_on, _key):
-        raise FlightAwareError(502, "FlightAware rejected the API key.", code="provider_auth")
+        raise FlightAwareError(
+            502,
+            "FlightAware rejected the API key. Type the times yourself. "
+            "This is not a suite sign-in failure.",
+            code="provider_auth",
+        )
 
     def limited(_ident, _depart_on, _key):
         raise FlightAwareError(
@@ -96,8 +101,14 @@ def test_flight_provider_errors_are_typed_and_keep_the_prefix(tmp_path, monkeypa
         body = rejected.json()
         assert body == {
             "code": "provider_auth",
-            "message": "FlightAware rejected the API key.",
-            "detail": "FlightAware rejected the API key.",
+            "message": (
+                "FlightAware rejected the API key. Type the times yourself. "
+                "This is not a suite sign-in failure."
+            ),
+            "detail": (
+                "FlightAware rejected the API key. Type the times yourself. "
+                "This is not a suite sign-in failure."
+            ),
             "field_errors": None,
             "retry_after": None,
             "request_id": request_id,

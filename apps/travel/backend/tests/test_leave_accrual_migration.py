@@ -18,7 +18,7 @@ from apps.travel.backend.services.leave_math import Bucket, walk_bucket
 
 PARENT = "site_leave_carry_v1"
 REVISION = "site_leave_accrual_v1"
-HEAD = "site_town_ownership_v1"
+HEAD = "site_flight_occurrence_v1"
 COMPATIBLE = {
     "site_schema_v1",
     "site_auth_challenge_purpose_v2",
@@ -118,6 +118,7 @@ def test_upgrade_preserves_rows_and_keeps_one_daily_head(tmp_path):
         "remove_fk:habit_checkins:None",
         "add_fk:habit_checkins:fk_habit_checkins_owner",
         "add_constraint:habits:uq_habits_id_user",
+        "add_column:transports.fa_flight_id",
     }
     with sqlite3.connect(database) as db:
         assert (
