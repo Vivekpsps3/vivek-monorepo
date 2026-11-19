@@ -134,5 +134,12 @@ test.describe('Activity row recovery', () => {
     await expect(row).toContainText('Food · Cafe card');
     await expect(page.getByText(/Unpublished harbor draft|Couldn't save|Transaction saved/)).toHaveCount(0);
     expect(vault.data('transactions')[0]).toMatchObject(imported);
+
+    await row.getByRole('button', { name: 'Delete', exact: true }).click();
+    const confirm = page.getByRole('dialog', { name: 'Delete transaction?' });
+    await expect(confirm).toBeVisible();
+    await page.goBack();
+    await expect(confirm).toHaveCount(0);
+    expect(vault.data('transactions')[0]).toMatchObject(imported);
   });
 });

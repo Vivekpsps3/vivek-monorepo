@@ -212,7 +212,7 @@ describe('Transactions delete and undo errors', () => {
   function makeComponent() {
     const finance = jasmine.createSpyObj('FinanceService', ['deleteTransaction', 'restoreTransaction']);
     const toast = jasmine.createSpyObj('ToastService', ['success', 'error'], { toasts$: of([]) });
-    const confirm = { ask: () => Promise.resolve(true) } as unknown as ConfirmService;
+    const confirm = { ask: () => Promise.resolve(true), state$: of(null) } as unknown as ConfirmService;
     const component = TestBed.runInInjectionContext(() => new TransactionsComponent(
       finance,
       toast,

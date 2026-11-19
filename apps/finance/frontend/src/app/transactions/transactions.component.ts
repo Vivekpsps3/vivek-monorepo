@@ -37,7 +37,7 @@ import {
   Transaction,
   TransactionCreate,
 } from '../models/transaction.model';
-import { ConfirmService, SESSION_CONTEXT, ToastService, failureCopy, isReturnDate } from '@vivek/ui';
+import { ConfirmService, SESSION_CONTEXT, ToastService, failureCopy, isReturnDate, type ConfirmState } from '@vivek/ui';
 import { readLockEpoch } from '../crypto/dek-holder';
 import { bindLockSnapshots } from '../crypto/lock-finance';
 import { normalizeTripId, tripTagChoices, type TripTagHome } from './trip-tag';
@@ -189,6 +189,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   private active = true;
   private readonly deleting = new Set<number>();
   private readonly rowToastIds = new Set<number>();
+  private confirmation: ConfirmState | null = null;
   private allTransactionsLoaded = false;
   private queryInitialized = false;
   private lastDeepLinkedEdit = '';
@@ -310,7 +311,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.searchTerm = params.get('q') || '';
     if (params.has('month')) {
       const month = params.get('month') || '';
-      this.summaryMonth = month === 'all' ? '' : /^\d{4}-\d{2}$/.test(month) ? month : '';
+      this.summaryMonth = isReturnDate(month + '-01') ? month : '';
     } else if (params.has('periodStart') || params.has('date') || params.has('from') || params.has('through')) {
       this.summaryMonth = '';
     } else if (isInitial) {
@@ -407,11 +408,18 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.active = false;
     this.destroy$.next();
     this.transactionEditor.dismiss();
+    if (this.confirmation && this.currentConfirmation() === this.confirmation) this.confirmService.close(false);
+    this.confirmation = null;
     for (const id of this.rowToastIds) this.toastService.dismiss(id);
     this.rowToastIds.clear();
     this.deleting.clear();
     this.restoreInFlight.clear();
     this.tripHome = null;
+    this.searchTerm = '';
+    this.categoryFilter = '';
+    this.merchantFilter = '';
+    this.accountFilter = '';
+    this.tripFilter = '';
     this.transactions = [];
     this.allTransactions = [];
     this.jobIncomes = [];
@@ -997,11 +1005,10 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     }
     this.categoryToolError = '';
 
-    const ok = await this.confirmService.ask(
+    const ok = await this.askActivityConfirmation(
       'Merge category?',
       `Rename every "${from}" transaction to "${to}"?`,
-      'Merge',
-      'Cancel'
+      'Merge'
     );
     if (!ok) return;
 
@@ -1047,11 +1054,10 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     }
     this.categoryToolError = '';
 
-    const ok = await this.confirmService.ask(
+    const ok = await this.askActivityConfirmation(
       'Bulk rename categories?',
       `Apply ${plural(rows.length, 'category rename')} across all transactions?`,
-      'Rename',
-      'Cancel'
+      'Rename'
     );
     if (!ok) return;
 
@@ -1083,7 +1089,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
       return;
     }
     this.categoryToolError = '';
-    const ok = await this.confirmService.ask(
+    const ok = await this.askActivityConfirmation(
       'Categorize merchant?',
       `Set every transaction for "${merchant}" to "${category}"?`,
       'Apply', 'Cancel'
@@ -1142,14 +1148,29 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.transactionEditor.closeModal();
   }
 
+  private async askActivityConfirmation(title: string, message: string, label: string): Promise<boolean> {
+    const session = this.financeService.sessionToken;
+    const pending = this.confirmService.ask(title, message, label);
+    const confirmation = this.currentConfirmation();
+    this.confirmation = confirmation;
+    const accepted = await pending;
+    if (this.confirmation === confirmation) this.confirmation = null;
+    return accepted && this.isCurrent(session);
+  }
+
+  private currentConfirmation(): ConfirmState | null {
+    let current: ConfirmState | null = null;
+    this.confirmService.state$.pipe(take(1)).subscribe(state => { current = state; });
+    return current;
+  }
+
   async deleteTransaction(tx: Transaction): Promise<void> {
     const session = this.financeService.sessionToken;
     if (!this.isCurrent(session) || this.deleting.has(tx.id)) return;
-    const ok = await this.confirmService.ask(
+    const ok = await this.askActivityConfirmation(
       'Delete transaction?',
       `Remove ${tx.category} (${tx.date})? You can undo this after it is removed.`,
       'Delete',
-      'Cancel',
     );
     if (ok) this.removeTransaction(tx.id, session);
   }
@@ -1168,6 +1189,11 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
       next: () => {
         if (!this.finishDelete(id, session)) return;
         this.showRowRecovery(() => this.toastService.success('Transaction deleted', () => this.restoreTransaction(backup, session)));
+        requestAnimationFrame(() => {
+          if (this.isCurrent(session) && document.activeElement === document.body) {
+            this.filterToggle?.nativeElement.focus({ preventScroll: true });
+          }
+        });
       },
       error: () => {
         if (!this.finishDelete(id, session)) return;
