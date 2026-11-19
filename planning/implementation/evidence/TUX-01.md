@@ -60,7 +60,7 @@ App Karma, Playwright, Python coverage, Ruff, and mypy were not required. The di
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after the local gate passes. `Closes #406` only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/533 (`Closes #406` only).
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed. No flight client was added. No production AeroAPI call was made.
 - Remaining external prerequisites or approved scope decisions: an AeroAPI account and key, and any paid tier, stay outside the repo. Personal tier does not include historical flights. TUX-02 implements the contract. #304, #134, and #277 stay open.
