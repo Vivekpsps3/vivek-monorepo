@@ -1,7 +1,7 @@
 # FUX-01 — Make Holdings compact and immediately useful
 
 - Leaf [#390](https://github.com/Vivekpsps3/vivek-monorepo/issues/390), parent [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304) and roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134).
-- Agent `issue_390`, branch `agent/fux-01`, worktree `/tmp/vivek-fux-01`.
+- Agents `issue_390` and `issue_390_recovery1`, branch `agent/fux-01`, worktree `/tmp/vivek-fux-01`, closing [PR #520](https://github.com/Vivekpsps3/vivek-monorepo/pull/520).
 - Base main `1a111853a413180fdab1946fde9cb6e56b032685`. Tested implementation `ea8b0decff43ec767b24354adecb45efd1a43fee`. Final browser verification `6bc8d8ed67e4fa27942fa90de2c2d6e4dc775108` adds only the alert-locator correction.
 - Fresh main contained the NAV-01 canonical Holdings destination from [PR #498](https://github.com/Vivekpsps3/vivek-monorepo/pull/498) and the STYLE-03 compact table from [PR #496](https://github.com/Vivekpsps3/vivek-monorepo/pull/496). Checked live open PRs before the [isolated claim](https://github.com/Vivekpsps3/vivek-monorepo/issues/390#issuecomment-6985861573).
 
@@ -30,8 +30,8 @@ visual approval and production activation remain separate.
 | Redundant brokerage import discovery subscription, forwarding methods and options type | The Fidelity dialog opened a hardcoded Fidelity flow and ignored the lookup result | Fidelity CSV parsing, preview, replacement and staged resume remain in the same owners. No other consumer of `getBrokerageImports`, `listBrokerages` or `listClientBrokerageImports` exists. |
 | Repeated initial/retry holdings load handlers, unused loading subscription and unused `trackByHoldingId` | Portfolio arrival/filter | Arrival and retry use `retryLoadHoldings`. The holdings stream continues publishing the only row projection. The loop tracks persistent row IDs. |
 
-Feature replacement. Production code and styles add 258 and remove 425 physical
-lines, including whitespace and comments. Tests add 181 and remove 52 lines.
+Feature replacement. Production code and styles add 264 and remove 421 physical
+lines, including whitespace and comments. Tests add 181 and remove 51 lines.
 The Finance lint allowance falls by one after eliminating a loose comparison.
 There are no moved or generated files in the diff. Holdings still has one source
 projection, table, position editor and record owner. There is no new persisted
@@ -64,6 +64,23 @@ CSV even when it contains only headers. Python backend/lint/type gates, Site
 Karma and non-Finance standalone browser projects were not run locally because
 the source diff is within Finance and its existing shared-shell entry. The
 GitHub workflow runs those projects and release rehearsal.
+
+## CI recovery
+
+The initial [Playwright job](https://github.com/Vivekpsps3/vivek-monorepo/actions/runs/44360826479/job/135002901215) failed three mobile Holdings assertions. The first value fell below the viewport when the symbol, company and provenance cell occupied its whole grid row. The recovery integrated current main `ac35a3172d328b7da542b22ecba5df5436e34cc4` and tested the layout change at `ab6bfd9ad70274778e2c91ec983038771219128d`. The mobile value now shares the symbol's first grid row. The existing tests still require both the symbol and the full value to be visible at arrival. I inspected the updated 390×844 light and dark captures for value, company and provenance legibility.
+
+The first fast check during recovery used the system Python, which lacks Alembic. It passed with the repository Python environment.
+
+| Exact command on recovery | Final result |
+| --- | --- |
+| `make build-frontends` | PASS. Production bundle and release manifest. |
+| `make test-fast` | PASS. Documentation, boundaries, planning and script checks. |
+| `make lint-web` and `make typecheck-web` | PASS. Lint baselines, engine purity and all seven TypeScript targets. |
+| `npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` | PASS. 503 tests and coverage. |
+| `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS. 417 tests and coverage. |
+| `npx playwright test --project=finance dense-holdings.spec.ts` | PASS. All 12 focused cases, including the three existing first-screen assertions. |
+| `npx playwright test` | FAIL. 745 passed, five existing Finance skips, and one Chromium `browserContext.close` protocol timeout in the unchanged passphrase network case. All Holdings assertions and all 150 Travel, 171 Media, 121 Town and 59 shared suite tests passed. |
+| `make e2e` | PASS. Rebuilt the production bundle and passed all 245 Finance tests, including the passphrase network case, with five existing viewport skips. |
 
 ## Handoff
 
