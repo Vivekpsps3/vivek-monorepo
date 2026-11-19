@@ -1,39 +1,20 @@
 # Issue map
 
-All links are real published issues. This map groups scope; it does not define readiness or a second execution order. Use the [execution queue](../implementation/README.md) and exact packet. No implementation is claimed.
+This map groups published issues by scope. Use the [execution queue](../implementation/README.md) and exact packet to select work. The [completion registry](../implementation/completed/registry.json) records merged PRs and their commits.
 
-102 new small leaves remain in this map. TOWN-07 and OPS-06 remain open. DISC-02, OPS-05, and MUX-01 through MUX-09 are archived. 56 original acceptance rows stay assigned to accountable children.
-
+The original 56 acceptance rows remain assigned to their accountable children. OPS-06 remains an independent open leaf.
 
 ## STYLE
 
-| Issue | Small outcome | Prerequisites |
-| --- | --- | --- |
-| [STYLE-01 / #382](https://github.com/Vivekpsps3/vivek-monorepo/issues/382) | Apply the coastal palette, typography and day/night tokens | Current merged invariants only |
-| [STYLE-02 / #383](https://github.com/Vivekpsps3/vivek-monorepo/issues/383) | Style shared buttons, fields, menus and dialogs | [STYLE-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/382) |
-| [STYLE-03 / #384](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) | Style tables, collection cards and charts with readable dense data | [STYLE-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/382) |
-| [STYLE-04 / #385](https://github.com/Vivekpsps3/vivek-monorepo/issues/385) | Register bounded scene assets and migrate one selectable composition | [STYLE-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/382) |
+STYLE-01 through STYLE-04 ([#382](https://github.com/Vivekpsps3/vivek-monorepo/issues/382)–[#385](https://github.com/Vivekpsps3/vivek-monorepo/issues/385)) are merged and archived.
 
 ## NAV
 
-| Issue | Small outcome | Prerequisites |
-| --- | --- | --- |
-| [NAV-01 / #386](https://github.com/Vivekpsps3/vivek-monorepo/issues/386) | Expose direct app destinations in the suite shell | [STYLE-02](https://github.com/Vivekpsps3/vivek-monorepo/issues/383) |
-| [NAV-02 / #387](https://github.com/Vivekpsps3/vivek-monorepo/issues/387) | Preserve source context through editors, unlock and browser history | [NAV-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/386) |
-| [NAV-03 / #388](https://github.com/Vivekpsps3/vivek-monorepo/issues/388) | Make the compact practical Hub the default arrival | [NAV-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/386), [NAV-02](https://github.com/Vivekpsps3/vivek-monorepo/issues/387), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [NAV-04 / #389](https://github.com/Vivekpsps3/vivek-monorepo/issues/389) | Unify account, appearance and connector settings navigation | [NAV-02](https://github.com/Vivekpsps3/vivek-monorepo/issues/387), [STYLE-02](https://github.com/Vivekpsps3/vivek-monorepo/issues/383) |
+NAV-01 through NAV-04 ([#386](https://github.com/Vivekpsps3/vivek-monorepo/issues/386)–[#389](https://github.com/Vivekpsps3/vivek-monorepo/issues/389)) are merged and archived.
 
 ## FUX
 
-| Issue | Small outcome | Prerequisites |
-| --- | --- | --- |
-| [FUX-01 / #390](https://github.com/Vivekpsps3/vivek-monorepo/issues/390) | Make Holdings compact and immediately useful | [NAV-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/386), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [FUX-02 / #391](https://github.com/Vivekpsps3/vivek-monorepo/issues/391) | Simplify account, asset and debt browsing and editing | [NAV-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/386), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [FUX-03 / #392](https://github.com/Vivekpsps3/vivek-monorepo/issues/392) | Make Activity filters, row actions and dated entry consistent | [NAV-02](https://github.com/Vivekpsps3/vivek-monorepo/issues/387), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [FUX-04 / #393](https://github.com/Vivekpsps3/vivek-monorepo/issues/393) | Organize bills and subscriptions in one due-date workspace | [NAV-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/386), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [FUX-05 / #394](https://github.com/Vivekpsps3/vivek-monorepo/issues/394) | Clarify pay, compensation and income history | [NAV-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/386), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [FUX-06 / #395](https://github.com/Vivekpsps3/vivek-monorepo/issues/395) | Give every planning tool a direct styled destination | [NAV-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/386), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [FUX-07 / #396](https://github.com/Vivekpsps3/vivek-monorepo/issues/396) | Make imports, receipts and recovery discoverable in context | [NAV-04](https://github.com/Vivekpsps3/vivek-monorepo/issues/389), [STYLE-02](https://github.com/Vivekpsps3/vivek-monorepo/issues/383) |
+FUX-01 through FUX-07 ([#390](https://github.com/Vivekpsps3/vivek-monorepo/issues/390)–[#396](https://github.com/Vivekpsps3/vivek-monorepo/issues/396)) are merged and archived.
 
 ## MUX
 
@@ -188,10 +169,9 @@ MUX-01 through MUX-09 ([#397](https://github.com/Vivekpsps3/vivek-monorepo/issue
 
 ## Retained independent leaves
 
-- [TOWN-07 / #255](https://github.com/Vivekpsps3/vivek-monorepo/issues/255): Enforce Town relational ownership with one preserving migration.
 - [OPS-06 / #277](https://github.com/Vivekpsps3/vivek-monorepo/issues/277): Record real off-host restore and independent alert activation evidence.
 
-[DISC-02 / #265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265) and [OPS-05 / #276](https://github.com/Vivekpsps3/vivek-monorepo/issues/276) are archived.
+[TOWN-07 / #255](https://github.com/Vivekpsps3/vivek-monorepo/issues/255), [DISC-02 / #265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265), and [OPS-05 / #276](https://github.com/Vivekpsps3/vivek-monorepo/issues/276) are archived. The Town ownership migration is merged in [PR #532](https://github.com/Vivekpsps3/vivek-monorepo/pull/532).
 The Cards design is [planning/implementation/cards.md](../implementation/cards.md).
 The app is not built, implementation stays unselected, and parent
 [#195](https://github.com/Vivekpsps3/vivek-monorepo/issues/195) stays open.

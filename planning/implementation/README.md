@@ -39,10 +39,10 @@ order; the design documents do not introduce a second ready list.
 
 ## 2. Open its exact packet
 
-For example, launch the selected style-token packet:
+For example, open the trip-draft packet with this command.
 
 ```sh
-python3 planning/implementation/plan.py launch STYLE-01
+python3 planning/implementation/plan.py launch TUX-03
 ```
 
 Substitute the selected key as work progresses. Launch prints the packet path and
