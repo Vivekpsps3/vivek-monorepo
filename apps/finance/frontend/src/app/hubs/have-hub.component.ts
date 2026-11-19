@@ -11,11 +11,11 @@ import { UiPageHeaderComponent } from '@vivek/ui';
   imports: [AssetsLiabilitiesComponent, PortfolioComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
-      <ui-page-header [title]="tab === 'holdings' ? 'Holdings' : 'Assets and debts'" [concealTitle]="true" />
       @if (tab === 'holdings') {
+        <ui-page-header title="Holdings" [concealTitle]="true" />
         <app-portfolio [embedded]="true" />
       } @else {
-        <app-assets-liabilities [embedded]="true" />
+        <app-assets-liabilities />
       }
     </div>
   `,

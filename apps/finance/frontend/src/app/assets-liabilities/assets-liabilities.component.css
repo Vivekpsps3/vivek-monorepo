@@ -1,29 +1,26 @@
 :host {
   display: block;
   min-width: 0;
-  max-width: 100%;
 }
 
-.page,
-.embed,
-:host ::ng-deep ui-card {
-  min-width: 0;
-  max-width: 100%;
-}
-
-h3 {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-lg);
-  letter-spacing: -0.02em;
+.net-worth-hero .section-eyebrow,
+.net-worth-hero .stat-display,
+.load-error p,
+#account-dialog-title {
+  margin: 0;
 }
 
 .net-worth-hero .stat-display {
-  margin: 0;
   font-size: clamp(1.75rem, 2.4vw, 2.125rem);
-  font-weight: 600;
-  letter-spacing: -0.03em;
+  font-weight: 650;
   line-height: 1.15;
   overflow-wrap: anywhere;
+}
+
+.summary-line,
+.source-dates {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .summary-line {
@@ -31,70 +28,90 @@ h3 {
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-1) var(--space-2);
-  margin: var(--space-4) 0 0;
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border-subtle);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
+  margin: var(--space-2) 0 0;
 }
 
 .summary-line .money {
   color: var(--text);
-  font-size: var(--text-lg);
-  font-weight: 650;
-}
-
-.summary-sep {
-  color: var(--text-tertiary);
 }
 
 .source-dates {
   margin: var(--space-2) 0 0;
+}
+
+.account-tools,
+.load-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0;
+}
+
+.account-search {
+  display: grid;
+  flex: 1 1 10rem;
+  gap: var(--space-2);
+  max-width: 25rem;
+  min-width: 0;
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  overflow-wrap: anywhere;
 }
 
-.source-dates strong {
-  color: var(--text);
-  font-weight: 600;
+.balance-groups {
+  display: grid;
+  gap: var(--space-3);
 }
 
-.name-cell {
-  overflow-wrap: anywhere;
+.balance-actions-heading {
+  width: 12rem;
 }
 
-.actions {
-  white-space: normal;
+.account-tools ui-button {
+  margin-inline-start: auto;
+}
+
+.account-tools input,
+.sheet-form input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.load-error {
+  align-items: center;
+  color: var(--danger);
+}
+
+.balance-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.balance-value {
+  vertical-align: top;
+}
+
+.balance-value ui-badge,
+.balance-value .amount-message {
+  display: block;
+}
+
+.balance-value .amount-message {
+  color: var(--text-secondary);
+}
+
+.balance-actions ui-button + ui-button {
+  margin-inline-start: var(--space-1);
 }
 
 .sheet-form {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: var(--space-4);
-  min-width: 0;
-  max-width: 100%;
-}
-
-.sheet-form label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-}
-
-.sheet-form input {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  margin: 0;
-  box-sizing: border-box;
-}
-
-.sheet-form ui-select {
-  display: block;
-  width: 100%;
   min-width: 0;
 }
 
@@ -103,138 +120,30 @@ h3 {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
-  margin-top: var(--space-2);
 }
 
-:host ::ng-deep .ui-card .ui-card__header {
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-:host ::ng-deep .ui-data-table__table thead th {
-  white-space: normal;
-}
-
-:host ::ng-deep .ui-data-table__table thead th.num,
-:host ::ng-deep .ui-data-table__table tbody td.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-:host ::ng-deep .ui-empty__action {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-2);
-}
-
-@media (min-width: 641px) {
-  :host ::ng-deep .ui-data-table__table tbody td.num {
-    white-space: nowrap;
-  }
-}
-
-@media (max-width: 640px) {
-
-  .source-dates {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-2);
+@media (max-width: 768px) {
+  :host ::ng-deep .ui-data-table__table tbody tr:has(.balance-identity) {
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
   }
 
-  /* F16: tables give way to the two-line phone rows. */
-  :host ::ng-deep .ui-data-table {
-    display: none;
+  :host ::ng-deep .ui-data-table__table tbody th.balance-identity[scope="row"]:first-child {
+    grid-column: 1 / 2;
+    grid-row: 1;
   }
 
-  .row-list {
-    display: block;
+  :host ::ng-deep .ui-data-table__table tbody td.num.balance-value {
+    grid-column: 2;
+    grid-row: 1;
+    align-items: end;
+    text-align: end;
   }
 
-  .actions,
-  td.actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-2);
+  :host ::ng-deep .ui-data-table__table tbody td.balance-actions::before {
+    content: none;
   }
 
-  td.actions ui-button,
-  .modal-actions ui-button {
-    flex: 0 1 auto;
-    width: auto;
-  }
-
-  td.actions ::ng-deep .ui-btn,
-  .modal-actions ::ng-deep .ui-btn,
-  :host ::ng-deep .ui-empty__action .ui-btn {
-    width: auto;
-    max-width: 100%;
-    min-height: 44px;
-  }
-
-  .modal-actions {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    align-items: center;
-  }
-}
-
-.empty-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: 0;
-  justify-content: center;
-}
-
-@media (max-width: 640px) {
-  .empty-actions {
-    flex-direction: column;
-  }
-
-  .empty-actions ui-button {
-    width: 100%;
-  }
-
-  .empty-actions ::ng-deep .ui-btn {
-    width: 100%;
-  }
-}
-
-/* F16: two-line phone rows (shown at ≤640px, where tables hide). */
-.row-list {
-  display: none;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.row-list__item {
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-.row-list__item:last-child {
-  border-bottom: 0;
-}
-.row-list__line {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-.row-list__meta {
-  margin-top: var(--space-1);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-}
-.row-list__actions {
-  display: inline-flex;
-  gap: var(--space-1);
-  flex-shrink: 0;
-}
-
-@media (max-width: 640px) {
-  .row-list {
-    display: block;
+  .balance-actions ui-button + ui-button {
+    margin-inline-start: 0;
   }
 }

@@ -31,7 +31,7 @@ const seed = {
 
 const routes: Array<{ path: string; h1: string }> = [
   { path: '/', h1: 'Home' },
-  { path: '/have?t=assets', h1: 'Assets and debts' },
+  { path: '/have?t=assets', h1: 'Accounts' },
   { path: '/have?t=holdings', h1: 'Holdings' },
   { path: '/spending?t=activity', h1: 'Activity' },
   { path: '/spending?t=calendar', h1: 'Calendar' },
@@ -85,7 +85,7 @@ for (const width of [390, 1280]) {
         const vault = await syntheticVault(page, seed);
         await vault.open('/');
         const sections: Array<{ tab: string; h1: string }> = [
-          { tab: 'Accounts', h1: 'Assets and debts' },
+          { tab: 'Accounts', h1: 'Accounts' },
           { tab: 'Holdings', h1: 'Holdings' },
           { tab: 'Activity', h1: 'Activity' },
           { tab: 'Pay', h1: 'Pay' },
