@@ -2,7 +2,7 @@
 
 All links are real published issues. This map groups scope; it does not define readiness or a second execution order. Use the [execution queue](../implementation/README.md) and exact packet. No implementation is claimed.
 
-111 new small leaves; four retained independent leaves; 56 original acceptance rows assigned to accountable children.
+102 new small leaves remain in this map. TOWN-07 and OPS-06 remain open. DISC-02, OPS-05, and MUX-01 through MUX-09 are archived. 56 original acceptance rows stay assigned to accountable children.
 
 
 ## STYLE
@@ -37,17 +37,7 @@ All links are real published issues. This map groups scope; it does not define r
 
 ## MUX
 
-| Issue | Small outcome | Prerequisites |
-| --- | --- | --- |
-| [MUX-01 / #397](https://github.com/Vivekpsps3/vivek-monorepo/issues/397) | Separate the library into visible media-type collections | [NAV-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/386), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [MUX-02 / #398](https://github.com/Vivekpsps3/vivek-monorepo/issues/398) | Group saved music by canonical artist identity without duplicate membership | Current merged invariants only |
-| [MUX-03 / #399](https://github.com/Vivekpsps3/vivek-monorepo/issues/399) | Build artist, album and song collection views | [MUX-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/397), [MUX-02](https://github.com/Vivekpsps3/vivek-monorepo/issues/398), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [MUX-04 / #400](https://github.com/Vivekpsps3/vivek-monorepo/issues/400) | Style movie and series collections with useful progress | [MUX-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/397), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [MUX-05 / #401](https://github.com/Vivekpsps3/vivek-monorepo/issues/401) | Build readable book shelves and reading actions | [MUX-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/397), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [MUX-06 / #402](https://github.com/Vivekpsps3/vivek-monorepo/issues/402) | Style tracked games as a distinct collection | [MUX-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/397), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
-| [MUX-07 / #403](https://github.com/Vivekpsps3/vivek-monorepo/issues/403) | Unify provider search and manual Media capture | [MUX-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/397), [STYLE-02](https://github.com/Vivekpsps3/vivek-monorepo/issues/383) |
-| [MUX-08 / #404](https://github.com/Vivekpsps3/vivek-monorepo/issues/404) | Simplify detail editing and restore the exact collection on return | [MUX-01](https://github.com/Vivekpsps3/vivek-monorepo/issues/397), [NAV-02](https://github.com/Vivekpsps3/vivek-monorepo/issues/387) |
-| [MUX-09 / #405](https://github.com/Vivekpsps3/vivek-monorepo/issues/405) | Style Now and Calendar without duplicating their saved queries | [MUX-04](https://github.com/Vivekpsps3/vivek-monorepo/issues/400), [STYLE-03](https://github.com/Vivekpsps3/vivek-monorepo/issues/384) |
+MUX-01 through MUX-09 ([#397](https://github.com/Vivekpsps3/vivek-monorepo/issues/397)–[#405](https://github.com/Vivekpsps3/vivek-monorepo/issues/405)) are archived. Later leaves still name them as prerequisites. Proof is in the completion registry.
 
 ## TUX
 
@@ -199,10 +189,9 @@ All links are real published issues. This map groups scope; it does not define r
 ## Retained independent leaves
 
 - [TOWN-07 / #255](https://github.com/Vivekpsps3/vivek-monorepo/issues/255): Enforce Town relational ownership with one preserving migration.
-- [OPS-05 / #276](https://github.com/Vivekpsps3/vivek-monorepo/issues/276): Deliver independent-monitor integrations with synthetic alert proof.
 - [OPS-06 / #277](https://github.com/Vivekpsps3/vivek-monorepo/issues/277): Record real off-host restore and independent alert activation evidence.
 
-[DISC-02 / #265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265) is archived.
+[DISC-02 / #265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265) and [OPS-05 / #276](https://github.com/Vivekpsps3/vivek-monorepo/issues/276) are archived.
 The Cards design is [planning/implementation/cards.md](../implementation/cards.md).
 The app is not built, implementation stays unselected, and parent
 [#195](https://github.com/Vivekpsps3/vivek-monorepo/issues/195) stays open.
