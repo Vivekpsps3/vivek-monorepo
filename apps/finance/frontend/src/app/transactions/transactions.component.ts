@@ -1092,7 +1092,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     const ok = await this.askActivityConfirmation(
       'Categorize merchant?',
       `Set every transaction for "${merchant}" to "${category}"?`,
-      'Apply', 'Cancel'
+      'Apply'
     );
     if (!ok) return;
     this.categoryMergeSaving = true;
