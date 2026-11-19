@@ -128,7 +128,7 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 
 ## Recurring cashflow pages
 
-- `/finance/recurring?t=pay` and `?t=spend` manage encrypted job, bill and subscription rows via `FinanceService`. Older `/finance/income`, `/finance/fixed-expenses` and `/finance/subscriptions` paths redirect there.
+- `/finance/bills` manages encrypted bills and subscriptions via `FinanceService`. Older fixed-expense, subscription and Recurring spend links route to the same workspace. `/finance/recurring` manages pay.
 - These do **not** change net worth. They feed cashflow summary and can influence planning spending inputs. Jobs & pay is the owner for optional payday cadence and its first payday anchor; no paycheck dates are inferred if that schedule is absent. Salary-entry frequency remains separate from paycheck cadence, and annual bonus/equity/other estimates remain undated. Dated payments are additional; clear the annual estimate if it represents the same payout.
 - Prefer the dedicated pages over inventing parallel recurring models on the transactions table.
 

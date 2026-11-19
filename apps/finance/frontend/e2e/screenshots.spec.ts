@@ -212,7 +212,7 @@ test.describe('finance F1 screenshot matrix', () => {
         await shot('job-empty', width, theme);
         await job.getByRole('button', { name: 'Cancel' }).click();
 
-        await vault.open('/recurring?t=spend');
+        await vault.open('/bills');
         await page.getByRole('button', { name: 'Add subscription' }).click();
         const sub = page.getByRole('dialog', { name: 'Add subscription' });
         await sub.getByLabel('Name', { exact: true }).fill('Stream');
@@ -265,7 +265,7 @@ test.describe('finance F1 screenshot matrix', () => {
         await page.getByRole('button', { name: 'Delete VOO' }).click();
         await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
         await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
-        await vault.open('/recurring?t=spend');
+        await vault.open('/bills');
         vault.failNextWrites(1);
         await page.getByRole('button', { name: 'Delete' }).click();
         await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();

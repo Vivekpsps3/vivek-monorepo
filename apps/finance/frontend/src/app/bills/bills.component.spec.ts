@@ -2,13 +2,13 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { ConfirmService,ToastService } from '@vivek/ui';
-import { BehaviorSubject,of } from 'rxjs';
+import { BehaviorSubject, EMPTY, of, Subject, throwError } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { FixedExpense,Subscription } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
-import { RecurringHubComponent } from './recurring-hub.component';
+import { BillsComponent } from './bills.component';
 
-describe('RecurringHubComponent editor handoff', () => {
+describe('BillsComponent editor handoff and source states', () => {
   let harness: RouterTestingHarness;
   let finance: jasmine.SpyObj<FinanceService>;
   let bills: BehaviorSubject<FixedExpense[]>;
@@ -31,14 +31,17 @@ describe('RecurringHubComponent editor handoff', () => {
     bills = new BehaviorSubject([bill]);
     subscriptions = new BehaviorSubject([subscription]);
     finance = jasmine.createSpyObj('FinanceService', [
-      'getFixedExpenses', 'getSubscriptions', 'addFixedExpense', 'updateFixedExpense', 'deleteFixedExpense',
+      'getFixedExpenses', 'getSubscriptions', 'getAllTransactions', 'addFixedExpense', 'updateFixedExpense', 'deleteFixedExpense',
       'addSubscription', 'updateSubscription', 'deleteSubscription',
     ], {
       fixedExpenses$: bills.asObservable(),
       subscriptions$: subscriptions.asObservable(),
+      dataChanges$: EMPTY,
+      sessionToken: 0,
     });
     finance.getFixedExpenses.and.returnValue(of([bill]).pipe(tap(rows => bills.next(rows))));
     finance.getSubscriptions.and.returnValue(of([subscription]).pipe(tap(rows => subscriptions.next(rows))));
+    finance.getAllTransactions.and.returnValue(of([]));
     finance.addFixedExpense.and.returnValue(of(bill));
     finance.updateFixedExpense.and.returnValue(of(bill));
     finance.deleteFixedExpense.and.returnValue(of({ ok: true }));
@@ -48,14 +51,14 @@ describe('RecurringHubComponent editor handoff', () => {
 
     await TestBed.configureTestingModule({
       providers: [
-        provideRouter([{ path: 'finance/recurring', component: RecurringHubComponent }]),
+        provideRouter([{ path: 'finance/bills', component: BillsComponent }]),
         { provide: FinanceService, useValue: finance },
         { provide: ConfirmService, useValue: { ask: () => Promise.resolve(true) } },
         { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
       ],
     }).compileComponents();
     harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/finance/recurring?t=spend', RecurringHubComponent);
+    await harness.navigateByUrl('/finance/bills', BillsComponent);
     await harness.fixture.whenStable();
     harness.detectChanges();
   });
@@ -72,7 +75,7 @@ describe('RecurringHubComponent editor handoff', () => {
 
   const clickRowAction = async (recordName: string, action: string): Promise<void> => {
     const root = harness.routeNativeElement!;
-    const row = Array.from(root.querySelectorAll('tr, .commitment-card'))
+    const row = Array.from(root.querySelectorAll('tbody tr'))
       .find(node => (node.textContent || '').includes(recordName));
     if (!row) throw new Error(`Expected the “${recordName}” commitment row.`);
     const button = Array.from(row.querySelectorAll('button'))
@@ -99,4 +102,22 @@ describe('RecurringHubComponent editor handoff', () => {
     expect(finance.getFixedExpenses).toHaveBeenCalled();
   });
 
+
+  it('keeps the existing list usable when the ledger fails and ignores the losing read after retry', async () => {
+    const losingRead = new Subject<never[]>();
+    finance.getAllTransactions.and.returnValues(losingRead, throwError(() => new Error('unavailable')), of([]));
+    const workspace = harness.routeDebugElement!.componentInstance as BillsComponent;
+    workspace.loadCommitments();
+    workspace.loadCommitments();
+    losingRead.next([]);
+    losingRead.complete();
+    harness.detectChanges();
+
+    const screen = harness.routeNativeElement!;
+    expect(screen.querySelector('[role="alert"]')?.textContent).toContain('Could not check the ledger');
+    expect(screen.querySelector('table')?.textContent).toContain('Rent');
+    expect(screen.querySelector('table')?.textContent).not.toContain('Possibly overdue');
+    await click('Retry');
+    expect(screen.querySelector('[role="alert"]')).toBeNull();
+  });
 });

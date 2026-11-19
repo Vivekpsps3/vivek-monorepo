@@ -1,3 +1,4 @@
+import { financeBillsPath } from '../core/layout/finance-navigation';
 import { Injector } from '@angular/core';
 import { hasDek } from '../crypto/dek-holder';
 import { financeVaultPresent } from '../crypto/dek-store';
@@ -27,7 +28,6 @@ export interface FinanceSearchRecents {
 
 const ACCOUNT_HREF = '/finance/have';
 const HOLDING_HREF = '/finance/have?t=holdings';
-const BILL_HREF = '/finance/recurring?t=spend';
 
 function contains(value: string | null | undefined, needle: string): boolean {
   return !!value && value.toLocaleLowerCase().includes(needle);
@@ -72,14 +72,14 @@ export function matchLoadedFinanceNames(loaded: FinanceLoadedNames, query: strin
   if (loaded.ready.fixedExpenses) {
     for (const row of loaded.fixedExpenses) {
       if (contains(row.name, needle)) {
-        take(rows, { app: 'finance', kind: 'bill', id: row.id, title: row.name, href: BILL_HREF });
+        take(rows, { app: 'finance', kind: 'bill', id: row.id, title: row.name, href: financeBillsPath });
       }
     }
   }
   if (loaded.ready.subscriptions) {
     for (const row of loaded.subscriptions) {
       if (contains(row.name, needle)) {
-        take(rows, { app: 'finance', kind: 'bill', id: row.id, title: row.name, href: BILL_HREF });
+        take(rows, { app: 'finance', kind: 'bill', id: row.id, title: row.name, href: financeBillsPath });
       }
     }
   }
@@ -125,7 +125,7 @@ export function resolveLoadedFinanceRecents(
         ? loaded.subscriptions.find(row => row.id === ref.id && row.name.trim())
         : undefined;
       const found = fixed ?? subscription;
-      if (found) names.push({ app: 'finance', kind: 'bill', id: found.id, title: found.name, href: BILL_HREF });
+      if (found) names.push({ app: 'finance', kind: 'bill', id: found.id, title: found.name, href: financeBillsPath });
       else if (loaded.ready.fixedExpenses && loaded.ready.subscriptions) missing.push({ kind: ref.kind, id: ref.id });
     }
   }

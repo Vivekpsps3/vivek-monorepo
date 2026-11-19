@@ -126,7 +126,7 @@
         @if (selectedPlans.length) {
           <h4 class="day-detail__section">Scheduled</h4>
           @for (item of selectedPlans; track item.name + item.date + item.amount) {
-            <a class="tx-item tx-item-link" [routerLink]="['/finance/recurring']" [queryParams]="{ t: 'spend' }" [attr.aria-label]="'Edit repeating ' + item.name">
+            <a class="tx-item tx-item-link" routerLink="/finance/bills" [attr.aria-label]="'Edit repeating ' + item.name">
               <ui-badge variant="default">Not posted</ui-badge>
               <span class="desc-main">{{ item.name }}</span>
               <span class="category">{{ item.category }}</span>

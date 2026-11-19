@@ -8,7 +8,7 @@ const ROUTES = [
   '/spending',
   '/spending?t=calendar',
   '/recurring',
-  '/recurring?t=spend',
+  '/bills',
   '/planning',
   '/planning?t=growth',
   '/planning?t=stocks',

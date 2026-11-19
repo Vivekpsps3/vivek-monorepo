@@ -206,15 +206,16 @@ test('Upcoming commitments are date sorted and show account, autopay and frequen
     subscriptions: [{ id: 81, name: 'Cloud storage', category: 'Software', amount: 120, frequency: 'annual',
       next_bill_date: soon, payment_account: 'Travel card', is_active: true }],
   });
-  await vault.open('/recurring?t=spend');
+  await vault.open('/bills');
 
   const commitments = page.getByRole('table', { name: 'Bills and subscriptions' });
   const rows = commitments.getByRole('row');
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(1)).toContainText('Cloud storage');
   await expect(rows.nth(1)).toContainText('Travel card');
-  await expect(rows.nth(1)).toContainText('—');
-  await expect(rows.nth(1)).not.toContainText('Not recorded');
+  await expect(rows.nth(1)).toContainText('Upcoming');
+  await expect(rows.nth(1)).not.toContainText('Manual');
+  await expect(rows.nth(1)).not.toContainText('Autopay');
   await expect(rows.nth(1)).toContainText('Annual');
   await expect(rows.nth(1)).toContainText(moneyText('$120.00'));
   await expect(rows.nth(2)).toContainText('Internet bill');

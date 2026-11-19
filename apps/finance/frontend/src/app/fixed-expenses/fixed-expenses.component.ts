@@ -2,73 +2,41 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
-  Input,
   OnDestroy,
-  OnInit,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
-import { ConfirmService } from '@vivek/ui';
 import { FinanceService } from '../services/finance.service';
-import { ToastService, UiFieldComponent, UiFieldControlDirective, failureCopy, successCopy } from '@vivek/ui';
+import { ToastService, UiFieldComponent, UiFieldControlDirective, successCopy } from '@vivek/ui';
 import {
   FixedExpense,
   FixedExpenseCreate,
   FixedExpenseFrequency,
 } from '../models/transaction.model';
-import { dollarsFromCountedCents, todayIsoDate, toDollars } from '@vivek/browser';
-import { countableCents, needsFixing, validateBill, validateMoney, type FieldIssue } from '../utils/validators';
+import { todayIsoDate, toDollars } from '@vivek/browser';
+import { validateBill, validateMoney, type FieldIssue } from '../utils/validators';
 import {
-  UiBadgeComponent,
   UiButtonComponent,
-  UiCardComponent,
-  UiDataTableComponent,
-  UiEmptyStateComponent,
-  UiIconComponent,
-  UiPageHeaderComponent,
   UiSelectComponent,
   UiSelectOption,
   UiDialogComponent,
 } from '@vivek/ui';
 import { dialogSaveAlert, fieldMessage, focusDialogAlert, focusErrorSummary, focusField } from '../shared/form-validation';
-import { MoneyPipe } from '@vivek/ui';
-import { AppDatePipe } from '@vivek/ui';
 
 @Component({
   selector: 'app-fixed-expenses',
   standalone: true,
-  imports: [
-    AppDatePipe,
-    MoneyPipe,
-    CommonModule,
-    FormsModule,
-    UiPageHeaderComponent,
-    UiButtonComponent,
-    UiCardComponent,
-    UiDataTableComponent,
-    UiEmptyStateComponent,
-    UiIconComponent,
-    UiSelectComponent,
-    UiBadgeComponent,
-    UiDialogComponent,
-    UiFieldComponent,
-    UiFieldControlDirective,
-  ],
+  imports: [FormsModule, UiButtonComponent, UiSelectComponent, UiDialogComponent, UiFieldComponent, UiFieldControlDirective],
   templateUrl: './fixed-expenses.component.html',
   styleUrls: ['./fixed-expenses.component.css', '../shared/recurring-editor.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class FixedExpensesComponent implements OnInit, OnDestroy {
-  @Input() embedded = false;
-  @Input() editorOnly = false;
-  expenses: FixedExpense[] = [];
+export class FixedExpensesComponent implements OnDestroy {
   showModal = false;
   saving = false;
   saveError = '';
   fieldErrors: FieldIssue[] = [];
   formSubmitted = false;
-  readonly needsFixing = needsFixing;
   editingId: number | null = null;
   moreOptionsOpen = false;
   form: FixedExpenseCreate = this.emptyForm();
@@ -83,34 +51,19 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
 
   readonly categoryOptions = ['Rent', 'Utilities', 'Insurance', 'Subscriptions', 'Debt', 'Other'];
 
-  private destroy$ = new Subject<void>();
+  private readonly dismiss$ = new Subject<void>();
 
   constructor(
     private financeService: FinanceService,
-    private confirmService: ConfirmService,
     private toastService: ToastService,
     private cdr: ChangeDetectorRef
   ) {}
 
-  ngOnInit(): void {
-    this.financeService.fixedExpenses$.pipe(takeUntil(this.destroy$)).subscribe(rows => {
-      this.expenses = rows;
-      this.cdr.markForCheck();
-    });
-    if (!this.editorOnly) this.financeService.getFixedExpenses().pipe(takeUntil(this.destroy$)).subscribe();
-  }
-
   ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
-  }
-
-  get activeMonthlyTotal(): number {
-    return countedBillTotal(this.expenses.filter(row => row.is_active).map(row => row.monthly_amount));
-  }
-
-  get activeAnnualTotal(): number {
-    return countedBillTotal(this.expenses.filter(row => row.is_active).map(row => row.annual_amount));
+    this.dismiss$.next();
+    this.dismiss$.complete();
+    this.showModal = false;
+    this.form = this.emptyForm();
   }
 
   fieldError(field: string): string | null {
@@ -188,7 +141,13 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  cancel(): void {
+    if (!this.saving) this.closeModal();
+  }
+
   closeModal(): void {
+    this.dismiss$.next();
+    this.saving = false;
     this.showModal = false;
     this.editingId = null;
     this.form = this.emptyForm();
@@ -204,14 +163,15 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
   }
 
   saveExpense(): void {
-    if (this.saving) return;
+    if (this.saving || !this.showModal) return;
+    const draft = this.form;
     const errors = this.billIssues();
     this.fieldErrors = errors;
     this.formSubmitted = true;
     if (errors.length) {
       if (errors.some(error => error.field === 'dueDay')) this.moreOptionsOpen = true;
       this.cdr.markForCheck();
-      setTimeout(() => focusErrorSummary(document.getElementById('bill-form')));
+      setTimeout(() => { if (this.form === draft && this.showModal) focusErrorSummary(document.getElementById('bill-form')); });
       return;
     }
     const parsed = validateMoney(this.form.amount, {
@@ -236,7 +196,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       this.editingId !== null
         ? this.financeService.updateFixedExpense(this.editingId, payload, true)
         : this.financeService.addFixedExpense(payload, true);
-    request.pipe(takeUntil(this.destroy$)).subscribe({
+    request.pipe(takeUntil(this.dismiss$)).subscribe({
       next: () => {
         this.saving = false;
         this.closeModal();
@@ -246,46 +206,13 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       error: () => {
         this.saving = false;
         this.saveError = dialogSaveAlert();
-        setTimeout(() => focusDialogAlert(document.getElementById('bill-form')));
+        setTimeout(() => { if (this.form === draft && this.showModal) focusDialogAlert(document.getElementById('bill-form')); });
         this.cdr.markForCheck();
       },
     });
-  }
-
-  async deleteExpense(row: FixedExpense): Promise<void> {
-    const ok = await this.confirmService.ask(
-      'Delete fixed expense?',
-      `Remove ${row.name} from bills?`,
-      'Delete',
-      'Cancel'
-    );
-    if (!ok) return;
-    this.financeService.deleteFixedExpense(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => this.toastService.success('Bill deleted'),
-      error: () => this.toastService.error(failureCopy('delete', 'this bill'), {
-        label: 'Try again',
-        run: () => { void this.deleteExpense(row); },
-      }),
-    });
-  }
-
-  frequencyLabel(value: string): string {
-    return this.frequencyOptions.find(option => option.value === value)?.label || value;
   }
 }
 
 function billHasOptions(row: FixedExpense): boolean {
   return Boolean(row.due_day || row.end_date || row.payment_account?.trim() || row.notes?.trim() || row.autopay);
-}
-
-function countedBillTotal(values: unknown[]): number {
-  let cents = 0;
-  for (const value of values) {
-    if (needsFixing(value, 'positive')) continue;
-    const part = countableCents(value, 'positive');
-    if (part == null) continue;
-    cents += part;
-  }
-  const dollars = dollarsFromCountedCents(cents);
-  return Number.isFinite(dollars) ? dollars : 0;
 }

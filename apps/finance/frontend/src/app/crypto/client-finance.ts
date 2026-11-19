@@ -383,17 +383,17 @@ export function incomeStreamsMatch(observed: number, scheduled: number): boolean
 }
 
 /** Bills already posted as a transaction within four days and 2% (or $1). Each posted row matches at most one bill. */
-export function unmatchedScheduledExpenses(
+export function unmatchedScheduledExpenses<T extends CashflowOccurrence>(
   transactions: Transaction[],
-  occurrences: CashflowOccurrence[],
+  occurrences: T[],
   start: string,
   end: string,
-): CashflowOccurrence[] {
+): T[] {
   const posted = transactions
     .filter(tx => tx.date >= start && tx.date <= end)
     .map(tx => ({ date: tx.date, spending: transactionEffects(tx).spending, used: false }))
     .filter(tx => tx.spending > 0);
-  const unmatched: CashflowOccurrence[] = [];
+  const unmatched: T[] = [];
   for (const occurrence of occurrences) {
     let best = -1;
     let bestScore = Number.POSITIVE_INFINITY;
@@ -411,6 +411,34 @@ export function unmatchedScheduledExpenses(
     else unmatched.push(occurrence);
   }
   return unmatched;
+}
+
+function commitmentOccurrences(
+  row: FixedExpense | Subscription, start: string, end: string, anchor: string, dueDay?: number | null,
+): CashflowOccurrence[] {
+  if (!row.is_active) return [];
+  const cents = countableCents(row.amount, 'positive');
+  if (cents == null) return [];
+  const amount = dollarsFromCents(cents);
+  return occurrencesBetween(anchor, row.frequency, start, end, row.end_date, dueDay)
+    .map(date => ({ date, name: row.name, category: row.category, amount }));
+}
+
+/** Latest recent occurrence per commitment for which the ledger has no likely payment. */
+export function possiblyOverdueCommitments(
+  today: string, transactions: Transaction[], bills: FixedExpense[], subscriptions: Subscription[],
+): ReadonlyMap<string, string> {
+  const start = addDays(today, -14);
+  const end = addDays(today, -1);
+  const recent = [
+    ...bills.flatMap(row => commitmentOccurrences(row, start, end, row.start_date, row.due_day)
+      .map(item => ({ ...item, key: `bill:${row.id}` }))),
+    ...subscriptions.flatMap(row => commitmentOccurrences(row, start, end, row.next_bill_date)
+      .map(item => ({ ...item, key: `subscription:${row.id}` }))),
+  ];
+  const unmatched = unmatchedScheduledExpenses(transactions, recent, addDays(start, -BILL_MATCH_DAYS), today);
+  // Occurrences for each commitment are in date order. Keep its latest unmatched date.
+  return new Map(unmatched.map(item => [item.key, item.date]));
 }
 
 export function computeCashflowSummary(
@@ -543,26 +571,8 @@ export function computeCashflowSummary(
   const planned_income = money(income_occurrences
     .filter(row => row.kind !== 'posted' && row.kind !== 'overlap')
     .reduce((sum, row) => sum + row.amount, 0));
-  const occurrenceAmount = (raw: unknown): number | null => {
-    const cents = countableCents(raw, 'positive');
-    return cents == null ? null : dollarsFromCents(cents);
-  };
-  const fixedOccurrences = fixedExpenses
-    .filter(row => row.is_active)
-    .flatMap(row => {
-      const amount = occurrenceAmount(row.amount);
-      if (amount == null) return [];
-      return occurrencesBetween(row.start_date, row.frequency, start, end, row.end_date, row.due_day)
-        .map(date => ({ date, name: row.name, category: row.category, amount }));
-    });
-  const subscriptionOccurrences = subscriptions
-    .filter(row => row.is_active)
-    .flatMap(row => {
-      const amount = occurrenceAmount(row.amount);
-      if (amount == null) return [];
-      return occurrencesBetween(row.next_bill_date, row.frequency, start, end, row.end_date)
-        .map(date => ({ date, name: row.name, category: row.category, amount }));
-    });
+  const fixedOccurrences = fixedExpenses.flatMap(row => commitmentOccurrences(row, start, end, row.start_date, row.due_day));
+  const subscriptionOccurrences = subscriptions.flatMap(row => commitmentOccurrences(row, start, end, row.next_bill_date));
   const centsOf = (rows: Array<{ amount: number }>) => rows.reduce((sum, row) => sum + (fromDollars(row.amount) ?? 0), 0);
   const fixed_total = centsOf(fixedOccurrences);
   const sub_total = centsOf(subscriptionOccurrences);

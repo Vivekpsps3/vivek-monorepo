@@ -1,85 +1,4 @@
-@if (!editorOnly) {
-<div [class.page]="!embedded" [class.embed]="embedded">
-  <ui-page-header
-    [embedded]="embedded"
-    [title]="'Bills'">
-
-    <div uiPageActions class="header-actions">
-      <ui-button variant="primary" (clicked)="openAddModal()">Add bill</ui-button>
-    </div>
-  </ui-page-header>
-
-  <section class="fixed-summary">
-    <div>
-      <p class="section-eyebrow">Active bills</p>
-      <div class="stat-display money">{{ activeMonthlyTotal | money }}</div>
-      <p class="summary-caption">{{ activeAnnualTotal | money }} annual equivalent</p>
-    </div>
-    <div class="summary-pill">
-      <ui-icon name="credit-card" size="sm" />
-      <span>{{ expenses.length }} {{ expenses.length === 1 ? 'bill' : 'bills' }}</span>
-    </div>
-  </section>
-
-  <ui-card [title]="'Rent and recurring expenses'">
-    @if (expenses.length) {
-      <ui-data-table ariaLabel="Bills">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Category</th>
-            <th>Amount</th>
-            <th>Monthly</th>
-            <th>Next due</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of expenses; track row.id) {
-            <tr>
-              <td>
-                <strong>{{ row.name }}</strong>
-                @if (row.notes) {
-                  <span class="muted block">{{ row.notes }}</span>
-                }
-              </td>
-              <td>{{ row.category }}</td>
-              <td>
-                <span class="money">{{ row.amount | money }}</span>
-                <span class="muted block">{{ frequencyLabel(row.frequency) }}</span>
-              </td>
-              <td class="money">{{ row.monthly_amount | money }}</td>
-              <td>
-                {{ row.next_due_date | appDate }}
-                @if (row.payment_account) {
-                  <span class="muted block">{{ row.payment_account }}</span>
-                }
-              </td>
-              <td>
-                <ui-badge [variant]="row.is_active ? 'success' : 'default'">
-                  {{ row.is_active ? 'active' : 'inactive' }}
-                </ui-badge>
-              </td>
-              <td class="actions actions--row">
-                <ui-button variant="ghost" size="sm" (clicked)="openEditModal(row)">Edit</ui-button>
-                <ui-button variant="danger" size="sm" (clicked)="deleteExpense(row)">Delete</ui-button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </ui-data-table>
-    } @else {
-      <ui-empty-state message="Add rent, utilities, insurance, minimum payments, or other non-subscription bills.">
-        <ui-icon name="credit-card" size="lg" style="display:block; margin: 0 auto 8px; opacity:.5;" />
-        <ui-button variant="primary" (clicked)="openAddModal()">Add bill</ui-button>
-      </ui-empty-state>
-    }
-  </ui-card>
-</div>
-}
-
-<ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="fixed-expense-modal-title" (closed)="closeModal()">
+<ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="fixed-expense-modal-title" [closeOnBackdrop]="!saving" (closed)="cancel()">
       <h3 id="fixed-expense-modal-title">{{ editingId ? 'Edit bill' : 'Add bill' }}</h3>
       @if (saveError) { <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ saveError }}</p> }
       <form id="bill-form" class="recurring-editor" novalidate (ngSubmit)="saveExpense()" #expenseForm="ngForm">
@@ -156,7 +75,7 @@
 
         <div class="form-actions">
           <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save' }}</ui-button>
-          <ui-button variant="secondary" (clicked)="closeModal()">Cancel</ui-button>
+          <ui-button variant="secondary" [disabled]="saving" (clicked)="cancel()">Cancel</ui-button>
         </div>
       </form>
 </ui-dialog>

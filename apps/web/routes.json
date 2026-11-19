@@ -13,7 +13,7 @@
     "town(?:/(?:world|clinic|gym|library))?",
     "pixels(?:/life)?",
     "settings(?:/(?:account|profile|appearance|game|connections|travel|finance|calendars|about))?",
-    "finance(?:/(?:have|spending|recurring|planning|embed|vault/(?:setup|unlock)|balance-sheet|portfolio|transactions|calendar|income|fixed-expenses|subscriptions|investment-insights|stock-lab|charts))?",
+    "finance(?:/(?:have|spending|bills|recurring|planning|embed|vault/(?:setup|unlock)|balance-sheet|portfolio|transactions|calendar|income|fixed-expenses|subscriptions|investment-insights|stock-lab|charts))?",
     "travel(?:/(?:trips/(?:new|[0-9]+)|calendar|pto|settings))?",
     "media(?:/(?:library|search|calendar|add|item/[0-9]+(?:/(?:season/[0-9]+|discography))?))?"
   ],

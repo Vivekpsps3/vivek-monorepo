@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, computed, effect, inject, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { financeBillsPath } from '../../../../../finance/frontend/src/public-api';
 import { Subject, finalize, takeUntil, timeout } from 'rxjs';
 import { ToastService, UiButtonComponent, UiIconComponent, UiSkeletonComponent, UiStateComponent } from '@vivek/ui';
 import type { HubCardState } from '../hub-load';
@@ -19,6 +20,7 @@ const compactLimit = 3;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UpNextComponent {
+  readonly billsPath = financeBillsPath;
   expanded = input(false);
   windowStart = input('');
   windowEnd = input('');

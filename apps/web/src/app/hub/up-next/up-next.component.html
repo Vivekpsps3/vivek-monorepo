@@ -70,7 +70,7 @@
     } @else if ((financeState() === 'ready' || financeState() === 'stale' || financeState() === 'empty') && billsDue() !== null) {
       @if (billsDue()! > 0) {
         <div class="finance-row"><ui-icon name="credit-card" /><span>{{ billsDue() }} {{ billsDue() === 1 ? 'bill' : 'bills' }} due this week</span>
-          <a routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }">Open Finance</a></div>
+          <a [routerLink]="billsPath">Open Bills</a></div>
       }
       @if (financeState() === 'stale') { <ui-state state="stale" thing="bill count" [pending]="financePending()" [updatedAt]="financeUpdatedAt()" (retry)="retryFinance.emit()" /> }
     } @else if (financeState() === 'unavailable') {

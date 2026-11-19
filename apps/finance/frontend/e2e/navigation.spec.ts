@@ -59,6 +59,7 @@ for (const viewport of VIEWPORTS) {
           ['/have', 'Net worth'],
           ['/spending', 'Spending'],
           ['/recurring', 'Recurring'],
+          ['/bills', 'Bills and subscriptions'],
           ['/planning', 'Planning'],
         ] as const) {
           await vault.open(path);
@@ -75,7 +76,7 @@ for (const viewport of VIEWPORTS) {
           ['Accounts', '/finance/have'],
           ['Calendar', '/finance/spending?t=calendar'],
           ['Activity', '/finance/spending'],
-          ['Bills', '/finance/recurring?t=spend'],
+          ['Bills', '/finance/bills'],
           ['Pay', '/finance/recurring'],
           ['Imports', '/finance/spending?receipts=1'],
         ]) {
@@ -109,6 +110,15 @@ for (const viewport of VIEWPORTS) {
 
         await vault.open('/recurring?t=pay');
         await expect(page.getByRole('link', { name: 'Pay', exact: true })).toHaveAttribute('aria-current', 'page');
+
+        const filteredBills = '/bills?kind=subscription&status=active&order=latest';
+        await vault.open('/recurring?t=spend&kind=subscription&status=active&order=latest&name=private', page, filteredBills);
+        await expect(page.getByRole('link', { name: 'Bills', exact: true })).toHaveAttribute('aria-current', 'page');
+        for (const legacy of ['/recurring?t=bills', '/recurring?t=subs', '/fixed-expenses', '/subscriptions']) {
+          await vault.open('/recurring');
+          await vault.open(legacy, page, '/bills');
+          await expect(page.getByRole('heading', { name: 'Bills and subscriptions' })).toBeVisible();
+        }
 
         await vault.open('/planning?t=path');
         await expect(page.getByRole('link', { name: 'Retirement and goals', exact: true })).toHaveAttribute('aria-current', 'page');

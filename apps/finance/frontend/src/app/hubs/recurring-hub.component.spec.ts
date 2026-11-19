@@ -1,230 +1,32 @@
-import { ChangeDetectorRef, NO_ERRORS_SCHEMA } from '@angular/core';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router, provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import { CompensationReportComponent } from '../income/compensation-report.component';
 import { IncomeComponent } from '../income/income.component';
-import { BehaviorSubject, of } from 'rxjs';
-import { RecurringHubComponent, CommitmentRow } from './recurring-hub.component';
-import { FinanceService } from '../services/finance.service';
-import { FixedExpense, Subscription } from '../models/transaction.model';
+import { RecurringHubComponent } from './recurring-hub.component';
 
 describe('RecurringHubComponent', () => {
-  let component: RecurringHubComponent;
-  let params: BehaviorSubject<any>;
-  let router: jasmine.SpyObj<Router>;
-  let finance: jasmine.SpyObj<FinanceService>;
-
-  const bill = (overrides: Partial<FixedExpense> = {}): FixedExpense => ({
-    id: 1, name: 'Rent', category: 'Rent', amount: 1200, frequency: 'monthly',
-    start_date: '2026-01-01', due_day: 1, autopay: true, payment_account: 'Checking',
-    is_active: true, next_due_date: '2026-11-01', monthly_amount: 1200,
-    annual_amount: 14400, created_at: '', updated_at: '', ...overrides,
-  });
-  const subscription = (overrides: Partial<Subscription> = {}): Subscription => ({
-    id: 2, name: 'Internet', category: 'Utilities', amount: 60, frequency: 'monthly',
-    next_bill_date: '2026-11-15', payment_account: 'Visa', is_active: true,
-    next_due_date: '2026-11-15', monthly_amount: 60, annual_amount: 720,
-    created_at: '', updated_at: '', ...overrides,
-  });
-
-  beforeEach(() => {
-    params = new BehaviorSubject({ get: (key: string) => ({ t: 'spend' } as Record<string, string>)[key] ?? null, keys: ['t'] });
-    router = jasmine.createSpyObj<Router>('Router', ['navigate']);
-    finance = jasmine.createSpyObj('FinanceService', ['getFixedExpenses', 'getSubscriptions'], {
-      fixedExpenses$: new BehaviorSubject<FixedExpense[]>([]).asObservable(),
-      subscriptions$: new BehaviorSubject<Subscription[]>([]).asObservable(),
-    });
-    finance.getFixedExpenses.and.returnValue(of([]));
-    finance.getSubscriptions.and.returnValue(of([]));
+  it('keeps Pay and legacy compensation links with their chosen report range', async () => {
     TestBed.configureTestingModule({
-      providers: [
-        { provide: ActivatedRoute, useValue: { queryParamMap: params.asObservable() } },
-        { provide: Router, useValue: router },
-        { provide: FinanceService, useValue: finance },
-        { provide: ChangeDetectorRef, useValue: { markForCheck: jasmine.createSpy() } },
-      ],
+      providers: [provideRouter([{ path: 'finance/recurring', component: RecurringHubComponent }])],
     });
-    component = TestBed.runInInjectionContext(() => new RecurringHubComponent());
-  });
-
-  it('sorts dated obligations first and keeps undated and inactive records in the owner list', () => {
-    component.fixedExpenses = [
-      bill({ id: 1, name: 'Rent', next_due_date: '2026-11-10', amount: 1200, monthly_amount: 1200 }),
-      bill({ id: 3, name: 'Old gym', is_active: false, next_due_date: null, amount: 20, monthly_amount: 20 }),
-    ];
-    component.subscriptions = [subscription({ id: 2, next_due_date: '2026-11-05', monthly_amount: 60 })];
-    expect(component.rows.map(row => row.name)).toEqual(['Internet', 'Rent', 'Old gym']);
-    expect(component.rows[2].date).toBeNull();
-    expect(component.rows[0].autopay).toBeNull();
-    expect(component.activeMonthlyTotal).toBe(1260);
-    expect(component.activeAnnualTotal).toBe(15120);
-  });
-
-  it('filters by kind and status without hiding inactive records by default', () => {
-    component.fixedExpenses = [bill(), bill({ id: 3, name: 'Old gym', is_active: false, next_due_date: null })];
-    component.subscriptions = [subscription()];
-    expect(component.filteredRows.length).toBe(3);
-    component.typeFilter = 'subscription';
-    expect(component.filteredRows.map(row => row.kind)).toEqual(['subscription']);
-    component.typeFilter = 'all';
-    component.statusFilter = 'inactive';
-    expect(component.filteredRows.map(row => row.name)).toEqual(['Old gym']);
-  });
-
-  it('hands add, edit, and delete actions to the existing bill or subscription form', () => {
-    const billEditor = { openAddModal: jasmine.createSpy(), openEditModal: jasmine.createSpy(), deleteExpense: jasmine.createSpy() };
-    const subscriptionEditor = { openAddModal: jasmine.createSpy(), openEditModal: jasmine.createSpy(), deleteSubscription: jasmine.createSpy() };
-    (component as any).billEditor = billEditor;
-    (component as any).subscriptionEditor = subscriptionEditor;
-    component.addBill();
-    component.addSubscription();
-    const billRow = { ...componentRow('bill', bill()) };
-    const subscriptionRow = componentRow('subscription', subscription());
-    component.edit(billRow);
-    component.edit(subscriptionRow);
-    component.remove(billRow);
-    component.remove(subscriptionRow);
-    expect(billEditor.openAddModal).toHaveBeenCalled();
-    expect(subscriptionEditor.openAddModal).toHaveBeenCalled();
-    expect(billEditor.openEditModal).toHaveBeenCalledWith(billRow.bill);
-    expect(subscriptionEditor.openEditModal).toHaveBeenCalledWith(subscriptionRow.subscription);
-    expect(billEditor.deleteExpense).toHaveBeenCalledWith(billRow.bill);
-    expect(subscriptionEditor.deleteSubscription).toHaveBeenCalledWith(subscriptionRow.subscription);
-  });
-
-  it('redirects old compensation links and retains the selected report range', () => {
-    params.next({
-      get: (key: string) => ({ t: 'compensation', year: '2025', start: '2025-02-01', end: '2025-09-30' } as Record<string, string>)[key] ?? null,
-      keys: ['t', 'year', 'start', 'end'],
-    });
-    component.ngOnInit();
-    expect(router.navigate).toHaveBeenCalledWith(['/finance/recurring'], {
-      queryParams: { t: 'pay', year: '2025', start: '2025-02-01', end: '2025-09-30', history: '1' },
-      replaceUrl: true,
-    });
-  });
-
-  it('metaLine reads kind, account and payment mode (F18)', () => {
-    component.fixedExpenses = [bill({})];
-    component.subscriptions = [subscription({})];
-    const rows = component.rows;
-    const rent = rows.find(row => row.name === 'Rent')!;
-    const internet = rows.find(row => row.name === 'Internet')!;
-    expect(component.metaLine(internet)).toBe('Subscription · Visa · Manual'); // never 'Subscription · Subscription'
-    expect(component.metaLine(rent)).toBe('Bill · Rent · Autopay');
-    component.subscriptions = [subscription({ payment_account: null })];
-    const noAccount = component.rows.find(row => row.name === 'Internet')!;
-    expect(component.metaLine(noAccount)).toBe('Subscription · — · Manual');
-  });
-});
-
-describe('RecurringHubComponent heading (F1)', () => {
-  it('renders one Bills and subscriptions h1 and keeps the visible h2', async () => {
-    const params = new BehaviorSubject({ get: (key: string) => ({ t: 'spend' } as Record<string, string>)[key] ?? null, keys: ['t'] });
-    const finance = jasmine.createSpyObj('FinanceService', ['getFixedExpenses', 'getSubscriptions'], {
-      fixedExpenses$: new BehaviorSubject<FixedExpense[]>([]).asObservable(),
-      subscriptions$: new BehaviorSubject<Subscription[]>([]).asObservable(),
-    });
-    finance.getFixedExpenses.and.returnValue(of([]));
-    finance.getSubscriptions.and.returnValue(of([]));
-    await TestBed.configureTestingModule({
-      imports: [RecurringHubComponent],
-      providers: [
-        { provide: ActivatedRoute, useValue: { queryParamMap: params.asObservable() } },
-        { provide: Router, useValue: jasmine.createSpyObj<Router>('Router', ['navigate']) },
-        { provide: FinanceService, useValue: finance },
-      ],
-    }).compileComponents();
-    const fixture = TestBed.createComponent(RecurringHubComponent);
-    fixture.detectChanges();
-    const el: HTMLElement = fixture.nativeElement;
-    const headings = el.querySelectorAll('h1');
-    expect(headings.length).toBe(1);
-    expect(headings[0].textContent?.trim()).toBe('Bills and subscriptions');
-    expect(headings[0].classList.contains('ui-page-header__title--concealed')).toBe(true);
-    const bills = el.querySelector('h2#commitments-title');
-    expect(bills).not.toBeNull();
-    expect(bills!.textContent?.trim()).toBe('Bills & subscriptions');
-    fixture.destroy();
-  });
-});
-
-
-function componentRow(kind: 'bill' | 'subscription', record: FixedExpense | Subscription): CommitmentRow {
-  if (kind === 'bill') {
-    const item = record as FixedExpense;
-    return { id: item.id, kind, name: item.name, category: item.category, date: item.next_due_date, account: item.payment_account || null, autopay: item.autopay, frequency: item.frequency, amount: item.amount, monthlyAmount: item.monthly_amount, active: item.is_active, bill: item };
-  }
-  const item = record as Subscription;
-  return { id: item.id, kind, name: item.name, category: item.category, date: item.next_due_date, account: item.payment_account || null, autopay: null, frequency: item.frequency, amount: item.amount, monthlyAmount: item.monthly_amount, active: item.is_active, subscription: item };
-}
-
-describe('direct recurring destinations', () => {
-  it('renders Pay and Bills for canonical and legacy links', async () => {
-    const harnessFinance = jasmine.createSpyObj('FinanceService', ['getFixedExpenses', 'getSubscriptions'], {
-      fixedExpenses$: new BehaviorSubject<FixedExpense[]>([]),
-      subscriptions$: new BehaviorSubject<Subscription[]>([]),
-    });
-    harnessFinance.getFixedExpenses.and.returnValue(of([]));
-    harnessFinance.getSubscriptions.and.returnValue(of([]));
-    TestBed.configureTestingModule({
-      providers: [
-        provideRouter([{ path: 'finance/recurring', component: RecurringHubComponent }]),
-        { provide: FinanceService, useValue: harnessFinance },
-      ],
-    });
-    const { CompensationReportComponent } = await import('../income/compensation-report.component');
-    const { FixedExpensesComponent } = await import('../fixed-expenses/fixed-expenses.component');
-    const { SubscriptionsComponent } = await import('../subscriptions/subscriptions.component');
     TestBed.overrideComponent(RecurringHubComponent, {
-      remove: { imports: [IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent] },
+      remove: { imports: [IncomeComponent, CompensationReportComponent] },
       add: { schemas: [NO_ERRORS_SCHEMA] },
     });
-    await TestBed.compileComponents();
     const harness = await RouterTestingHarness.create();
-    for (const [suffix, title, view] of [
-      ['', 'Pay', 'app-income'],
-      ['?t=spend', 'Bills and subscriptions', '.commitments'],
-      ['?t=bills', 'Bills and subscriptions', '.commitments'],
-      ['?t=subs', 'Bills and subscriptions', '.commitments'],
-    ]) {
-      await harness.navigateByUrl('/finance/recurring' + suffix, RecurringHubComponent);
-      harness.detectChanges();
-      expect(harness.routeNativeElement!.querySelector('h1')?.textContent?.trim()).toBe(title);
-      expect(harness.routeNativeElement!.querySelector(view)).not.toBeNull();
-    }
-  });
-});
+    await harness.navigateByUrl('/finance/recurring', RecurringHubComponent);
+    harness.detectChanges();
+    expect(harness.routeNativeElement!.querySelector('h1')?.textContent?.trim()).toBe('Pay');
+    expect(harness.routeNativeElement!.querySelector('app-income')).not.toBeNull();
+    expect(harness.routeNativeElement!.querySelector('details')?.open).toBeFalse();
 
-describe('empty states (F10)', () => {
-  it('showAllCommitments resets type and status filters and keeps order', () => {
-    const params = new BehaviorSubject({ get: (key: string) => ({ t: 'spend' } as Record<string, string>)[key] ?? null, keys: ['t'] });
-    const router = jasmine.createSpyObj<Router>('Router', ['navigate']);
-    router.navigate.and.resolveTo(true);
-    const finance = jasmine.createSpyObj('FinanceService', ['getFixedExpenses', 'getSubscriptions'], {
-      fixedExpenses$: new BehaviorSubject<FixedExpense[]>([]).asObservable(),
-      subscriptions$: new BehaviorSubject<Subscription[]>([]).asObservable(),
-    });
-    finance.getFixedExpenses.and.returnValue(of([]));
-    finance.getSubscriptions.and.returnValue(of([]));
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: ActivatedRoute, useValue: { queryParamMap: params.asObservable() } },
-        { provide: Router, useValue: router },
-        { provide: FinanceService, useValue: finance },
-        { provide: ChangeDetectorRef, useValue: { markForCheck: jasmine.createSpy() } },
-      ],
-    });
-    const hub = TestBed.runInInjectionContext(() => new RecurringHubComponent());
-    hub.typeFilter = 'subscription';
-    hub.statusFilter = 'active';
-    hub.dateOrder = 'latest';
-    hub.showAllCommitments();
-    expect(hub.typeFilter).toBe('all');
-    expect(hub.statusFilter).toBe('all');
-    expect(hub.dateOrder).toBe('latest');
-    expect(router.navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
-      queryParams: { kind: 'all', status: 'all', order: 'latest' },
-    }));
+    await harness.navigateByUrl('/finance/recurring?t=compensation&year=2025&start=2025-02-01&end=2025-09-30');
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    const url = TestBed.inject(Router).parseUrl(TestBed.inject(Router).url);
+    expect(url.queryParams).toEqual({ t: 'pay', year: '2025', start: '2025-02-01', end: '2025-09-30', history: '1' });
+    expect(harness.routeNativeElement!.querySelector('details')?.open).toBeTrue();
   });
 });

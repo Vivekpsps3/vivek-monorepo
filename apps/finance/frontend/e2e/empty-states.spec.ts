@@ -33,7 +33,7 @@ const ROUTES: Array<{
     absent: ['Yearly pay'],
   },
   {
-    path: '/recurring?t=spend', slug: 'spend', hub: 'app-recurring-hub',
+    path: '/bills', slug: 'spend', hub: 'app-bills',
     present: ['No bills or subscriptions yet', 'Add rent, utilities, or a streaming plan to see what repeats each month.'],
     absent: ['Active monthly equivalent', 'Filter commitments'],
   },
@@ -112,7 +112,7 @@ test.describe('empty states behavior', () => {
     await vault.open('/recurring?t=pay');
     await expect(page.getByRole('button', { name: 'Add job', exact: true })).toHaveCount(1);
 
-    await vault.open('/recurring?t=spend');
+    await vault.open('/bills');
     await expect(page.getByRole('button', { name: 'Add bill', exact: true })).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Add subscription', exact: true })).toHaveCount(1);
     await expect(page.locator('.commitment-totals')).toHaveCount(0);
@@ -147,7 +147,7 @@ test.describe('empty states behavior', () => {
     const vault = await syntheticVault(page, {
       fixed_expenses: [{ id: 80, name: 'Internet bill', category: 'Utilities', amount: 60, frequency: 'monthly', start_date: frozenToday(), due_day: 2, autopay: false, payment_account: 'Checking', is_active: true }],
     });
-    await vault.open('/recurring?t=spend');
+    await vault.open('/bills');
     await expect(page.getByText('Internet bill').first()).toBeVisible();
     await page.getByLabel('Type').selectOption('subscription');
     await expect(page.getByText('Nothing matches these filters')).toBeVisible();

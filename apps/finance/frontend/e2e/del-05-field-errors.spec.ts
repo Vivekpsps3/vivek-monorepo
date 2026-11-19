@@ -5,7 +5,7 @@ import { syntheticVault } from './synthetic-vault';
 test('bill and subscription editors share field errors across viewport, theme, and zoom', async ({ page }) => {
   const vault = await syntheticVault(page);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await vault.open('/recurring?t=spend');
+  await vault.open('/bills');
 
   const bill = await openEditor(page, 'Add bill');
   await bill.getByRole('button', { name: 'Save', exact: true }).click();

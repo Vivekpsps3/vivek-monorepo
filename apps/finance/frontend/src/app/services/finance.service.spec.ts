@@ -524,7 +524,7 @@ describe('FinanceService', () => {
       const result = await searchFinanceNames(TestBed.inject(Injector), 'rent');
       expect(result).toEqual({
         status: 'ready',
-        names: [{ app: 'finance', kind: 'bill', id: 3, title: 'Rent', href: '/finance/recurring?t=spend' }],
+        names: [{ app: 'finance', kind: 'bill', id: 3, title: 'Rent', href: '/finance/bills' }],
       });
       expect(JSON.stringify(result)).not.toContain('1200');
       expect(loadDashboard).not.toHaveBeenCalled();

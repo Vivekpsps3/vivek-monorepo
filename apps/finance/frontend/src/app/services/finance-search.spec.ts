@@ -73,8 +73,8 @@ describe('finance name search', () => {
     expect(matchLoadedFinanceNames(loaded, 'rent').map(row => [row.kind, row.title, row.href])).toEqual([
       ['account', 'Rent reserve', '/finance/have'],
       ['holding', 'RENT', '/finance/have?t=holdings'],
-      ['bill', 'Rent', '/finance/recurring?t=spend'],
-      ['bill', 'Rental stream', '/finance/recurring?t=spend'],
+      ['bill', 'Rent', '/finance/bills'],
+      ['bill', 'Rental stream', '/finance/bills'],
     ]);
   });
 

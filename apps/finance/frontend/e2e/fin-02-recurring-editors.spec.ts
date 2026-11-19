@@ -119,7 +119,7 @@ async function exerciseJob(page: Page, vault: Awaited<ReturnType<typeof syntheti
 }
 
 async function exerciseBill(page: Page, vault: Awaited<ReturnType<typeof syntheticVault>>): Promise<void> {
-  await vault.open('/recurring?t=spend');
+  await vault.open('/bills');
   await editCommitment(page, 'Rent');
   const dialog = page.getByRole('dialog', { name: 'Edit bill' });
   const more = dialog.locator('details.more-options');
@@ -157,7 +157,7 @@ async function exerciseBill(page: Page, vault: Awaited<ReturnType<typeof synthet
 }
 
 async function exerciseSubscription(page: Page, vault: Awaited<ReturnType<typeof syntheticVault>>): Promise<void> {
-  await vault.open('/recurring?t=spend');
+  await vault.open('/bills');
   await editCommitment(page, 'Stream');
   const dialog = page.getByRole('dialog', { name: 'Edit subscription' });
   await expect(dialog.getByLabel('Next bill date')).toHaveValue('2026-10-20');
@@ -197,7 +197,7 @@ async function exerciseSubscription(page: Page, vault: Awaited<ReturnType<typeof
 }
 
 async function editCommitment(page: Page, name: string): Promise<void> {
-  await page.locator('tr, .commitment-card').filter({ hasText: name }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByRole('row').filter({ hasText: name }).getByRole('button', { name: 'Edit', exact: true }).click();
 }
 
 async function scrollBody(dialog: Locator, requireOverflow: boolean): Promise<void> {

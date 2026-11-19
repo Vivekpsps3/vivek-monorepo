@@ -171,7 +171,7 @@ test('one combined commitments list hands off to bill editing and keeps a failed
     fixed_expenses: [{ id: 80, name: 'Internet bill', category: 'Utilities', amount: 60, frequency: 'monthly', start_date: today(), due_day: 2, autopay: false, payment_account: 'Checking', is_active: true }],
     subscriptions: [{ id: 81, name: 'Cloud storage', category: 'Software', amount: 120, frequency: 'annual', next_bill_date: today(), payment_account: 'Card', is_active: true }],
   });
-  await vault.open('/recurring?t=spend');
+  await vault.open('/bills');
 
   const table = page.getByRole('table', { name: 'Bills and subscriptions' });
   await expect(table.getByRole('row')).toHaveCount(3);
@@ -205,19 +205,21 @@ test('one combined commitments list hands off to bill editing and keeps a failed
   await expect(subscriptionEditor).toBeHidden();
 });
 
-test('phone commitments use one expandable card per obligation and stay keyboard operable', async ({ page }) => {
+test('phone commitments use one responsive row per obligation and stay keyboard operable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const vault = await syntheticVault(page, {
     fixed_expenses: [{ id: 80, name: 'Internet bill', category: 'Utilities', amount: 60, frequency: 'monthly', start_date: today(), due_day: 2, autopay: false, payment_account: 'Checking', is_active: true }],
     subscriptions: [{ id: 81, name: 'Cloud storage', category: 'Software', amount: 120, frequency: 'annual', next_bill_date: today(), payment_account: 'Card', is_active: true }],
   });
-  await vault.open('/recurring?t=spend');
-  await expect(page.locator('.commitment-card')).toHaveCount(2);
-  await expect(page.locator('.commitment-table-wrap')).toBeHidden();
+  await vault.open('/bills');
+  const table = page.getByRole('table', { name: 'Bills and subscriptions' });
+  await expect(table.locator('tbody tr')).toHaveCount(2);
+  await expect(table.locator('thead')).toBeHidden();
+  await expect(table.getByRole('row').filter({ hasText: 'Internet bill' }).locator('td[data-label="Due date"]')).toBeVisible();
   const width = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: innerWidth }));
   expect(width.document).toBeLessThanOrEqual(width.viewport);
 
-  const internet = page.locator('.commitment-card').filter({ hasText: 'Internet bill' });
+  const internet = table.getByRole('row').filter({ hasText: 'Internet bill' });
   const edit = internet.getByRole('button', { name: 'Edit', exact: true });
   await edit.focus();
   await page.keyboard.press('Enter');

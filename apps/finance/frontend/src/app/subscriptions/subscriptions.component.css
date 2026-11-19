@@ -4,63 +4,6 @@
   max-width: 100%;
 }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
-  min-width: 0;
-}
-
-.metric-label {
-  display: block;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  margin-bottom: var(--space-2);
-}
-
-.metric-value {
-  font-size: var(--text-2xl);
-  font-variant-numeric: tabular-nums;
-}
-
-.subscription-list {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.subscription-row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-4);
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
-  padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  background: var(--surface-2);
-}
-
-.subscription-row > * {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.row-title,
-.row-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.subscription-row p,
-.subscription-row small {
-  margin: var(--space-1) 0 0;
-  color: var(--text-secondary);
-}
-
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
@@ -104,44 +47,6 @@
   min-height: 1.25rem;
 }
 
-.subscription-row p,
-.subscription-row small,
-.subscription-row strong {
-  overflow-wrap: anywhere;
-}
-
-:host ::ng-deep .ui-card,
-:host ::ng-deep .ui-page-header,
-:host ::ng-deep .ui-page-header__actions {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.metric-value {
-  overflow-wrap: anywhere;
-}
-
 @media (max-width: 768px) {
-  .summary-grid,
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .subscription-row,
-  .row-actions {
-    align-items: center;
-    flex-wrap: wrap;
-  }
-
-  .row-actions {
-    justify-content: flex-end;
-  }
-
-  .row-actions ui-button,
-  .row-actions ::ng-deep .ui-btn,
-  :host ::ng-deep .ui-page-header__actions .ui-btn {
-    width: auto;
-    max-width: 100%;
-    min-height: 44px;
-  }
+  .form-grid { grid-template-columns: 1fr; }
 }

@@ -38,6 +38,7 @@ function routeReady(target: Page, pathname: string) {
   if (bare === '/') return target.locator('app-dashboard');
   if (bare === '/have' || bare.startsWith('/have/')) return target.locator('app-have-hub');
   if (bare === '/spending' || bare.startsWith('/spending/')) return target.locator('app-spending-hub');
+  if (bare === '/bills') return target.locator('app-bills');
   if (bare === '/recurring' || bare.startsWith('/recurring/')) return target.locator('app-recurring-hub');
   if (bare === '/planning' || bare.startsWith('/planning/')) return target.locator('app-planning-hub');
   if (bare === '/login' || bare.startsWith('/auth/')) return target.getByRole('heading', { level: 1, name: /Sign in|Create/ });

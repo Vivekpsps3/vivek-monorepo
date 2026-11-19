@@ -1,62 +1,33 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
-import { ConfirmService } from '@vivek/ui';
 import { FinanceService } from '../services/finance.service';
-import { ToastService, UiFieldComponent, UiFieldControlDirective, failureCopy, successCopy } from '@vivek/ui';
-import { FixedExpenseFrequency, Subscription, SubscriptionCreate } from '../models/transaction.model';
-import { dollarsFromCountedCents, todayIsoDate, toDollars } from '@vivek/browser';
-import { amountProblem, countableCents, needsFixing, validateMoney, validateSubscription, type FieldIssue } from '../utils/validators';
+import { ToastService, UiFieldComponent, UiFieldControlDirective, successCopy } from '@vivek/ui';
+import { Subscription, SubscriptionCreate } from '../models/transaction.model';
+import { todayIsoDate, toDollars } from '@vivek/browser';
+import { validateMoney, validateSubscription, type FieldIssue } from '../utils/validators';
 import {
-  UiBadgeComponent,
   UiButtonComponent,
-  UiCardComponent,
-  UiEmptyStateComponent,
-  UiIconComponent,
-  UiPageHeaderComponent,
   UiSelectComponent,
   UiSelectOption,
   UiDialogComponent,
 } from '@vivek/ui';
 import { dialogSaveAlert, fieldMessage, focusDialogAlert, focusErrorSummary, focusField } from '../shared/form-validation';
-import { MoneyPipe } from '@vivek/ui';
-import { AppDatePipe } from '@vivek/ui';
 
 @Component({
   selector: 'app-subscriptions',
   standalone: true,
-  imports: [
-    AppDatePipe,
-    MoneyPipe,
-    CommonModule,
-    FormsModule,
-    UiPageHeaderComponent,
-    UiButtonComponent,
-    UiCardComponent,
-    UiEmptyStateComponent,
-    UiIconComponent,
-    UiSelectComponent,
-    UiBadgeComponent,
-    UiDialogComponent,
-    UiFieldComponent,
-    UiFieldControlDirective,
-  ],
+  imports: [FormsModule, UiButtonComponent, UiSelectComponent, UiDialogComponent, UiFieldComponent, UiFieldControlDirective],
   templateUrl: './subscriptions.component.html',
   styleUrls: ['./subscriptions.component.css', '../shared/recurring-editor.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class SubscriptionsComponent implements OnInit, OnDestroy {
-  @Input() embedded = false;
-  @Input() editorOnly = false;
-  subscriptions: Subscription[] = [];
+export class SubscriptionsComponent implements OnDestroy {
   showModal = false;
   saving = false;
   saveError = '';
   fieldErrors: FieldIssue[] = [];
   formSubmitted = false;
-  readonly amountProblem = amountProblem;
-  readonly needsFixing = needsFixing;
   editingId: number | null = null;
   moreOptionsOpen = false;
   form: SubscriptionCreate = this.emptyForm();
@@ -69,34 +40,19 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     { value: 'weekly', label: 'Weekly' },
   ];
 
-  private destroy$ = new Subject<void>();
+  private readonly dismiss$ = new Subject<void>();
 
   constructor(
     private finance: FinanceService,
-    private confirm: ConfirmService,
     private toast: ToastService,
     private cdr: ChangeDetectorRef
   ) {}
 
-  ngOnInit(): void {
-    this.finance.subscriptions$.pipe(takeUntil(this.destroy$)).subscribe(rows => {
-      this.subscriptions = rows;
-      this.cdr.markForCheck();
-    });
-    if (!this.editorOnly) this.finance.getSubscriptions().pipe(takeUntil(this.destroy$)).subscribe();
-  }
-
   ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
-  }
-
-  get activeMonthlyTotal(): number {
-    return countedTotal(this.subscriptions.filter(row => row.is_active).map(row => row.monthly_amount));
-  }
-
-  get activeAnnualTotal(): number {
-    return countedTotal(this.subscriptions.filter(row => row.is_active).map(row => row.annual_amount));
+    this.dismiss$.next();
+    this.dismiss$.complete();
+    this.showModal = false;
+    this.form = this.emptyForm();
   }
 
   fieldError(field: string): string | null {
@@ -147,7 +103,13 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  cancel(): void {
+    if (!this.saving) this.closeModal();
+  }
+
   closeModal(): void {
+    this.dismiss$.next();
+    this.saving = false;
     this.showModal = false;
     this.editingId = null;
     this.form = this.emptyForm();
@@ -163,13 +125,14 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
   }
 
   saveSubscription(): void {
-    if (this.saving) return;
+    if (this.saving || !this.showModal) return;
+    const draft = this.form;
     const errors = validateSubscription({ name: this.form.name, amount: this.form.amount });
     this.fieldErrors = errors;
     this.formSubmitted = true;
     if (errors.length) {
       this.cdr.markForCheck();
-      setTimeout(() => focusErrorSummary(document.getElementById('subscription-form')));
+      setTimeout(() => { if (this.form === draft && this.showModal) focusErrorSummary(document.getElementById('subscription-form')); });
       return;
     }
     const parsed = validateMoney(this.form.amount, {
@@ -193,7 +156,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
       this.editingId !== null
         ? this.finance.updateSubscription(this.editingId, payload, true)
         : this.finance.addSubscription(payload, true);
-    req.pipe(takeUntil(this.destroy$)).subscribe({
+    req.pipe(takeUntil(this.dismiss$)).subscribe({
       next: () => {
         this.saving = false;
         this.closeModal();
@@ -204,26 +167,9 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
         this.saving = false;
         this.saveError = dialogSaveAlert();
         this.cdr.markForCheck();
-        setTimeout(() => focusDialogAlert(document.getElementById('subscription-form')));
-        this.cdr.markForCheck();
+        setTimeout(() => { if (this.form === draft && this.showModal) focusDialogAlert(document.getElementById('subscription-form')); });
       },
     });
-  }
-
-  async deleteSubscription(row: Subscription): Promise<void> {
-    const ok = await this.confirm.ask('Delete subscription?', `Remove ${row.name}?`, 'Delete', 'Cancel');
-    if (!ok) return;
-    this.finance.deleteSubscription(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => this.toast.success('Subscription deleted'),
-      error: () => this.toast.error(failureCopy('delete', 'this subscription'), {
-        label: 'Try again',
-        run: () => this.deleteSubscription(row),
-      }),
-    });
-  }
-
-  frequencyLabel(value: FixedExpenseFrequency): string {
-    return this.frequencyOptions.find(option => option.value === value)?.label || value;
   }
 
   private emptyForm(): SubscriptionCreate {
@@ -243,16 +189,4 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
 
 function subscriptionHasOptions(row: { end_date?: string | null; payment_account?: string | null; notes?: string | null; category?: string | null }): boolean {
   return Boolean(row.end_date || row.payment_account?.trim() || row.notes?.trim() || (row.category && row.category !== 'Subscriptions'));
-}
-
-function countedTotal(values: unknown[]): number {
-  let cents = 0;
-  for (const value of values) {
-    if (needsFixing(value, 'positive')) continue;
-    const part = countableCents(value, 'positive');
-    if (part == null) continue;
-    cents += part;
-  }
-  const dollars = dollarsFromCountedCents(cents);
-  return Number.isFinite(dollars) ? dollars : 0;
 }

@@ -37,6 +37,11 @@ export const routes: Routes = [
         loadComponent: () => import('./hubs/spending-hub.component').then(m => m.SpendingHubComponent),
       },
       {
+        path: 'bills',
+        title: 'Bills and subscriptions · Finance',
+        loadComponent: () => import('./bills/bills.component').then(m => m.BillsComponent),
+      },
+      {
         path: 'recurring',
         title: 'Recurring · Finance',
         loadComponent: () => import('./hubs/recurring-hub.component').then(m => m.RecurringHubComponent),
@@ -51,8 +56,8 @@ export const routes: Routes = [
       { path: 'transactions', pathMatch: 'full', redirectTo: () => '/finance/spending' },
       { path: 'calendar', pathMatch: 'full', redirectTo: () => '/finance/spending?t=calendar' },
       { path: 'income', pathMatch: 'full', redirectTo: () => '/finance/recurring' },
-      { path: 'fixed-expenses', pathMatch: 'full', redirectTo: () => '/finance/recurring?t=spend' },
-      { path: 'subscriptions', pathMatch: 'full', redirectTo: () => '/finance/recurring?t=spend' },
+      { path: 'fixed-expenses', pathMatch: 'full', redirectTo: () => '/finance/bills' },
+      { path: 'subscriptions', pathMatch: 'full', redirectTo: () => '/finance/bills' },
       { path: 'investment-insights', pathMatch: 'full', redirectTo: () => '/finance/planning?t=growth' },
       { path: 'stock-lab', pathMatch: 'full', redirectTo: () => '/finance/planning?t=stocks' },
       { path: 'charts', pathMatch: 'full', redirectTo: '' },
