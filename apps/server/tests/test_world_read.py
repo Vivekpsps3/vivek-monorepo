@@ -38,7 +38,7 @@ def _open(folder, principal=Principal(1, "tester", "Tester"), clock=CLOCK):
     return application, database
 
 
-def _seed(database, user, name, created_on, days=(), archived=False, style="cabin"):
+def _seed(database, user, name, created_on, days=(), archived=False, style="cottage"):
     with database.sessionmaker() as db:
         habit_id = db.execute(
             insert(habits_t).values(

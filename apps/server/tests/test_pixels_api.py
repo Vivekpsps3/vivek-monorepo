@@ -26,13 +26,21 @@ def _seed_user(database, user_id: int, token: str) -> None:
     _user(database, user_id, token, f"csrf-{user_id}")
 
 
-def _habit(db, habit_id: int, user_id: int) -> None:
+def _habit(db, habit_id: int, user_id: int, slot: int) -> None:
     db.execute(
         text(
-            "INSERT INTO habits (id, user_id, name, slot, building_style, per_week, created_on, created_at, name_key) "
-            "VALUES (:id, :user, :name, :id, 'cottage', 7, '2026-01-01', '2026-01-01 00:00:00+00:00', :key)"
+            "INSERT INTO habits (id, user_id, name, slot, building_style, per_week, created_on, "
+            "created_at, name_key) "
+            "VALUES (:id, :user, :name, :slot, 'cottage', 7, '2026-01-01', "
+            "'2026-01-01 00:00:00+00:00', :key)"
         ),
-        {"id": habit_id, "user": user_id, "name": f"H{habit_id}", "key": f"h{habit_id}"},
+        {
+            "id": habit_id,
+            "user": user_id,
+            "name": f"H{habit_id}",
+            "key": f"h{habit_id}",
+            "slot": slot,
+        },
     )
 
 
@@ -85,11 +93,11 @@ def _seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _seed_user(database, 1, "token-a")
     _seed_user(database, 2, "token-b")
     db = database.sessionmaker()
-    _habit(db, 10, 1)
-    _habit(db, 20, 2)
+    _habit(db, 10, 1, 0)
+    _habit(db, 20, 2, 0)
     # User A: two check-ins on Jan 3 (two habits would differ; same habit
     # twice is impossible, so a second habit row stands in via habit 11).
-    _habit(db, 11, 1)
+    _habit(db, 11, 1, 1)
     _checkin(db, 10, 1, "2026-01-03")
     _checkin(db, 11, 1, "2026-01-03")
     _checkin(db, 10, 1, "2026-01-05")
