@@ -50,8 +50,8 @@ Finance, Media, Karma, and Playwright gates were not run. This diff does not cha
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending in this commit.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/532 (`Closes #255` only).
 - Roadmap #134 append-only status-note URL: pending until merge.
-- Merged/activation status (actual evidence, not assumption): not merged. Not deployed.
+- Merged/activation status (actual evidence, not assumption): PR #532 is open. Local gates passed. CI has not been recorded yet. Not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this packet. Merge is authorized after required GitHub checks are green.
-- Next actor: push `agent/town-07`, open the PR with `Closes #255`, watch checks, merge with a merge commit, comment on #134, remove the worktree.
+- Next actor: watch checks, merge with a merge commit, comment on #134, remove the worktree.
