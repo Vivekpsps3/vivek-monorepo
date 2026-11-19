@@ -13,10 +13,12 @@ SEC-03/04 were already archived on main with PRs #376/#377. HUB-01/05/06 are als
 merged in #379/#380/#381; their real evidence and merge ancestry are retained, and
 their packets enter the completion registry. None is rebuilt as an unfinished feature.
 
-TOWN-07 ownership migration and OPS-05/06 monitoring/real restore evidence
-remain independent existing leaves with their existing requirements. DISC-02
-Cards discovery is archived; its design does not build the app. Their relative
-order is retained when inserted after the first practical-navigation tranche.
+TOWN-07 ownership migration and OPS-06 real restore evidence remain
+independent existing leaves with their existing requirements. DISC-02 Cards
+discovery and OPS-05 synthetic monitoring are archived. The Cards design does
+not build the app. OPS-06 stays open until a real off-host restore and alert
+exist. Their relative order is retained when inserted after the first
+practical-navigation tranche.
 Cards/Sidequests implementation and a real-people/residence map remain outside
 this amendment. Existing closed delivery issues stay closed.
 
