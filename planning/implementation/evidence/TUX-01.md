@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#406](https://github.com/Vivekpsps3/vivek-monorepo/issues/406) TUX-01; parent [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/tux-01`; `/tmp/vivek-tux-01`.
-- Base main SHA, current tested SHA: base `af0b2f0709eeebfe165823ed01af5a044ece3e51`. Tested SHA is the commit that contains this file after the local `make test-fast` recorded below.
+- Base main SHA, current tested SHA: base `af0b2f0709eeebfe165823ed01af5a044ece3e51`. `make test-fast` passed on `244c19318975db2904d61c129d77fcee26755b69` before this sentence named that commit.
 - Fresh-main/prerequisite/active-PR checks: `git fetch origin main` on 2026-11-19 returned `af0b2f0709eeebfe165823ed01af5a044ece3e51` (TOWN-07, pull request #532). Packet dependencies: none. #406 was open with no comments before the claim. Open pull requests: `gh pr list --state open` returned `[]`. No competing `planning-discovery` pull request. OPS-06 / #277 was not edited. The shared checkout was not edited.
 
 ## Acceptance
@@ -52,9 +52,9 @@ Record command, tested SHA, result and meaningful counts. A failed command stays
 
 | Command | Tested SHA | Result |
 | --- | --- | --- |
-| `make test-fast` | worktree `/tmp/vivek-tux-01` on `af0b2f0709eeebfe165823ed01af5a044ece3e51` plus this diff | PASS |
+| `make test-fast` | `244c19318975db2904d61c129d77fcee26755b69` | PASS |
 
-Passing worktree run: doc paths OK; planning validation PASS (104 active packets, 24 parents, 83 completed packets, forty TD owners); blame-ignore revisions OK; shared boundaries OK; Finance UX F1 OK; 135 Python unittest tests OK; e2e discovery guard OK (projects listed, not executed); Node tests 21 pass / 0 fail. An earlier `make test-fast` was started in the shared checkout without its virtualenv and stopped in `test_restore_drill` with `No module named 'alembic'`. That run is not this tree. The worktree command above was rerun with `.venv` on `PATH` and passed. `git diff --check` is recorded with the commit.
+Passing worktree run on `244c19318975db2904d61c129d77fcee26755b69`: doc paths OK; planning validation PASS (104 active packets, 24 parents, 83 completed packets, forty TD owners); blame-ignore revisions OK; shared boundaries OK; Finance UX F1 OK; 135 Python unittest tests OK; e2e discovery guard OK (projects listed, not executed); Node tests 21 pass / 0 fail. The same command was re-run on the worktree immediately before the commit that names that SHA, after this paragraph was updated. An earlier `make test-fast` was started in the shared checkout without its virtualenv and stopped in `test_restore_drill` with `No module named 'alembic'`. That run is not this tree. The worktree command above was rerun with `.venv` on `PATH` and passed. `git diff --check` is recorded with the commit.
 
 App Karma, Playwright, Python coverage, Ruff, and mypy were not required. The diff has no `apps/`, `packages/`, or `scripts/` file.
 
