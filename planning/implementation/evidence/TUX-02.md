@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#407](https://github.com/Vivekpsps3/vivek-monorepo/issues/407) TUX-02; parent [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. OPS-06 / #277 was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/tux-02`; `/tmp/vivek-tux-02`. The shared checkout was not edited.
-- Base main SHA, current tested SHA: base `08bf5671d9d6cf49bc3e830d2a0205580a81eb91` (TUX-01, pull request #533). The verification commands passed on this worktree before the implementation commit. The follow-up evidence commit names that SHA after `make test-fast`.
+- Base main SHA, current tested SHA: base `08bf5671d9d6cf49bc3e830d2a0205580a81eb91` (TUX-01, pull request #533). `make test-fast` passed on `4ae0992611d55114a83c0221cbf87d9a316960c5` before this sentence named that commit.
 - Fresh-main/prerequisite/active-PR checks: `git fetch origin main` on 2026-11-19 still returned `08bf5671d9d6cf49bc3e830d2a0205580a81eb91`. TUX-01 is on that commit: one AeroAPI v4 host, the schedules/history/flights date table, one 20-second page, and preserved overrides. `gh pr list --state open` returned only #534 (`agent/orchestrator-roadmap-archive`). No open `travel-provider` pull request. `FLIGHTAWARE_API_KEY` is unset. Tests use a synthetic key and `httpx` mock responses. No live AeroAPI call.
 
 ## Acceptance
@@ -39,7 +39,7 @@ Commands ran in `/tmp/vivek-tux-02`. Python gates used `PATH="/tmp/vivek-tux-02/
 
 | Command | Tested SHA | Result |
 | --- | --- | --- |
-| `PATH="/tmp/vivek-tux-02/.venv/bin:$PATH" make test-fast` | working tree on `08bf5671` | PASS. Doc paths OK. Planning validation PASS (104 active packets, 24 parents, 83 completed packets, forty TD owners). 135 unittest tests OK. Node tests 21 pass / 0 fail. |
+| `PATH="/tmp/vivek-tux-02/.venv/bin:$PATH" make test-fast` | `4ae0992611d55114a83c0221cbf87d9a316960c5` | PASS. Doc paths OK. Planning validation PASS (104 active packets, 24 parents, 83 completed packets, forty TD owners). 135 unittest tests OK. Node tests 21 pass / 0 fail. The same command was re-run immediately before the commit that names that SHA. |
 | `make lint-python` | working tree on `08bf5671` | PASS. 250 files already formatted. Ruff 90 match the baseline. Suppressions 6 match the baseline. |
 | `make typecheck-python` | working tree on `08bf5671` | PASS. mypy 79 findings match the baseline. |
 | `./scripts/coverage-gate.sh travel` | working tree on `08bf5671` | PASS. 196 passed. Total coverage 88.41% (floor 80.41%). `flights.py` 85.97% (335 statements, 47 missed). Notice: rose from 81.41%; suggested floor 87.41% was not pinned. |
