@@ -451,6 +451,16 @@ summary.section-header::before {
     background: transparent;
   }
 
+  /* Keep the value beside its symbol when provenance wraps onto more lines. */
+  .positions-card td.symbol:first-child {
+    grid-column: 1;
+  }
+
+  .positions-card td.position-value {
+    align-self: start;
+    align-items: flex-end;
+  }
+
   .holding-form .form-row,
   .symbol-check,
   .import-accounts {

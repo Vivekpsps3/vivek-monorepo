@@ -117,7 +117,7 @@
                     · Position date {{ dateLabel(h.position_as_of) }} · {{ holdingSource(h) }}
                   </small>
                 </td>
-                <td class="num">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
+                <td class="num position-value">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
                 <td class="num">{{ h.shares }}</td>
                 <td class="num" [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">
                   {{ gainDisplay(h) }}
