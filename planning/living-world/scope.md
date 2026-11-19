@@ -22,7 +22,7 @@ catalog. The single queue and exact small packets own execution; this is a scope
 | Residents/ambience | Authored GAME/SCENE leaves expand purposeful interaction while preserving mute/reduced-motion, private data isolation and zero hidden work |
 | Release acceptance | QA leaves retain F0–F5, actual interaction/art/privacy/performance/migration/rollback evidence; none claims activation from a plan |
 | Cards/Sidequests proposals | Cards discovery unchanged; neither standalone implementation selected; Town game collectibles do not create Sidequests records |
-| Operations/security completed work | Preserve merge/evidence registry; remaining OPS-05/06 still require real activation/restore proof |
+| Operations/security completed work | Preserve merge/evidence registry. OPS-05 synthetic monitoring is archived. OPS-06 still requires a real off-host restore and alert. |
 
 ## Explicit owner-selected presentation changes
 
