@@ -211,9 +211,9 @@ describe('Transactions multi-file import UI', () => {
 describe('Transactions delete and undo errors', () => {
   function makeComponent() {
     const finance = jasmine.createSpyObj('FinanceService', ['deleteTransaction', 'restoreTransaction']);
-    const toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
-    const confirm = { ask: () => Promise.resolve(true) } as unknown as ConfirmService;
-    const component = new TransactionsComponent(
+    const toast = jasmine.createSpyObj('ToastService', ['success', 'error'], { toasts$: of([]) });
+    const confirm = { ask: () => Promise.resolve(true), state$: of(null) } as unknown as ConfirmService;
+    const component = TestBed.runInInjectionContext(() => new TransactionsComponent(
       finance,
       toast,
       confirm,
@@ -221,8 +221,9 @@ describe('Transactions delete and undo errors', () => {
       {} as ActivatedRoute,
       {} as Router,
       {} as TransactionsImportWorkflow,
-      {} as TransactionsEditorWorkflow,
-    );
+      { dismiss: () => undefined } as TransactionsEditorWorkflow,
+    ));
+    component.transactions = [transaction];
     return { component, finance, toast };
   }
 
@@ -230,11 +231,12 @@ describe('Transactions delete and undo errors', () => {
     id: 8, date: '2026-10-03', type: 'expense' as const, category: 'Food', amount: -45.67, description: 'Legacy return',
   };
 
-  it('shows one retry toast when undoing a transaction delete fails and keeps the amount', async () => {
+  it('deletes a visible row while reading the full ledger, then retains its amount on Undo retry', async () => {
     const { component, finance, toast } = makeComponent();
     finance.deleteTransaction.and.returnValue(of({ ok: true }));
     finance.restoreTransaction.and.returnValue(throwError(() => new Error('nope')));
     await component.deleteTransaction(transaction);
+    expect(finance.deleteTransaction).toHaveBeenCalledOnceWith(transaction.id, true);
     const undo = toast.success.calls.mostRecent().args[1] as () => void;
     undo();
     expect(toast.error).toHaveBeenCalledTimes(1);
@@ -249,5 +251,9 @@ describe('Transactions delete and undo errors', () => {
     retry();
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(finance.restoreTransaction.calls.mostRecent().args[0].amount).toBe(-45.67);
+    component.ngOnDestroy();
+    finance.restoreTransaction.calls.reset();
+    retry();
+    expect(finance.restoreTransaction).not.toHaveBeenCalled();
   });
 });

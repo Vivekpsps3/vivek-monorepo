@@ -10,6 +10,7 @@ describe('return context', () => {
       '/travel/calendar?month=2026-11',
       '/settings/calendars',
       '/finance/spending?month=all',
+      '/finance/spending?date=2024-02-29&pixelsDay=2024-02-29',
     ]) {
       expect(returnPath(path)).withContext(path).toBe(path);
     }
@@ -18,6 +19,8 @@ describe('return context', () => {
   it('drops private values, invalid dates, duplicate coordinates and fragments', () => {
     expect(returnPath('/finance/spending?t=calendar&date=2026-02-31&name=private&account=private&edit=42#private'))
       .toBe('/finance/spending?t=calendar');
+    expect(returnPath('/finance/spending?date=2024-02-29&pixelsDay=2024-02-31&trip=123&account=private&edit=42'))
+      .toBe('/finance/spending?date=2024-02-29');
     expect(returnPath('/media/library?kind=artist&kind=book&q=private&tag=private&offset=24&expanded=42'))
       .toBe('/media/library?offset=24');
     expect(returnPath('/media/library?kind=book&face=text&status=in_progress&sort=title&q=private'))

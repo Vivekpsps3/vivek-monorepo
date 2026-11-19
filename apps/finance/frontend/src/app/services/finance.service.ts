@@ -538,8 +538,9 @@ export class FinanceService {
 
   restoreTransaction(record: Transaction, silent = false): Observable<{ record: Transaction; outcome: 'restored' | 'already-restored' }> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const result = await this.encStore.restoreTransaction(record, options);
-      this._transactions.next(await this.encStore.getTransactions());
+      await this.publishReadBackIfUnlocked(lock, this._transactions, () => this.encStore.getTransactions());
       this.invalidateDashboardCache();
       return result;
     }, silent);

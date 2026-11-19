@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectorRef, Injectable, OnDestroy, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subject, takeUntil } from 'rxjs';
+import { defer, of, share, Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { ReturnContext, ToastService, silentErrorToast, successCopy } from '@vivek/ui';
 import { financeCalendarPath } from '../core/layout/finance-navigation';
@@ -31,6 +31,11 @@ export class TransactionsEditorWorkflow implements OnDestroy {
   tripListNote = '';
   private tripLoad = 0;
   private readonly http = inject(HttpClient, { optional: true });
+  // Filters and the editor can join one in-flight Travel read. Reopening retries
+  // unavailability without caching an owner's trip names beyond this Activity view.
+  readonly tripHome$ = defer(() => this.http
+    ? this.http.get<TripTagHome>('/travel/api/home', { context: silentErrorToast() })
+    : of(null)).pipe(share());
   private originalAmount: number | null = null;
   private amountDirty = false;
   private readonly destroy$ = new Subject<void>();
@@ -91,7 +96,7 @@ export class TransactionsEditorWorkflow implements OnDestroy {
     this.transactionSaveError = '';
     if (errors.length) {
       this.cdr.markForCheck();
-      setTimeout(() => focusErrorSummary(document.getElementById('transaction-form')));
+      this.focusFeedback(focusErrorSummary);
       return;
     }
     let amount = this.originalAmount ?? 0;
@@ -128,7 +133,7 @@ export class TransactionsEditorWorkflow implements OnDestroy {
         this.saving = false;
         this.transactionSaveError = dialogSaveAlert();
         this.cdr.markForCheck();
-        setTimeout(() => focusDialogAlert(document.getElementById('transaction-form')));
+        this.focusFeedback(focusDialogAlert);
       },
     });
   }
@@ -181,22 +186,29 @@ export class TransactionsEditorWorkflow implements OnDestroy {
     this.editingTxId = null;
     this.editingImported = false;
     this.transactionSaveError = '';
+    this.originalAmount = null;
+    this.fieldErrors = [];
+    this.formSubmitted = false;
+    this.tripChoices = tripTagChoices(null, null);
+    this.tripListNote = '';
     this.newTx = this.emptyTx();
     this.cdr.markForCheck();
   }
 
+  private focusFeedback(focus: (root: HTMLElement | null) => void): void {
+    const draft = this.newTx;
+    setTimeout(() => {
+      if (this.showModal && this.newTx === draft) focus(document.getElementById('transaction-form'));
+    });
+  }
+
   private loadTripChoices(): void {
     const request = ++this.tripLoad;
-    const selected = this.newTx.trip_id;
-    if (!this.http) {
-      this.applyTripHome(null, selected, true);
-      return;
-    }
     this.tripListNote = '';
-    this.http.get<TripTagHome>('/travel/api/home', { context: silentErrorToast() }).pipe(takeUntil(this.dismissed$), takeUntil(this.destroy$)).subscribe({
+    this.tripHome$.pipe(takeUntil(this.dismissed$), takeUntil(this.destroy$)).subscribe({
       next: home => {
         if (request !== this.tripLoad) return;
-        this.applyTripHome(home, this.newTx.trip_id, false);
+        this.applyTripHome(home, this.newTx.trip_id, home === null);
       },
       error: () => {
         if (request !== this.tripLoad) return;
@@ -212,8 +224,8 @@ export class TransactionsEditorWorkflow implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.dismiss();
     this.dismissed$.complete();
-    this.newTx = this.emptyTx();
     this.destroy$.next();
     this.destroy$.complete();
   }

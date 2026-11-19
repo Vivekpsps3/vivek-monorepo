@@ -22,7 +22,7 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/finance/have': { t: ['sheet', 'balance', 'assets', 'liabilities', 'holdings'] },
   '/finance/spending': {
     t: spendingTabs, v: ['all', 'income', 'spending'], month: value => value === 'all' || month(value),
-    date: isReturnDate, from: isReturnDate, through: isReturnDate,
+    date: isReturnDate, from: isReturnDate, through: isReturnDate, pixelsDay: isReturnDate,
     periodStart: isReturnDate, periodEnd: isReturnDate, priorStart: isReturnDate, priorEnd: isReturnDate, add: flag, receipts: flag,
   },
   '/finance/recurring': {
