@@ -135,10 +135,14 @@ test.describe('Activity row recovery', () => {
     await expect(page.getByText(/Unpublished harbor draft|Couldn't save|Transaction saved/)).toHaveCount(0);
     expect(vault.data('transactions')[0]).toMatchObject(imported);
 
+    const sections = page.getByRole('navigation', { name: 'Finance sections' });
+    await sections.getByRole('link', { name: 'Home', exact: true }).click();
+    await sections.getByRole('link', { name: 'Activity', exact: true }).click();
     await row.getByRole('button', { name: 'Delete', exact: true }).click();
     const confirm = page.getByRole('dialog', { name: 'Delete transaction?' });
     await expect(confirm).toBeVisible();
     await page.goBack();
+    await expect(page).toHaveURL(/\/finance$/);
     await expect(confirm).toHaveCount(0);
     expect(vault.data('transactions')[0]).toMatchObject(imported);
   });
