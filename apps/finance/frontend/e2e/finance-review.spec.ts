@@ -51,7 +51,7 @@ test('an empty job form focuses the summary once', async ({ page }) => {
 
 test('a negative subscription is rejected in the dialog', async ({ page }) => {
   const vault = await syntheticVault(page);
-  await vault.open('/recurring?t=spend');
+  await vault.open('/bills');
   await page.getByRole('button', { name: 'Add subscription' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add subscription' });
   await dialog.getByLabel('Name', { exact: true }).fill('Stream');

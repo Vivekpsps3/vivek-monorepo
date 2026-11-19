@@ -1,0 +1,106 @@
+@if (active()) {
+  <div class="page bills-page">
+    <ui-page-header title="Bills and subscriptions" [titleTabIndex]="-1">
+      <div uiPageActions class="bill-actions">
+        <ui-button (clicked)="addBill()">Add bill</ui-button>
+        <ui-button variant="secondary" (clicked)="addSubscription()">Add subscription</ui-button>
+      </div>
+    </ui-page-header>
+    @if (rows().length && !loading()) {
+      <dl class="commitment-totals" aria-label="Commitment totals">
+        <div><dt>{{ commitmentsError() ? 'Loaded monthly equivalent' : 'Active monthly equivalent' }}</dt><dd class="money">{{ activeMonthlyTotal() | money }}</dd></div>
+        <div><dt>{{ commitmentsError() ? 'Loaded annual equivalent' : 'Active annual equivalent' }}</dt><dd class="money">{{ activeMonthlyTotal() * 12 | money }}</dd></div>
+        <div><dt>Repeating</dt><dd>{{ rows().length }}</dd></div>
+      </dl>
+      <div class="commitment-filters" role="group" aria-label="Filter commitments">
+        <label>Type
+          <select name="commitment_type" [(ngModel)]="typeFilter" (ngModelChange)="filterChanged()">
+            <option value="all">All types</option><option value="bill">Bills</option><option value="subscription">Subscriptions</option>
+          </select>
+        </label>
+        <label>Status
+          <select name="commitment_status" [(ngModel)]="statusFilter" (ngModelChange)="filterChanged()">
+            <option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option>
+          </select>
+        </label>
+        <label>Order
+          <select name="commitment_order" [(ngModel)]="dateOrder" (ngModelChange)="filterChanged()">
+            <option value="soonest">Earliest due first</option><option value="latest">Latest due first</option>
+          </select>
+        </label>
+      </div>
+    }
+    @if (commitmentsError() || ledgerError()) {
+      <div class="commitment-error">
+        <span role="alert">{{ commitmentsError() ? 'Some commitments could not be loaded.' : 'Could not check the ledger for potentially overdue payments.' }}</span>
+        <ui-button variant="secondary" (clicked)="loadCommitments()">Retry</ui-button>
+      </div>
+    }
+    @if (loading()) {
+      <p role="status">Loading bills and subscriptions…</p>
+    } @else if (filteredRows().length) {
+      @if (ledgerLoading()) {
+        <p class="commitment-note" role="status">Checking recent payments…</p>
+      } @else if (!commitmentsError() && !ledgerError() && rows().length) {
+        <p class="commitment-note">Possible overdue dates cover the past 14 days and use payments recorded in Activity.</p>
+      }
+      <ui-data-table ariaLabel="Bills and subscriptions" [compact]="true">
+        <thead>
+          <tr><th scope="col">Commitment</th><th scope="col">Due date</th><th scope="col">Payment</th><th scope="col">Amount</th><th scope="col">Actions</th></tr>
+        </thead>
+        <tbody>
+          @for (item of filteredRows(); track item.key) {
+            @let commitment = item.commitment;
+            @let record = commitment.record;
+            <tr>
+              <th scope="row">
+                {{ record.name }}
+                <small>{{ commitment.kind === 'bill' ? 'Bill' : 'Subscription' }}@if (commitment.kind === 'bill' || record.category !== 'Subscriptions') { {{ ' · ' + record.category }} }</small>
+              </th>
+              <td>
+                @if (item.overdue) {
+                  <ui-badge variant="warning">Possibly overdue</ui-badge>
+                  <small>{{ item.overdue | appDate }}{{ item.date ? ' · Next ' + (item.date | appDate) : '' }}</small>
+                } @else if (item.date) {
+                  <span>{{ item.date | appDate }}</span>
+                  <small>{{ item.date === today ? 'Due today' : 'Upcoming' }}</small>
+                } @else {
+                  <span>{{ record.is_active ? 'No upcoming dates' : 'Inactive' }}</span>
+                }
+              </td>
+              <td>
+                @if (commitment.kind === 'bill') {
+                  @if (commitment.record.autopay) { <ui-badge variant="success">Autopay</ui-badge> }
+                  @else { <span>Manual</span> }
+                }
+                @if (record.payment_account) { <small>{{ record.payment_account }}</small> }
+                @else if (commitment.kind === 'subscription') { <span>No account listed</span> }
+              </td>
+              <td>
+                @if (item.needsFixing) { <ui-badge variant="warning">Needs fixing</ui-badge> }
+                <span class="money">{{ record.amount | money }}</span>
+                <small>{{ frequencyLabels[record.frequency] || record.frequency }}</small>
+                @if (!item.needsFixing) { <small class="money">{{ record.monthly_amount | money }} / month</small> }
+              </td>
+              <td class="actions">
+                <div class="bill-actions">
+                  <ui-button variant="secondary" [disabled]="deleting() === item.key" (clicked)="edit(item)">Edit</ui-button>
+                  <ui-button variant="danger-ghost" [disabled]="deleting() !== null" (clicked)="remove(item.key, $event)">{{ deleteError() === item.key ? 'Retry delete' : 'Delete' }}</ui-button>
+                </div>
+                @if (deleteError() === item.key) { <p role="alert">Could not delete this {{ commitment.kind }}.</p> }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </ui-data-table>
+    } @else if (rows().length) {
+      <ui-empty-state message="Nothing matches these filters">
+        <div class="empty-actions"><ui-button variant="secondary" (clicked)="showAllCommitments()">Show all</ui-button></div>
+      </ui-empty-state>
+    } @else if (!commitmentsError()) {
+      <ui-empty-state title="No bills or subscriptions yet" message="Add rent, utilities, or a streaming plan to see what repeats each month." />
+    }
+  </div>
+  <app-fixed-expenses />
+  <app-subscriptions />
+}

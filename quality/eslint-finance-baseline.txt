@@ -20,9 +20,7 @@ apps/finance/frontend/src/app/crypto/vault.service.ts	@angular-eslint/prefer-inj
 apps/finance/frontend/src/app/dashboard/dashboard.component.ts	@angular-eslint/prefer-inject	2
 apps/finance/frontend/src/app/embed/net-worth-embed.component.spec.ts	@typescript-eslint/no-explicit-any	6
 apps/finance/frontend/src/app/embed/net-worth-embed.component.ts	@angular-eslint/prefer-inject	5
-apps/finance/frontend/src/app/fixed-expenses/fixed-expenses.component.ts	@angular-eslint/prefer-inject	4
-apps/finance/frontend/src/app/hubs/recurring-hub.component.spec.ts	@typescript-eslint/no-explicit-any	3
-apps/finance/frontend/src/app/hubs/recurring-hub.component.ts	@angular-eslint/template/eqeqeq	2
+apps/finance/frontend/src/app/fixed-expenses/fixed-expenses.component.ts	@angular-eslint/prefer-inject	3
 apps/finance/frontend/src/app/income/income-editor.component.spec.ts	@typescript-eslint/no-explicit-any	2
 apps/finance/frontend/src/app/income/income.component.ts	@angular-eslint/prefer-inject	5
 apps/finance/frontend/src/app/investment-insights/investment-insights.component.spec.ts	@typescript-eslint/no-explicit-any	2
@@ -47,7 +45,7 @@ apps/finance/frontend/src/app/services/planning.service.ts	@angular-eslint/prefe
 apps/finance/frontend/src/app/services/planning.service.ts	@typescript-eslint/no-explicit-any	12
 apps/finance/frontend/src/app/services/stock-lab-scenario.service.ts	@angular-eslint/prefer-inject	1
 apps/finance/frontend/src/app/stock-lab/stock-lab.component.ts	@angular-eslint/prefer-inject	5
-apps/finance/frontend/src/app/subscriptions/subscriptions.component.ts	@angular-eslint/prefer-inject	4
+apps/finance/frontend/src/app/subscriptions/subscriptions.component.ts	@angular-eslint/prefer-inject	3
 apps/finance/frontend/src/app/transactions/transactions-editor-workflow.ts	@angular-eslint/prefer-inject	5
 apps/finance/frontend/src/app/transactions/transactions-import-workflow.ts	@angular-eslint/prefer-inject	6
 apps/finance/frontend/src/app/transactions/transactions-import-workflow.ts	@typescript-eslint/no-explicit-any	4

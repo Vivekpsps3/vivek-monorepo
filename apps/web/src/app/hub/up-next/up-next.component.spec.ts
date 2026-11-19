@@ -117,7 +117,7 @@ describe('Up next reminder actions and source states', () => {
   it('exposes only a Finance integer and clears it on lock', () => {
     fixture.componentRef.setInput('financeState', 'ready'); fixture.componentRef.setInput('billsDue', 2); fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('2 bills due this week');
-    expect(fixture.nativeElement.querySelector('.finance-row a').getAttribute('href')).toBe('/finance/recurring?t=spend');
+    expect(fixture.nativeElement.querySelector('.finance-row a').getAttribute('href')).toBe('/finance/bills');
     fixture.componentRef.setInput('financeState', 'locked'); fixture.componentRef.setInput('billsDue', null); fixture.detectChanges();
     expect(fixture.nativeElement.textContent).not.toContain('2 bills');
     expect(fixture.nativeElement.textContent).toContain('Bills hidden: Finance is locked');

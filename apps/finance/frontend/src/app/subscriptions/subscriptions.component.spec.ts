@@ -1,6 +1,6 @@
 import { ComponentFixture,TestBed } from '@angular/core/testing';
-import { ConfirmService,ToastService } from '@vivek/ui';
-import { BehaviorSubject,of,throwError } from 'rxjs';
+import { ToastService } from '@vivek/ui';
+import { of,throwError } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { SubscriptionsComponent } from './subscriptions.component';
 
@@ -10,20 +10,17 @@ describe('SubscriptionsComponent field errors', () => {
 
   beforeEach(async () => {
     finance = jasmine.createSpyObj('FinanceService', [
-      'getSubscriptions', 'addSubscription', 'updateSubscription', 'deleteSubscription',
-    ], { subscriptions$: new BehaviorSubject([]) });
-    finance.getSubscriptions.and.returnValue(of([]));
+      'addSubscription', 'updateSubscription',
+    ]);
     finance.addSubscription.and.returnValue(of({ id: 1 }) as ReturnType<FinanceService['addSubscription']>);
     await TestBed.configureTestingModule({
       imports: [SubscriptionsComponent],
       providers: [
         { provide: FinanceService, useValue: finance },
-        { provide: ConfirmService, useValue: { ask: () => Promise.resolve(false) } },
         { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(SubscriptionsComponent);
-    fixture.componentInstance.editorOnly = true;
     fixture.detectChanges();
     await fixture.whenStable();
   });

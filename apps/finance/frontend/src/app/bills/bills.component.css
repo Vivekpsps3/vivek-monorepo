@@ -1,0 +1,106 @@
+:host,
+.bills-page {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.bills-page {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.bill-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.commitment-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.commitment-totals > div {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+
+.commitment-totals dt,
+.commitment-note,
+small {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.commitment-totals dd {
+  margin: 0;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.commitment-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.commitment-filters label {
+  flex: 1 1 9rem;
+  min-width: 0;
+  max-width: 15rem;
+  font-size: var(--text-sm);
+}
+
+.commitment-filters select {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+}
+
+.commitment-note {
+  margin: 0;
+}
+
+td small,
+th small {
+  display: block;
+  font-weight: 400;
+}
+
+td.actions {
+  min-width: 9.75rem;
+}
+
+.commitment-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.empty-actions {
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  td.actions { min-width: 0; }
+
+  .commitment-totals > div {
+    padding: var(--space-2);
+    overflow-wrap: anywhere;
+  }
+
+  .commitment-filters label { max-width: none; }
+}

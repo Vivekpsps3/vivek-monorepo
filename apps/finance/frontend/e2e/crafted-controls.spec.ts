@@ -9,7 +9,7 @@ for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
     await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
     const vault = await syntheticVault(page);
-    await vault.open('/recurring?t=spend');
+    await vault.open('/bills');
     const add = page.getByRole('button', { name: 'Add bill', exact: true });
     for (const motion of ['no-preference', 'reduce'] as const) {
       await page.emulateMedia({ reducedMotion: motion });
@@ -88,7 +88,7 @@ for (const theme of ['light', 'dark']) {
 
 test('a held bill save cannot restore its private editor after automatic lock', async ({ page }) => {
   const vault = await syntheticVault(page);
-  await vault.open('/recurring?t=spend');
+  await vault.open('/bills');
   await page.getByRole('button', { name: 'Add bill', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add bill', exact: true });
   await dialog.getByLabel('Name', { exact: true }).fill('PRIVATE_HELD_BILL');
@@ -104,8 +104,8 @@ test('a held bill save cannot restore its private editor after automatic lock', 
   await expect(page.locator('.toast')).toHaveCount(0);
   await page.getByLabel('Vault passphrase', { exact: true }).fill('Synthetic finance test passphrase');
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
-  await expect(page).toHaveURL(/\/finance\/recurring\?t=spend$/);
-  await vault.open('/recurring?t=spend');
+  await expect(page).toHaveURL(/\/finance\/bills$/);
+  await vault.open('/bills');
   await page.getByRole('button', { name: 'Add bill', exact: true }).click();
   await expect(page.getByRole('dialog').getByLabel('Name', { exact: true })).toHaveValue('');
 });

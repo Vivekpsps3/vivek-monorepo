@@ -95,7 +95,7 @@
 
     @if (hasRecurring) {
       <ui-card class="due-soon" [title]="'Due soon'">
-        <a uiCardActions class="due-soon__all" routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }">Bills and subscriptions</a>
+        <a uiCardActions class="due-soon__all" routerLink="/finance/bills">Bills and subscriptions</a>
         @if (dueSoon.length) {
           <p class="due-soon__summary">Next 14 days · <span class="money">{{ dueSoonTotal | money }}</span></p>
           <ul class="due-soon__list">
@@ -108,7 +108,7 @@
             }
           </ul>
           @if (dueSoon.length > 5) {
-            <a class="due-soon__more" routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }">{{ dueSoon.length - 5 }} more due soon</a>
+            <a class="due-soon__more" routerLink="/finance/bills">{{ dueSoon.length - 5 }} more due soon</a>
           }
         } @else {
           <p class="muted">No bills due in the next two weeks.</p>

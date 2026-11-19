@@ -1,6 +1,6 @@
 import { ComponentFixture,TestBed } from '@angular/core/testing';
-import { ConfirmService,ToastService } from '@vivek/ui';
-import { BehaviorSubject,of } from 'rxjs';
+import { ToastService } from '@vivek/ui';
+import { of } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { FixedExpensesComponent } from './fixed-expenses.component';
 
@@ -10,20 +10,17 @@ describe('FixedExpensesComponent field errors', () => {
 
   beforeEach(async () => {
     finance = jasmine.createSpyObj('FinanceService', [
-      'getFixedExpenses', 'addFixedExpense', 'updateFixedExpense', 'deleteFixedExpense',
-    ], { fixedExpenses$: new BehaviorSubject([]) });
-    finance.getFixedExpenses.and.returnValue(of([]));
+      'addFixedExpense', 'updateFixedExpense',
+    ]);
     finance.addFixedExpense.and.returnValue(of({ id: 1 }) as ReturnType<FinanceService['addFixedExpense']>);
     await TestBed.configureTestingModule({
       imports: [FixedExpensesComponent],
       providers: [
         { provide: FinanceService, useValue: finance },
-        { provide: ConfirmService, useValue: { ask: () => Promise.resolve(false) } },
         { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(FixedExpensesComponent);
-    fixture.componentInstance.editorOnly = true;
     fixture.detectChanges();
     await fixture.whenStable();
   });

@@ -40,7 +40,7 @@
       <div>
         <span>{{ factsCopy.scheduled.label }}</span>
         <strong>{{ formatMoney(inputs?.recurring_annual_spending) }} a year</strong>
-        <a routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }">Open bills and subscriptions</a>
+        <a routerLink="/finance/bills">Open bills and subscriptions</a>
         <small>{{ factsCopy.scheduled.small }}</small>
       </div>
     </div>

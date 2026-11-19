@@ -31,6 +31,13 @@
       "angular": "media/item/:id/discography"
     },
     {
+      "id": "finance-bills",
+      "path": "finance/bills",
+      "owner": "finance",
+      "status": "mounted",
+      "query": "kind=subscription"
+    },
+    {
       "id": "finance-portfolio",
       "path": "finance/portfolio",
       "owner": "finance",

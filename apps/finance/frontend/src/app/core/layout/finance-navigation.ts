@@ -7,6 +7,7 @@ export function pixelsDayActivityPath(day: string): string {
 }
 
 export const financeCalendarPath = '/finance/spending?t=calendar';
+export const financeBillsPath = '/finance/bills';
 
 export const financeSections: readonly UiSectionNavItem[] = [
   { label: 'Home', link: '/finance', exact: true },
@@ -14,7 +15,7 @@ export const financeSections: readonly UiSectionNavItem[] = [
   { label: 'Holdings', link: '/finance/have?t=holdings' },
   { label: 'Activity', link: '/finance/spending' },
   { label: 'Calendar', link: financeCalendarPath },
-  { label: 'Bills', link: '/finance/recurring?t=spend', also: ['/finance/recurring?t=bills', '/finance/recurring?t=subs'] },
+  { label: 'Bills', link: financeBillsPath, also: ['/finance/recurring?t=spend', '/finance/recurring?t=bills', '/finance/recurring?t=subs'] },
   { label: 'Pay', link: '/finance/recurring' },
   { label: 'Planning', link: '/finance/planning' },
   { label: 'Imports', link: '/finance/spending?receipts=1', also: ['/finance/spending?t=imports'] },

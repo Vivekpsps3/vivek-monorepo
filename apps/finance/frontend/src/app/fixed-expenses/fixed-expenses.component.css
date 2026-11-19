@@ -4,49 +4,6 @@
   max-width: 100%;
 }
 
-.fixed-summary {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-6);
-  align-items: flex-end;
-  flex-wrap: wrap;
-  box-sizing: border-box;
-  min-width: 0;
-  max-width: 100%;
-  background: var(--card-bg);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  padding: var(--space-8);
-  box-shadow: var(--shadow-card);
-}
-
-.fixed-summary .stat-display {
-  font-size: clamp(2rem, 5vw, 3rem);
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
-.summary-caption {
-  margin: var(--space-2) 0 0;
-}
-
-.summary-pill {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  max-width: 100%;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  padding: var(--space-2) var(--space-3);
-  color: var(--text-secondary);
-  background: var(--surface-2);
-}
-
-.block {
-  display: block;
-}
-
 .checkbox-field {
   display: flex;
   gap: var(--space-2);
@@ -61,7 +18,6 @@
   min-height: 1.25rem;
 }
 
-.fixed-summary > div,
 form,
 .form-row,
 .form-group {
@@ -79,12 +35,7 @@ form,
 }
 
 .form-row > *,
-ui-select,
-:host ::ng-deep .ui-card,
-:host ::ng-deep .ui-page-header,
-:host ::ng-deep .ui-page-header__actions,
-:host ::ng-deep .header-actions,
-:host ::ng-deep .ui-data-table {
+ui-select {
   min-width: 0;
   max-width: 100%;
 }
@@ -97,38 +48,7 @@ textarea {
   box-sizing: border-box;
 }
 
-:host ::ng-deep .ui-data-table td {
-  overflow-wrap: anywhere;
-}
-
 @media (max-width: 768px) {
-  .fixed-summary {
-    flex-direction: column;
-    align-items: stretch;
-    padding: var(--space-5);
-  }
-
-  .summary-pill {
-    align-self: flex-start;
-    width: fit-content;
-  }
-
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-
-  .checkbox-field {
-    align-self: stretch;
-  }
-
-  :host ::ng-deep .header-actions .ui-btn,
-  :host ::ng-deep td.actions .ui-btn {
-    width: auto;
-    max-width: 100%;
-    min-height: 44px;
-  }
-
-  :host ::ng-deep .ui-data-table tbody td {
-    grid-column: 1 / -1 !important;
-  }
+  .form-row { grid-template-columns: 1fr; }
+  .checkbox-field { align-self: stretch; }
 }

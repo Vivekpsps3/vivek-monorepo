@@ -22,12 +22,14 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 | `/` | Finance Home: net worth and current-month cashflow, with source/holdings detail |
 | `/have` | Assets, debts, and holdings (`?t=holdings`) |
 | `/spending` | Activity (default; `?t=activity&v=all|spending|income`), Calendar (`?t=calendar`), and Imports (`?receipts=1`); old Review links and legacy `?t=pay` / `?t=spend` links open Activity |
-| `/recurring` | Jobs & pay or bills & subscriptions (`?t=pay`, `?t=spend`) |
+| `/bills` | Bills and subscriptions (`?kind=all|bill|subscription`, `?status=all|active|inactive`, `?order=soonest|latest`) |
+| `/recurring` | Jobs and pay (`?t=pay`; `?history=1` opens compensation history). Older `?t=spend`, `?t=bills`, and `?t=subs` links open Bills |
 | `/planning` | Retirement & goals (`?t=path&tool=overview|simulation|retirement-target|savings-goal|debt-payoff`), portfolio projection (`?t=growth`), and stock research (`?t=stocks`) |
 | `/hub/admin` | Suite admin: app health, people, and what needs attention. Not inside Finance. |
 | `/balance-sheet`, `/portfolio` | Redirect to `/have`, with `/portfolio` opening holdings |
 | `/transactions`, `/calendar` | Redirect to `/spending`, with `/calendar` opening Calendar |
-| `/income`, `/fixed-expenses`, `/subscriptions` | Redirect to `/recurring` |
+| `/income` | Redirect to `/recurring` |
+| `/fixed-expenses`, `/subscriptions` | Redirect to `/bills` |
 | `/investment-insights`, `/stock-lab` | Redirect to `/planning`, opening Growth or Stocks respectively |
 | `/charts` | Redirects to `/` |
 
@@ -128,7 +130,7 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 
 ## Recurring cashflow pages
 
-- `/finance/recurring?t=pay` and `?t=spend` manage encrypted job, bill and subscription rows via `FinanceService`. Older `/finance/income`, `/finance/fixed-expenses` and `/finance/subscriptions` paths redirect there.
+- `/finance/bills` manages encrypted bills and subscriptions via `FinanceService`. Older fixed-expense, subscription and Recurring spend links route to the same workspace. `/finance/recurring` manages pay.
 - These do **not** change net worth. They feed cashflow summary and can influence planning spending inputs. Jobs & pay is the owner for optional payday cadence and its first payday anchor; no paycheck dates are inferred if that schedule is absent. Salary-entry frequency remains separate from paycheck cadence, and annual bonus/equity/other estimates remain undated. Dated payments are additional; clear the annual estimate if it represents the same payout.
 - Prefer the dedicated pages over inventing parallel recurring models on the transactions table.
 

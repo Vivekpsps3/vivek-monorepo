@@ -25,6 +25,9 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
     date: isReturnDate, from: isReturnDate, through: isReturnDate, pixelsDay: isReturnDate,
     periodStart: isReturnDate, periodEnd: isReturnDate, priorStart: isReturnDate, priorEnd: isReturnDate, add: flag, receipts: flag,
   },
+  '/finance/bills': {
+    kind: ['all', 'bill', 'subscription'], status: ['all', 'active', 'inactive'], order: ['latest', 'soonest'],
+  },
   '/finance/recurring': {
     t: ['income', 'spend', 'pay', 'bills', 'subs', 'compensation'], history: flag,
     kind: ['bill', 'subscription'], status: ['active', 'inactive'], order: ['latest', 'soonest'],
