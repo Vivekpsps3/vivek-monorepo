@@ -24,3 +24,35 @@ export function seriesShelf(card: {
     episode?: number;
   } | null;
 }): SeriesShelf;
+
+export interface ShelfContinuation {
+  episode_id: number;
+  season: number;
+  episode: number;
+  title: string | null;
+  air_date: string | null;
+  state: "next" | "upcoming";
+}
+
+export function continuationFromShow(show: {
+  next_episode?: {
+    id?: number;
+    season_number?: number;
+    episode_number?: number;
+    title?: string | null;
+    air_date?: string | null;
+    released?: boolean;
+  } | null;
+  upcoming_episodes?: {
+    id?: number;
+    season_number?: number;
+    episode_number?: number;
+    title?: string | null;
+    air_date?: string | null;
+    released?: boolean;
+  }[] | null;
+} | null | undefined): ShelfContinuation | null;
+
+export function showContinuation(card: {
+  continuation?: ShelfContinuation | null;
+} | null | undefined): ShelfContinuation | null;

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  collectionHref,
   collectionKey,
   collectionQuery,
   collectionSummary,
@@ -146,6 +147,15 @@ test("an impossible status is a visible normalization, not a silent empty read",
     }).group,
     null,
   );
+  assert.equal(collectionHref("movie"), "/media/library?kind=movie");
+  assert.equal(collectionHref("tv"), "/media/library?kind=tv");
+  assert.equal(collectionHref("book"), "/media/library?kind=book");
+  assert.equal(collectionHref("artist"), "/media/library?kind=artist");
+  assert.equal(collectionHref("album"), "/media/library?kind=album");
+  assert.equal(collectionHref("track"), "/media/library?kind=track");
+  assert.equal(collectionHref("game"), "/media/library?kind=game");
+  assert.equal(collectionHref("nope"), "/media/library");
+  assert.equal(collectionHref(""), "/media/library");
   assert.equal(collectionKey("album"), "music");
   assert.match(collectionSummary("artist"), /^Music\. Artists you have saved/);
   assert.equal(emptyLibraryCopy("artist", false).title, "No artists in your music yet");

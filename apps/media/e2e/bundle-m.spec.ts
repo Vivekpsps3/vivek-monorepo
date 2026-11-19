@@ -141,7 +141,10 @@ test('calendar uses browser timezone, keeps imprecise dates in bands and refresh
   expect(refreshes).toBe(0);
   await page.getByRole('button', { name: 'Refresh release metadata' }).click();
   await expect(page.locator('main [role=alert]')).toContainText('Release source unavailable');
-  await expect(page.getByText('Month-only release · 2026-10', { exact: true })).toBeVisible();
+  await expect(page.getByText('Month-only release · October 2026', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Month-only release · .*, 1/)).toHaveCount(0);
+  await expect(page.getByText('Year-only release · 2026', { exact: true })).toBeVisible();
+  await expect(page.getByText('Unknown release · Date unknown', { exact: true })).toBeVisible();
   expect(refreshes).toBe(1);
 });
 

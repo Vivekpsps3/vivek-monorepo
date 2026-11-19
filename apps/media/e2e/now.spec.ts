@@ -45,9 +45,11 @@ test('Now distinguishes an empty library from one with nothing in progress', asy
   await expect(page.getByText(/Nothing in progress/)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'In progress' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Favorites' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Coming out' })).toHaveCount(0);
   await addItem(request, { kind: 'book', title: 'Someday book', status: 'want' });
   await page.reload();
   await expect(page.getByText('Nothing in progress.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Nothing coming out this month.', { exact: true })).toBeVisible();
   const link = page.getByRole('link', { name: 'Pick something from your library.' });
   await expect(link).toBeVisible();
   await link.click();

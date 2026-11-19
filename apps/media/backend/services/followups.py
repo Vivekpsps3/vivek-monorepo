@@ -22,11 +22,15 @@ WIKIDATA_URL = "https://query.wikidata.org/sparql"
 
 
 class Budget:
-    def __init__(self, limit: int = FETCH_LIMIT):
+    def __init__(self, limit: int = FETCH_LIMIT, *, offline: bool = False):
         self.left = limit
         self.partial = False
+        self.offline = offline
 
     def allow(self) -> bool:
+        # A saved read refuses the network without looking like an outage.
+        if self.offline:
+            return False
         if self.left <= 0:
             self.partial = True
             return False

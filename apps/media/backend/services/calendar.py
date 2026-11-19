@@ -1,8 +1,10 @@
 """A month of episodes, anticipated movies, and follow-ups of movies you watched.
 
 A month or a year is never placed on the 1st. Follow-ups are not saved into the library.
+An ordinary read uses the database and cache only. Refresh is the provider request.
 """
 
+import os
 from datetime import date
 
 import httpx
@@ -30,8 +32,9 @@ def build_calendar(
     current = today(tz)
     month = parse_month(month_text, current)
     # An ordinary view uses saved episodes and cached follow-ups only. Discovery
-    # and metadata writes belong to the explicit refresh action.
-    budget = Budget() if refresh else Budget(limit=0)
+    # and metadata writes belong to the explicit refresh action. Offline refuses
+    # the network without marking the saved month partial.
+    budget = Budget() if refresh else Budget(limit=0, offline=True)
     entries = db.query(UserEntry).filter(UserEntry.user_id == user_id).all()
     entries.sort(key=lambda entry: entry.id)
     experience_kinds = experience_kinds_for(db, user_id, entries)
@@ -53,7 +56,7 @@ def build_calendar(
             event = related_event(item, entry, find_library_movie(entries, item), experience_kinds)
             if event is not None:
                 events.append(event)
-    return pack(events, month, current, budget.partial)
+    return pack(events, month, current, budget.partial, unconfigured_sources(entries))
 
 
 def parse_month(value: str | None, current: date) -> date:
@@ -327,7 +330,24 @@ def publish(event: dict) -> dict:
     }
 
 
-def pack(events: list[dict], month: date, current: date, partial: bool) -> dict:
+def unconfigured_sources(entries: list[UserEntry]) -> list[str]:
+    """Name a provider the saved rows need when this server has no key. No network."""
+    if os.getenv("TMDB_API_KEY", "").strip():
+        return []
+    for entry in entries:
+        catalog = entry.catalog
+        if catalog.source == "tmdb" and catalog.source_id and catalog.kind in {"movie", "tv"}:
+            return ["tmdb"]
+    return []
+
+
+def pack(
+    events: list[dict],
+    month: date,
+    current: date,
+    partial: bool,
+    unconfigured: list[str] | None = None,
+) -> dict:
     grouped: dict[tuple, dict] = {}
     buckets = {}
     for event in events:
@@ -362,7 +382,7 @@ def pack(events: list[dict], month: date, current: date, partial: bool) -> dict:
     month_band.sort(key=sort_key)
     year_band.sort(key=sort_key)
     unknown.sort(key=sort_key)
-    return {
+    payload = {
         "month": f"{month.year:04d}-{month.month:02d}",
         "today": current.isoformat(),
         "partial": partial,
@@ -371,6 +391,9 @@ def pack(events: list[dict], month: date, current: date, partial: bool) -> dict:
         "year_band": year_band,
         "unknown": unknown,
     }
+    if unconfigured:
+        payload["unconfigured"] = unconfigured
+    return payload
 
 
 def sort_key(event: dict):
