@@ -127,12 +127,12 @@
     grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
   }
 
-  :host ::ng-deep .ui-data-table__table tbody th.balance-identity:first-child {
-    grid-column: 1;
+  :host ::ng-deep .ui-data-table__table tbody th.balance-identity[scope="row"]:first-child {
+    grid-column: 1 / 2;
     grid-row: 1;
   }
 
-  :host ::ng-deep .ui-data-table__table tbody td.balance-value {
+  :host ::ng-deep .ui-data-table__table tbody td.num.balance-value {
     grid-column: 2;
     grid-row: 1;
     align-items: end;

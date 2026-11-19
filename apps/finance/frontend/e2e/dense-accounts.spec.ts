@@ -60,6 +60,16 @@ for (const [width, theme] of [[390, 'light'], [390, 'dark'], [1280, 'light'], [1
     await expect(checkingRow).toContainText('As of Oct 1');
     await expect(zeroRow).toContainText('No source date');
     await expect(zeroRow.locator('.balance-value .money')).toHaveText(moneyText('$0.00'));
+    if (width === 390) {
+      expect(await zeroRow.evaluate(row => {
+        const name = row.querySelector('.balance-identity > span:first-child')!;
+        const value = row.querySelector('.balance-value')!;
+        const text = document.createRange();
+        text.selectNodeContents(name);
+        const valueEdge = value.getBoundingClientRect().left;
+        return [...text.getClientRects()].every(line => line.right <= valueEdge + 1);
+      })).toBe(true);
+    }
     await expect(debtRow).toContainText('Credit Card');
     await expect(debtRow).toContainText('As of Oct 11');
     await expect(debtRow.locator('.balance-value .money')).toHaveText(moneyText('−$250.00'));
