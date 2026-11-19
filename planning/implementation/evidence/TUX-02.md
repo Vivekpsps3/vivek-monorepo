@@ -58,8 +58,8 @@ Finance Playwright, Media Playwright, Finance Karma, and site Karma were not run
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending. The pull request will use `Closes #407` only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/535 (`Closes #407` only).
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed. No production AeroAPI call was made. A missing account or key stays external configuration.
 - Remaining external prerequisites or approved scope decisions: an AeroAPI account, key, and any paid historical tier stay outside the repo. #304, #134, and #277 stay open.
-- Next actor: open the pull request, wait for green required checks, then merge with a merge commit.
+- Next actor: wait for green required checks, then merge with a merge commit.
