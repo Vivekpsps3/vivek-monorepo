@@ -5,12 +5,30 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.server.database import open_database
 from apps.server.town.engine import evaluate_streak, habit_xp
 from apps.server.town.models import Habit, HabitCheckin, TownBase
 from apps.server.town.service import _run_streak, _runs, read_checkins, read_habits, read_town
+
+
+def _stored_cross_owner_checkin_is_rejected(
+    db: Session, habit_id: int, day: date, now: datetime
+) -> None:
+    """A child row must carry the habit owner's user_id."""
+    nested = db.begin_nested()
+    try:
+        db.execute(
+            insert(HabitCheckin),
+            [dict(habit_id=habit_id, user_id=2, day=day, created_at=now)],
+        )
+    except IntegrityError:
+        nested.rollback()
+        return
+    nested.rollback()
+    raise AssertionError("cross-owner checkin was stored")
 
 
 def test_runs_equal_day_lists_and_owner_scoping(tmp_path):
@@ -58,14 +76,13 @@ def test_runs_equal_day_lists_and_owner_scoping(tmp_path):
                 )
             expected[hid] = evaluate_streak(created, today, days, target, archived_on=end)
             points += 10 * (len(days) + expected[hid].streak7_count)
-        # Wrong-owner and out-of-lifetime rows must not enter any aggregate or day fetch.
+        # A future same-owner day stays out of every aggregate. A cross-owner
+        # day on this habit is rejected by the composite foreign key.
         db.execute(
             insert(HabitCheckin),
-            [
-                dict(habit_id=1, user_id=uid, day=day, created_at=now)
-                for uid, day in [(2, date(1900, 1, 1)), (1, today + timedelta(days=1))]
-            ],
+            [dict(habit_id=1, user_id=1, day=today + timedelta(days=1), created_at=now)],
         )
+        _stored_cross_owner_checkin_is_rejected(db, 1, date(1900, 1, 1), now)
         for target in range(1, 8):
             ids = [hid for hid in expected if (hid % 7) + 1 == target]
             grouped: dict[int, list[tuple[int, int]]] = {hid: [] for hid in ids}
@@ -186,7 +203,7 @@ def _oracle_histories(today: date) -> list[_Hist]:
     return rows
 
 
-def test_wrong_owner_checkin_inside_the_range_is_ignored(tmp_path):
+def test_cross_owner_checkin_inside_the_range_is_rejected(tmp_path):
     database = open_database(f"sqlite:///{tmp_path / 'owner.db'}")
     TownBase.metadata.create_all(database.engine)
     today = date(2026, 10, 29)
@@ -214,12 +231,12 @@ def test_wrong_owner_checkin_inside_the_range_is_ignored(tmp_path):
         )
         db.execute(
             insert(HabitCheckin),
-            [
-                dict(habit_id=1, user_id=user_id, day=day, created_at=now)
-                for user_id, days in ((1, owner_days), (2, foreign_days))
-                for day in days
-            ],
+            [dict(habit_id=1, user_id=1, day=day, created_at=now) for day in owner_days],
         )
+        # Those foreign days sit inside the counted range. The database
+        # refuses them, so the owner's history stays the owner days.
+        for day in foreign_days:
+            _stored_cross_owner_checkin_is_rejected(db, 1, day, now)
         view = read_town(db, 1, today, "UTC")["archived"][0]
         streak = evaluate_streak(created, today, owner_days, 7, archived_on=end)
         assert (view["best_days"], view["best_weeks"], view["xp"]) == (
@@ -227,13 +244,11 @@ def test_wrong_owner_checkin_inside_the_range_is_ignored(tmp_path):
             streak.best_weeks,
             habit_xp(len(owner_days), streak.streak7_count),
         )
-        # GET checkins reads the same rows: the foreign days inside the
-        # range stay out of the owner's history.
         assert read_checkins(db, 1, 1, created, today)["days"] == list(owner_days)
     database.engine.dispose()
 
 
-def test_wrong_owner_checkin_is_ignored_for_archived_weekly_week_and_last7(tmp_path):
+def test_cross_owner_checkin_cannot_change_archived_week_or_last7(tmp_path):
     database = open_database(f"sqlite:///{tmp_path / 'owner-weekly.db'}")
     TownBase.metadata.create_all(database.engine)
     today = date(2026, 10, 29)
@@ -248,8 +263,8 @@ def test_wrong_owner_checkin_is_ignored_for_archived_weekly_week_and_last7(tmp_p
         date(2026, 10, 12),
         date(2026, 10, 14),
     )
-    # Inside the archive week and the last7 window: counted, week.done and
-    # last7 would both change.
+    # Inside the archive week and the last7 window. Stored, they would change
+    # both week.done and last7. The composite key rejects them.
     foreign_days = (date(2026, 10, 8), date(2026, 10, 10), date(2026, 10, 13))
     with Session(database.engine) as db:
         db.execute(
@@ -270,12 +285,10 @@ def test_wrong_owner_checkin_is_ignored_for_archived_weekly_week_and_last7(tmp_p
         )
         db.execute(
             insert(HabitCheckin),
-            [
-                dict(habit_id=1, user_id=user_id, day=day, created_at=now)
-                for user_id, days in ((1, owner_days), (2, foreign_days))
-                for day in days
-            ],
+            [dict(habit_id=1, user_id=1, day=day, created_at=now) for day in owner_days],
         )
+        for day in foreign_days:
+            _stored_cross_owner_checkin_is_rejected(db, 1, day, now)
         view = next(
             item
             for item in read_habits(db, 1, today, "UTC", include_archived=True)["items"]

@@ -18,7 +18,7 @@ from apps.travel.backend.services.leave_math import Bucket, walk_bucket
 
 PARENT = "site_leave_carry_v1"
 REVISION = "site_leave_accrual_v1"
-HEAD = "site_calendar_feeds_v1"
+HEAD = "site_town_ownership_v1"
 COMPATIBLE = {
     "site_schema_v1",
     "site_auth_challenge_purpose_v2",
@@ -94,16 +94,31 @@ def test_upgrade_preserves_rows_and_keeps_one_daily_head(tmp_path):
     assert head_revision() == HEAD
     # This historical revision predates restore staging, credentials and calendar capabilities.
     drift = model_diff(database)
-    assert len(drift) == 5
-    assert {(item[0], item[1].name) for item in drift if item[0] != "add_column"} == {
-        ("add_table", "calendar_feeds"),
-        ("add_table", "vault_restore_stages"),
-        ("add_index", "ix_vault_restore_stages_user_id"),
-        ("add_table", "vault_restore_batches"),
+
+    def _label(item) -> str:
+        kind = item[0]
+        if kind == "add_column":
+            return f"add_column:{item[2]}.{item[3].name}"
+        subject = item[1]
+        table = getattr(subject, "table", None)
+        table_name = getattr(table, "name", None)
+        return f"{kind}:{table_name}:{getattr(subject, 'name', None)}"
+
+    # This revision predates calendar feeds, restore staging, credentials, and
+    # the Town ownership constraints. Alembic does not report CHECK constraints.
+    assert {_label(item) for item in drift} == {
+        "add_table:None:calendar_feeds",
+        "add_table:None:vault_restore_stages",
+        "add_index:vault_restore_stages:ix_vault_restore_stages_user_id",
+        "add_table:None:vault_restore_batches",
+        "add_column:users.credential_wrap_revision",
+        "add_index:habit_cadences:ix_habit_cadences_user_id",
+        "remove_fk:habit_cadences:None",
+        "add_fk:habit_cadences:fk_habit_cadences_owner",
+        "remove_fk:habit_checkins:None",
+        "add_fk:habit_checkins:fk_habit_checkins_owner",
+        "add_constraint:habits:uq_habits_id_user",
     }
-    assert [(item[2], item[3].name) for item in drift if item[0] == "add_column"] == [
-        ("users", "credential_wrap_revision")
-    ]
     with sqlite3.connect(database) as db:
         assert (
             _rows(db, f"SELECT {POLICIES} FROM leave_policies ORDER BY bucket") == before_policies

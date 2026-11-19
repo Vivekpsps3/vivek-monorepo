@@ -35,6 +35,12 @@ LATER_THAN_BIRTHDAY = {
     "add_index:ix_world_concepts_user_id",
     "add_index:ix_world_concepts_user_understood",
     "add_index:uq_world_concepts_active_name",
+    "add_index:ix_habit_cadences_user_id",
+    "remove_fk:habit_cadences:None:habit_id",
+    "add_fk:habit_cadences:fk_habit_cadences_owner:habit_id,user_id",
+    "remove_fk:habit_checkins:None:habit_id",
+    "add_fk:habit_checkins:fk_habit_checkins_owner:habit_id,user_id",
+    "add_constraint:habits:uq_habits_id_user:id,user_id",
 }
 
 
@@ -48,6 +54,13 @@ def _drift_names(diff) -> set[str]:
             names.add(f"add_index:{item[1].name}")
         elif kind == "add_column":
             names.add(f"add_column:{item[2]}.{item[3].name}")
+        elif kind in {"add_fk", "remove_fk", "add_constraint"}:
+            constraint = item[1]
+            if hasattr(constraint, "column_keys"):
+                columns = ",".join(constraint.column_keys)
+            else:
+                columns = ",".join(column.name for column in constraint.columns)
+            names.add(f"{kind}:{constraint.table.name}:{constraint.name}:{columns}")
         else:
             names.add(f"{kind}:{item!r}")
     return names
