@@ -29,9 +29,10 @@
 
 <div class="account-tools">
   @if (hasBalances() || query()) {
-    <ui-field label="Search accounts">
-      <input #accountSearch uiFieldControl type="search" [ngModel]="query()" (ngModelChange)="query.set($event)" />
-    </ui-field>
+    <div class="account-search">
+      <label for="account-search">Search accounts</label>
+      <input #accountSearch id="account-search" type="search" [ngModel]="query()" (ngModelChange)="query.set($event)" />
+    </div>
   }
   <ui-button variant="ghost" href="/finance/spending" label="View card activity" />
 </div>
@@ -54,7 +55,7 @@
             <tr>
               <th scope="col">Name</th>
               <th scope="col" class="num">{{ group.amountLabel }}</th>
-              <th scope="col">Actions</th>
+              <th scope="col" class="balance-actions-heading">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -93,7 +94,7 @@
         </ui-data-table>
       } @else if (!loading && !loadFailed) {
         @if (group.count) {
-          <p class="muted no-matches" role="status">No matching {{ group.title.toLowerCase() }}.</p>
+          <p class="muted" role="status">No matching {{ group.title.toLowerCase() }}.</p>
         } @else {
           <ui-empty-state [title]="group.emptyTitle" [message]="group.emptyMessage" />
         }
