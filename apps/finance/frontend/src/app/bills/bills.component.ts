@@ -202,9 +202,9 @@ export class BillsComponent implements OnInit, OnDestroy {
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
-        kind: this.typeFilter() === 'all' ? null : this.typeFilter(),
-        status: this.statusFilter() === 'all' ? null : this.statusFilter(),
-        order: this.dateOrder() === 'soonest' ? null : this.dateOrder(),
+        kind: this.typeFilter(),
+        status: this.statusFilter(),
+        order: this.dateOrder(),
       },
       queryParamsHandling: 'merge',
       replaceUrl: true,

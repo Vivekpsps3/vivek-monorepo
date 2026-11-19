@@ -244,10 +244,6 @@ test.describe('finance F1 screenshot matrix', () => {
         id: 10, symbol: 'VOO', shares: 2, purchase_price: 80, purchase_date: '2022-01-01',
         current_price: 100, price_source: 'manual', quote_date: '2026-10-08', position_as_of: '2026-10-10',
       }],
-      subscriptions: [{
-        id: 11, name: 'Cloud', category: 'software', amount: 15.99, frequency: 'monthly',
-        next_bill_date: '2026-10-15', is_active: true,
-      }],
     });
     const shot = async (name: string, width: number, theme: 'light' | 'dark') => {
       await assertTheme(page, theme);
@@ -265,12 +261,13 @@ test.describe('finance F1 screenshot matrix', () => {
         await page.getByRole('button', { name: 'Delete VOO' }).click();
         await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
         await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
-        await vault.open('/bills');
-        vault.failNextWrites(1);
-        await page.getByRole('button', { name: 'Delete' }).click();
-        await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
-        await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
         await vault.open('/have?t=assets');
+        vault.failNextWrites(1);
+        const checking = page.getByRole('row').filter({ has: page.getByRole('rowheader', { name: /^Checking(?: |$)/ }) });
+        await checking.getByRole('button', { name: 'Delete', exact: true }).click();
+        await page.getByRole('dialog', { name: 'Delete Checking?' }).getByRole('button', { name: 'Delete', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+        await expect(checking).toBeVisible();
         await page.getByRole('button', { name: 'Add asset' }).click();
         const added = page.getByRole('dialog', { name: 'Add asset' });
         await added.getByLabel('Name', { exact: true }).fill('Cash');
