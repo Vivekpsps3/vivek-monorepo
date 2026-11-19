@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { failureCopy } from '@vivek/ui';
 import { of,Subject,throwError } from 'rxjs';
+import { PlanningWorkflow } from './planning-workflow';
 import { DEFAULT_MC_ASSUMPTIONS,PlanningProfile } from '../models/planning.model';
 import { lastThreeCompletedMonths } from '../utils/planning-spending.util';
 import { PlanningComponent } from './planning.component';
@@ -123,4 +124,55 @@ describe('PlanningComponent spending acceptance', () => {
     expect(component.profiles).toEqual([]);
   });
 
+});
+
+describe('PlanningComponent late results', () => {
+  function fakeRun(horizon: number, seed: number) {
+    return {
+      tool_id: 'retirement',
+      status: 'completed',
+      disclaimer: '',
+      input_snapshot_hash: 'abc',
+      as_of: '2026-10-15',
+      seed,
+      n_paths: 500,
+      horizon_years: horizon,
+      result_summary: { terminal_p50: 10 },
+      result_artifacts: {},
+      started_at: '2026-10-15T00:00:00Z',
+    };
+  }
+
+  it('drops a comparison that arrives after the horizon changed', () => {
+    const pending = new Subject<{ baseline: ReturnType<typeof fakeRun>; scenario: ReturnType<typeof fakeRun> }>();
+    spyOn(PlanningWorkflow.prototype, 'runComparison').and.returnValue(pending);
+    const { component, toast } = createComponent();
+    component.horizonYears = 30;
+    component.seed = 4;
+    component.runSimulation();
+    component.horizonYears = 12;
+    pending.next({ baseline: fakeRun(30, 4), scenario: fakeRun(30, 4) });
+    pending.complete();
+
+    expect(component.lastRun).toBeNull();
+    expect(component.horizonYears).toBe(12);
+    expect(component.running).toBeFalse();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('keeps a comparison that still matches the inputs', () => {
+    const pending = new Subject<{ baseline: ReturnType<typeof fakeRun>; scenario: ReturnType<typeof fakeRun> }>();
+    spyOn(PlanningWorkflow.prototype, 'runComparison').and.returnValue(pending);
+    const { component, toast } = createComponent();
+    component.horizonYears = 30;
+    component.nPaths = 500;
+    component.seed = 4;
+    component.runSimulation();
+    pending.next({ baseline: fakeRun(30, 4), scenario: fakeRun(30, 4) });
+    pending.complete();
+
+    expect(component.lastRun?.result_summary.terminal_p50).toBe(10);
+    expect(component.horizonYears).toBe(30);
+    expect(toast.success).toHaveBeenCalled();
+  });
 });

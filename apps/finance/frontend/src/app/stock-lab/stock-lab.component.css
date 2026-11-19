@@ -4,6 +4,12 @@
   max-width: 100%;
 }
 
+.projection-note {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
 ui-card,
 ui-data-table {
   display: block;

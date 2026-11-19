@@ -308,7 +308,7 @@ test('saved planning defaults keep live facts live, while explicit starting-bala
       effective_date: '2020-01-01', is_active: true, pay_periods_per_year: 1, annual_base_pay: 96000,
     }],
   });
-  await vault.open('/planning?t=path&tool=simulation');
+  await vault.open('/planning/simulation');
   await expectQuoteRequests(vault, ['VOO']);
   await expect.poll(() => vault.data('holdings')[0]?.current_price).toBe(125);
   await expect(page.locator('.planning-facts-grid')).toContainText(moneyText('$1,025'));
@@ -332,7 +332,7 @@ test('saved planning defaults keep live facts live, while explicit starting-bala
   await assetEditor.getByRole('button', { name: 'Save asset', exact: true }).click();
   await expect(assetEditor).toBeHidden();
 
-  await vault.open('/planning?t=path&tool=simulation');
+  await vault.open('/planning/simulation');
   await expect(page.locator('.planning-facts-grid')).toContainText(moneyText('$1,125'));
   const loadProfile = page.locator('.mc-profiles-row select');
   await loadProfile.selectOption(String(profileId));
@@ -350,7 +350,7 @@ test('saved planning defaults keep live facts live, while explicit starting-bala
   await expect.poll(() => profilePayload(vault)?.start_net_worth).toBe(777);
 
   await vault.open('/have?t=assets');
-  await vault.open('/planning?t=path&tool=simulation');
+  await vault.open('/planning/simulation');
   await expect(page.locator('.planning-facts-grid')).toContainText(moneyText('$1,125'));
   await page.locator('.mc-profiles-row select').selectOption(String(profileId));
   await expect(page.getByLabel('Use ledger net worth at start', { exact: true })).not.toBeChecked();
@@ -653,7 +653,7 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
     await expect(plan).toBeFocused();
     await plan.press('Enter');
     await expect(page).toHaveURL(/\/planning(?:\?|$)/);
-    await expect(page.locator('app-planning-hub')).toBeVisible();
+    await expect(page.locator('app-planning-tool-index')).toBeVisible();
   }
 });
 

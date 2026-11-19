@@ -93,11 +93,12 @@ for (const viewport of VIEWPORTS) {
         await expect(page.locator('ui-page-header').getByRole('button', { name: 'Import', exact: true })).toBeVisible();
 
         await vault.open('/planning');
-        await page.getByRole('link', { name: 'Portfolio projection', exact: true }).click();
-        await expect(page).toHaveURL(/\/finance\/planning\?t=growth$/);
-        await page.getByRole('link', { name: 'Retirement and goals', exact: true }).click();
-        await expect(page).toHaveURL(/\/finance\/planning$/);
-        await expect(page.locator('.hub-tabs a[aria-current="page"]')).toHaveCount(1);
+        const tools = page.getByRole('navigation', { name: 'Planning tools' });
+        await tools.getByRole('link', { name: 'Projection' }).click();
+        await expect(page).toHaveURL(/\/finance\/planning\/projection$/);
+        await tools.getByRole('link', { name: 'Retirement' }).click();
+        await expect(page).toHaveURL(/\/finance\/planning\/retirement$/);
+        await expect(page.locator('app-planning-tool-index a[aria-current="page"]')).toHaveCount(1);
       });
 
       test('legacy params still resolve', async ({ page }) => {
@@ -124,7 +125,14 @@ for (const viewport of VIEWPORTS) {
         }
 
         await vault.open('/planning?t=path');
-        await expect(page.getByRole('link', { name: 'Retirement and goals', exact: true })).toHaveAttribute('aria-current', 'page');
+        await expect(page.getByRole('heading', { level: 1, name: 'Planning' })).toBeVisible();
+        await vault.open('/planning?t=growth', page, '/planning/projection');
+        await expect(page.getByRole('heading', { level: 1, name: 'Projection' })).toBeVisible();
+        await vault.open('/planning?tool=debt-payoff', page, '/planning/debt');
+        await expect(page.getByRole('heading', { level: 1, name: 'Debt' })).toBeVisible();
+        await vault.open('/investment-insights', page, '/planning/projection');
+        await vault.open('/stock-lab', page, '/planning/research');
+        await expect(page.getByRole('heading', { level: 1, name: 'Stock research' })).toBeVisible();
       });
 
       test('guide', async ({ page }) => {

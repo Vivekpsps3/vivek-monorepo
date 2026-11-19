@@ -73,7 +73,7 @@ for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
     const vault = await syntheticVault(page, { holdings: [{ id: 1, symbol: 'VOO', shares: 2, current_price: 100, purchase_price: 80, purchase_date: '2026-10-01', price_source: 'manual' }] });
-    await vault.open('/planning?t=growth');
+    await vault.open('/planning/projection');
     const preset = page.getByRole('button', { name: '5% annual growth preset', exact: true });
     await preset.focus();
     await page.keyboard.press('Enter');

@@ -41,4 +41,31 @@ describe('StockLabComponent', () => {
     expect(fact?.detail).not.toContain('cached');
     expect(fact?.detail).not.toContain('fetched');
   });
+
+  it('does not apply a scenario saved after the research view closed', async () => {
+    let resolveSave: (value: unknown) => void = () => undefined;
+    const market = jasmine.createSpyObj('MarketResearchService', ['getBatch']);
+    const scenarios = jasmine.createSpyObj('StockLabScenarioService', ['createDefaultScenario', 'save', 'list']);
+    const fresh = {
+      id: 0, name: 'VOO scenario', primary_symbol: 'VOO', comparison_symbols: [],
+      selected_owned_symbols: [], include_owned_symbols: false, budget: 1000, projection_years: 10,
+    };
+    scenarios.createDefaultScenario.and.returnValue({ ...fresh });
+    scenarios.save.and.returnValue(new Promise(resolve => { resolveSave = resolve; }));
+    scenarios.list.and.resolveTo([]);
+    const component = new StockLabComponent(
+      market as unknown as MarketResearchService,
+      scenarios as unknown as StockLabScenarioService,
+      { holdings$: new Subject<unknown>() } as unknown as FinanceService,
+      {} as unknown as ToastService,
+      jasmine.createSpyObj('ChangeDetectorRef', ['markForCheck']),
+    );
+    component.scenario = { ...fresh, primary_symbol: 'MSFT', name: 'MSFT scenario' } as unknown as typeof component.scenario;
+    const pending = component.saveScenario();
+    (component as unknown as { researchEpoch: number }).researchEpoch = 1;
+    component.scenario = { ...fresh } as unknown as typeof component.scenario;
+    resolveSave({ ...fresh, id: 9, primary_symbol: 'MSFT' });
+    await pending;
+    expect(component.scenario.primary_symbol).toBe('VOO');
+  });
 });

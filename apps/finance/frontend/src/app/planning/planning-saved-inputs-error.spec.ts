@@ -5,6 +5,7 @@ import { Subject,of,throwError } from 'rxjs';
 import { DEFAULT_MC_ASSUMPTIONS,PlanningProfile } from '../models/planning.model';
 import { FinanceService } from '../services/finance.service';
 import { PlanningService } from '../services/planning.service';
+import { clearPlanningDrafts } from './planning-session';
 import { PlanningComponent } from './planning.component';
 
 /**
@@ -46,6 +47,7 @@ describe('PlanningComponent Saved inputs card errors (F23)', () => {
   }
 
   beforeEach(async () => {
+    clearPlanningDrafts();
     planning = jasmine.createSpyObj('PlanningService', [
       'createProfile', 'updateProfile', 'deleteProfile', 'createRun', 'getInputs',
       'getSpendingSuggestionContext', 'listProfiles',

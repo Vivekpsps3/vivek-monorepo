@@ -4,6 +4,9 @@ import { formatStoredMoney } from '../shared/stored-money';
 
 export type PlanningInputs = PlanningInputsPreview;
 
+/** Shown beside a calculated result so it cannot be read as a current balance. */
+export const PROJECTED_RESULT_NOTE = 'Projected. This does not change your current balances.';
+
 /** Plain-language source lines; never the internal source keys. */
 export function planningSourceLabel(kind: 'net_worth' | 'income' | 'spending'): string {
   switch (kind) {

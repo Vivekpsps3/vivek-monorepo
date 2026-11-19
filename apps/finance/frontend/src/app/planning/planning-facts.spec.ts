@@ -6,6 +6,7 @@ import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { FinanceService } from '../services/finance.service';
 import { PlanningService } from '../services/planning.service';
 import { dateWarnings,planningFactsCopy } from './planning-copy';
+import { clearPlanningDrafts } from './planning-session';
 import { PlanningComponent } from './planning.component';
 
 /**
@@ -20,6 +21,7 @@ describe('Planning current facts (FIN-03)', () => {
   }
 
   beforeEach(async () => {
+    clearPlanningDrafts();
     encStore = jasmine.createSpyObj<EncryptedStoreService>('EncryptedStoreService', [
       'getNetWorth', 'getJobIncomes', 'getFixedExpenses', 'getSubscriptions',
       'getTransactions', 'getImportReceipts', 'getBankAccounts',

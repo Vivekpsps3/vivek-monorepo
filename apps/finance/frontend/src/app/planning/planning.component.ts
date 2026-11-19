@@ -1,19 +1,17 @@
 import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
-  EventEmitter,
   Component,
   Input,
   OnChanges,
   OnDestroy,
   OnInit,
-  Output,
   SimpleChanges,
   inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, auditTime, finalize, takeUntil } from 'rxjs';
 import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../shared/stored-money';
 import { FinanceDataChange, FinanceService } from '../services/finance.service';
@@ -58,6 +56,7 @@ import {
 } from '../utils/planning-spending.util';
 import { inferredPortfolioAllocation } from '../utils/planning-allocation.util';
 import { PlanningQuickToolsComponent } from './planning-quick-tools.component';
+import { PlanningToolIndexComponent } from './planning-tool-index.component';
 import { PlanningWorkflow } from './planning-workflow';
 import {
   cleanPlanningCheckpoints,
@@ -65,7 +64,14 @@ import {
   normalizePlanningAssumptions,
   restorePlanningProfilePayload,
 } from './planning-assumptions.util';
+import { bindLockSnapshots } from '../crypto/lock-finance';
 import { spendingModeInference } from './spending-mode';
+import {
+  clearPlanningDrafts,
+  readSimulationDraft,
+  retainPlanningDraftsUntilLock,
+  writeSimulationDraft,
+} from './planning-session';
 import {
   dateWarnings as dateWarningsFor,
   planningFactsCopy,
@@ -92,6 +98,7 @@ import { AppDatePipe } from '@vivek/ui';
     UiSkeletonComponent,
     PlanningQuickToolsComponent,
     PlanningResultsComponent,
+    PlanningToolIndexComponent,
   ],
   templateUrl: './planning.component.html',
   styleUrl: './planning.component.css',
@@ -100,7 +107,6 @@ import { AppDatePipe } from '@vivek/ui';
 export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   @Input() embedded = false;
   @Input() tool: PlanningToolId = 'overview';
-  @Output() toolChange = new EventEmitter<PlanningToolId>();
   readonly disclaimer = PLANNING_DISCLAIMER;
   readonly evidenceKindLabel = evidenceKindLabel;
   activeTool: PlanningToolId = 'overview';
@@ -189,9 +195,12 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   private destroy$ = new Subject<void>();
   private inputRefreshRequest = 0;
   private financeChangeVersion = 0;
+  private simulationClosed = false;
+  private releaseDraftLock: (() => void) | null = null;
   readonly workflow: PlanningWorkflow;
 
   private readonly router = inject(Router, { optional: true });
+  private readonly route = inject(ActivatedRoute, { optional: true });
 
   constructor(
     private planning: PlanningService,
@@ -207,9 +216,26 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     if (changes['tool']) this.activeTool = this.validTool(this.tool);
   }
 
+  get pageTitle(): string {
+    switch (this.activeTool) {
+      case 'retirement-target': return 'Retirement';
+      case 'simulation': return 'Simulation';
+      case 'savings-goal': return 'Savings';
+      case 'debt-payoff': return 'Debt';
+      default: return 'Planning';
+    }
+  }
+
   ngOnInit(): void {
-    this.activeTool = this.validTool(this.tool);
-    this.randomizeSeed();
+    const routed = this.route?.snapshot.data['planningTool'];
+    this.activeTool = this.validTool(routed ?? this.tool);
+    retainPlanningDraftsUntilLock();
+    this.releaseDraftLock = bindLockSnapshots(() => {
+      this.simulationClosed = true;
+      clearPlanningDrafts();
+    });
+    this.randomizeSeed(false);
+    this.restoreSimulationDraft();
     this.workflow.listProfiles().pipe(takeUntil(this.destroy$)).subscribe({
       next: list => {
         this.profiles = list;
@@ -241,6 +267,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
           this.assumptions.portfolio_allocation = this.inferredAllocation();
           this.assumptions.checkpoints = this.defaultCheckpoints(inp);
           this.startingNetWorth = inp.net_worth_total;
+          this.restoreSimulationDraft();
         },
         error: err => {
           this.error = err?.message ?? 'Could not load planning inputs.';
@@ -391,6 +418,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     if (mode === 'manual' && this.assumptions.annual_spending == null) {
       this.assumptions.annual_spending = previousAmount;
     }
+    this.rememberSimulationDraft();
     this.cdr.markForCheck();
   }
 
@@ -455,12 +483,6 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     return tool === 'simulation' || tool === 'retirement-target' || tool === 'savings-goal' || tool === 'debt-payoff'
       ? tool
       : 'overview';
-  }
-
-  setTool(tool: PlanningToolId): void {
-    this.activeTool = this.validTool(tool);
-    this.toolChange.emit(this.activeTool);
-    this.cdr.markForCheck();
   }
 
   showSpendingPlan(): boolean {
@@ -692,6 +714,9 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.simulationClosed = true;
+    this.releaseDraftLock?.();
+    this.releaseDraftLock = null;
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -710,6 +735,22 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
 
   onAnnualSpendingInput(value: number | null): void {
     this.assumptions.annual_spending = value;
+    this.rememberSimulationDraft();
+  }
+
+  setHorizonYears(value: number | null): void {
+    this.horizonYears = Number(value);
+    this.rememberSimulationDraft();
+  }
+
+  setPathCount(value: number | null): void {
+    this.nPaths = Number(value);
+    this.rememberSimulationDraft();
+  }
+
+  setSeed(value: number | null): void {
+    this.seed = Number(value);
+    this.rememberSimulationDraft();
   }
 
   setSpendingComponent(key: keyof SpendingComponents, value: number | null): void {
@@ -868,6 +909,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     const normalized = this.normalizedAssumptions();
     const comparisonSeed = Number.isFinite(Number(this.seed)) ? Number(this.seed) : 1;
     this.seed = comparisonSeed;
+    const fingerprint = this.simulationFingerprint();
     this.cdr.markForCheck();
 
     this.workflow.runComparison({
@@ -889,6 +931,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
       )
       .subscribe({
         next: runs => {
+          if (this.simulationClosed || this.simulationFingerprint() !== fingerprint) return;
           this.baselineRun = runs.baseline;
           this.scenarioRun = runs.scenario;
           this.applyRunResult(runs.scenario);
@@ -960,7 +1003,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     return index;
   }
 
-  randomizeSeed(): void {
+  randomizeSeed(remember = true): void {
     const max = 2_147_483_646;
     if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
       const buf = new Uint32Array(1);
@@ -969,7 +1012,44 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     } else {
       this.seed = Math.floor(Math.random() * max) + 1;
     }
+    if (remember) this.rememberSimulationDraft();
     this.cdr.markForCheck();
+  }
+
+  private simulationFingerprint(): string {
+    return JSON.stringify({
+      horizonYears: Number(this.horizonYears),
+      nPaths: Number(this.nPaths),
+      seed: Number(this.seed),
+      spendingMode: this.spendingMode,
+      assumptions: this.normalizedAssumptions(),
+      checkpoints: this.cleanedCheckpoints(),
+      events: this.cleanedEvents(),
+    });
+  }
+
+  private rememberSimulationDraft(): void {
+    if (this.activeTool !== 'simulation' || this.simulationClosed) return;
+    writeSimulationDraft({
+      horizonYears: this.horizonYears,
+      nPaths: this.nPaths,
+      seed: this.seed,
+      spendingMode: this.spendingMode,
+      annualSpending: this.assumptions.annual_spending ?? null,
+    });
+  }
+
+  private restoreSimulationDraft(): void {
+    if (this.activeTool !== 'simulation' || this.simulationClosed) return;
+    const draft = readSimulationDraft();
+    if (!draft) return;
+    this.horizonYears = draft.horizonYears;
+    this.nPaths = draft.nPaths;
+    this.seed = draft.seed;
+    this.spendingMode = draft.spendingMode;
+    this.assumptions.spending_mode = draft.spendingMode;
+    this.useTxSpending = draft.spendingMode === 'recurring';
+    this.assumptions.annual_spending = draft.annualSpending;
   }
 
   private defaultCheckpoints(inp: PlanningInputsPreview): PlanningCheckpoint[] {

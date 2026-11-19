@@ -2,6 +2,10 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="'Stock research'" />
+  @if (!embedded) {
+    <app-planning-tool-index [compact]="true" />
+  }
+  <p class="projection-note">{{ projectedNote }}</p>
   @if (error) { <p class="stock-error" role="alert">{{ error }}</p> }
 
   <ui-card [title]="'Facts and guesses'">
@@ -21,9 +25,9 @@
   <ui-card [title]="'Command center'">
     <div class="stock-controls-grid">
       <label class="stock-field"><span>Ticker</span><input name="primary_symbol" [ngModel]="scenario.primary_symbol" (ngModelChange)="setPrimarySymbol($event)" maxlength="10" /></label>
-      <label class="stock-field"><span>History period</span><select name="period" [(ngModel)]="period"><option value="1y">1y</option><option value="2y">2y</option><option value="5y">5y</option><option value="10y">10y</option><option value="max">Max</option></select></label>
+      <label class="stock-field"><span>History period</span><select name="period" [ngModel]="period" (ngModelChange)="setPeriod($event)"><option value="1y">1y</option><option value="2y">2y</option><option value="5y">5y</option><option value="10y">10y</option><option value="max">Max</option></select></label>
       <label class="stock-field"><span>Scenario</span><select name="id" [value]="scenario.id || ''" (change)="selectScenario($any($event.target).value)"><option value="">Current draft</option>@for (saved of scenarios; track saved.id) { <option [value]="saved.id">{{ saved.name }}</option> }</select></label>
-      <label class="stock-field"><span>Scenario name</span><input name="name" [(ngModel)]="scenario.name" maxlength="120" /></label>
+      <label class="stock-field"><span>Scenario name</span><input name="name" [ngModel]="scenario.name" (ngModelChange)="setScenarioName($event)" maxlength="120" /></label>
     </div>
     @if (savedQuoteLine) { <p class="stock-saved-quote">{{ savedQuoteLine }}</p> }
     <div class="stock-actions-row">
@@ -97,9 +101,9 @@
         <div class="stock-controls-grid compact">
           <label class="stock-field"><span>Purchase mode</span><select name="purchase_mode" [(ngModel)]="scenario.purchase_mode"><option value="budget">Budget</option><option value="shares">Shares</option><option value="target_price">Target price</option></select></label>
           <label class="stock-field"><span>Shares</span><input name="shares" type="number" [(ngModel)]="scenario.shares" /></label>
-          <label class="stock-field"><span>Budget</span><input name="budget" type="number" [(ngModel)]="scenario.budget" /></label>
+          <label class="stock-field"><span>Budget</span><input name="budget" type="number" [ngModel]="scenario.budget" (ngModelChange)="setBudget($event)" /></label>
           <label class="stock-field"><span>Target price</span><input name="target_price" type="number" [(ngModel)]="scenario.target_price" /></label>
-          <label class="stock-field"><span>Years</span><input name="projection_years" type="number" [(ngModel)]="scenario.projection_years" /></label>
+          <label class="stock-field"><span>Years</span><input name="projection_years" type="number" [ngModel]="scenario.projection_years" (ngModelChange)="setProjectionYears($event)" /></label>
           <label class="stock-field"><span>Base growth (%)</span><input name="base-growth-rate" type="number" step="0.5" [ngModel]="asPercent(scenario.base_growth_rate)" (ngModelChange)="setRatePercent('base_growth_rate', $event)" /></label>
           <label class="stock-field"><span>Dividend growth (%)</span><input name="dividend-growth-rate" type="number" step="0.5" [ngModel]="asPercent(scenario.dividend_growth_rate)" (ngModelChange)="setRatePercent('dividend_growth_rate', $event)" /></label>
           <label class="stock-field"><span>Inflation (%)</span><input name="inflation-rate" type="number" step="0.5" [ngModel]="asPercent(scenario.inflation_rate)" (ngModelChange)="setRatePercent('inflation_rate', $event)" /></label>

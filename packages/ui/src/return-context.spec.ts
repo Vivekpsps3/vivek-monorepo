@@ -12,6 +12,7 @@ describe('return context', () => {
       '/finance/spending?month=all',
       '/finance/pay?month=2026-10&history=1&year=custom&start=2024-02-29&end=2024-12-31',
       '/finance/bills?kind=subscription&status=active&order=latest',
+      '/finance/planning/retirement',
       '/finance/spending?date=2024-02-29&pixelsDay=2024-02-29',
     ]) {
       expect(returnPath(path)).withContext(path).toBe(path);

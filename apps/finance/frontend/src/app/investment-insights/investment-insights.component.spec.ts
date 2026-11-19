@@ -27,4 +27,18 @@ describe('InvestmentInsightsComponent', () => {
     component.toggleTable();
     expect(localStorage.getItem('finance.chartTable.projection')).toBe('0');
   });
+
+  it('does not paint a projection after the lock epoch changes', async () => {
+    const component = createComponent();
+    component.netWorth = { portfolio: 100 } as unknown as NetWorth;
+    (component as unknown as { viewReady: boolean }).viewReady = true;
+    (component as unknown as { projectionEpoch: number }).projectionEpoch = 1;
+    (component as unknown as { _projectionChartCanvas: unknown })._projectionChartCanvas = {
+      nativeElement: document.createElement('canvas'),
+    };
+    const pending = (component as unknown as { renderProjectionChart(): Promise<void> }).renderProjectionChart();
+    (component as unknown as { projectionEpoch: number }).projectionEpoch = 2;
+    await pending;
+    expect((component as unknown as { projectionChart?: unknown }).projectionChart).toBeUndefined();
+  });
 });

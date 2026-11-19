@@ -9,6 +9,16 @@ import { MarketResearchService } from '../services/market-research.service';
 import { StockLabScenarioService } from '../services/stock-lab-scenario.service';
 import { ToastService } from '@vivek/ui';
 import { UiButtonComponent, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, UiPageHeaderComponent, UiSkeletonComponent } from '@vivek/ui';
+import { bindLockSnapshots } from '../crypto/lock-finance';
+import { PlanningToolIndexComponent } from '../planning/planning-tool-index.component';
+import { PROJECTED_RESULT_NOTE } from '../planning/planning-copy';
+import {
+  clearPlanningDrafts,
+  readResearchDraft,
+  retainPlanningDraftsUntilLock,
+  writeResearchDraft,
+  type ResearchDraft,
+} from '../planning/planning-session';
 import { buildScorecard, calculatePurchasePlan, calculateReturnPeriods, detectDividendCadence, trailingTwelveMonthDividend } from '../utils/stock-lab.util';
 import { formatAsOf, quoteBook } from '../utils/quote-book';
 import {
@@ -24,13 +34,14 @@ import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../sha
   selector: 'app-stock-lab',
   standalone: true,
   imports: [
-    AppDatePipe, CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiDataTableComponent, UiEmptyStateComponent, UiSkeletonComponent],
+    AppDatePipe, CommonModule, FormsModule, UiPageHeaderComponent, PlanningToolIndexComponent, UiCardComponent, UiButtonComponent, UiDataTableComponent, UiEmptyStateComponent, UiSkeletonComponent],
   templateUrl: './stock-lab.component.html',
   styleUrl: './stock-lab.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class StockLabComponent implements OnInit, OnDestroy {
   @Input() embedded = false;
+  readonly projectedNote = PROJECTED_RESULT_NOTE;
   readonly disclosure = 'Price checks send ticker symbols only. Shares, balances and plans stay encrypted in this browser.';
   readonly calculateReturnPeriods = calculateReturnPeriods;
   readonly evidenceKindLabel = evidenceKindLabel;
@@ -45,6 +56,9 @@ export class StockLabComponent implements OnInit, OnDestroy {
   newComparisonSymbol = '';
   private destroy$ = new Subject<void>();
   private marketRequest = 0;
+  private researchEpoch = 0;
+  private researchClosed = false;
+  private releaseDraftLock: (() => void) | null = null;
 
   constructor(
     private market: MarketResearchService,
@@ -57,6 +71,9 @@ export class StockLabComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    retainPlanningDraftsUntilLock();
+    this.releaseDraftLock = bindLockSnapshots(() => this.onPlanningLock());
+    this.applyResearchDraft(readResearchDraft());
     void this.loadScenarios();
     this.finance.holdings$.pipe(takeUntil(this.destroy$)).subscribe(holdings => {
       this.holdings = holdings;
@@ -67,6 +84,10 @@ export class StockLabComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.researchClosed = true;
+    this.researchEpoch += 1;
+    this.releaseDraftLock?.();
+    this.releaseDraftLock = null;
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -150,6 +171,7 @@ export class StockLabComponent implements OnInit, OnDestroy {
 
   loadMarketData(refresh: boolean): void {
     const request = ++this.marketRequest;
+    const epoch = this.researchEpoch;
     const symbols = this.symbols();
     if (symbols.length === 0) {
       this.research = [];
@@ -163,19 +185,19 @@ export class StockLabComponent implements OnInit, OnDestroy {
     this.market.getBatch(symbols, { refresh, period: this.period }).pipe(
       takeUntil(this.destroy$),
       finalize(() => {
-        if (request === this.marketRequest) {
+        if (request === this.marketRequest && epoch === this.researchEpoch) {
           this.loading = false;
           this.cdr.markForCheck();
         }
       })
     ).subscribe({
       next: batch => {
-        if (request !== this.marketRequest) return;
+        if (request !== this.marketRequest || epoch !== this.researchEpoch) return;
         this.research = batch.results;
         if (batch.failed.length) this.error = "Market data couldn't be loaded. Check your connection and try again.";
       },
       error: () => {
-        if (request !== this.marketRequest) return;
+        if (request !== this.marketRequest || epoch !== this.researchEpoch) return;
         this.error = "Market data couldn't be loaded. Check your connection and try again.";
       },
     });
@@ -184,9 +206,9 @@ export class StockLabComponent implements OnInit, OnDestroy {
   async loadScenarios(): Promise<void> {
     try {
       this.scenarios = await this.scenariosSvc.list();
-      // Hydrate draft with first saved scenario. Market data is not fetched
-      // here either; the saved price (if any) stands in until Look up.
-      if (this.scenarios.length && this.scenario.id === 0) {
+      // A same-session draft wins over the first saved scenario. Market data
+      // still waits for Look up.
+      if (!readResearchDraft() && this.scenarios.length && this.scenario.id === 0 && !this.researchClosed) {
         this.scenario = { ...this.scenarios[0] };
       }
     } catch {
@@ -198,16 +220,22 @@ export class StockLabComponent implements OnInit, OnDestroy {
   async saveScenario(): Promise<void> {
     this.saving = true;
     this.cdr.markForCheck();
+    const epoch = this.researchEpoch;
     try {
       const saved = await this.scenariosSvc.save(this.scenario);
+      if (epoch !== this.researchEpoch) return;
       this.scenario = { ...saved };
       await this.loadScenarios();
+      if (epoch !== this.researchEpoch) return;
       this.toast.success('Scenario saved.');
     } catch {
+      if (epoch !== this.researchEpoch) return;
       this.error = "Couldn't save this scenario.";
     } finally {
-      this.saving = false;
-      this.cdr.markForCheck();
+      if (epoch === this.researchEpoch) {
+        this.saving = false;
+        this.cdr.markForCheck();
+      }
     }
   }
 
@@ -250,6 +278,30 @@ export class StockLabComponent implements OnInit, OnDestroy {
 
   setPrimarySymbol(symbol: string): void {
     this.scenario = { ...this.scenario, primary_symbol: symbol.trim().toUpperCase() };
+    this.rememberResearchDraft();
+  }
+
+  setPeriod(period: string): void {
+    if (period !== '1y' && period !== '2y' && period !== '5y' && period !== '10y' && period !== 'max') return;
+    this.period = period;
+    this.rememberResearchDraft();
+  }
+
+  setScenarioName(name: string): void {
+    this.scenario = { ...this.scenario, name };
+    this.rememberResearchDraft();
+  }
+
+  setBudget(value: number | string | null): void {
+    const parsed = Number(value);
+    this.scenario = { ...this.scenario, budget: Number.isFinite(parsed) ? parsed : 0 };
+    this.rememberResearchDraft();
+  }
+
+  setProjectionYears(value: number | string | null): void {
+    const parsed = Number(value);
+    this.scenario = { ...this.scenario, projection_years: Number.isFinite(parsed) ? parsed : this.scenario.projection_years };
+    this.rememberResearchDraft();
   }
 
   addComparisonSymbol(): void {
@@ -302,5 +354,41 @@ export class StockLabComponent implements OnInit, OnDestroy {
   formatPct(value: number | null | undefined): string {
     if (value == null || Number.isNaN(value)) return '—';
     return `${(value * 100).toFixed(Math.abs(value) >= 0.1 ? 1 : 2)}%`;
+  }
+
+  private onPlanningLock(): void {
+    this.researchClosed = true;
+    this.researchEpoch += 1;
+    clearPlanningDrafts();
+    this.scenario = this.scenariosSvc.createDefaultScenario('VOO');
+    this.research = [];
+    this.period = '10y';
+    this.error = null;
+    this.loading = false;
+    this.saving = false;
+    this.cdr.markForCheck();
+  }
+
+  private rememberResearchDraft(): void {
+    if (this.researchClosed) return;
+    writeResearchDraft({
+      primarySymbol: this.scenario.primary_symbol,
+      period: this.period,
+      name: this.scenario.name,
+      projectionYears: this.scenario.projection_years,
+      budget: this.scenario.budget ?? 0,
+    });
+  }
+
+  private applyResearchDraft(draft: ResearchDraft | null): void {
+    if (!draft || this.researchClosed) return;
+    this.period = draft.period;
+    this.scenario = {
+      ...this.scenario,
+      primary_symbol: draft.primarySymbol,
+      name: draft.name,
+      projection_years: draft.projectionYears,
+      budget: draft.budget,
+    };
   }
 }

@@ -38,12 +38,12 @@ const ROUTES: Array<{
     absent: ['Active monthly equivalent', 'Filter commitments'],
   },
   {
-    path: '/planning', slug: 'planning', hub: 'app-planning-hub',
+    path: '/planning', slug: 'planning', hub: 'app-planning',
     present: ['Planning uses your balances, pay and bills', 'Add a balance or your pay, and Planning fills in from there.'],
     absent: ['Your current facts'],
   },
   {
-    path: '/planning?t=growth', slug: 'growth', hub: 'app-planning-hub',
+    path: '/planning/projection', slug: 'growth', hub: 'app-investment-insights',
     present: ['No holdings to project', 'Add holdings or import from Fidelity to project growth.'],
   },
 ];

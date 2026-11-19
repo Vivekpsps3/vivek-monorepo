@@ -25,13 +25,13 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 | `/bills` | Bills and subscriptions (`?kind=all|bill|subscription`, `?status=all|active|inactive`, `?order=soonest|latest`) |
 | `/pay` | Monthly income sources, jobs and pay, and read-only compensation history. `?month=YYYY-MM` selects the income month and `?history=1` opens the report |
 | `/recurring` | Redirects to Pay. Older `?t=spend`, `?t=bills`, and `?t=subs` links open Bills |
-| `/planning` | Retirement & goals (`?t=path&tool=overview|simulation|retirement-target|savings-goal|debt-payoff`), portfolio projection (`?t=growth`), and stock research (`?t=stocks`) |
+| `/planning` | Planning index and current picture. Direct tools: `/planning/retirement`, `/planning/simulation`, `/planning/savings`, `/planning/debt`, `/planning/projection`, `/planning/research`. Older `?t=growth`, `?t=stocks`, and `?tool=` links open those tools. `?t=compensation` opens Pay |
 | `/hub/admin` | Suite admin: app health, people, and what needs attention. Not inside Finance. |
 | `/balance-sheet`, `/portfolio` | Redirect to `/have`, with `/portfolio` opening holdings |
 | `/transactions`, `/calendar` | Redirect to `/spending`, with `/calendar` opening Calendar |
 | `/income` | Redirect to `/pay` |
 | `/fixed-expenses`, `/subscriptions` | Redirect to `/bills` |
-| `/investment-insights`, `/stock-lab` | Redirect to `/planning`, opening Growth or Stocks respectively |
+| `/investment-insights`, `/stock-lab` | Redirect to `/planning/projection` and `/planning/research` |
 | `/charts` | Redirects to `/` |
 
 Finance paths above are relative to `/finance`; `/auth/*` and `/hub/admin` are root routes. Public `/` is the portfolio. The root `<base href="/">` and Angular router own all navigation. `PrivateLayoutComponent` owns one app switcher with direct Hub and app links at wide widths and a named disclosure at narrow widths. The disclosure links to individual destinations. Finance, Media and Travel own the lists used by both their local navigation and this disclosure. The account button stays visible. Its dropdown opens the grouped Settings index, shows admin stats when authorized, and offers sign-out. Settings links to account and security, appearance, game and connector sections. Finance contributes its guide, vault lock and confirmed clear-data actions while its unlocked layout is active; those actions are removed when that layout is destroyed. The Finance bar links directly to Accounts, Holdings, Activity, Calendar, Bills, Pay, Planning and Imports. Media exposes Movies, Series, Books, Music and Games alongside Now, Calendar, Search, Add and All items. Existing legacy URLs still use the app's route behavior. The root dev proxy is `apps/web/proxy.conf.cjs`; all APIs use the same FastAPI process. Hash bookmarks translate once at startup into known canonical routes. Unknown assets and unknown page paths return 404 rather than an arbitrary shell.

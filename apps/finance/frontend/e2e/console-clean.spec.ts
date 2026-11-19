@@ -10,8 +10,8 @@ const ROUTES = [
   '/pay',
   '/bills',
   '/planning',
-  '/planning?t=growth',
-  '/planning?t=stocks',
+  '/planning/projection',
+  '/planning/research',
 ] as const;
 
 const COMBOS = [
