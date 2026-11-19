@@ -2,7 +2,7 @@
 
 - Leaf [#393](https://github.com/Vivekpsps3/vivek-monorepo/issues/393) and parent [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304).
 - Bills implementation agent, branch `agent/fux-04`, worktree `/tmp/vivek-fux-04`.
-- Base `b7bb3cc4bb00d4ee77f6a2ad5432ab1241e962bc`. Tested product `7be18320dae3f647875b8101e12682cd8d758c72`. Docs `7fd6479f7bf39179c7196d45d7b47b5ba57a0e89` are included.
+- Base `b7bb3cc4bb00d4ee77f6a2ad5432ab1241e962bc`. Tested production source `99f93a5ca3d784c3f89fe1c855f4f64d6a995e20`. The reviewed test follow-up is `7be18320dae3f647875b8101e12682cd8d758c72`.
 - [NAV-01](NAV-01.md) and [STYLE-03](STYLE-03.md) merges are ancestors of fresh main. NAV-01 supplies the Finance section destinations. STYLE-03 supplies the compact responsive table. The issue was open without a competing PR or claim before [the scoped claim](https://github.com/Vivekpsps3/vivek-monorepo/issues/393#issuecomment-7014474566).
 
 ## Acceptance
@@ -36,28 +36,49 @@ resolves through the Finance route.
 
 ## Verification
 
-Commands ran from `/tmp/vivek-fux-04` with Node v20.20.2. Karma used
-`CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`
-(Chrome Headless 156). `make test-fast` used `PATH="$PWD/.venv/bin:$PATH"`
-because the worktree virtualenv provides Alembic. A system-Python `make test-fast`
-stopped in `scripts/test_restore_drill.py` with `ModuleNotFoundError: alembic`
-and is not a pass.
+Local verification used Node 24, the existing Python environment and Chromium 157.
 
 | Exact command | Final result |
 | --- | --- |
-| `PATH="$PWD/.venv/bin:$PATH" make test-fast` | PASS. Doc paths, planning, boundaries, 135 Python tests and 21 Node tests. Repeated after the route docs and again on the evidence commit |
-| `make lint-web` | PASS. Four lint ratchets match their baselines. The Finance baseline shrank with the removed editor findings. Engine purity passed |
-| `make typecheck-web` | PASS. Seven TypeScript projects |
-| `CHROME_BIN=... npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` | PASS, 499 tests on `7be18320`. Statements 63.27% (7458/11786), branches 49.26%, functions 59.06%, lines 66.73% |
-| `CHROME_BIN=... npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS, 417 tests, repeated after the Bills route example. Statements 72.6% (5824/8022) |
-| `make e2e` | PASS. Production bundle, release manifest, 264 Finance browser tests and five existing viewport skips. Initial bundle 673.11 kB warns above 650 kB and stays under the error limit |
-| `npx playwright test --config apps/finance/frontend/playwright.config.ts apps/finance/frontend/e2e/bills.spec.ts apps/finance/frontend/e2e/screenshots.spec.ts` | PASS, 10 tests, after the Accounts row selector tweak |
+| `make test-fast` | PASS, doc paths, planning, boundaries, 135 Python and 21 Node tests |
+| `make lint-web` and `make typecheck-web` | PASS, four lint ratchets, engine purity and seven TypeScript targets |
+| `python3 scripts/quality_ratchet.py check-base eslint-finance origin/main` | PASS, allowance shrank by seven findings |
+| `python3 -m pytest apps/server/tests/test_route_parity.py -q` | PASS, 32 cases including the direct private Bills example |
+| `./scripts/coverage-gate.sh server` | PASS, 398 tests, 79.38% coverage and a 150.27 ms Town p50 under the existing 600 ms gate |
+| `npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` | PASS, 499 tests and coverage |
+| `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS, 417 tests and coverage |
+| `npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI` | PASS, 9 tests and coverage |
+| `node --test packages/browser/runtime/*.test.mjs packages/ui/*.test.mjs` | PASS, 16 tests |
+| `make e2e` | PASS, production build, release manifest, 264 Finance browser tests and five existing viewport skips |
 | `npx playwright test --config apps/web/e2e/playwright.config.ts` | PASS, 121 Web browser tests |
-| `PATH="$PWD/.venv/bin:$PATH" python3 -m pytest apps/server/tests/test_route_parity.py -q` | PASS, 32 tests, including the mounted `finance/bills` example |
+| `npx playwright test --config apps/media/e2e/playwright.config.ts` | PASS, 171 Media browser tests |
+| `npx playwright test` in `apps/travel/e2e` | PASS, 150 Travel browser tests |
+| `npx playwright test --project=suite` | PASS, 61 shared browser tests |
 
-Not run locally: `./scripts/coverage-gate.sh server`, site Karma, Media Playwright, Travel Playwright, and `npx playwright test --project=suite`. Python product files did not change. The route-parity test above covers the Bills example that `apps/server/frontend.py` classifies from `routes.json` and `route-examples.json`. CI still runs the full server gate.
+The first integrated Finance run caught the missing legacy URL defaults after
+Show all and the toast-stack fixture's dependency on the old cross-route retry.
+The final run retains the URL coordinates and keeps the full toast fixture on
+the real Accounts retry boundary. Focused test iteration corrected exact field
+and row selectors. Visual review shortened the phone Status label and checked
+the compact editor again. The existing bundle warning is 673.11 kB against its
+650 kB warning threshold and below the unchanged error limit. Backend code is
+untouched. Server coverage applies because the document classifier reads the
+route manifest. Other Python gates are deferred to normal PR CI.
 
-Show all keeps `kind=all` and `status=all`. The toast-stack capture stays on the Accounts delete retry. The inactive undated row, its exclusion from the monthly total, and latest-due ordering are in the Finance Karma rerun.
+The published review restored explicit coverage for inactive undated rows,
+monthly totals excluding those rows, and sorting through status changes. The
+Finance Karma and repository gates reran for that test-only follow-up.
+
+The docs-only follow-up preserves two existing worktree edits that align the
+route inventory with Bills and Pay. Their author could not be established.
+The route wording was reviewed in scope and the documentation gate rerun.
+
+A second work session recorded supplemental verification using Node v20.20.2
+and Chrome Headless 156. That session reported 499 Finance Karma tests, 417
+Web Karma tests, 264 Finance and 121 Web browser tests, 10 focused Bills and
+capture cases, and the route parity tests. Its system-Python fast run lacked
+Alembic. The gated run above used the repository virtual environment. The
+reported extra runs are recorded in [the supplemental evidence commit](https://github.com/Vivekpsps3/vivek-monorepo/commit/bd9947d705589c453a7c91536acd7bed2ebae178).
 
 ## Handoff
 
