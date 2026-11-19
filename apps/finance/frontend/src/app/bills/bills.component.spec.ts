@@ -6,6 +6,7 @@ import { BehaviorSubject, EMPTY, of, Subject, throwError } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { FixedExpense,Subscription } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
+import { isoAddDays } from '../utils/home-summary';
 import { BillsComponent } from './bills.component';
 
 describe('BillsComponent editor handoff and source states', () => {
@@ -102,6 +103,43 @@ describe('BillsComponent editor handoff and source states', () => {
     expect(finance.getFixedExpenses).toHaveBeenCalled();
   });
 
+  it('keeps an undated inactive commitment visible and preserves sort when filtering', async () => {
+    const workspace = harness.routeDebugElement!.componentInstance as BillsComponent;
+    const soon = isoAddDays(workspace.today, 2);
+    const later = isoAddDays(workspace.today, 4);
+    bills.next([
+      { ...bill, start_date: soon, next_due_date: soon },
+      {
+        ...bill, id: 44, name: 'Retired boiler service', is_active: false, next_due_date: null,
+        amount: 45, monthly_amount: 45, annual_amount: 540,
+      },
+    ]);
+    subscriptions.next([{ ...subscription, next_bill_date: later, next_due_date: later }]);
+    harness.detectChanges();
+    const screen = harness.routeNativeElement!;
+    const names = () => Array.from(screen.querySelectorAll('tbody th'), row => row.textContent?.replace(/\s+/g, ' ').trim());
+    const select = async (name: string, value: string) => {
+      const input = screen.querySelector<HTMLSelectElement>(`select[name="${name}"]`)!;
+      input.value = value;
+      input.dispatchEvent(new Event('change'));
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+    };
+
+    expect(names()).toEqual(['Rent Bill · Rent', 'Internet Subscription · Utilities', 'Retired boiler service Bill · Rent']);
+    expect(screen.querySelector('tbody tr:last-child')?.textContent).toContain('Inactive');
+    expect(screen.querySelector('.commitment-totals')?.textContent).toContain('1,260.00');
+
+    await select('commitment_order', 'latest');
+    await select('commitment_status', 'inactive');
+    expect(names()).toEqual(['Retired boiler service Bill · Rent']);
+
+    await select('commitment_type', 'subscription');
+    expect(screen.textContent).toContain('Nothing matches these filters');
+    await click('Show all');
+    expect(names()).toEqual(['Internet Subscription · Utilities', 'Rent Bill · Rent', 'Retired boiler service Bill · Rent']);
+    expect(screen.querySelector<HTMLSelectElement>('[name="commitment_order"]')?.value).toBe('latest');
+  });
 
   it('keeps the existing list usable when the ledger fails and ignores the losing read after retry', async () => {
     const losingRead = new Subject<never[]>();

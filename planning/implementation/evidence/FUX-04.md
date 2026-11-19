@@ -30,7 +30,7 @@ resolves through the Finance route.
 | Two per-editor delete confirmations and toast retry closures | Removed both dispatch copies. A single route-owned confirmation uses the selected record's type and ID. Failure keeps the row and retry action in the workspace. A leaving or invalidated view discards the pending action. | Browser cases assert no request on Back, retry only the selected collection, preserve other records, and return focus after removal. The original shared toast-stack capture still checks three real toasts, keyboard focus, and Undo, using an Accounts delete failure for its retry toast. |
 | Per-type copies of occurrence assembly in cashflow | Factored existing amount admission, schedule expansion and occurrence shape into one domain function, with each kind supplying its original date anchor. Bills consumes that function and the existing posted matcher. | Home, Calendar and charts retain their ranges, ordering and counted amounts. New overlapping synthetic fixtures verify one payment only covers one projection. |
 
-- Feature replacement. Relative to the base, production adds 629 and removes 836 physical lines. The comparison includes routes, shipped stylesheet and template changes, editors, shared allowlist and shell links. Tests and route fixtures add 322 and remove 276, with one editor handoff spec renamed and meaningful tab/filter/type/total assertions replaced by routed browser proof. This record is outside those figures.
+- Feature replacement. Relative to the base, production adds 629 and removes 836 physical lines. The comparison includes routes, shipped stylesheet and template changes, editors, shared allowlist and shell links. Tests and route fixtures add 360 and remove 276, with one editor handoff spec renamed and meaningful tab/filter/type/total assertions replaced by routed browser proof. This record is outside those figures.
 - The encrypted store, revision checks and cashflow engine retain their owners. Bills subscribes to the existing record views and refreshes the checked ledger without adding persistence or an API endpoint.
 - No runtime consumer remains for the old spend renderer, separate commitment cards, or editor-only switches in the two editors. The old URLs remain compatibility entry points. A follow-up Bills filter changes the Bills route projection and supported return coordinates.
 
@@ -44,7 +44,7 @@ Local verification used Node 24, the existing Python environment and Chromium 15
 | `make lint-web` and `make typecheck-web` | PASS, four lint ratchets, engine purity and seven TypeScript targets |
 | `python3 scripts/quality_ratchet.py check-base eslint-finance origin/main` | PASS, allowance shrank by seven findings |
 | `./scripts/coverage-gate.sh server` | PASS, 398 tests, 79.38% coverage and a 150.27 ms Town p50 under the existing 600 ms gate |
-| `npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` | PASS, 498 tests and coverage |
+| `npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` | PASS, 499 tests and coverage |
 | `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS, 417 tests and coverage |
 | `npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI` | PASS, 9 tests and coverage |
 | `node --test packages/browser/runtime/*.test.mjs packages/ui/*.test.mjs` | PASS, 16 tests |
@@ -63,6 +63,10 @@ the compact editor again. The existing bundle warning is 673.11 kB against its
 650 kB warning threshold and below the unchanged error limit. Backend code is
 untouched. Server coverage applies because the document classifier reads the
 route manifest. Other Python gates are deferred to normal PR CI.
+
+The published review restored explicit coverage for inactive undated rows,
+monthly totals excluding those rows, and sorting through status changes. The
+Finance Karma and repository gates reran for that test-only follow-up.
 
 The docs-only follow-up preserves two existing worktree edits that align the
 route inventory with Bills and Pay. Their author could not be established.
