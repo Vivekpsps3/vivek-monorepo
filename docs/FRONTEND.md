@@ -22,12 +22,14 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 | `/` | Finance Home: net worth and current-month cashflow, with source/holdings detail |
 | `/have` | Assets, debts, and holdings (`?t=holdings`) |
 | `/spending` | Activity (default; `?t=activity&v=all|spending|income`), Calendar (`?t=calendar`), and Imports (`?receipts=1`); old Review links and legacy `?t=pay` / `?t=spend` links open Activity |
-| `/recurring` | Jobs & pay or bills & subscriptions (`?t=pay`, `?t=spend`) |
+| `/bills` | Bills and subscriptions (`?kind=all|bill|subscription`, `?status=all|active|inactive`, `?order=soonest|latest`) |
+| `/recurring` | Jobs and pay (`?t=pay`; `?history=1` opens compensation history). Older `?t=spend`, `?t=bills`, and `?t=subs` links open Bills |
 | `/planning` | Retirement & goals (`?t=path&tool=overview|simulation|retirement-target|savings-goal|debt-payoff`), portfolio projection (`?t=growth`), and stock research (`?t=stocks`) |
 | `/hub/admin` | Suite admin: app health, people, and what needs attention. Not inside Finance. |
 | `/balance-sheet`, `/portfolio` | Redirect to `/have`, with `/portfolio` opening holdings |
 | `/transactions`, `/calendar` | Redirect to `/spending`, with `/calendar` opening Calendar |
-| `/income`, `/fixed-expenses`, `/subscriptions` | Redirect to `/recurring` |
+| `/income` | Redirect to `/recurring` |
+| `/fixed-expenses`, `/subscriptions` | Redirect to `/bills` |
 | `/investment-insights`, `/stock-lab` | Redirect to `/planning`, opening Growth or Stocks respectively |
 | `/charts` | Redirects to `/` |
 
