@@ -25,7 +25,7 @@ test('a failed asset save stays in the dialog with the draft', async ({ page }) 
 
 test('an empty job form focuses the summary once', async ({ page }) => {
   const vault = await syntheticVault(page);
-  await vault.open('/recurring');
+  await vault.open('/pay');
   await page.getByRole('button', { name: 'Add job', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add job' });
   await dialog.getByRole('button', { name: 'Save' }).click();

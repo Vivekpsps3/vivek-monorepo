@@ -1,5 +1,6 @@
 import { inject } from '@angular/core';
 import type { Routes } from '@angular/router';
+import { legacyPayDestination } from './core/layout/finance-navigation';
 import { MainLayoutComponent } from './core/layout/main-layout.component';
 import { authGuard } from '@vivek/ui';
 import { vaultGuard } from './crypto/vault.guard';
@@ -42,9 +43,9 @@ export const routes: Routes = [
         loadComponent: () => import('./bills/bills.component').then(m => m.BillsComponent),
       },
       {
-        path: 'recurring',
-        title: 'Recurring · Finance',
-        loadComponent: () => import('./hubs/recurring-hub.component').then(m => m.RecurringHubComponent),
+        path: 'pay',
+        title: 'Pay · Finance',
+        loadComponent: () => import('./income/pay.component').then(m => m.PayComponent),
       },
       {
         path: 'planning',
@@ -55,7 +56,8 @@ export const routes: Routes = [
       { path: 'portfolio', pathMatch: 'full', redirectTo: () => '/finance/have?t=holdings' },
       { path: 'transactions', pathMatch: 'full', redirectTo: () => '/finance/spending' },
       { path: 'calendar', pathMatch: 'full', redirectTo: () => '/finance/spending?t=calendar' },
-      { path: 'income', pathMatch: 'full', redirectTo: () => '/finance/recurring' },
+      { path: 'recurring', pathMatch: 'full', redirectTo: route => legacyPayDestination(route.queryParamMap) },
+      { path: 'income', pathMatch: 'full', redirectTo: route => legacyPayDestination(route.queryParamMap) },
       { path: 'fixed-expenses', pathMatch: 'full', redirectTo: () => '/finance/bills' },
       { path: 'subscriptions', pathMatch: 'full', redirectTo: () => '/finance/bills' },
       { path: 'investment-insights', pathMatch: 'full', redirectTo: () => '/finance/planning?t=growth' },

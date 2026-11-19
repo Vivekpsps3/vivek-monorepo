@@ -58,7 +58,7 @@ for (const viewport of VIEWPORTS) {
           ['/', 'Home'],
           ['/have', 'Net worth'],
           ['/spending', 'Spending'],
-          ['/recurring', 'Recurring'],
+          ['/pay', 'Pay'],
           ['/bills', 'Bills and subscriptions'],
           ['/planning', 'Planning'],
         ] as const) {
@@ -77,7 +77,7 @@ for (const viewport of VIEWPORTS) {
           ['Calendar', '/finance/spending?t=calendar'],
           ['Activity', '/finance/spending'],
           ['Bills', '/finance/bills'],
-          ['Pay', '/finance/recurring'],
+          ['Pay', '/finance/pay'],
           ['Imports', '/finance/spending?receipts=1'],
         ]) {
           const link = nav.getByRole('link', { name: label, exact: true });
@@ -108,14 +108,17 @@ for (const viewport of VIEWPORTS) {
         await vault.open('/spending?t=pay', page, '/spending?t=activity&v=income');
         await expect(page).toHaveURL(/v=income/);
 
-        await vault.open('/recurring?t=pay');
-        await expect(page.getByRole('link', { name: 'Pay', exact: true })).toHaveAttribute('aria-current', 'page');
+        for (const legacyPay of ['/recurring', '/recurring?t=pay', '/income']) {
+          await vault.open('/spending');
+          await vault.open(legacyPay, page, '/pay');
+          await expect(page.getByRole('link', { name: 'Pay', exact: true })).toHaveAttribute('aria-current', 'page');
+        }
 
         const filteredBills = '/bills?kind=subscription&status=active&order=latest';
         await vault.open('/recurring?t=spend&kind=subscription&status=active&order=latest&name=private', page, filteredBills);
         await expect(page.getByRole('link', { name: 'Bills', exact: true })).toHaveAttribute('aria-current', 'page');
         for (const legacy of ['/recurring?t=bills', '/recurring?t=subs', '/fixed-expenses', '/subscriptions']) {
-          await vault.open('/recurring');
+          await vault.open('/pay');
           await vault.open(legacy, page, '/bills');
           await expect(page.getByRole('heading', { name: 'Bills and subscriptions' })).toBeVisible();
         }

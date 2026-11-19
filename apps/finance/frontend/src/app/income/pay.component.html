@@ -1,0 +1,80 @@
+<div class="page pay-page">
+  <ui-page-header title="Pay" />
+
+  @if (active()) {
+    <ui-card [headingLevel]="2" title="Monthly income">
+      <div class="income-month">
+        <label class="form-group">
+          <span>Income month</span>
+          <input id="income-month" name="income_month" type="month" #monthInput [value]="month()" (change)="changeMonth(monthInput)" />
+        </label>
+        @if (summary(); as totals) {
+          <dl class="income-totals" aria-label="Monthly income totals">
+            <div><dt>Recorded deposits</dt><dd class="money">{{ totals.observed_income | money }}</dd></div>
+            <div><dt>Estimated and other job income</dt><dd class="money">{{ totals.scheduled_income | money }}</dd></div>
+            @if (totals.income_overlap_adjustment !== 0) {
+              <div><dt>Possible overlap</dt><dd class="money">{{ totals.income_overlap_adjustment | money }}</dd></div>
+            }
+            <div><dt>Combined income</dt><dd class="money"><strong>{{ totals.total_income | money }}</strong></dd></div>
+          </dl>
+        }
+      </div>
+      @if (incomeError()) {
+        <p role="alert">Monthly income is unavailable.</p>
+        <ui-button variant="secondary" (clicked)="retry()">Retry monthly income</ui-button>
+      } @else if (summary(); as totals) {
+        @if (totals.income_occurrences.length) {
+          <details class="pay-disclosure">
+            <summary>View income sources</summary>
+            <ui-data-table ariaLabel="Monthly income sources" [compact]="true">
+              <thead>
+                <tr><th scope="col">Source</th><th scope="col">Date</th><th scope="col" class="num">Amount</th></tr>
+              </thead>
+              <tbody>
+                @for (source of totals.income_occurrences; track source.id) {
+                  <tr>
+                    <td>
+                      <strong>{{ sourceTitle(source) }}</strong>
+                      <small>
+                        @if (source.kind === 'estimate' || source.kind === 'compensation' || source.kind === 'stock_sale') {
+                          {{ source.name }} ·
+                        }
+                        {{ sourceDetail(source) }}
+                      </small>
+                    </td>
+                    <td>{{ source.date ? (source.date | appDate) : (source.kind === 'overlap' ? 'Monthly adjustment' : 'No date set') }}</td>
+                    <td class="money num">{{ source.amount | money }}</td>
+                  </tr>
+                }
+              </tbody>
+            </ui-data-table>
+          </details>
+        } @else {
+          <p class="muted">No recorded or estimated income for this month.</p>
+        }
+      } @else {
+        <p role="status">Loading monthly income…</p>
+      }
+    </ui-card>
+
+    @if (jobsState() === 'ready') {
+      <app-income />
+
+      <details class="pay-disclosure compensation-history" [open]="historyOpen()" (toggle)="historyToggled(history.open)" #history>
+        <summary>View compensation history</summary>
+        @if (historyOpen()) {
+          <app-compensation-report />
+        }
+      </details>
+    } @else {
+      <ui-card [headingLevel]="2" title="Jobs and pay">
+        @if (jobsState() === 'loading') {
+          <p role="status">Loading jobs…</p>
+        } @else {
+          <p role="alert">Jobs and compensation history are unavailable.</p>
+          <ui-button variant="secondary" (clicked)="retryJobs()">Retry jobs</ui-button>
+        }
+      </ui-card>
+    }
+  }
+</div>

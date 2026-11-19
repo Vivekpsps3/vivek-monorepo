@@ -16,8 +16,9 @@ import { MoneyPipe } from '@vivek/ui';
   imports: [
     MoneyPipe, CommonModule, FormsModule, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent],
   template: `
-    <ui-card [title]="'Total compensation by employer'">
+    <ui-card [headingLevel]="2" title="Total compensation by employer">
 
+      <p class="muted">Gross pay and compensation from job records. Share sale proceeds and remaining value are shown separately from gross compensation.</p>
       <div class="form-row">
         <label class="form-group">
           <span>Calendar year</span>
@@ -26,16 +27,17 @@ import { MoneyPipe } from '@vivek/ui';
             @for (year of yearOptions; track year) {
               <option [value]="year">{{ year }}</option>
             }
-            @if (selectedYear === 'custom') { <option value="custom">Custom dates</option> }
+            @if (selectedYear === 'custom') {
+              <option value="custom">Custom dates</option>
+            } @else if (selectedYear !== 'all' && !yearOptions.includes(selectedYear)) {
+              <option [value]="selectedYear">{{ selectedYear }}</option>
+            }
           </select>
         </label>
-        <div class="form-group">
-          <span>
-            <label for="compensation-start">From</label>
-
-          </span>
-          <input id="compensation-start" name="compensation_start" type="date" [(ngModel)]="start" (ngModelChange)="customRangeChanged()" />
-        </div>
+        <label class="form-group">
+          <span>From</span>
+          <input name="compensation_start" type="date" [(ngModel)]="start" (ngModelChange)="customRangeChanged()" />
+        </label>
         <label class="form-group">
           <span>Through</span>
           <input name="compensation_end" type="date" [(ngModel)]="end" (ngModelChange)="customRangeChanged()" required />
@@ -46,7 +48,7 @@ import { MoneyPipe } from '@vivek/ui';
       } @else if (rows.length) {
         <p class="stat-display money">{{ total | money }}</p>
         <p class="muted">{{ start || 'All recorded history' }} → {{ end }}{{ isProjection ? ' · Includes projected pay' : '' }}</p>
-        <ui-data-table ariaLabel="Total compensation by employer">
+        <ui-data-table ariaLabel="Total compensation by employer" [compact]="true">
           <thead><tr><th>Employer</th><th>Base pay</th><th>Cash bonuses</th><th>Equity</th><th>Stock comp this range</th><th>Other</th><th>Employee ESPP contributions</th><th>Sale cash through date</th><th>Unsold stock value at date</th><th>Total compensation</th></tr></thead>
           <tbody>
             @for (row of rows; track row.employer) {
@@ -81,10 +83,9 @@ import { MoneyPipe } from '@vivek/ui';
     .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--space-4); min-width: 0; }
     .form-group, input, select { min-width: 0; max-width: 100%; box-sizing: border-box; }
     .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
-    .form-group > span { display: flex; align-items: center; }
+    input, select { min-height: 44px; }
     @media (max-width: 768px) {
       .form-row { grid-template-columns: 1fr; }
-      input, select { min-height: 44px; }
       :host ::ng-deep .ui-data-table tbody td { grid-column: 1 / -1 !important; }
     }
   `],
@@ -116,10 +117,9 @@ export class CompensationReportComponent implements OnInit, OnDestroy {
       const year = params.get('year');
       const start = params.get('start') ?? params.get('compensation_start');
       const end = params.get('end') ?? params.get('compensation_end');
-      if (year && /^\d{4}$/.test(year) && !start && !end) {
+      if (year && /^(?!0000)\d{4}$/.test(year) && !start && !end) {
+        this.applyYear(year);
         this.selectedYear = year;
-        this.start = `${year}-01-01`;
-        this.end = year === todayIsoDate().slice(0, 4) ? todayIsoDate() : `${year}-12-31`;
       } else {
         this.selectedYear = year === 'all' || year === 'custom' ? year : (start || end ? 'custom' : 'all');
         this.start = start || '';
@@ -130,13 +130,8 @@ export class CompensationReportComponent implements OnInit, OnDestroy {
   }
 
   selectYear(value: string): void {
-    if (value === 'all') {
-      this.start = '';
-      this.end = todayIsoDate();
-    } else if (value !== 'custom') {
-      this.start = `${value}-01-01`;
-      this.end = value === todayIsoDate().slice(0, 4) ? todayIsoDate() : `${value}-12-31`;
-    }
+    this.selectedYear = value;
+    if (value !== 'custom') this.applyYear(value);
     this.refresh();
     this.syncRangeToUrl();
   }
@@ -168,13 +163,21 @@ export class CompensationReportComponent implements OnInit, OnDestroy {
     return Array.from({ length: Math.max(1, currentYear - firstYear + 1) }, (_, index) => String(currentYear - index));
   }
 
+  private applyYear(year: string): void {
+    const today = todayIsoDate();
+    this.start = year === 'all' ? '' : `${year}-01-01`;
+    this.end = year === 'all' || year === today.slice(0, 4) ? today : `${year}-12-31`;
+  }
+
   private syncRangeToUrl(): void {
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
         year: this.selectedYear === 'all' ? null : this.selectedYear,
-        start: this.start || null,
-        end: this.end,
+        start: this.selectedYear === 'custom' ? this.start || null : null,
+        end: this.selectedYear === 'custom' ? this.end : null,
+        compensation_start: null,
+        compensation_end: null,
       },
       queryParamsHandling: 'merge',
       replaceUrl: true,

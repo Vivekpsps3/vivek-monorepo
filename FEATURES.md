@@ -31,7 +31,7 @@ The suite runs as one Angular web application, one FastAPI service, and one SQLi
 | Workspace | `/hub` | Independent domain summaries and next actions |
 | Administration | `/hub/admin` | Admin-only user and session management |
 | Settings | `/settings`, `/settings/account`, `/settings/profile`, `/settings/appearance`, `/settings/game`, `/settings/connections`, `/settings/calendars`, `/settings/travel`, `/settings/finance`, `/settings/about` | Shared account, preferences, profile, and domain configuration |
-| Finance | `/finance`, `/finance/have`, `/finance/spending`, `/finance/recurring`, `/finance/planning` | Encrypted personal finance tools |
+| Finance | `/finance`, `/finance/have`, `/finance/spending`, `/finance/bills`, `/finance/pay`, `/finance/planning` | Encrypted personal finance tools |
 | Vault | `/finance/vault/setup`, `/finance/vault/unlock` | Create or unlock browser access to encrypted records |
 | Compact Finance | `/finance/embed` | Authenticated, unlocked compact net-worth view; framing is denied by security policy |
 | Travel | `/travel`, `/travel/trips/new`, `/travel/trips/:id`, `/travel/calendar`, `/travel/pto`, `/travel/settings` | Trips, itinerary, maps, leave balances, and policy settings |

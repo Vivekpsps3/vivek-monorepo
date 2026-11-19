@@ -6,6 +6,7 @@ import {
   BehaviorSubject,
   Subject,
   Observable,
+  filter,
   forkJoin,
   from,
   firstValueFrom,
@@ -25,6 +26,7 @@ import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { FinanceImportService } from './finance-import.service';
 import { FinanceMarketCoordinator } from './finance-market-coordinator';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
+import { computeCashflowSummary } from '../crypto/client-finance';
 import { hasDek, readLockEpoch } from '../crypto/dek-holder';
 import { bindLockSnapshots } from '../crypto/lock-finance';
 import { VaultService, type VaultWriteOptions } from '../crypto/vault.service';
@@ -498,6 +500,16 @@ export class FinanceService {
     return this.guardedRead(() => this.encStore.getTransactions(), rows => {
       if (epoch === this.dataEpoch(['transactions'])) this._dashboardTransactions.next(rows);
     });
+  }
+
+  /** A Pay range never replaces the Home current-month summary. */
+  readIncomeSummary(startDate: string, endDate: string): Observable<CashflowSummary> {
+    const dependencies: EncryptedCollection[] = ['transactions', 'job_incomes'];
+    const epoch = this.dataEpoch(dependencies);
+    return this.guardedRead(async () => {
+      const [transactions, jobs] = await Promise.all([this.encStore.getTransactions(), this.encStore.getJobIncomes()]);
+      return computeCashflowSummary(startDate, endDate, transactions, jobs, [], []);
+    }, () => undefined).pipe(filter(() => epoch === this.dataEpoch(dependencies)));
   }
 
   getCashflowSummary(startDate: string, endDate: string): Observable<CashflowSummary> {

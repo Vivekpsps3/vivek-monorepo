@@ -101,7 +101,7 @@ Separate from the transaction ledger and balance sheet. Code: `apps/finance/fron
 | `subscriptions` | Recurring subscription amounts with `next_bill_date` |
 
 The cashflow summary is computed client-side after vault unlock (`apps/finance/frontend/src/app/crypto/client-finance.ts`).
-`total_income`, `total_expenses`, and `net_cashflow` are one stream: posted transaction effects plus projected job pay, dated compensation payments, stock-sale proceeds, and bill/subscription occurrences that are not already posted. Job pay and posted income within 20% count once, keeping the larger figure; the smaller side appears as a negative, undated aggregate adjustment. That adjustment is not matched to a specific paycheck or deposit. A bill within four days and 2% (or $1) of a posted purchase counts once. `observed_*` remains the ledger alone and `scheduled_*` remains the full repeating projection. Home and Calendar show each income source and its date, or explicitly mark timing as unknown; those rows add to `total_income`. Spending → Activity → Income uses the same summary for a selected month, day, or finite date range, and shows recorded, scheduled work income, overlap adjustment, and combined income together. It does not project an all-history or open-ended period. There is no cashflow-summary HTTP endpoint. This is a cashflow view only: it does **not** write assets, liabilities, holdings, transactions, or net worth.
+`total_income`, `total_expenses`, and `net_cashflow` are one stream: posted transaction effects plus projected job pay, dated compensation payments, stock-sale proceeds, and bill/subscription occurrences that are not already posted. Job pay and posted income within 20% count once, keeping the larger figure; the smaller side appears as a negative, undated aggregate adjustment. That adjustment is not matched to a specific paycheck or deposit. A bill within four days and 2% (or $1) of a posted purchase counts once. `observed_*` remains the ledger alone and `scheduled_*` remains the full repeating projection. Home, Calendar and Pay show each income source and its date, or explicitly mark timing as unknown; those rows add to `total_income`. Spending → Activity → Income uses the same summary for a selected month, day, or finite date range, and shows recorded, scheduled work income, overlap adjustment, and combined income together. It does not project an all-history or open-ended period. There is no cashflow-summary HTTP endpoint. This is a cashflow view only: it does **not** write assets, liabilities, holdings, transactions, or net worth.
 
 `fixed_expenses.due_day` places occurrences on the configured day within each period when present; `start_date` and frequency define the schedule, and `end_date` bounds it. Subscriptions use `next_bill_date` as their schedule anchor. Bills shows the next dates for editing. It flags recent past projections without a matching ledger entry as possibly overdue. These flags use the same amount and date matching rule and apply to the previous 14 days. An unmatched occurrence cannot establish whether an external payment was made. Home, charts, and Calendar include occurrences that do not already match a posted purchase.
 
@@ -170,7 +170,7 @@ after employment ends. Annual taxes/deductions remain estimates; a scheduled pay
 spreads the existing annualized withholding across its payday cadence, and dated payments
 do not carry an additional withholding estimate.
 
-Recurring → Jobs & pay compensation history groups gross compensation
+Pay → Jobs and pay compensation history groups gross compensation
 by employer (trimmed, case insensitive), including inactive/past jobs. Its range
 defaults to all recorded history through today; a calendar-year selector and date
 range are available, and future ranges are labeled as projections. Base, annual
@@ -180,7 +180,7 @@ avoid recording the same amount in both places. Stock awards appear as separate
 period compensation, with cumulative sale proceeds and the remaining-share snapshot
 shown through the selected end date.
 Starting base pay stays intact when promotions are added. This is a read-only
-report; edit the source job in Recurring → Jobs & pay. The legacy
+report; edit the source job in Pay → Jobs and pay. The legacy
 `/planning?t=compensation` deep link redirects there and opens the history
 section. Compensation history never writes net-worth or ledger data.
 

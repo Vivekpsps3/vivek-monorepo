@@ -49,7 +49,7 @@ describe('Transactions multi-file import UI', () => {
           events: new Subject(),
           navigate: () => Promise.resolve(true),
           createUrlTree: () => ({}),
-          serializeUrl: () => '/finance/recurring?t=pay',
+          serializeUrl: () => '/finance/pay',
         } },
       ],
     }).compileComponents();

@@ -7,7 +7,7 @@ const ROUTES = [
   '/have?t=holdings',
   '/spending',
   '/spending?t=calendar',
-  '/recurring',
+  '/pay',
   '/bills',
   '/planning',
   '/planning?t=growth',
@@ -61,7 +61,7 @@ for (const combo of COMBOS) {
 
     test('no interactive content in summary', async ({ page }) => {
       const vault = await syntheticVault(page);
-      await vault.open('/recurring');
+      await vault.open('/pay');
       const count = await page.evaluate(() =>
         document.querySelectorAll('summary :is(a,button,input,select,textarea,ui-button,[tabindex])').length,
       );

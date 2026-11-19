@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { legacyPayDestination } from '../core/layout/finance-navigation';
 import { PlanningComponent } from '../planning/planning.component';
 import { InvestmentInsightsComponent } from '../investment-insights/investment-insights.component';
 import { StockLabComponent } from '../stock-lab/stock-lab.component';
@@ -50,11 +51,7 @@ export class PlanningHubComponent implements OnInit {
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       const requested = params.get('t');
       if (requested === 'compensation') {
-        const queryParams: Record<string, string> = {};
-        params.keys.forEach(key => { const value = params.get(key); if (value !== null) queryParams[key] = value; });
-        queryParams['t'] = 'pay';
-        queryParams['history'] = '1';
-        void this.router.navigate(['/finance/recurring'], { queryParams, replaceUrl: true });
+        void this.router.navigateByUrl(legacyPayDestination(params), { replaceUrl: true });
         return;
       }
       this.tab = requested === 'growth' || requested === 'stocks' ? requested : 'path';

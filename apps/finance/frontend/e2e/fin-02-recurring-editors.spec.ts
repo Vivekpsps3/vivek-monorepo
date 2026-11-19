@@ -41,7 +41,7 @@ test('REC1–REC3 editors keep Save, optional values, and pay totals', async ({ 
     }],
   });
 
-  await vault.open('/recurring');
+  await vault.open('/pay');
   for (const theme of ['light', 'dark'] as const) {
     await chooseColorTheme(page, theme);
     for (const viewport of viewports) {
@@ -52,7 +52,7 @@ test('REC1–REC3 editors keep Save, optional values, and pay totals', async ({ 
     }
   }
 
-  await vault.open('/recurring');
+  await vault.open('/pay');
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const job = page.getByRole('dialog', { name: 'Edit job' });
   await job.getByRole('button', { name: 'Save', exact: true }).click();
@@ -74,7 +74,7 @@ test('REC1–REC3 editors keep Save, optional values, and pay totals', async ({ 
 });
 
 async function exerciseJob(page: Page, vault: Awaited<ReturnType<typeof syntheticVault>>): Promise<void> {
-  await vault.open('/recurring');
+  await vault.open('/pay');
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Edit job' });
   await expect(dialog.getByLabel('How often are you paid?')).toHaveCount(1);

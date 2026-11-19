@@ -137,11 +137,10 @@ test('the legacy compensation link opens one canonical Jobs & pay editor with re
   await vault.open(
     '/planning?t=compensation&start=2024-01-01&end=2024-12-31',
     page,
-    '/recurring?t=pay&start=2024-01-01&end=2024-12-31&history=1',
+    '/pay?history=1&start=2024-01-01&end=2024-12-31',
   );
-  await expect(page).toHaveURL(/\/recurring\?/);
+  await expect(page).toHaveURL(/\/pay\?/);
   const url = new URL(page.url());
-  expect(url.searchParams.get('t')).toBe('pay');
   expect(url.searchParams.get('history')).toBe('1');
   expect(url.searchParams.get('start')).toBe('2024-01-01');
   expect(url.searchParams.get('end')).toBe('2024-12-31');
@@ -157,6 +156,10 @@ test('the legacy compensation link opens one canonical Jobs & pay editor with re
   await expect(field(report, 'From')).toHaveValue('2024-01-01');
   await expect(field(report, 'Through')).toHaveValue('2024-12-31');
   await expect(report.getByRole('button', { name: /Edit|Add job/ })).toHaveCount(0);
+  await vault.open('/recurring?t=compensation&year=2025&start=2025-02-01&end=2025-09-30', page,
+    '/pay?history=1&year=2025&start=2025-02-01&end=2025-09-30');
+  await expect(field(report, 'From')).toHaveValue('2025-02-01');
+  await expect(field(report, 'Through')).toHaveValue('2025-09-30');
   expect(vault.data('job_incomes')[0].compensation_payments).toEqual([
     expect.objectContaining({ date: '2024-12-15', kind: 'bonus', label: 'Retention bonus', amount: 5000 }),
   ]);
