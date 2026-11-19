@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#408](https://github.com/Vivekpsps3/vivek-monorepo/issues/408) TUX-03; parent [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. OPS-06 / #277 was not edited. TUX-02 / #407 stays merged as #535.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/tux-03`; `/tmp/vivek-tux-03`. The shared checkout was not edited.
-- Base main SHA, current tested SHA: base `1187e37e21921b4c6ad5cb1bacce7b2b70d00930` (TUX-02 merge, pull request #535). Commands below ran on that working tree before this file was committed.
+- Base main SHA, current tested SHA: base `1187e37e21921b4c6ad5cb1bacce7b2b70d00930` (TUX-02 merge, pull request #535). `make test-fast` passed on `791fa952951930d9cb5d82f2cda3ce09db070c54` before this sentence named that commit.
 - Fresh-main/prerequisite/active-PR checks: `git fetch origin main` on 2026-11-19 still returned `1187e37e21921b4c6ad5cb1bacce7b2b70d00930`. TUX-02 is on that commit. `gh pr list --state open` returned no pull requests. No open `schema-head` or `travel-records` pull request. One new revision, `site_trip_draft_v1`, chains from `site_flight_occurrence_v1`. No applied migration file was edited.
 
 ## Acceptance
@@ -39,7 +39,7 @@ Commands ran in `/tmp/vivek-tux-03`. Python gates used `PATH="/tmp/vivek-tux-03/
 
 | Command | Tested SHA | Result |
 | --- | --- | --- |
-| `PATH="/tmp/vivek-tux-03/.venv/bin:$PATH" make test-fast` | working tree on `1187e37e` | PASS. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. `schema_drift_check` ok at `site_trip_draft_v1`. |
+| `PATH="/tmp/vivek-tux-03/.venv/bin:$PATH" make test-fast` | `791fa952951930d9cb5d82f2cda3ce09db070c54` | PASS. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. The same command was re-run immediately before the commit that names that SHA. |
 | `make lint-python` | working tree on `1187e37e` | PASS. 255 files already formatted. Ruff 90 match the baseline. Suppressions 6 match the baseline. |
 | `make typecheck-python` | working tree on `1187e37e` | PASS. mypy 79 findings match the baseline. |
 | `./scripts/coverage-gate.sh travel` | working tree on `1187e37e` | PASS. 202 passed. Total coverage 88.90% (floor 80.41%). Notice: rose from 81.41%; suggested floor 87.90% was not pinned. |
