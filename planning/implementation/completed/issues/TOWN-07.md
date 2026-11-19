@@ -10,7 +10,7 @@
 - Conflict groups: `schema-head`, `town-models`, `town-writes`
 - Verification profiles: `server_back`, `schema`
 
-Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md), [the queue index](../README.md), [deletion contract](../deletion-strategy.md) and [verification profiles](../verification.json) before editing. Record proof with the [evidence template](../templates/evidence.md) and end with the [handoff template](../templates/handoff.md).
+Read [root AGENTS](../../../../AGENTS.md), [planning instructions](../../../AGENTS.md), [the queue index](../../README.md), [deletion contract](../../deletion-strategy.md) and [verification profiles](../../verification.json) before editing. Record proof with the [evidence template](../../templates/evidence.md) and end with the [handoff template](../../templates/handoff.md).
 
 This file is the executable packet. The parent issue is a scope ledger. Close only this leaf, with `Closes` on this leaf and a reference to each parent.
 

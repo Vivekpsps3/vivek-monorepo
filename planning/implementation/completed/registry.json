@@ -1911,6 +1911,375 @@
       ],
       "merged_pr": 523,
       "merge_sha": "c340ed95beb2ab6f4936ab8aa93c129f1060cf33"
+    },
+    {
+      "id": "STYLE-01",
+      "title": "Apply the coastal palette, typography and day/night tokens",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 382,
+      "dependencies": [],
+      "conflict_groups": [
+        "shared-styles",
+        "shared-controls"
+      ],
+      "verification_profiles": [
+        "docs",
+        "shared_front"
+      ],
+      "merged_pr": 494,
+      "merge_sha": "4cecdd9eaccef5960fa160d5bc3a1809b8a0f153"
+    },
+    {
+      "id": "STYLE-02",
+      "title": "Style shared buttons, fields, menus and dialogs",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 383,
+      "dependencies": [
+        "STYLE-01"
+      ],
+      "conflict_groups": [
+        "shared-styles",
+        "shared-controls"
+      ],
+      "verification_profiles": [
+        "docs",
+        "shared_front"
+      ],
+      "merged_pr": 495,
+      "merge_sha": "6303c08adbee023600b3a8df1673fef934a4c7d4"
+    },
+    {
+      "id": "STYLE-03",
+      "title": "Style tables, collection cards and charts with readable dense data",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 384,
+      "dependencies": [
+        "STYLE-01"
+      ],
+      "conflict_groups": [
+        "shared-styles",
+        "shared-controls"
+      ],
+      "verification_profiles": [
+        "docs",
+        "shared_front"
+      ],
+      "merged_pr": 496,
+      "merge_sha": "fe04d6d84a6a99f525e053e483ba19405ea96e06"
+    },
+    {
+      "id": "STYLE-04",
+      "title": "Register bounded scene assets and migrate one selectable composition",
+      "parent_issues": [
+        304,
+        308
+      ],
+      "kind": "implementation",
+      "issue": 385,
+      "dependencies": [
+        "STYLE-01"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ],
+      "merged_pr": 497,
+      "merge_sha": "7c2302295618d3a215038510c5116aff2476a37f"
+    },
+    {
+      "id": "NAV-01",
+      "title": "Expose direct app destinations in the suite shell",
+      "parent_issues": [
+        304,
+        93
+      ],
+      "kind": "implementation",
+      "issue": 386,
+      "dependencies": [
+        "STYLE-02"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ],
+      "merged_pr": 498,
+      "merge_sha": "35c9f2413866aec85c73f1d8b715beb181edc6df"
+    },
+    {
+      "id": "NAV-02",
+      "title": "Preserve source context through editors, unlock and browser history",
+      "parent_issues": [
+        304,
+        307,
+        317,
+        93
+      ],
+      "kind": "implementation",
+      "issue": 387,
+      "dependencies": [
+        "NAV-01"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ],
+      "merged_pr": 499,
+      "merge_sha": "8126d6efef2e6e0564d7dccc67e17d785204d4f9"
+    },
+    {
+      "id": "NAV-03",
+      "title": "Make the compact practical Hub the default arrival",
+      "parent_issues": [
+        304,
+        317,
+        93
+      ],
+      "kind": "implementation",
+      "issue": 388,
+      "dependencies": [
+        "NAV-01",
+        "NAV-02",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ],
+      "merged_pr": 500,
+      "merge_sha": "18c8553f95fc78a0c14c7ecd461609964a4f20de"
+    },
+    {
+      "id": "NAV-04",
+      "title": "Unify account, appearance and connector settings navigation",
+      "parent_issues": [
+        304,
+        93
+      ],
+      "kind": "implementation",
+      "issue": 389,
+      "dependencies": [
+        "NAV-02",
+        "STYLE-02"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ],
+      "merged_pr": 518,
+      "merge_sha": "2e4a6013eae106a73c040bdddc4490f75eb11526"
+    },
+    {
+      "id": "FUX-01",
+      "title": "Make Holdings compact and immediately useful",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 390,
+      "dependencies": [
+        "NAV-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ],
+      "merged_pr": 520,
+      "merge_sha": "9ae590269cde2f2cda1b03f54eb717d163efee94"
+    },
+    {
+      "id": "FUX-02",
+      "title": "Simplify account, asset and debt browsing and editing",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 391,
+      "dependencies": [
+        "NAV-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ],
+      "merged_pr": 526,
+      "merge_sha": "850353ed05f9f4655b1108eb7b0de6466bbf0c96"
+    },
+    {
+      "id": "FUX-03",
+      "title": "Make Activity filters, row actions and dated entry consistent",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 392,
+      "dependencies": [
+        "NAV-02",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ],
+      "merged_pr": 527,
+      "merge_sha": "b7bb3cc4bb00d4ee77f6a2ad5432ab1241e962bc"
+    },
+    {
+      "id": "FUX-04",
+      "title": "Organize bills and subscriptions in one due-date workspace",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 393,
+      "dependencies": [
+        "NAV-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ],
+      "merged_pr": 528,
+      "merge_sha": "4b8a004905e691947598e08a8916179558fcf09f"
+    },
+    {
+      "id": "FUX-05",
+      "title": "Clarify pay, compensation and income history",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 394,
+      "dependencies": [
+        "NAV-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ],
+      "merged_pr": 529,
+      "merge_sha": "809254d5984a39426deea3993ac20e52977fb4ee"
+    },
+    {
+      "id": "FUX-06",
+      "title": "Give every planning tool a direct styled destination",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 395,
+      "dependencies": [
+        "NAV-01",
+        "STYLE-03"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ],
+      "merged_pr": 530,
+      "merge_sha": "620fcb87f3c7654c3cb0742777096bf93e3b863c"
+    },
+    {
+      "id": "FUX-07",
+      "title": "Make imports, receipts and recovery discoverable in context",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 396,
+      "dependencies": [
+        "NAV-04",
+        "STYLE-02"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ],
+      "merged_pr": 531,
+      "merge_sha": "c5bfd45411796d85a9b0ccc04df9c801ced46b17"
+    },
+    {
+      "id": "TOWN-07",
+      "title": "Enforce Town relational ownership with one preserving migration",
+      "parent_issues": [
+        81
+      ],
+      "kind": "implementation",
+      "issue": 255,
+      "dependencies": [
+        "TOWN-02"
+      ],
+      "conflict_groups": [
+        "schema-head",
+        "town-models",
+        "town-writes"
+      ],
+      "verification_profiles": [
+        "server_back",
+        "schema"
+      ],
+      "merged_pr": 532,
+      "merge_sha": "af0b2f0709eeebfe165823ed01af5a044ece3e51"
     }
   ],
   "td_coverage": {

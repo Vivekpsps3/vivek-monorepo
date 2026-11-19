@@ -13,12 +13,11 @@ SEC-03/04 were already archived on main with PRs #376/#377. HUB-01/05/06 are als
 merged in #379/#380/#381; their real evidence and merge ancestry are retained, and
 their packets enter the completion registry. None is rebuilt as an unfinished feature.
 
-TOWN-07 ownership migration and OPS-06 real restore evidence remain
-independent existing leaves with their existing requirements. DISC-02 Cards
-discovery and OPS-05 synthetic monitoring are archived. The Cards design does
-not build the app. OPS-06 stays open until a real off-host restore and alert
-exist. Their relative order is retained when inserted after the first
-practical-navigation tranche.
+The STYLE-01–04, NAV-01–04, FUX-01–07, and TOWN-07 PRs have merged and their
+issues are closed. The [completion registry](../implementation/completed/registry.json)
+records their commits, and later leaves retain their prerequisites. OPS-06 stays
+open until a real off-host restore and alert exist. DISC-02 Cards discovery and
+OPS-05 synthetic monitoring are archived. The Cards app remains unbuilt.
 Cards/Sidequests implementation and a real-people/residence map remain outside
 this amendment. Existing closed delivery issues stay closed.
 
@@ -49,10 +48,10 @@ presentation amendments are explicit in the requirement ledger; the rest survive
 
 ## Issue slicing and authority
 
-111 new small leaves cover selected design delivery, practical app journeys,
-connections, Health/workouts, Town/rooms/decor, all game systems, World retirement
-and integrated evidence. Four unchanged leaves remain alongside them. Each packet
-has an outcome, concrete requirements, dependencies, source/target owners,
+The original plan assigned 111 new small leaves across design delivery,
+practical app journeys, connections, Health/workouts, Town/rooms/decor, games,
+World retirement and integrated evidence. It also carried over four existing
+leaves. Each packet has an outcome, concrete requirements, dependencies, source/target owners,
 acceptance, deletion/non-goals, test scenarios and evidence/handoff instructions.
 
 The queue is dependency checked. Profiles expand the existing root/app quality
