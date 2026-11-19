@@ -17,6 +17,7 @@ COMPATIBILITY_TABLE = "site_revision_compatibility"
 FINANCE_REVISION = "e0f6a2b3c4d5"
 OWNER_TABLES = {
     "trips",
+    "trip_drafts",
     "pto_policy",
     "leave_policies",
     "pto_entries",

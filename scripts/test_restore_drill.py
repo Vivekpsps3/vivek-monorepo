@@ -50,6 +50,7 @@ EXPECTED_OWNERS = {
     "pto_policy": 1,
     "season_progress": 1,
     "track_ratings": 1,
+    "trip_drafts": 0,
     "trips": 1,
     "user_entries": 1,
     "user_vaults": 2,

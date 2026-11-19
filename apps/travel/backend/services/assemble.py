@@ -14,6 +14,7 @@ from apps.travel.backend.models import (
     Stay,
     Transport,
     Trip,
+    TripDraftLeg,
 )
 from apps.travel.backend.services.budget import (
     CATEGORY_LABELS,
@@ -81,7 +82,7 @@ def _route(depart: str | None, arrive: str | None) -> str:
     return depart or arrive or ""
 
 
-def transport_label(row: Transport) -> str:
+def transport_label(row: Transport | TripDraftLeg) -> str:
     if row.mode == "flight":
         parts = [part for part in (row.carrier, row.number) if part]
         return " ".join(parts) or "Flight"
@@ -98,7 +99,7 @@ def _budget_label(row: Transport) -> str:
     return label
 
 
-def transport_out(row: Transport) -> dict:
+def transport_out(row: Transport | TripDraftLeg) -> dict:
     return {
         "id": row.id,
         "role": row.role,

@@ -150,6 +150,20 @@ def delete_user_account(db: Session, user: User, *, actor_user_id: int) -> None:
     wipe_encrypted_user_data(db, user.id)
     if "site_schema" in inspect(db.connection()).get_table_names():
         # Unified ownership contract; delete personal rows, retain public catalogs.
+        db.execute(
+            text(
+                "DELETE FROM trip_draft_proposals WHERE draft_id IN "
+                "(SELECT id FROM trip_drafts WHERE user_id=:owner)"
+            ),
+            {"owner": user.id},
+        )
+        db.execute(
+            text(
+                "DELETE FROM trip_draft_legs WHERE draft_id IN "
+                "(SELECT id FROM trip_drafts WHERE user_id=:owner)"
+            ),
+            {"owner": user.id},
+        )
         for table in (
             "habit_checkins",
             "habit_cadences",
@@ -164,6 +178,7 @@ def delete_user_account(db: Session, user: User, *, actor_user_id: int) -> None:
             "pto_entries",
             "pto_policy",
             "leave_policies",
+            "trip_drafts",
             "trips",
         ):
             db.execute(text(f'DELETE FROM "{table}" WHERE user_id=:owner'), {"owner": user.id})

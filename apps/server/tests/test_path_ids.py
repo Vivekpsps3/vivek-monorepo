@@ -114,6 +114,14 @@ def test_invalid_path_id_matches_unknown(client, path, method, name, value):
     }
     if "transports" in path:
         body.update(role="outbound", mode="flight")
+    if "trip-drafts" in path:
+        # Draft writes forbid trip fields. A valid body lets a missing id 404.
+        body = {
+            "title": "Seed",
+            "start_date": "2026-06-01",
+            "legs": [{"role": "outbound", "mode": "flight"}],
+            "revision": 1,
+        }
     kwargs = {
         "json": body,
         "params": {"q": "seed"},
