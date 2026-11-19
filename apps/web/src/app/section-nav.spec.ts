@@ -59,7 +59,7 @@ describe('section nav', () => {
       ['/finance', '/finance'],
       ['/finance/have?t=assets', '/finance/have'],
       ['/finance/have?t=holdings', '/finance/have?t=holdings'],
-      ['/finance/recurring?t=bills&kind=bill', '/finance/bills'],
+      ['/finance/pay?month=2026-10&history=1', '/finance/pay'],
       ['/finance/bills?kind=bill&status=active', '/finance/bills'],
       ['/finance/spending?t=calendar&receipts=1', '/finance/spending?t=calendar'],
       ['/finance/spending?t=activity&receipts=1', '/finance/spending?receipts=1'],

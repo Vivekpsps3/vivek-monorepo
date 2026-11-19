@@ -42,7 +42,7 @@ Each major subpage should have page-level metrics at the top:
 - Balance sheet: total assets, liabilities, net worth, stale balances.
 - Portfolio: market value, account allocation, largest holdings, price freshness.
 - Investment insights: portfolio value, growth assumptions, projected value, withdrawal-rate income (client-side; speculative).
-- Calendar: one month of pay and spending. Posted transactions and repeating bills share the same days; a bill that already matches a posted amount is not shown twice. Highest-purchase and selected-day transaction rows preserve month/date and open the chosen Activity editor; repeating rows open Recurring. Keep the calendar Add action's selected date.
+- Calendar: one month of pay and spending. Posted transactions and repeating bills share the same days; a bill that already matches a posted amount is not shown twice. Highest-purchase and selected-day transaction rows preserve month/date and open the chosen Activity editor; repeating bill rows open Bills. Keep the calendar Add action's selected date.
 - Planning: current balance-sheet/cashflow facts with source links, then a clear question selector, scenario success rate, median ending value, risk bands, and assumptions.
 - Stock Lab: primary ticker price, price return, total return, dividend income, purchase scenario value, scorecard warnings, and comparison tickers.
 
@@ -79,7 +79,7 @@ Planning separates fixed, variable, and irregular annual spending, identifies th
 - Every chart needs a nearby numeric summary. Do not add hover tooltips.
 - Cashflow charts show one monthly series: posted activity plus repeating pay and bills that are not already posted. Month links open Activity.
 - Category charts use transaction-kind effects over the full ledger, independent of transaction-list paging.
-- Recorded monthly/category chart values have accessible drilldown links and matching chart-click behavior. Scheduled values go to Recurring. A collapsed synthetic `Other` tail expands categories instead of pretending to be a real category named `Other`.
+- Recorded monthly/category chart values have accessible drilldown links and matching chart-click behavior. Those links open Activity. A collapsed synthetic `Other` tail expands categories instead of pretending to be a real category named `Other`.
 - Keep net worth charts sourced from the current balance-sheet formula, never
   from transaction sums.
 - Investment-insights projections are speculative client-side charts, not

@@ -28,7 +28,7 @@ const ROUTES: Array<{
     present: ['No transactions yet', 'Import a card statement or add one by hand.'],
   },
   {
-    path: '/recurring?t=pay', slug: 'pay', hub: 'app-recurring-hub',
+    path: '/pay', slug: 'pay', hub: 'app-pay',
     present: ['No jobs yet', 'Add your salary and pay schedule to project income.'],
     absent: ['Yearly pay'],
   },
@@ -109,7 +109,7 @@ test.describe('empty states behavior', () => {
     const spendActions = page.locator('app-spending-hub .empty-actions').first();
     await expect(spendActions.getByRole('button')).toHaveText(['Import', 'Add transaction']);
 
-    await vault.open('/recurring?t=pay');
+    await vault.open('/pay');
     await expect(page.getByRole('button', { name: 'Add job', exact: true })).toHaveCount(1);
 
     await vault.open('/bills');
@@ -159,7 +159,7 @@ test.describe('empty states behavior', () => {
 
   test('the one Add job button opens the Add job dialog', async ({ page }) => {
     const vault = await syntheticVault(page, {});
-    await vault.open('/recurring?t=pay');
+    await vault.open('/pay');
     await page.getByRole('button', { name: 'Add job', exact: true }).click();
     await expect(page.getByRole('dialog').getByRole('heading', { name: 'Add job' })).toBeVisible();
   });

@@ -35,7 +35,7 @@ const routes: Array<{ path: string; h1: string }> = [
   { path: '/have?t=holdings', h1: 'Holdings' },
   { path: '/spending?t=activity', h1: 'Activity' },
   { path: '/spending?t=calendar', h1: 'Calendar' },
-  { path: '/recurring?t=pay', h1: 'Pay' },
+  { path: '/pay', h1: 'Pay' },
   { path: '/bills', h1: 'Bills and subscriptions' },
   { path: '/planning?t=path', h1: 'Planning' },
   { path: '/planning?t=growth', h1: 'Planning' },

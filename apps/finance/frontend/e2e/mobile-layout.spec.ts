@@ -85,8 +85,8 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   await expectFits(page, 'calendar');
 
   await sections.getByRole('link', { name: 'Pay', exact: true }).click();
-  await expect(page).toHaveURL(/\/recurring/);
-  await expectFits(page, 'recurring');
+  await expect(page).toHaveURL(/\/pay/);
+  await expectFits(page, 'pay');
 
   await sections.getByRole('link', { name: 'Planning', exact: true }).click();
   await expect(page).toHaveURL(/\/planning/);

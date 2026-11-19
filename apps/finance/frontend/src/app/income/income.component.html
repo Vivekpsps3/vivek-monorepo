@@ -1,16 +1,4 @@
-<div [class.page]="!embedded" [class.embed]="embedded">
-  <ui-page-header
-    [embedded]="embedded"
-    [title]="compensationTracking ? 'Compensation history' : 'Jobs & pay'">
-
-    @if (incomes.length || compensationTracking) {
-      <div uiPageActions class="header-actions">
-        <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
-      </div>
-    }
-  </ui-page-header>
-
-  @if (!compensationTracking && incomes.length) {
+@if (incomes.length) {
   <section class="income-summary" aria-label="Pay summary">
     <p class="income-summary__headline">Yearly pay <strong class="money">{{ activeAnnualTotal | money }}</strong> before taxes</p>
     <p class="summary-caption">about {{ activeMonthlyGross | money }} a month</p>
@@ -25,9 +13,12 @@
   </section>
   }
 
-  <ui-card [title]="'Jobs and pay'">
-    @if (incomes.length) {
-      <ui-data-table ariaLabel="Jobs and pay">
+<ui-card [headingLevel]="2" title="Jobs and pay">
+  @if (incomes.length) {
+    <ui-button uiCardActions variant="primary" (clicked)="openAddModal()">Add job</ui-button>
+  }
+  @if (incomes.length) {
+      <ui-data-table ariaLabel="Jobs and pay" [compact]="true">
         <thead>
           <tr>
             <th>Employer</th>
@@ -36,7 +27,7 @@
             <th>Annual net rate</th>
             <th>Employment dates / history</th>
             <th>Status</th>
-            <th></th>
+            <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -168,8 +159,7 @@
         <div class="empty-actions"><ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button></div>
       </ui-empty-state>
     }
-  </ui-card>
-</div>
+</ui-card>
 
 <ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="income-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeModal()">
       <h3 id="income-modal-title">{{ editingId ? 'Edit job' : 'Add job' }}</h3>

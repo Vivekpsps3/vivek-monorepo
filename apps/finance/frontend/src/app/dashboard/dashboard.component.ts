@@ -340,7 +340,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       case 'activity':
         return { path: '/finance/spending', params: { add: '1' } };
       case 'recurring':
-        return { path: '/finance/recurring', params: null };
+        return { path: '/finance/pay', params: null };
     }
   }
 

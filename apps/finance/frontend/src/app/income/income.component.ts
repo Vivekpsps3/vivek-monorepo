@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
-  Input,
   OnDestroy,
   OnInit,
 } from '@angular/core';
@@ -60,8 +59,6 @@ import {
   UiCardComponent,
   UiDataTableComponent,
   UiEmptyStateComponent,
-  UiIconComponent,
-  UiPageHeaderComponent,
   UiSelectComponent,
   UiSelectOption,
   UiDialogComponent,
@@ -76,13 +73,11 @@ import {
     MoneyPipe,
     CommonModule,
     FormsModule,
-    UiPageHeaderComponent,
-    UiButtonComponent,
+      UiButtonComponent,
     UiCardComponent,
     UiDataTableComponent,
     UiEmptyStateComponent,
-    UiIconComponent,
-    UiSelectComponent,
+      UiSelectComponent,
     UiBadgeComponent,
     UiDialogComponent,
   ],
@@ -91,8 +86,6 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IncomeComponent implements OnInit, OnDestroy {
-  @Input() embedded = false;
-  @Input() compensationTracking = false;
   isCurrentJob = isCurrentJob;
   stockSnapshotAt = stockSnapshotAt;
   stockGrantSnapshot = stockGrantSnapshot;
@@ -162,13 +155,15 @@ export class IncomeComponent implements OnInit, OnDestroy {
       this.ensureStockPriceDrafts(rows);
       this.cdr.markForCheck();
     });
-    this.financeService.getJobIncomes().pipe(takeUntil(this.destroy$)).subscribe();
   }
 
   ngOnDestroy(): void {
     this.destroyed = true;
     this.destroy$.next();
     this.destroy$.complete();
+    this.closeModal();
+    this.incomes = [];
+    this.stockPriceDrafts = {};
   }
 
   get activeAnnualTotal(): number {
@@ -775,7 +770,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
       'Delete',
       'Cancel'
     );
-    if (!ok) return;
+    if (!ok || this.destroyed) return;
     this.financeService.deleteJobIncome(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toastService.success('Job deleted'),
       error: () => this.toastService.error(failureCopy('delete', 'this job'), {

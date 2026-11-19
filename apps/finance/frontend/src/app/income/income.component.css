@@ -11,6 +11,7 @@
 }
 
 .income-summary {
+  margin-bottom: var(--space-4);
   display: flex;
   justify-content: space-between;
   gap: var(--space-6);
@@ -161,7 +162,6 @@
   .tax-helper__actions ::ng-deep .ui-btn,
   .history-heading ::ng-deep .ui-btn,
   .stock-quote-controls__actions ::ng-deep .ui-btn,
-  :host ::ng-deep .header-actions .ui-btn,
   :host ::ng-deep td.actions .ui-btn {
     width: auto;
     max-width: 100%;
@@ -269,7 +269,6 @@
 .tax-helper,
 .pay-disclosure,
 .job-history,
-.compensation-history,
 .history-entry,
 .stock-grant-entry,
 .stock-quote-controls,
@@ -293,9 +292,6 @@ form {
 .form-group,
 ui-select,
 :host ::ng-deep .ui-card,
-:host ::ng-deep .ui-page-header,
-:host ::ng-deep .ui-page-header__actions,
-:host ::ng-deep .header-actions,
 :host ::ng-deep .ui-data-table {
   min-width: 0;
   max-width: 100%;
@@ -410,4 +406,14 @@ textarea {
   .empty-actions ::ng-deep .ui-btn {
     width: 100%;
   }
+}
+
+:host ::ng-deep td.actions .ui-btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.link-button {
+  min-width: 44px;
+  min-height: 44px;
 }

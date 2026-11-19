@@ -16,6 +16,12 @@ export function isReturnDate(value: string): boolean {
 
 type Coordinate = readonly string[] | ((value: string) => boolean);
 
+const compensationRange = {
+  year: (value: string) => value === 'all' || value === 'custom' || /^(?!0000)\d{4}$/.test(value),
+  start: isReturnDate, end: isReturnDate,
+  compensation_start: isReturnDate, compensation_end: isReturnDate,
+};
+
 const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>>> = {
   '/finance': {},
   '/finance/embed': {},
@@ -28,12 +34,14 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/finance/bills': {
     kind: ['all', 'bill', 'subscription'], status: ['all', 'active', 'inactive'], order: ['latest', 'soonest'],
   },
+  '/finance/pay': { month, history: flag, ...compensationRange },
+  '/finance/income': { month, history: flag, ...compensationRange },
   '/finance/recurring': {
-    t: ['income', 'spend', 'pay', 'bills', 'subs', 'compensation'], history: flag,
-    kind: ['bill', 'subscription'], status: ['active', 'inactive'], order: ['latest', 'soonest'],
+    t: ['income', 'spend', 'pay', 'bills', 'subs', 'compensation'], month, history: flag, ...compensationRange,
+    kind: ['all', 'bill', 'subscription'], status: ['all', 'active', 'inactive'], order: ['latest', 'soonest'],
   },
   '/finance/planning': {
-    t: ['growth', 'stocks', 'compensation'],
+    t: ['growth', 'stocks', 'compensation'], ...compensationRange,
     tool: ['simulation', 'retirement-target', 'savings-goal', 'debt-payoff'],
   },
   '/town': {},
@@ -73,7 +81,7 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
 };
 
 const financeAliases = new Set([
-  'balance-sheet', 'portfolio', 'transactions', 'calendar', 'income', 'fixed-expenses',
+  'balance-sheet', 'portfolio', 'transactions', 'calendar', 'fixed-expenses',
   'subscriptions', 'investment-insights', 'stock-lab', 'charts',
 ]);
 

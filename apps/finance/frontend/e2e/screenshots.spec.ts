@@ -203,7 +203,7 @@ test.describe('finance F1 screenshot matrix', () => {
         await expect(page.getByText('This is the only active admin, so the role and access stay as they are.')).toBeVisible();
         await shot('admin-locks', width, theme);
 
-        await vault.open('/recurring');
+        await vault.open('/pay');
         await page.getByRole('button', { name: 'Add job', exact: true }).click();
         const job = page.getByRole('dialog', { name: 'Add job' });
         await job.getByRole('button', { name: 'Save' }).click();
@@ -311,7 +311,7 @@ test.describe('finance F1 screenshot matrix', () => {
     for (const width of [390, 768, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       for (const theme of ['light', 'dark'] as const) {
-        await vault.open('/recurring');
+        await vault.open('/pay');
         await page.evaluate(value => localStorage.setItem('ft-theme', value), theme);
         await vault.reload();
         await expectNoStrayToast(page);

@@ -38,6 +38,13 @@
       "query": "kind=subscription"
     },
     {
+      "id": "finance-pay",
+      "path": "finance/pay",
+      "owner": "finance",
+      "status": "mounted",
+      "query": "month=2026-10"
+    },
+    {
       "id": "finance-portfolio",
       "path": "finance/portfolio",
       "owner": "finance",

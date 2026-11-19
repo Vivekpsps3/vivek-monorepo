@@ -128,9 +128,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     if (kind === 'balance') {
       void this.router?.navigate(['/finance/have']);
     } else {
-      // Pay is Recurring's default tab, so the canonical URL has no t
-      // (F6). F10's text said { t: 'pay' }, which F6 superseded.
-      void this.router?.navigate(['/finance/recurring']);
+      void this.router?.navigate(['/finance/pay']);
     }
   }
 
