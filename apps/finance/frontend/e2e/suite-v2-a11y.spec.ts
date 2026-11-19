@@ -37,9 +37,9 @@ const routes: Array<{ path: string; h1: string }> = [
   { path: '/spending?t=calendar', h1: 'Calendar' },
   { path: '/pay', h1: 'Pay' },
   { path: '/bills', h1: 'Bills and subscriptions' },
-  { path: '/planning?t=path', h1: 'Planning' },
-  { path: '/planning?t=growth', h1: 'Planning' },
-  { path: '/planning?t=stocks', h1: 'Planning' },
+  { path: '/planning', h1: 'Planning' },
+  { path: '/planning/projection', h1: 'Projection' },
+  { path: '/planning/research', h1: 'Stock research' },
 ];
 
 function watchConsole(page: Page): string[] {
@@ -139,7 +139,7 @@ for (const width of [390, 1280]) {
       test('invalid field border wins over the base rule', async ({ page }) => {
         const violations = watchConsole(page);
         const vault = await syntheticVault(page, seed);
-        await vault.open('/planning?t=path');
+        await vault.open('/planning');
         const field = page.locator('.mc-field select, .mc-field input').first();
         await expect(field).toBeVisible();
         const borders = await field.evaluate(el => {
@@ -163,22 +163,16 @@ for (const width of [390, 1280]) {
       test('planning, quick-tools and insights fields show a 2px focus ring', async ({ page }) => {
         const violations = watchConsole(page);
         const vault = await syntheticVault(page, seed);
-        await vault.open('/planning?t=path');
-        await page.getByLabel('Planning question').selectOption('retirement-target');
-        const targets = [
-          page.locator('app-planning .planning-question select'),
-          page.locator('app-planning-quick-tools .mc-field input').first(),
-        ];
-        for (const target of targets) {
-          await expect(target).toBeVisible();
-          await target.focus();
-          const outline = await target.evaluate(el => {
-            const style = getComputedStyle(el);
-            return { width: style.outlineWidth, style: style.outlineStyle };
-          });
-          expect(outline).toEqual({ width: '2px', style: 'solid' });
-        }
-        await vault.open('/planning?t=growth');
+        await vault.open('/planning/retirement');
+        const target = page.locator('app-planning-quick-tools .mc-field input').first();
+        await expect(target).toBeVisible();
+        await target.focus();
+        const outline = await target.evaluate(el => {
+          const style = getComputedStyle(el);
+          return { width: style.outlineWidth, style: style.outlineStyle };
+        });
+        expect(outline).toEqual({ width: '2px', style: 'solid' });
+        await vault.open('/planning/projection');
         const unit = page.locator('.input-with-unit input').first();
         await expect(unit).toBeVisible();
         await unit.focus();
@@ -203,7 +197,7 @@ for (const width of [390, 1280]) {
           const box = await toggle.boundingBox();
           expect(box?.height).toBeGreaterThanOrEqual(44);
         }
-        await vault.open('/planning?t=path');
+        await vault.open('/planning');
         const labels = page.locator('label:has(> input[type="checkbox"]), label:has(> input[type="radio"])');
         for (const label of await labels.all()) {
           const box = await label.boundingBox();

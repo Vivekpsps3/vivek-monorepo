@@ -205,10 +205,9 @@ test('treasury follows completed budget weeks and clears when Finance locks', as
   await expect(treasury).not.toContainText(/Lv \d/);
   await expect(scene.getByRole('button', { name: /Read 20 pages/ })).toContainText(/day streak/);
 
-  await page.goto('/finance/planning');
+  await page.goto('/finance/planning/simulation');
   await page.getByLabel('Spending basis', { exact: true }).selectOption('manual');
   await page.getByLabel('Manual annual spending', { exact: true }).fill('36500');
-  await page.getByLabel('Planning question', { exact: true }).selectOption('simulation');
   const saved = page.locator('ui-card').filter({ has: page.getByRole('heading', { name: 'Saved inputs' }) });
   await saved.locator('input[name="savedInputName"]').fill('Town budget');
   await saved.getByRole('button', { name: 'Save', exact: true }).click();

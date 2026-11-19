@@ -8,7 +8,7 @@ test('a selected growth preset stays pressed with a heavier inset style', async 
       current_price: 100, price_source: 'manual', quote_date: '2026-10-08', position_as_of: '2026-10-10',
     }],
   });
-  await vault.open('/planning?t=growth');
+  await vault.open('/planning/projection');
   const selected = page.getByRole('button', { name: '7% annual growth preset' });
   const other = page.getByRole('button', { name: '5% annual growth preset' });
   await expect(selected).toHaveAttribute('aria-pressed', 'true');

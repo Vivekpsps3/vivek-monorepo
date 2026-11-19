@@ -1,7 +1,11 @@
 <div [class.page]="!embedded" [class.embed]="embedded" class="investment-insights-page">
   <ui-page-header
     [embedded]="embedded"
-    [title]="'Portfolio projection'" />
+    [title]="'Projection'" />
+  @if (!embedded) {
+    <app-planning-tool-index [compact]="true" />
+  }
+  <p class="projection-note">{{ projectedNote }}</p>
 
   @if (loading) {
     <ui-card>

@@ -4,6 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { PlanningToolId } from '../models/planning.model';
 import { PlanningQuickToolsComponent } from './planning-quick-tools.component';
+import { clearPlanningDrafts, writeRetirementDraft } from './planning-session';
 
 @Component({
   standalone: true,
@@ -20,6 +21,8 @@ class QuickToolsHostComponent {
 
 describe('PlanningQuickToolsComponent state', () => {
   let fixture: ComponentFixture<QuickToolsHostComponent>;
+
+  afterEach(() => clearPlanningDrafts());
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -47,5 +50,16 @@ describe('PlanningQuickToolsComponent state', () => {
     fixture.detectChanges();
     expect(child().goal.name).toBe('First home');
     expect(child().goal.currentSaved).toBe(18_500);
+  });
+
+  it('restores a retirement draft from this session', () => {
+    clearPlanningDrafts();
+    writeRetirementDraft({ withdrawalRate: 0.04, extraAnnualExpenses: 2400, includeRecurringExpenses: false });
+    fixture = TestBed.createComponent(QuickToolsHostComponent);
+    fixture.detectChanges();
+    const child = fixture.debugElement.query(By.directive(PlanningQuickToolsComponent))
+      .componentInstance as PlanningQuickToolsComponent;
+    expect(child.fire.extraAnnualExpenses).toBe(2400);
+    expect(child.fire.includeRecurringExpenses).toBeFalse();
   });
 });

@@ -1,8 +1,11 @@
 <div class="planning-page" [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    [title]="'Planning'"
+    [title]="pageTitle"
   />
+  @if (!embedded) {
+    <app-planning-tool-index [compact]="activeTool !== 'overview'" />
+  }
 
   @if (!loading && !error && !hasPlanningInputs) {
     <ui-card>
@@ -68,19 +71,6 @@
   </ui-card>
   }
 
-  <div class="planning-question">
-    <label class="mc-field">
-      <span>What are you trying to decide?</span>
-      <select name="activeTool" aria-label="Planning question" [ngModel]="activeTool" (ngModelChange)="setTool($event)">
-        <option value="overview">See my current picture</option>
-        <option value="simulation">Try a what-if scenario</option>
-        <option value="retirement-target">Can I retire or take time off?</option>
-        <option value="savings-goal">Can I reach a savings goal?</option>
-        <option value="debt-payoff">How long to pay off a debt?</option>
-      </select>
-    </label>
-  </div>
-
   @if (showSpendingFallbackBanner()) {
     <div class="mc-callout mc-spending-fallback" role="status">
       <p>
@@ -131,7 +121,7 @@
       } @else if (spendingMode === 'manual') {
         <label class="mc-field">
           <span>Manual annual spending</span>
-          <input name="annual_spending" aria-label="Manual annual spending" type="number" min="0" step="100" [(ngModel)]="assumptions.annual_spending" />
+          <input name="annual_spending" aria-label="Manual annual spending" type="number" min="0" step="100" [ngModel]="assumptions.annual_spending" (ngModelChange)="onAnnualSpendingInput($event)" />
         </label>
       }
 
@@ -308,7 +298,7 @@
           <div class="mc-control-grid">
             <label class="mc-field">
               <span>Horizon</span>
-              <input name="horizonYears" type="number" min="1" max="80" [(ngModel)]="horizonYears" />
+              <input name="horizonYears" type="number" min="1" max="80" [ngModel]="horizonYears" (ngModelChange)="setHorizonYears($event)" />
             </label>
             <label class="mc-field">
               <span>Paths </span>
@@ -317,13 +307,14 @@
                 [min]="mcNPathsMin"
                 [max]="mcNPathsMax"
                 step="100"
-                [(ngModel)]="nPaths"
+                [ngModel]="nPaths"
+                (ngModelChange)="setPathCount($event)"
               />
             </label>
             <label class="mc-field mc-field--seed">
               <span>Seed</span>
               <div class="mc-seed-row">
-                <input name="seed" type="number" [(ngModel)]="seed" />
+                <input name="seed" type="number" [ngModel]="seed" (ngModelChange)="setSeed($event)" />
                 <ui-button variant="secondary" (clicked)="randomizeSeed()">Randomize</ui-button>
               </div>
             </label>

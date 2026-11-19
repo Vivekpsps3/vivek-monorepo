@@ -9,6 +9,12 @@
   min-width: 0;
 }
 
+.projection-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
 .mc-empty-state {
   display: grid;
   place-items: center;

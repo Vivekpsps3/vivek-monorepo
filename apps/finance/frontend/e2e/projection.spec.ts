@@ -9,7 +9,7 @@ test('projection answer, legend and yearly table', async ({ page }) => {
     holdings: [{ id: 1, symbol: 'VOO', shares: 1, cost_basis: 500, position_date: '2026-01-01' }],
   });
   vault.setQuote('VOO', { price: 700.86 });
-  await vault.open('/planning?t=growth');
+  await vault.open('/planning/projection');
 
   await expect(page.getByRole('heading', { name: moneyText('About $5,689 in 30 years') })).toBeVisible();
   await expect(page.getByText(moneyText('Starting from $700.86 · 7% a year · $0.00 a month'))).toBeVisible();

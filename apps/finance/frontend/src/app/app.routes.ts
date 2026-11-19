@@ -1,6 +1,7 @@
 import { inject } from '@angular/core';
 import type { Routes } from '@angular/router';
 import { legacyPayDestination } from './core/layout/finance-navigation';
+import { redirectLegacyPlanningQuery } from './planning/planning-destinations';
 import { MainLayoutComponent } from './core/layout/main-layout.component';
 import { authGuard } from '@vivek/ui';
 import { vaultGuard } from './crypto/vault.guard';
@@ -49,8 +50,51 @@ export const routes: Routes = [
       },
       {
         path: 'planning',
-        title: 'Planning · Finance',
-        loadComponent: () => import('./hubs/planning-hub.component').then(m => m.PlanningHubComponent),
+        children: [
+          {
+            path: '',
+            pathMatch: 'full',
+            title: 'Planning · Finance',
+            canActivate: [redirectLegacyPlanningQuery],
+            runGuardsAndResolvers: 'paramsOrQueryParamsChange',
+            data: { planningTool: 'overview' },
+            loadComponent: () => import('./planning/planning.component').then(m => m.PlanningComponent),
+          },
+          {
+            path: 'retirement',
+            title: 'Retirement · Finance',
+            data: { planningTool: 'retirement-target' },
+            loadComponent: () => import('./planning/planning.component').then(m => m.PlanningComponent),
+          },
+          {
+            path: 'simulation',
+            title: 'Simulation · Finance',
+            data: { planningTool: 'simulation' },
+            loadComponent: () => import('./planning/planning.component').then(m => m.PlanningComponent),
+          },
+          {
+            path: 'savings',
+            title: 'Savings · Finance',
+            data: { planningTool: 'savings-goal' },
+            loadComponent: () => import('./planning/planning.component').then(m => m.PlanningComponent),
+          },
+          {
+            path: 'debt',
+            title: 'Debt · Finance',
+            data: { planningTool: 'debt-payoff' },
+            loadComponent: () => import('./planning/planning.component').then(m => m.PlanningComponent),
+          },
+          {
+            path: 'projection',
+            title: 'Projection · Finance',
+            loadComponent: () => import('./investment-insights/investment-insights.component').then(m => m.InvestmentInsightsComponent),
+          },
+          {
+            path: 'research',
+            title: 'Stock research · Finance',
+            loadComponent: () => import('./stock-lab/stock-lab.component').then(m => m.StockLabComponent),
+          },
+        ],
       },
       { path: 'balance-sheet', pathMatch: 'full', redirectTo: () => '/finance/have' },
       { path: 'portfolio', pathMatch: 'full', redirectTo: () => '/finance/have?t=holdings' },
@@ -60,8 +104,8 @@ export const routes: Routes = [
       { path: 'income', pathMatch: 'full', redirectTo: route => legacyPayDestination(route.queryParamMap) },
       { path: 'fixed-expenses', pathMatch: 'full', redirectTo: () => '/finance/bills' },
       { path: 'subscriptions', pathMatch: 'full', redirectTo: () => '/finance/bills' },
-      { path: 'investment-insights', pathMatch: 'full', redirectTo: () => '/finance/planning?t=growth' },
-      { path: 'stock-lab', pathMatch: 'full', redirectTo: () => '/finance/planning?t=stocks' },
+      { path: 'investment-insights', pathMatch: 'full', redirectTo: () => '/finance/planning/projection' },
+      { path: 'stock-lab', pathMatch: 'full', redirectTo: () => '/finance/planning/research' },
       { path: 'charts', pathMatch: 'full', redirectTo: '' },
       {
         path: '**',

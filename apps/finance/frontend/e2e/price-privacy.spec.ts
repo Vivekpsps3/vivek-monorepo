@@ -60,7 +60,7 @@ test('with automatic checks off, manual refresh updates every holdings screen an
   await expect(prices.nth(1)).toContainText(moneyText('$125.00'));
   expect(vault.quoteRequests).toEqual(['VOO']);
 
-  await vault.open('/planning?t=stocks');
+  await vault.open('/planning/research');
   await expect(page.getByText('Saved price for VOO', { exact: false })).toContainText('125');
   expect(researchRequests).toEqual([]);
   expect(vault.quoteRequestDetails).toEqual([{ symbol: 'VOO', refresh: true }]);
@@ -72,7 +72,7 @@ test('stock research fetches nothing until Look up is chosen', async ({ page }) 
     if (request.url().includes('/api/market/research')) researchRequests.push(request.url());
   });
   const vault = await syntheticVault(page, { holdings });
-  await vault.open('/planning?t=stocks');
+  await vault.open('/planning/research');
 
   await expect(page.getByText('Saved price for VOO', { exact: false })).toBeVisible();
   expect(researchRequests).toEqual([]);

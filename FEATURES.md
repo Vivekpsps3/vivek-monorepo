@@ -40,7 +40,7 @@ The suite runs as one Angular web application, one FastAPI service, and one SQLi
 | World | `/town/world` | Navigable week-based world, concepts, and activity projections |
 | Pixels | `/pixels`, `/pixels/life` | Daily year grid and weekly life view |
 
-Older login/signup/enroll, account, and Finance page URLs redirect into current owners. For example, `/finance/transactions` opens Spending, `/finance/portfolio` opens the holdings tab of Net worth, and `/finance/stock-lab` opens Planning's stocks tab. `/blog` redirects to `/home`. Route definitions, rather than historical standalone apps, determine current navigation.
+Older login/signup/enroll, account, and Finance page URLs redirect into current owners. For example, `/finance/transactions` opens Spending, `/finance/portfolio` opens the holdings tab of Net worth, and `/finance/stock-lab` opens Planning's stock research page. `/blog` redirects to `/home`. Route definitions, rather than historical standalone apps, determine current navigation.
 
 ## Shared Workspace, identity, and settings
 

@@ -7,6 +7,7 @@ import {
 } from '../models/planning.model';
 import { McChartData, MonteCarloFanChartComponent } from './monte-carlo-fan-chart.component';
 import { formatEstimate } from '../shared/stored-money';
+import { PROJECTED_RESULT_NOTE } from './planning-copy';
 
 @Component({
   selector: 'app-planning-results',
@@ -17,6 +18,7 @@ import { formatEstimate } from '../shared/stored-money';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PlanningResultsComponent {
+  readonly projectedNote = PROJECTED_RESULT_NOTE;
   @Input() lastRun: PlanningRun | null = null;
   @Input() baselineRun: PlanningRun | null = null;
   @Input() scenarioRun: PlanningRun | null = null;

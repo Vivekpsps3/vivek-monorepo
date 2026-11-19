@@ -10,6 +10,15 @@ import {
   ViewChild,
   inject,
 } from '@angular/core';
+import { bindLockSnapshots } from '../crypto/lock-finance';
+import { PlanningToolIndexComponent } from '../planning/planning-tool-index.component';
+import { PROJECTED_RESULT_NOTE } from '../planning/planning-copy';
+import {
+  clearPlanningDrafts,
+  readProjectionDraft,
+  retainPlanningDraftsUntilLock,
+  writeProjectionDraft,
+} from '../planning/planning-session';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -72,6 +81,7 @@ type ChartConstructor = new (
     CommonModule,
     FormsModule,
     UiPageHeaderComponent,
+    PlanningToolIndexComponent,
     UiButtonComponent,
     UiCardComponent,
     UiDataTableComponent,
@@ -84,6 +94,7 @@ type ChartConstructor = new (
 })
 export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() embedded = false;
+  readonly projectedNote = PROJECTED_RESULT_NOTE;
   private _projectionChartCanvas?: ElementRef<HTMLCanvasElement>;
 
   @ViewChild('growthInput') growthInput?: ElementRef<HTMLInputElement>;
@@ -112,6 +123,9 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
   private chartCtor: ChartConstructor | null = null;
   private projectionChart?: ChartInstance;
   private viewReady = false;
+  private projectionEpoch = 0;
+  private projectionClosed = false;
+  private releaseDraftLock: (() => void) | null = null;
 
   private readonly router = inject(Router, { optional: true });
 
@@ -126,6 +140,9 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
 
   ngOnInit(): void {
     this.tableOpen = readTablePref();
+    retainPlanningDraftsUntilLock();
+    this.releaseDraftLock = bindLockSnapshots(() => this.onPlanningLock());
+    this.restoreProjectionDraft();
     this.financeService.netWorth$.pipe(takeUntil(this.destroy$)).subscribe(data => {
       this.netWorth = data;
       void this.renderProjectionChart();
@@ -152,6 +169,10 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
   }
 
   ngOnDestroy(): void {
+    this.projectionClosed = true;
+    this.projectionEpoch += 1;
+    this.releaseDraftLock?.();
+    this.releaseDraftLock = null;
     this.destroy$.next();
     this.destroy$.complete();
     this.projectionChart?.destroy();
@@ -408,8 +429,46 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
 
   onAssumptionChange(): void {
     this.normalizeAssumptions();
+    if (!this.projectionClosed) this.rememberProjectionDraft();
     void this.renderProjectionChart();
     this.cdr.markForCheck();
+  }
+
+  private onPlanningLock(): void {
+    this.projectionClosed = true;
+    this.projectionEpoch += 1;
+    clearPlanningDrafts();
+    this.annualGrowthRate = 7;
+    this.withdrawalRate = 4;
+    this.inflationRate = 3;
+    this.monthlyContribution = 0;
+    this.monthlyContributionIncrease = 0;
+    this.projectionYears = 30;
+    this.projectionChart?.destroy();
+    this.projectionChart = undefined;
+    this.cdr.markForCheck();
+  }
+
+  private rememberProjectionDraft(): void {
+    writeProjectionDraft({
+      annualGrowthRate: this.annualGrowthRate,
+      withdrawalRate: this.withdrawalRate,
+      inflationRate: this.inflationRate,
+      monthlyContribution: this.monthlyContribution,
+      monthlyContributionIncrease: this.monthlyContributionIncrease,
+      projectionYears: this.projectionYears,
+    });
+  }
+
+  private restoreProjectionDraft(): void {
+    const draft = readProjectionDraft();
+    if (!draft) return;
+    this.annualGrowthRate = draft.annualGrowthRate;
+    this.withdrawalRate = draft.withdrawalRate;
+    this.inflationRate = draft.inflationRate;
+    this.monthlyContribution = draft.monthlyContribution;
+    this.monthlyContributionIncrease = draft.monthlyContributionIncrease;
+    this.projectionYears = draft.projectionYears;
   }
 
   private projectValueAtRate(rate: number): number {
@@ -471,7 +530,9 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
     if (!this.viewReady || !this.projectionChartCanvas?.nativeElement || this.portfolioValue <= 0) {
       return;
     }
+    const epoch = this.projectionEpoch;
     const Chart = await this.ensureChartCtor();
+    if (epoch !== this.projectionEpoch) return;
     const canvas = this.projectionChartCanvas.nativeElement;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;

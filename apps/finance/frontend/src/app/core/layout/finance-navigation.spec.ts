@@ -27,5 +27,7 @@ describe('legacy Pay destination', () => {
       expect(target).withContext(path).toEqual(jasmine.any(Function));
       expect(String(target?.({}))).toBe('/finance/pay');
     }
+    expect(String(redirect('investment-insights')?.({}))).toBe('/finance/planning/projection');
+    expect(String(redirect('stock-lab')?.({}))).toBe('/finance/planning/research');
   });
 });

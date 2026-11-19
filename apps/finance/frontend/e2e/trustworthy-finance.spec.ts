@@ -264,9 +264,10 @@ test('legacy spending links translate to Activity filters and direct destination
   await expect(page).toHaveURL(/v=spending/);
   await expect(page.getByRole('heading', { name: 'Work income', exact: true })).toHaveCount(0);
   await vault.open('/planning');
-  await expect(page.getByRole('navigation', { name: 'Planning sections', exact: true })).toContainText('Retirement and goals');
-  await expect(page.getByRole('navigation', { name: 'Planning sections', exact: true })).toContainText('Portfolio projection');
-  await expect(page.getByRole('navigation', { name: 'Planning sections', exact: true })).toContainText('Stock research');
+  const tools = page.getByRole('navigation', { name: 'Planning tools', exact: true });
+  for (const label of ['Retirement', 'Simulation', 'Savings', 'Debt', 'Projection', 'Stock research']) {
+    await expect(tools.getByRole('link', { name: label })).toBeVisible();
+  }
 });
 
 test('planning accepts only covered selected spending and persists its composition without changing actual balances', async ({ page }) => {
@@ -302,8 +303,9 @@ test('a coverage gap prevents a planning estimate and preserves a legacy manual 
   const vault = await syntheticVault(page, { ...spendingPlanSeed(true), planning_profiles: [{
     id: 90, name: 'Legacy manual plan', base_currency: 'USD', payload_json: JSON.stringify({ annual_spending: 7777 }),
   }] });
-  await vault.open('/planning?t=path&tool=simulation');
-  await expect(field(page, 'Planning question')).toHaveValue('simulation');
+  await vault.open('/planning/simulation');
+  await expect(page.getByRole('heading', { level: 1, name: 'Simulation' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Simulation', exact: true })).toHaveAttribute('aria-current', 'page');
   await page.getByRole('combobox', { name: 'Load saved inputs', exact: true }).selectOption('90');
   await expect(page.getByRole('combobox', { name: 'Spending basis', exact: true })).toHaveValue('manual');
   await expect(field(page, 'Manual annual spending')).toHaveValue('7777');

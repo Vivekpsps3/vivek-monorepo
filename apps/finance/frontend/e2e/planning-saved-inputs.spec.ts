@@ -11,7 +11,7 @@ test(`${width} ${theme}: saved-inputs failure stays in its card and keyboard ret
   const vault = await syntheticVault(page, {
     assets: [{ id: 1, name: 'Checking', category: 'cash', current_value: 10000, as_of_date: '2026-10-01' }],
   });
-  await vault.open('/planning?tool=simulation');
+  await vault.open('/planning/simulation');
   const card = page.locator('ui-card').filter({
     has: page.getByRole('heading', { name: 'Saved inputs', exact: true }),
   });

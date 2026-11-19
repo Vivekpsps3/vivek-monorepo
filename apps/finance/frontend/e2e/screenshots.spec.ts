@@ -168,12 +168,12 @@ test.describe('finance F1 screenshot matrix', () => {
         await expect(page.getByText(moneyText('−$480.00'))).toHaveCount(0);
         await shot('planning-negative-subscription', width, theme);
 
-        await vault.open('/planning?tool=simulation');
+        await vault.open('/planning/simulation');
         await expect(page.getByText('Using ledger net worth')).toBeVisible();
         await expect(page.getByText('Choose saved inputs to delete.')).toBeVisible();
         await shot('planning-locks', width, theme);
 
-        await vault.open('/planning?t=growth');
+        await vault.open('/planning/projection');
         const selectedPreset = page.getByRole('button', { name: '7% annual growth preset' });
         const otherPreset = page.getByRole('button', { name: '5% annual growth preset' });
         await expect(selectedPreset).toHaveAttribute('aria-pressed', 'true');
@@ -187,7 +187,7 @@ test.describe('finance F1 screenshot matrix', () => {
         await selectedPreset.scrollIntoViewIfNeeded();
         await shot('growth-presets', width, theme);
 
-        await vault.open('/planning?t=stocks');
+        await vault.open('/planning/research');
         await expect(page.getByRole('button', { name: 'Save scenario', exact: true })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Delete scenario', exact: true })).toHaveCount(0);
         await shot('stock-lab-delete', width, theme);

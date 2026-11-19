@@ -1,0 +1,16 @@
+<nav class="planning-tools" [class.compact]="compact" aria-labelledby="planning-tools-heading">
+  <h2 id="planning-tools-heading" class="visually-hidden">Planning tools</h2>
+  @for (tool of tools; track tool.id) {
+    <a
+      [routerLink]="tool.path"
+      routerLinkActive="is-current"
+      [routerLinkActiveOptions]="activeOptions"
+      ariaCurrentWhenActive="page"
+    >
+      <span class="label">{{ tool.label }}</span>
+      @if (!compact) {
+        <span class="detail">{{ tool.detail }}</span>
+      }
+    </a>
+  }
+</nav>

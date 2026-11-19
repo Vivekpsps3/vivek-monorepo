@@ -17,7 +17,7 @@ A new field, provider fixture, or private record starts from the existing owner 
 | **Balance sheet** | encrypted per-user `assets`, `liabilities`, `holdings` collections + market prices | Browser CRUD + Fidelity CSV (holdings per brokerage account) | **Net worth** (computed client-side in `client-finance.ts` after vault unlock) |
 | **Transactions ledger** | encrypted per-user `transactions` collection; legacy income/expense direction plus a typed kind | Browser CRUD + client-side staged bank CSV import | Activity, calendar, observed cashflow summaries |
 | **Recurring cashflow** | encrypted per-user `job_incomes`, `fixed_expenses`, `subscriptions` collections | Browser CRUD in the vault | Income / fixed-expense / subscription pages; cashflow summary computed client-side; planning spending inputs |
-| **Planning (speculative)** | Encrypted `planning_profiles` and `stock_lab_scenarios`; public market research cache | Browser-side profile CRUD and Monte Carlo; Stock Lab scenarios via vault; market research by symbol | Monte Carlo `/planning`, Stock Lab `/stock-lab` |
+| **Planning (speculative)** | Encrypted `planning_profiles` and `stock_lab_scenarios`; public market research cache | Browser-side profile CRUD and Monte Carlo; Stock Lab scenarios via vault; market research by symbol | Monte Carlo `/planning/simulation`, stock research `/planning/research` |
 
 **Invariant:** Net worth is always balance-sheet based: manual assets + portfolio market value − liabilities. Transactions, recurring cashflow rows, and simulations **never** update net worth.
 
@@ -107,7 +107,7 @@ There is no active plaintext analytics or planning router. Monte Carlo inputs an
 - **Monte Carlo:** client-side and read-only; it computes paths from the unlocked encrypted financial snapshot and does not persist runs.
 - **Saved inputs:** named presets in the encrypted vault collection `planning_profiles`.
 - UI: `apps/finance/frontend/src/app/planning/` + `PlanningService`; route `/planning`.
-- **Stock Lab:** `/stock-lab` is a speculative stock/ETF planning page. It saves encrypted scenario inputs in the vault and uses `/api/market/research/*` for public ticker research. Ticker symbols, including selected owned symbols, are intentionally disclosed for this feature; purchase assumptions remain encrypted client data.
+- **Stock research:** `/planning/research` is a speculative stock/ETF planning page. `/stock-lab` redirects there. It saves encrypted scenario inputs in the vault and uses `/api/market/research/*` for public ticker research. Ticker symbols, including selected owned symbols, are intentionally disclosed for this feature; purchase assumptions remain encrypted client data.
 
 ## Imports
 
