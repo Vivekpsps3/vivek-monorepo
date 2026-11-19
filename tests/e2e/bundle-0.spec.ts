@@ -429,7 +429,7 @@ test('a settings lock clears Finance and the Hub in other tabs within a second',
   await finance.setViewportSize({ width: 1280, height: 900 });
   await hub.setViewportSize({ width: 1280, height: 900 });
   await vault.open('/have?t=assets', finance);
-  await expect(finance.getByRole('cell', { name: 'Harbor Checking' })).toBeVisible();
+  await expect(finance.getByRole('rowheader', { name: /^Harbor Checking/ })).toBeVisible();
   await vault.open('/hub', hub);
   const card = hub.locator('.finance-bar');
   await expect.poll(async () => card.evaluate(el => el.textContent || '')).toMatch(/\$[\s\u2060]*\d/);
