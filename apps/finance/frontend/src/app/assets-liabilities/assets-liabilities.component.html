@@ -1,233 +1,132 @@
-<div [class.page]="!embedded" [class.embed]="embedded">
-  <ui-page-header
-    [embedded]="embedded"
-    [title]="'Assets and debts'">
+<ui-page-header title="Accounts" titleId="accounts-heading">
+  <div uiPageActions class="header-actions">
+    <ui-button variant="primary" (clicked)="openEditor('asset')">Add asset</ui-button>
+    <ui-button variant="secondary" (clicked)="openEditor('debt')">Add debt</ui-button>
+  </div>
+</ui-page-header>
 
-    @if (assets.length || liabilities.length) {
-      <div uiPageActions class="header-actions">
-        <ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button>
-        <ui-button variant="secondary" (clicked)="openAddLiability()">Add debt</ui-button>
-      </div>
-    }
-  </ui-page-header>
-
-  @if (netWorth && hasBalanceSheet) {
+@if (netWorth; as worth) {
+  @if (hasBalances() || worth.portfolio !== 0) {
     <ui-card class="summary-card net-worth-hero">
       <p class="section-eyebrow">Net worth</p>
-      <div class="stat-display money" aria-live="polite">{{ netWorth.total | money }}</div>
-      @if (excludedNote(); as note) {
+      <div class="stat-display money" aria-live="polite">{{ worth.total | money }}</div>
+      @if (excludedAmountNote(worth.excluded_invalid_amounts ?? 0); as note) {
         <p class="muted">{{ note }}</p>
       }
       <p class="summary-line">
-        <span class="summary-part">Assets <strong class="money">{{ netWorth.other_assets | money }}</strong></span>
+        <span>Assets <strong class="money">{{ worth.other_assets | money }}</strong></span>
         <span class="summary-sep" aria-hidden="true">·</span>
-        <span class="summary-part">Investments <strong class="money">{{ netWorth.portfolio | money }}</strong></span>
+        <span>Investments <strong class="money">{{ worth.portfolio | money }}</strong></span>
         <span class="summary-sep" aria-hidden="true">·</span>
-        <span class="summary-part">Debts <strong class="money">{{ (-netWorth.liabilities) | money }}</strong></span>
+        <span>Debts <strong class="money">{{ (-worth.liabilities) | money }}</strong></span>
       </p>
-      @if (balancesDatesSummary()) {
-        <p class="source-dates">Balances as of <strong>{{ balancesDatesSummary() }}</strong></p>
+      @if (balancesDates(); as dates) {
+        <p class="source-dates">Balances as of <strong>{{ dates }}</strong></p>
       }
     </ui-card>
   }
+}
 
-  <ui-card [title]="'Assets'">
-    @if (assets.length) {
-      <ui-data-table ariaLabel="Assets">
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Category</th>
-            <th scope="col" class="num">Value</th>
-            <th scope="col">As of</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of assets; track row.id) {
-            <tr>
-              <td class="name-cell">{{ row.name }}</td>
-              <td>{{ row.category | formatCategory }}</td>
-              <td class="num">
-                @if (amountProblem(row.current_value, 'nonNegative'); as problem) {
-                  <ui-badge variant="warning">Needs fixing</ui-badge>
-                  @if (problem === 'over-max') {
-                    <span>Amount too large to count · <button type="button" (click)="openEditAsset(row)">Fix</button></span>
-                  } @else {
-                    {{ row.current_value | money }}
-                  }
-                } @else {
-                  {{ row.current_value | money }}
-                }
-              </td>
-              <td>{{ row.as_of_date | appDate }}</td>
-              <td class="actions actions--row">
-                <ui-button variant="ghost" size="sm" (clicked)="openEditAsset(row)">Edit</ui-button>
-                <ui-button variant="danger" size="sm" (clicked)="deleteAsset(row)">Delete</ui-button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </ui-data-table>
-      <ul class="row-list">
-        @for (row of assets; track row.id) {
-          <li class="row-list__item">
-            <div class="row-list__line">
-              <strong>{{ row.name }}</strong>
-              @if (amountProblem(row.current_value, 'nonNegative'); as problem) {
-                <span>
-                  <ui-badge variant="warning">Needs fixing</ui-badge>
-                  @if (problem === 'over-max') {
-                    <span>Amount too large to count · <button type="button" (click)="openEditAsset(row)">Fix</button></span>
-                  } @else {
-                    <span class="money">{{ row.current_value | money }}</span>
-                  }
-                </span>
-              } @else {
-                <span class="money">{{ row.current_value | money }}</span>
-              }
-            </div>
-            <div class="row-list__line row-list__meta">
-              <span>{{ row.category | formatCategory }} · {{ row.as_of_date | appDate }}</span>
-              <span class="row-list__actions">
-                <ui-button variant="ghost" size="sm" (clicked)="openEditAsset(row)">Edit</ui-button>
-                <ui-button variant="danger" size="sm" (clicked)="deleteAsset(row)">Delete</ui-button>
-              </span>
-            </div>
-          </li>
-        }
-      </ul>
-    } @else {
-      <ui-empty-state [title]="'No assets yet'" message="Add checking, savings, property, or anything else you own.">
-        <div class="empty-actions"><ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button></div>
-      </ui-empty-state>
-    }
-  </ui-card>
-
-  <ui-card [title]="'Debts'">
-    @if (liabilities.length) {
-      <ui-data-table ariaLabel="Debts">
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Category</th>
-            <th scope="col" class="num">Owed</th>
-            <th scope="col">As of</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of liabilities; track row.id) {
-            <tr>
-              <td class="name-cell">{{ row.name }}</td>
-              <td>{{ row.category | formatCategory }}</td>
-              <td class="num">
-                @if (amountProblem(row.balance_owed, 'nonNegative'); as problem) {
-                  <ui-badge variant="warning">Needs fixing</ui-badge>
-                  @if (problem === 'over-max') {
-                    <span>Amount too large to count · <button type="button" (click)="openEditLiability(row)">Fix</button></span>
-                  } @else {
-                    {{ (-row.balance_owed) | money }}
-                  }
-                } @else {
-                  {{ (-row.balance_owed) | money }}
-                }
-              </td>
-              <td>{{ row.as_of_date | appDate }}</td>
-              <td class="actions actions--row">
-                <ui-button variant="ghost" size="sm" (clicked)="openEditLiability(row)">Edit</ui-button>
-                <ui-button variant="danger" size="sm" (clicked)="deleteLiability(row)">Delete</ui-button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </ui-data-table>
-      <ul class="row-list">
-        @for (row of liabilities; track row.id) {
-          <li class="row-list__item">
-            <div class="row-list__line">
-              <strong>{{ row.name }}</strong>
-              @if (amountProblem(row.balance_owed, 'nonNegative'); as problem) {
-                <span>
-                  <ui-badge variant="warning">Needs fixing</ui-badge>
-                  @if (problem === 'over-max') {
-                    <span>Amount too large to count · <button type="button" (click)="openEditLiability(row)">Fix</button></span>
-                  } @else {
-                    <span class="money">{{ (-row.balance_owed) | money }}</span>
-                  }
-                </span>
-              } @else {
-                <span class="money">{{ (-row.balance_owed) | money }}</span>
-              }
-            </div>
-            <div class="row-list__line row-list__meta">
-              <span>{{ row.category | formatCategory }} · {{ row.as_of_date | appDate }}</span>
-              <span class="row-list__actions">
-                <ui-button variant="ghost" size="sm" (clicked)="openEditLiability(row)">Edit</ui-button>
-                <ui-button variant="danger" size="sm" (clicked)="deleteLiability(row)">Delete</ui-button>
-              </span>
-            </div>
-          </li>
-        }
-      </ul>
-    } @else {
-      <ui-empty-state icon="credit-card" [title]="'No debts recorded'" message="Add a mortgage, loan, or card balance you owe.">
-        <div class="empty-actions"><ui-button variant="primary" (clicked)="openAddLiability()">Add debt</ui-button></div>
-      </ui-empty-state>
-    }
-  </ui-card>
+<div class="account-tools">
+  @if (hasBalances() || query()) {
+    <ui-field label="Search accounts">
+      <input #accountSearch uiFieldControl type="search" [ngModel]="query()" (ngModelChange)="query.set($event)" />
+    </ui-field>
+  }
+  <ui-button variant="ghost" href="/finance/spending" label="View card activity" />
 </div>
 
-<ui-dialog scrollTarget=".main-content" [open]="showAssetModal" labelledBy="asset-modal-title" (closed)="closeModals()">
-  <h3 id="asset-modal-title">{{ editingAssetId ? 'Edit asset' : 'Add asset' }}</h3>
-  @if (assetSaveError) {
-    <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ assetSaveError }}</p>
+@if (loadFailed) {
+  <div class="load-error">
+    <p role="alert">Couldn't load all balances.</p>
+    <ui-button variant="secondary" (clicked)="loadBalances()">Try again</ui-button>
+  </div>
+} @else if (loading) {
+  <p class="muted" role="status">Loading balances…</p>
+}
+
+<div class="balance-groups">
+  @for (group of groups(); track group.kind) {
+    <ui-card [title]="group.title" [headingLevel]="2">
+      @if (group.rows.length) {
+        <ui-data-table [ariaLabel]="group.title" [compact]="true">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col" class="num">{{ group.amountLabel }}</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of group.rows; track row.id) {
+              <tr>
+                @let problem = amountProblem(row.value, 'nonNegative');
+                @let nameId = group.kind + '-balance-name-' + row.id;
+                <th scope="row" class="balance-identity">
+                  <span [id]="nameId">{{ row.name }}</span>
+                  <span class="balance-meta">
+                    <span>{{ row.category | formatCategory }}</span>
+                    @let date = row.as_of_date | appDate;
+                    @if (date !== 'No date') {
+                      <span>As of {{ date }}</span>
+                    } @else {
+                      <span>No source date</span>
+                    }
+                  </span>
+                </th>
+                <td class="num balance-value">
+                  @if (problem !== 'over-max') {
+                    <strong class="money">{{ (group.kind === 'asset' ? row.value : -row.value) | money }}</strong>
+                  }
+                  @if (problem) {
+                    <ui-badge variant="warning">Needs fixing</ui-badge>
+                    @if (problem === 'over-max') { <span class="amount-message">Amount too large to count</span> }
+                  }
+                </td>
+                <td class="actions--row balance-actions">
+                  <ui-button variant="ghost" [describedBy]="nameId" (clicked)="openEditor(group.kind, row)">{{ problem === 'over-max' ? 'Fix' : 'Edit' }}</ui-button>
+                  <ui-button variant="danger-ghost" [describedBy]="nameId" (clicked)="deleteBalance(group.kind, row)">Delete</ui-button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </ui-data-table>
+      } @else if (!loading && !loadFailed) {
+        @if (group.count) {
+          <p class="muted no-matches" role="status">No matching {{ group.title.toLowerCase() }}.</p>
+        } @else {
+          <ui-empty-state [title]="group.emptyTitle" [message]="group.emptyMessage" />
+        }
+      }
+    </ui-card>
   }
-  <form id="asset-form" class="sheet-form" novalidate (ngSubmit)="saveAsset()">
-    <ui-field label="Name" [error]="assetFieldError('name')">
-      <input uiFieldControl data-field="name" name="asset-name" [(ngModel)]="assetForm.name" data-dialog-initial-focus (blur)="revalidateAsset()" />
-    </ui-field>
-    <ui-select label="Category" [options]="assetCategoryOptions" [(value)]="assetForm.category" />
-    <ui-field label="Value" [error]="assetFieldError('value')">
-      <input uiFieldControl data-field="value" name="asset-value" type="text" inputmode="decimal" [(ngModel)]="assetForm.current_value" (blur)="revalidateAsset()" />
-    </ui-field>
-    <ui-field label="As of" [optional]="true">
-      <input uiFieldControl name="asset-date" type="date" [(ngModel)]="assetForm.as_of_date" />
-    </ui-field>
-    <ui-field label="Notes" [optional]="true">
-      <input uiFieldControl name="asset-notes" [(ngModel)]="assetForm.notes" />
-    </ui-field>
-    <div class="modal-actions">
-      <ui-button type="button" variant="ghost" (clicked)="closeModals()">Cancel</ui-button>
-      <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save asset' }}</ui-button>
-    </div>
-  </form>
-</ui-dialog>
-<ui-dialog scrollTarget=".main-content" [open]="showLiabilityModal" labelledBy="liability-modal-title" (closed)="closeModals()">
-  <h3 id="liability-modal-title">{{ editingLiabilityId ? 'Edit debt' : 'Add debt' }}</h3>
-  @if (liabilitySaveError) {
-    <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ liabilitySaveError }}</p>
+</div>
+
+<ui-dialog scrollTarget=".main-content" [open]="editor !== null" labelledBy="account-dialog-title" (closed)="closeEditor()">
+  @if (editor; as draft) {
+    @let amountField = draft.kind === 'asset' ? 'value' : 'amount';
+    <h2 id="account-dialog-title">{{ draft.id === null ? 'Add' : 'Edit' }} {{ draft.kind }}</h2>
+    @if (draft.saveError) {
+      <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ draft.saveError }}</p>
+    }
+    <form id="account-balance-form" class="sheet-form" novalidate (ngSubmit)="saveEditor()">
+      <ui-field label="Name" [error]="fieldError('name')">
+        <input uiFieldControl name="balance-name" [(ngModel)]="draft.name" data-dialog-initial-focus (blur)="revalidate()" />
+      </ui-field>
+      <ui-select label="Category" [options]="balanceKinds[draft.kind].categories" [(value)]="draft.category" />
+      <ui-field [label]="draft.kind === 'asset' ? 'Value' : 'Amount owed'" [error]="fieldError(amountField)">
+        <input uiFieldControl name="balance-value" type="text" inputmode="decimal" [(ngModel)]="draft.value" (blur)="revalidate()" />
+      </ui-field>
+      <ui-field label="As of" [optional]="true">
+        <input uiFieldControl name="balance-date" type="date" [(ngModel)]="draft.date" />
+      </ui-field>
+      <ui-field label="Notes" [optional]="true">
+        <input uiFieldControl name="balance-notes" [(ngModel)]="draft.notes" />
+      </ui-field>
+      <div class="modal-actions">
+        <ui-button variant="ghost" (clicked)="closeEditor()">Cancel</ui-button>
+        <ui-button type="submit" variant="primary" [disabled]="draft.saving">{{ draft.saving ? 'Saving…' : 'Save ' + draft.kind }}</ui-button>
+      </div>
+    </form>
   }
-  <form id="liability-form" class="sheet-form" novalidate (ngSubmit)="saveLiability()">
-    <ui-field label="Name" [error]="liabilityFieldError('name')">
-      <input uiFieldControl data-field="name" name="debt-name" [(ngModel)]="liabilityForm.name" data-dialog-initial-focus (blur)="revalidateLiability()" />
-    </ui-field>
-    <ui-select
-      label="Category"
-      [options]="liabilityCategoryOptions"
-      [(value)]="liabilityForm.category" />
-    <ui-field label="Amount owed" [error]="liabilityFieldError('amount')">
-      <input uiFieldControl data-field="amount" name="debt-amount" type="text" inputmode="decimal" [(ngModel)]="liabilityForm.balance_owed" (blur)="revalidateLiability()" />
-    </ui-field>
-    <ui-field label="As of" [optional]="true">
-      <input uiFieldControl name="debt-date" type="date" [(ngModel)]="liabilityForm.as_of_date" />
-    </ui-field>
-    <ui-field label="Notes" [optional]="true">
-      <input uiFieldControl name="debt-notes" [(ngModel)]="liabilityForm.notes" />
-    </ui-field>
-    <div class="modal-actions">
-      <ui-button type="button" variant="ghost" (clicked)="closeModals()">Cancel</ui-button>
-      <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save debt' }}</ui-button>
-    </div>
-  </form>
 </ui-dialog>
