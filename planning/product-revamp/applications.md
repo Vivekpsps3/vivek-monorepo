@@ -140,8 +140,9 @@ Keep an incomplete draft without manufacturing those facts. Decide how a draft
 maps to current required trip fields before authorizing a schema change.
 
 Advance schedule lookup, near-departure updates and historical recovery are distinct
-capabilities. Specify date coverage, source, confidence/freshness, fees/configuration,
-timeouts and manual fallback for each. See [flight discovery](connections.md).
+capabilities. Date coverage, source, fees, configuration, timeout and manual
+fallback are specified in the [TUX-02 adapter contract](../implementation/issues/TUX-02.md).
+See [flight discovery](connections.md).
 
 Booking capture candidates: paste a confirmation, upload/select an `.ics` calendar
 file, or choose a supported booking source. Decide scope before designing parser
