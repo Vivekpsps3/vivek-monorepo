@@ -488,10 +488,7 @@ label.form-group,
   overflow-wrap: anywhere;
 }
 
-.tx-mobile-details .actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
+.tx-mobile-details .row-actions {
   margin-top: var(--space-3);
 }
 
@@ -891,8 +888,7 @@ label.form-group,
   .empty-actions,
   .category-merge-action,
   .category-bulk-rename__actions,
-  .load-more-row,
-  .tx-mobile-details .actions {
+  .load-more-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -913,7 +909,6 @@ label.form-group,
   .import-file-heading ::ng-deep .ui-btn,
   .load-more-row ::ng-deep .ui-btn,
   .activity-load-error ::ng-deep .ui-btn,
-  .tx-mobile-details .actions ::ng-deep .ui-btn,
   :host ::ng-deep .ui-btn--sm {
     width: auto;
     max-width: 100%;
@@ -1070,14 +1065,18 @@ label.form-group,
 }
 
 .tx-table-wrap th:nth-child(4) {
-  width: 8.5rem;
+  width: 10rem;
 }
 
-.actions--row {
+.row-actions {
   --control-h-sm: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
 }
 
-.actions--row ::ng-deep .ui-btn {
+.row-actions ::ng-deep .ui-btn {
   min-width: 44px;
   min-height: 44px;
 }

@@ -224,11 +224,13 @@ for (const [width, height] of [[390, 844], [1280, 800]] as const) {
         if (width === 390) await row.locator('summary').tap();
         const edit = row.getByRole('button', { name: 'Edit', exact: true });
         const remove = row.getByRole('button', { name: 'Delete', exact: true });
-        for (const action of [edit, remove]) {
-          const box = await action.boundingBox();
+        const editBox = await edit.boundingBox();
+        const deleteBox = await remove.boundingBox();
+        for (const box of [editBox, deleteBox]) {
           expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
           expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
         }
+        expect(editBox?.y).toBe(deleteBox?.y);
         if (width === 390) await edit.tap();
         else await edit.press('Enter');
         const editor = page.getByRole('dialog', { name: 'Edit transaction' });

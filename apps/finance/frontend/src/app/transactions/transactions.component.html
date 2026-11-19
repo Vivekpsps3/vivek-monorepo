@@ -345,7 +345,7 @@
             <td class="amount-col" [class.positive]="transactionAmountClass(tx) === 'positive'" [class.negative]="transactionAmountClass(tx) === 'negative'">
               {{ transactionAmountPrefix(tx) }}{{ tx.amount | money }}
             </td>
-            <td class="actions actions--row">
+            <td>
               <ng-container *ngTemplateOutlet="rowActions; context: { $implicit: tx }" />
             </td>
           </tr>
@@ -375,9 +375,7 @@
             <p><strong>Source description</strong><span>{{ tx.description || '—' }}</span></p>
             <p><strong>Account</strong><span>{{ tx.account_display || '—' }}</span></p>
             @if (tx.kind === 'ambiguous_credit') { <p><strong>Classification</strong><span>Choose a type to include this credit in spending or income totals.</span></p> }
-            <div class="actions actions--row">
-              <ng-container *ngTemplateOutlet="rowActions; context: { $implicit: tx }" />
-            </div>
+            <ng-container *ngTemplateOutlet="rowActions; context: { $implicit: tx }" />
           </div>
         </details>
       }
@@ -417,8 +415,10 @@
 </div>
 
 <ng-template #rowActions let-tx>
-  <ui-button variant="ghost" size="sm" [disabled]="isDeleting(tx.id)" (clicked)="editTransaction(tx)">Edit</ui-button>
-  <ui-button variant="ghost" size="sm" [disabled]="isDeleting(tx.id)" (clicked)="deleteTransaction(tx)">Delete</ui-button>
+  <div class="row-actions">
+    <ui-button variant="ghost" size="sm" [disabled]="isDeleting(tx.id)" (clicked)="editTransaction(tx)">Edit</ui-button>
+    <ui-button variant="ghost" size="sm" [disabled]="isDeleting(tx.id)" (clicked)="deleteTransaction(tx)">Delete</ui-button>
+  </div>
 </ng-template>
 
 <ng-template #receiptHistory>
