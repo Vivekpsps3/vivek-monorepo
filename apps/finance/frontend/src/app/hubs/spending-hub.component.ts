@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { TransactionsComponent } from '../transactions/transactions.component';
 import { CalendarComponent } from '../calendar/calendar.component';
-import { UiPageHeaderComponent } from '@vivek/ui';
+import { UiPageHeaderComponent, isReturnDate } from '@vivek/ui';
 
 export type SpendingTab = 'activity' | 'calendar';
 export type SpendingActivityView = 'all' | 'spending' | 'income';
@@ -63,7 +63,13 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
   imports: [TransactionsComponent, CalendarComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
-      <ui-page-header [title]="tab === 'calendar' ? 'Calendar' : receiptsOpen ? 'Imports' : 'Activity'" [concealTitle]="true" />
+      <ui-page-header
+        [title]="tab === 'calendar' ? 'Calendar' : receiptsOpen ? 'Imports' : 'Activity'"
+        [concealTitle]="true"
+        backLabel="Back to Pixels day"
+        [backLink]="tab === 'activity' ? pixelsSource : undefined"
+        [backSource]="pixelsSource"
+      />
       @switch (tab) {
         @case ('calendar') { <app-calendar [embedded]="true" /> }
         @case ('activity') {
@@ -87,6 +93,7 @@ export class SpendingHubComponent implements OnInit {
   tab: SpendingTab = 'activity';
   activityView: SpendingActivityView = 'all';
   receiptsOpen = false;
+  pixelsSource: string | undefined;
 
   get activityTypeFilter(): 'all' | 'income' | 'expense' {
     return this.activityView === 'income' ? 'income' : this.activityView === 'spending' ? 'expense' : 'all';
@@ -98,6 +105,8 @@ export class SpendingHubComponent implements OnInit {
       this.tab = state.tab;
       this.activityView = state.activityView;
       this.receiptsOpen = state.receiptsOpen;
+      const day = params.get('pixelsDay') || '';
+      this.pixelsSource = isReturnDate(day) ? `/pixels?year=${day.slice(0, 4)}&day=${day}` : undefined;
       if (state.queryParams) {
         void this.router.navigate([], {
           relativeTo: this.route,

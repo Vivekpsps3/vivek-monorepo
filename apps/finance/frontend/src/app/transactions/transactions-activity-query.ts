@@ -1,5 +1,6 @@
 import { fromDollars } from '@vivek/browser';
 import { transactionEffects } from '../crypto/client-finance';
+import { normalizeTripId } from './trip-tag';
 import { Transaction } from '../models/transaction.model';
 import { spendingGroupKey, UNASSIGNED_ACCOUNT_FILTER } from '../utils/spending-filter.util';
 
@@ -14,6 +15,7 @@ export interface TransactionActivityFilters {
   categoryFilter: string;
   merchantFilter: string;
   receiptFilter: string;
+  tripFilter: string;
 }
 
 export interface TransactionActivityTotals {
@@ -45,6 +47,10 @@ export function filterTransactionActivity(rows: Transaction[], filters: Transact
     if (filters.accountFilter && filters.accountFilter !== UNASSIGNED_ACCOUNT_FILTER && row.bank_account_key !== filters.accountFilter) return false;
     if (filters.categoryFilter && spendingGroupKey(row, 'category') !== filters.categoryFilter) return false;
     if (filters.merchantFilter && spendingGroupKey(row, 'merchant') !== filters.merchantFilter) return false;
+    if (filters.tripFilter) {
+      const trip = normalizeTripId(row.trip_id);
+      if (filters.tripFilter === 'none' ? trip !== null : trip !== normalizeTripId(filters.tripFilter)) return false;
+    }
     if (filters.receiptFilter && Number(row.import_receipt_id) !== Number(filters.receiptFilter)) return false;
     return true;
   });

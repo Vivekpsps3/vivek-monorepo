@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 import { test, expect } from './frozen-clock';
 import { syntheticVault } from './synthetic-vault';
@@ -6,7 +7,7 @@ import { moneyText } from './money-text';
 /**
  * F12 acceptance: header action order, the period summary with per-type
  * counts, the Filters panel and chips, the four-column table and the
- * mobile rows. The row-menu test lands with K1's ui-menu (not on main).
+ * mobile row details. FUX-03 exercises the shared row actions and dated filters.
  */
 
 const activitySeed = {
@@ -163,6 +164,85 @@ for (const width of [390, 1280]) {
         await row.locator('summary').click();
         await expect(row.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
         await expectCleanPage(page, violations);
+      });
+    });
+  }
+}
+
+for (const [width, height] of [[390, 844], [1280, 800]] as const) {
+  for (const theme of ['light', 'dark'] as const) {
+    test.describe(`Activity filters and correction at ${width} in ${theme}`, () => {
+      test.use({ viewport: { width, height }, hasTouch: width === 390, reducedMotion: 'reduce' });
+
+      test('combines date, range, account, category and trip on one ledger', async ({ page }, info) => {
+        await page.addInitScript(choice => localStorage.setItem('suite-theme', choice), theme);
+        const vault = await syntheticVault(page, {
+          ...activitySeed,
+          transactions: [
+            { ...activitySeed.transactions[0], trip_id: 5 },
+            { ...activitySeed.transactions[1], date: '2026-10-06', trip_id: 5 },
+            { ...activitySeed.transactions[2], trip_id: 8, bank_account_key: 'card-a', account_display: 'Daily card' },
+          ],
+        });
+        await page.route('**/travel/api/home', route => route.fulfill({
+          json: { in_progress: [{ id: 5, title: 'Coast field trip' }], upcoming: [], past: [] },
+        }));
+        await vault.open('/spending?month=all');
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        const filter = page.getByRole('button', { name: 'Filters', exact: true });
+        if (width === 390) await filter.tap();
+        else await filter.press('Enter');
+        const panel = page.getByRole('group', { name: 'Filters', exact: true });
+        const exact = panel.getByLabel('Exact day');
+        const from = panel.getByLabel('From date');
+        const through = panel.getByLabel('Through date');
+        const trip = panel.getByLabel('Trip', { exact: true });
+        await expect(trip.locator('option')).toHaveText(['All trips', 'No trip', 'Coast field trip', 'Trip #8']);
+        await exact.fill('2026-10-05');
+        await expect(page).toHaveURL(url => url.searchParams.get('date') === '2026-10-05');
+        const visibleRows = width === 390
+          ? page.locator('.tx-mobile-row')
+          : page.getByRole('table', { name: 'Transactions history' }).locator('tbody tr');
+        await expect(visibleRows).toHaveCount(1);
+        await expect(visibleRows.first()).toContainText('Corner Cafe');
+
+        await from.fill('2026-10-04');
+        await through.fill('2026-10-07');
+        await expect(page).toHaveURL(url => url.searchParams.get('through') === '2026-10-07' && !url.searchParams.has('date'));
+        await expect(visibleRows).toHaveCount(2);
+        await trip.selectOption('5');
+        await panel.getByLabel('Category', { exact: true }).selectOption({ label: 'Food and Drink' });
+        await panel.getByLabel('Account', { exact: true }).selectOption({ label: 'Daily card' });
+        await expect(visibleRows).toHaveCount(1);
+        await expect(visibleRows.first()).toContainText('Imported');
+        await expect(page.getByRole('button', { name: 'Remove filter Trip: Coast field trip' })).toBeVisible();
+        await through.press('Escape');
+        await expect(page.getByRole('button', { name: 'Filters (5)', exact: true })).toBeFocused();
+        await expect(panel).toBeHidden();
+
+        const row = visibleRows.first();
+        if (width === 390) await row.locator('summary').tap();
+        const edit = row.getByRole('button', { name: 'Edit', exact: true });
+        const remove = row.getByRole('button', { name: 'Delete', exact: true });
+        for (const action of [edit, remove]) {
+          const box = await action.boundingBox();
+          expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+          expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+        }
+        if (width === 390) await edit.tap();
+        else await edit.press('Enter');
+        const editor = page.getByRole('dialog', { name: 'Edit transaction' });
+        await expect(editor.getByLabel('Amount')).toHaveValue('10');
+        await expect(editor.getByLabel('Description (optional)')).toHaveAttribute('readonly', '');
+        await page.keyboard.press('Escape');
+        await expect(editor).toHaveCount(0);
+        await expect(edit).toBeFocused();
+        const audit = await new AxeBuilder({ page }).analyze();
+        expect(audit.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+        await expectCleanPage(page, []);
+        const screenshot = info.outputPath('activity.png');
+        await page.screenshot({ path: screenshot, fullPage: true });
+        await info.attach('activity', { path: screenshot, contentType: 'image/png' });
       });
     });
   }

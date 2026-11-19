@@ -4,6 +4,7 @@ import {
   Component,
   ElementRef,
   Input,
+  inject,
   OnChanges,
   OnDestroy,
   OnInit,
@@ -13,7 +14,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Subject, takeUntil } from 'rxjs';
+import { catchError, merge, of, Subject, switchMap, take, takeUntil, tap } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { TransactionsImportWorkflow } from './transactions-import-workflow';
 import { TransactionsEditorWorkflow } from './transactions-editor-workflow';
@@ -36,7 +37,10 @@ import {
   Transaction,
   TransactionCreate,
 } from '../models/transaction.model';
-import { ConfirmService, ToastService, failureCopy } from '@vivek/ui';
+import { ConfirmService, SESSION_CONTEXT, ToastService, failureCopy, isReturnDate } from '@vivek/ui';
+import { readLockEpoch } from '../crypto/dek-holder';
+import { bindLockSnapshots } from '../crypto/lock-finance';
+import { normalizeTripId, tripTagChoices, type TripTagHome } from './trip-tag';
 import { downloadCsv, formatDate, plural } from '@vivek/browser';
 import { excludedAmountNote } from '../utils/validators';
 import { focusField } from '../shared/form-validation';
@@ -53,7 +57,6 @@ import {
   UiCardComponent,
   UiEmptyStateComponent,
   UiPageHeaderComponent,
-  UiIconComponent,
   UiSelectComponent,
   UiSelectOption,
   UiDataTableComponent,
@@ -77,7 +80,6 @@ import { PluralPipe } from '../shared/pipes/plural.pipe';
     UiCardComponent,
     UiBadgeComponent,
     UiEmptyStateComponent,
-    UiIconComponent,
     UiSelectComponent,
     UiDataTableComponent,
     UiDialogComponent,
@@ -108,6 +110,8 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   merchantFilter = '';
   accountFilter = '';
   receiptFilter = '';
+  tripFilter = '';
+  private tripHome: TripTagHome | null = null;
   fromDate = '';
   throughDate = '';
   sortColumn: 'date' | 'category' | 'amount' = 'date';
@@ -177,7 +181,14 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   hasMore = true;
   listLoading = false;
 
-  private destroy$ = new Subject<void>();
+  private readonly destroy$ = new Subject<void>();
+  private readonly retryRows$ = new Subject<void>();
+  private readonly session = inject(SESSION_CONTEXT, { optional: true });
+  private readonly openedLock = readLockEpoch();
+  private readonly releaseLock = bindLockSnapshots(() => this.invalidateActivity());
+  private active = true;
+  private readonly deleting = new Set<number>();
+  private readonly rowToastIds = new Set<number>();
   private allTransactionsLoaded = false;
   private queryInitialized = false;
   private lastDeepLinkedEdit = '';
@@ -211,6 +222,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
       this.sortDirection = 'desc';
     }
 
+    this.session?.cleared$?.pipe(takeUntil(this.destroy$)).subscribe(() => this.invalidateActivity());
     this.connectImportContextRefresh();
     this.route.queryParamMap.pipe(takeUntil(this.destroy$)).subscribe(params => this.applyRouteQuery(params));
 
@@ -238,25 +250,28 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
       },
     });
 
-    this.financeService.transactions$.pipe(takeUntil(this.destroy$)).subscribe(data => {
-      this.transactions = data;
-      this.financeService.getAllTransactions().pipe(takeUntil(this.destroy$)).subscribe(all => {
-        this.allTransactions = all;
-        this.allTransactionsLoaded = true;
+    merge(
+      this.financeService.transactions$.pipe(tap(rows => { this.transactions = rows; })),
+      this.retryRows$,
+    ).pipe(
+      switchMap(() => {
+        if (!this.allTransactionsLoaded) this.listLoading = true;
+        this.applyFilterAndSort();
+        return this.financeService.getAllTransactions().pipe(catchError(() => of(null)));
+      }),
+      takeUntil(this.destroy$),
+    ).subscribe(rows => {
+      this.listLoading = false;
+      this.allTransactionsLoaded = true;
+      if (rows) {
+        this.allTransactions = rows;
         this.listError = '';
-        this.applyFilterAndSort();
         this.openRouteTransactionIfReady();
-      }, () => {
-        this.allTransactionsLoaded = true;
+      } else {
         this.listError = 'Activity could not load all transactions. Try again or refresh the page.';
-        this.applyFilterAndSort();
-        this.cdr.markForCheck();
-      });
+      }
       this.applyFilterAndSort();
-      this.cdr.markForCheck();
     });
-
-    this.reloadTransactionList();
   }
 
   private connectImportContextRefresh(): void {
@@ -296,22 +311,26 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     if (params.has('month')) {
       const month = params.get('month') || '';
       this.summaryMonth = month === 'all' ? '' : /^\d{4}-\d{2}$/.test(month) ? month : '';
-    } else if (params.has('periodStart') || params.has('date') || params.has('from')) {
+    } else if (params.has('periodStart') || params.has('date') || params.has('from') || params.has('through')) {
       this.summaryMonth = '';
     } else if (isInitial) {
       this.summaryMonth = this.currentMonthKey();
     }
-    this.categoryFilter = params.get('category') ? normalizeSpendingLabel(params.get('category')) : '';
-    this.merchantFilter = params.get('merchant') ? normalizeSpendingLabel(params.get('merchant')) : '';
+    this.categoryFilter = normalizeSpendingLabel(params.get('category') || '');
+    this.merchantFilter = normalizeSpendingLabel(params.get('merchant') || '');
     this.accountFilter = params.get('account') || '';
     this.receiptFilter = /^\d+$/.test(params.get('receipt') || '') ? params.get('receipt')! : '';
     this.reattachReceiptId = /^\d+$/.test(params.get('reattach') || '') ? Number(params.get('reattach')) : null;
     this.reattachReceiptFilename = params.get('reattach_file') || null;
-    this.fromDate = /^\d{4}-\d{2}-\d{2}$/.test(params.get('from') || '') ? params.get('from')! : '';
-    this.throughDate = /^\d{4}-\d{2}-\d{2}$/.test(params.get('through') || '') ? params.get('through')! : '';
+    const trip = params.get('trip') || '';
+    this.tripFilter = trip === 'none' || normalizeTripId(trip) !== null ? trip : '';
+    const from = params.get('from') || '';
+    const through = params.get('through') || '';
+    this.fromDate = isReturnDate(from) ? from : '';
+    this.throughDate = isReturnDate(through) ? through : '';
     const calendarDate = params.get('date') || '';
-    this.selectedCalendarDate = /^\d{4}-\d{2}-\d{2}$/.test(calendarDate) ? calendarDate : null;
-    if (params.get('add') === '1' && !this.selectedCalendarDate && !this.showImportModal) this.startImportWizard();
+    this.selectedCalendarDate = isReturnDate(calendarDate) ? calendarDate : null;
+    if (params.get('add') === '1' && !params.has('date') && !this.showImportModal) this.startImportWizard();
     const addDate = params.get('add') === '1' ? this.selectedCalendarDate : null;
     const editId = params.get('edit') || '';
     if ((this.lastDeepLinkedEdit && this.lastDeepLinkedEdit !== editId)
@@ -342,6 +361,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
         from: this.fromDate || null,
         through: this.throughDate || null,
         receipt: this.receiptFilter || null,
+        trip: this.tripFilter || null,
         date: this.selectedCalendarDate || null,
         review: null,
         periodStart: null,
@@ -363,11 +383,6 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     if (transaction) this.openTransactionEditor(transaction, false);
   }
 
-  private reloadTransactionList(): void {
-    this.visibleRowCount = this.pageSize;
-    this.applyFilterAndSort();
-  }
-
   loadMoreTransactions(): void {
     if (!this.hasMore) return;
     this.visibleRowCount += this.pageSize;
@@ -377,24 +392,39 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   retryActivityLoad(): void {
     this.listError = '';
     this.listLoading = true;
-    this.financeService.getAllTransactions().pipe(takeUntil(this.destroy$)).subscribe({
-      next: rows => {
-        this.allTransactions = rows;
-        this.allTransactionsLoaded = true;
-        this.listLoading = false;
-        this.applyFilterAndSort();
-      },
-      error: () => {
-        this.listLoading = false;
-        this.listError = 'Activity could not load all transactions. Try again or refresh the page.';
-        this.cdr.markForCheck();
-      },
-    });
+    this.retryRows$.next();
   }
 
-  ngOnDestroy() {
-    this.destroy$.next();
+  ngOnDestroy(): void {
+    this.releaseLock();
+    this.invalidateActivity();
     this.destroy$.complete();
+    this.retryRows$.complete();
+  }
+
+  private invalidateActivity(): void {
+    if (!this.active) return;
+    this.active = false;
+    this.destroy$.next();
+    this.transactionEditor.dismiss();
+    for (const id of this.rowToastIds) this.toastService.dismiss(id);
+    this.rowToastIds.clear();
+    this.deleting.clear();
+    this.restoreInFlight.clear();
+    this.tripHome = null;
+    this.transactions = [];
+    this.allTransactions = [];
+    this.jobIncomes = [];
+    this.categoryMergeFrom = '';
+    this.categoryMergeTo = '';
+    this.categoryBulkRows = [this.emptyBulkRenameRow()];
+    this.bulkMerchant = '';
+    this.bulkMerchantCategory = '';
+    this.applyFilterAndSort();
+  }
+
+  private isCurrent(session: number): boolean {
+    return this.active && this.openedLock === readLockEpoch() && this.financeService.sessionToken === session;
   }
 
   importBank(slug: string): BankImportOption | undefined { return this.importWorkflow.importBank(slug); }
@@ -414,11 +444,15 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   /** The month alone is not a narrowing filter; the eyebrow already shows it. */
   get hasNarrowingFilters(): boolean {
     return !!(this.searchTerm || this.categoryFilter || this.merchantFilter || this.accountFilter
-      || this.receiptFilter || this.fromDate || this.throughDate || this.selectedCalendarDate
+      || this.receiptFilter || this.tripFilter || this.fromDate || this.throughDate || this.selectedCalendarDate
       || (!this.embedded && this.activityView !== 'all'));
   }
 
   get periodEyebrow(): string {
+    if (this.selectedCalendarDate) return formatDate(this.selectedCalendarDate, 'heading');
+    if (this.fromDate && this.throughDate) return `${formatDate(this.fromDate, 'table')} – ${formatDate(this.throughDate, 'table')}`;
+    if (this.fromDate) return `From ${formatDate(this.fromDate, 'table')}`;
+    if (this.throughDate) return `Through ${formatDate(this.throughDate, 'table')}`;
     return this.summaryMonthLabel + (this.hasNarrowingFilters ? ' · filtered' : '');
   }
 
@@ -470,6 +504,18 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     ];
   }
 
+  get tripSelectOptions(): UiSelectOption[] {
+    const names = new Map(tripTagChoices(this.tripHome, null).map(choice => [choice.id, choice.label]));
+    const ids = new Set(this.allTransactions.map(row => normalizeTripId(row.trip_id)));
+    ids.add(normalizeTripId(this.tripFilter));
+    const tags = [...ids].filter(id => id !== null).sort((a, b) => a - b);
+    return [
+      { value: '', label: 'All trips' },
+      { value: 'none', label: 'No trip' },
+      ...tags.map(id => ({ value: String(id), label: names.get(id) ?? `Trip #${id}` })),
+    ];
+  }
+
   get categoryOptions(): string[] {
     const source = this.summaryMonth
       ? this.allTransactions.filter(row => row.date.startsWith(`${this.summaryMonth}-`))
@@ -505,6 +551,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
       categoryFilter: this.categoryFilter,
       merchantFilter: this.merchantFilter,
       receiptFilter: this.receiptFilter,
+      tripFilter: this.tripFilter,
     };
   }
 
@@ -712,30 +759,24 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  onSearchChange() {
+  applyFilters(replaceUrl = false): void {
     this.visibleRowCount = this.pageSize;
-    this.syncQueryParams(true);
-    this.reloadTransactionList();
-  }
-
-  onAccountFilterChange(): void {
-    this.visibleRowCount = this.pageSize;
-    this.syncQueryParams();
+    this.syncQueryParams(replaceUrl);
     this.applyFilterAndSort();
   }
 
-  onMerchantFilterChange(): void {
-    this.visibleRowCount = this.pageSize;
-    this.syncQueryParams();
-    this.applyFilterAndSort();
+  onExactDateChange(date: string): void {
+    this.selectedCalendarDate = isReturnDate(date) ? date : null;
+    this.summaryMonth = '';
+    this.fromDate = '';
+    this.throughDate = '';
+    this.applyFilters();
   }
 
   onDateRangeChange(): void {
-    this.visibleRowCount = this.pageSize;
     this.summaryMonth = '';
     this.selectedCalendarDate = null;
-    this.syncQueryParams();
-    this.applyFilterAndSort();
+    this.applyFilters();
   }
 
   transactionLabel(tx: Transaction): string {
@@ -785,18 +826,10 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   onSummaryMonthChange() {
-    this.visibleRowCount = this.pageSize;
     this.fromDate = '';
     this.throughDate = '';
     this.selectedCalendarDate = null;
-    this.syncQueryParams();
-    this.applyFilterAndSort();
-  }
-
-  onCategoryFilterChange() {
-    this.visibleRowCount = this.pageSize;
-    this.syncQueryParams();
-    this.applyFilterAndSort();
+    this.applyFilters();
   }
 
   onSortPresetChange(value: string) {
@@ -817,18 +850,17 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.merchantFilter = '';
     this.accountFilter = '';
     this.receiptFilter = '';
+    this.tripFilter = '';
     this.summaryMonth = '';
     this.fromDate = '';
     this.throughDate = '';
     this.selectedCalendarDate = null;
-    this.visibleRowCount = this.pageSize;
-    this.syncQueryParams();
-    this.applyFilterAndSort();
+    this.applyFilters();
   }
 
   get hasActiveFilters(): boolean {
     return !!(this.searchTerm || this.categoryFilter || this.merchantFilter || this.accountFilter || this.receiptFilter
-      || this.summaryMonth || this.fromDate || this.throughDate || this.selectedCalendarDate);
+      || this.tripFilter || this.summaryMonth || this.fromDate || this.throughDate || this.selectedCalendarDate);
   }
 
   filtersOpen = false;
@@ -840,6 +872,8 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     if (this.categoryFilter) count += 1;
     if (this.merchantFilter) count += 1;
     if (this.accountFilter) count += 1;
+    if (this.tripFilter) count += 1;
+    if (this.selectedCalendarDate) count += 1;
     if (this.fromDate) count += 1;
     if (this.throughDate) count += 1;
     return count;
@@ -862,6 +896,10 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
       const label = this.accountSelectOptions.find(option => option.value === this.accountFilter)?.label ?? this.accountFilter;
       chips.push({ key: 'account', label: `Account: ${label}` });
     }
+    if (this.tripFilter) {
+      const label = this.tripSelectOptions.find(option => option.value === this.tripFilter)?.label ?? 'Saved trip';
+      chips.push({ key: 'trip', label: `Trip: ${label}` });
+    }
     if (this.fromDate) chips.push({ key: 'from', label: `From: ${formatDate(this.fromDate, 'table')}` });
     if (this.throughDate) chips.push({ key: 'through', label: `Through: ${formatDate(this.throughDate, 'table')}` });
     if (this.selectedCalendarDate) chips.push({ key: 'day', label: `Day: ${formatDate(this.selectedCalendarDate, 'table')}` });
@@ -873,7 +911,16 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.filtersOpen = !this.filtersOpen;
     this.cdr.markForCheck();
     if (this.filtersOpen) {
-      setTimeout(() => document.getElementById('tx-type-filter')?.focus());
+      if (!this.tripHome) this.transactionEditor.tripHome$.pipe(takeUntil(this.destroy$)).subscribe({
+        next: home => {
+          this.tripHome = home;
+          this.cdr.markForCheck();
+        },
+        error: () => { /* The encrypted tags still work with their saved ids. */ },
+      });
+      setTimeout(() => {
+        if (this.active && this.filtersOpen) document.getElementById('tx-type-filter')?.focus();
+      });
     }
   }
 
@@ -892,15 +939,19 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
         break;
       case 'category':
         this.categoryFilter = '';
-        this.onCategoryFilterChange();
+        this.applyFilters();
         break;
       case 'merchant':
         this.merchantFilter = '';
-        this.onMerchantFilterChange();
+        this.applyFilters();
         break;
       case 'account':
         this.accountFilter = '';
-        this.onAccountFilterChange();
+        this.applyFilters();
+        break;
+      case 'trip':
+        this.tripFilter = '';
+        this.applyFilters();
         break;
       case 'from':
         this.fromDate = '';
@@ -912,21 +963,18 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
         break;
       case 'day':
         this.selectedCalendarDate = null;
-        this.visibleRowCount = this.pageSize;
-        this.syncQueryParams();
-        this.applyFilterAndSort();
+        this.applyFilters();
         break;
       case 'receipt':
         this.receiptFilter = '';
-        this.visibleRowCount = this.pageSize;
-        this.syncQueryParams();
-        this.applyFilterAndSort();
+        this.applyFilters();
         break;
       default:
         return;
     }
     this.cdr.markForCheck();
     setTimeout(() => {
+      if (!this.active) return;
       const host = this.filterToggle?.nativeElement.closest('app-transactions');
       const chips = host?.querySelectorAll<HTMLButtonElement>('.filter-chip');
       const target = chips && chips.length ? chips[Math.min(Math.max(index, 0), chips.length - 1)] : undefined;
@@ -1094,63 +1142,82 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.transactionEditor.closeModal();
   }
 
-  async deleteTransaction(tx: Transaction) {
+  async deleteTransaction(tx: Transaction): Promise<void> {
+    const session = this.financeService.sessionToken;
+    if (!this.isCurrent(session) || this.deleting.has(tx.id)) return;
     const ok = await this.confirmService.ask(
       'Delete transaction?',
-      `Remove ${tx.category} (${tx.date}) permanently?`,
+      `Remove ${tx.category} (${tx.date})? You can undo this after it is removed.`,
       'Delete',
-      'Cancel'
+      'Cancel',
     );
-    if (!ok) return;
-
-    // F21: the Undo snapshot is the full record, held only in memory, so a
-    // restore puts back the intended record exactly — same id, merchant,
-    // account, kind and import linkage — never a stripped re-creation.
-    const backup: Transaction = { ...tx };
-
-    this.removeTransaction(tx, backup);
+    if (ok) this.removeTransaction(tx.id, session);
   }
 
-  private removeTransaction(tx: Transaction, backup: Transaction): void {
-    this.financeService.deleteTransaction(tx.id, true).pipe(takeUntil(this.destroy$)).subscribe({
+  isDeleting(id: number): boolean { return this.deleting.has(id); }
+
+  private removeTransaction(id: number, session: number): void {
+    if (!this.isCurrent(session) || this.deleting.has(id)) return;
+    const tx = this.allTransactions.find(row => row.id === id);
+    if (!tx) return;
+    // Keep the exact encrypted-ledger record in the recovery action's memory.
+    const backup = { ...tx };
+    this.deleting.add(id);
+    this.cdr.markForCheck();
+    this.financeService.deleteTransaction(id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
-        this.toastService.success('Transaction deleted', () => this.restoreTransaction(backup));
+        if (!this.finishDelete(id, session)) return;
+        this.showRowRecovery(() => this.toastService.success('Transaction deleted', () => this.restoreTransaction(backup, session)));
       },
       error: () => {
-        this.toastService.error(failureCopy('delete', 'this transaction'), {
+        if (!this.finishDelete(id, session)) return;
+        this.showRowRecovery(() => this.toastService.error(failureCopy('delete', 'this transaction'), {
           label: 'Try again',
-          run: () => this.removeTransaction(tx, backup),
-        });
+          run: () => this.removeTransaction(id, session),
+        }));
       },
     });
   }
 
-  private restoreInFlight = new Set<number>();
+  private finishDelete(id: number, session: number): boolean {
+    this.deleting.delete(id);
+    if (!this.isCurrent(session)) return false;
+    this.cdr.markForCheck();
+    return true;
+  }
 
-  private restoreTransaction(backup: Transaction): void {
-    // Exactly once: a second Undo click while a restore runs is a no-op,
-    // and the store answers 'already-restored' if the first attempt landed
-    // but its response was lost, so a retry can never duplicate the record.
-    if (this.restoreInFlight.has(backup.id)) return;
+  private readonly restoreInFlight = new Set<number>();
+
+  private restoreTransaction(backup: Transaction, session: number): void {
+    if (!this.isCurrent(session) || this.restoreInFlight.has(backup.id)) return;
     this.restoreInFlight.add(backup.id);
-    // Keep the error toast if the user leaves this page while the restore is in flight.
-    this.financeService.restoreTransaction(backup, true).subscribe({
+    this.financeService.restoreTransaction(backup, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.restoreInFlight.delete(backup.id);
       },
       error: (err: unknown) => {
         this.restoreInFlight.delete(backup.id);
+        if (!this.isCurrent(session)) return;
         if (err instanceof Error && err.message === 'Transaction changed after it was deleted') {
-          // A different record holds the id now. Never overwrite it, and a
-          // retry would fail the same way, so this toast has no action.
           this.toastService.error(failureCopy('restore', 'this transaction', 'It changed after it was deleted.'));
           return;
         }
-        this.toastService.error(failureCopy('restore', 'this transaction'), {
+        this.showRowRecovery(() => this.toastService.error(failureCopy('restore', 'this transaction'), {
           label: 'Try again',
-          run: () => this.restoreTransaction(backup),
-        });
+          run: () => this.restoreTransaction(backup, session),
+        }));
       },
+    });
+  }
+
+  private showRowRecovery(show: () => void): void {
+    show();
+    this.toastService.toasts$.pipe(take(1)).subscribe(toasts => {
+      for (const id of this.rowToastIds) {
+        if (!toasts.some(toast => toast.id === id)) this.rowToastIds.delete(id);
+      }
+      const latest = toasts.at(-1);
+      if (latest?.action) this.rowToastIds.add(latest.id);
     });
   }
 

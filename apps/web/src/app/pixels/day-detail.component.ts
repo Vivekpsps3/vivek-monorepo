@@ -10,8 +10,9 @@ import {
   input,
   output,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ReturnContext, dayActivities, vaultReturnQuery } from '@vivek/ui';
+import { pixelsDayActivityPath } from '../../../../finance/frontend/src/public-api';
 import { isIsoDate } from './pixels-dates';
 import { tripDayLabel } from './pixels-model';
 import type { FinanceJoinStatus, PixelDayView } from './pixels.types';
@@ -67,6 +68,7 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly context = inject(ReturnContext);
   protected readonly returnQuery = vaultReturnQuery;
+  private readonly router = inject(Router);
   private focusTimers: ReturnType<typeof setTimeout>[] = [];
 
   day = input<PixelDayView | null>(null);
@@ -91,6 +93,7 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
       media: mediaLine(day.channels.media),
       travel: day.trip ? `Travel · ${tripDayLabel(day.trip, day.date)}` : 'Travel · no trip',
       tripId: day.trip ? day.trip.id : null,
+      activityLink: this.router.parseUrl(pixelsDayActivityPath(day.date)),
       finance: financeCopy(this.financeStatus(), day.channels.fin),
     };
   });

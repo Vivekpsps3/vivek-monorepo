@@ -1,5 +1,11 @@
 import type { UiSectionNavItem } from '@vivek/ui';
 
+/** Canonical Activity coordinates for a selected Pixels day, without ledger fields. */
+export function pixelsDayActivityPath(day: string): string {
+  const query = new URLSearchParams({ date: day, pixelsDay: day });
+  return '/finance/spending?' + query.toString();
+}
+
 export const financeCalendarPath = '/finance/spending?t=calendar';
 
 export const financeSections: readonly UiSectionNavItem[] = [

@@ -211,9 +211,9 @@ describe('Transactions multi-file import UI', () => {
 describe('Transactions delete and undo errors', () => {
   function makeComponent() {
     const finance = jasmine.createSpyObj('FinanceService', ['deleteTransaction', 'restoreTransaction']);
-    const toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    const toast = jasmine.createSpyObj('ToastService', ['success', 'error'], { toasts$: of([]) });
     const confirm = { ask: () => Promise.resolve(true) } as unknown as ConfirmService;
-    const component = new TransactionsComponent(
+    const component = TestBed.runInInjectionContext(() => new TransactionsComponent(
       finance,
       toast,
       confirm,
@@ -221,8 +221,9 @@ describe('Transactions delete and undo errors', () => {
       {} as ActivatedRoute,
       {} as Router,
       {} as TransactionsImportWorkflow,
-      {} as TransactionsEditorWorkflow,
-    );
+      { dismiss: () => undefined } as TransactionsEditorWorkflow,
+    ));
+    component.allTransactions = [transaction];
     return { component, finance, toast };
   }
 
@@ -249,5 +250,9 @@ describe('Transactions delete and undo errors', () => {
     retry();
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(finance.restoreTransaction.calls.mostRecent().args[0].amount).toBe(-45.67);
+    component.ngOnDestroy();
+    finance.restoreTransaction.calls.reset();
+    retry();
+    expect(finance.restoreTransaction).not.toHaveBeenCalled();
   });
 });

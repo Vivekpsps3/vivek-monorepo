@@ -1,7 +1,7 @@
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    [title]="typeFilter === 'income' ? 'Income' : typeFilter === 'expense' ? 'Spend' : 'Spending'">
+    [title]="typeFilter === 'income' ? 'Income' : typeFilter === 'expense' ? 'Spending' : 'Activity'">
 
     <div uiPageActions class="header-actions">
       <ui-button variant="primary" (clicked)="openAddModal()">Add transaction</ui-button>
@@ -55,7 +55,7 @@
             </div>
           }
         </div>
-      } @else if (!listLoading && !listError && allTransactions.length > 0 && summaryMonth) {
+      } @else if (!listLoading && !listError && allTransactions.length > 0 && summaryMonth && !hasNarrowingFilters) {
         <p class="period-empty">No activity in {{ periodMonthName }}.</p>
       }
     </div>
@@ -119,7 +119,7 @@
       <input name="searchTerm"
         type="search"
         [(ngModel)]="searchTerm"
-        (input)="onSearchChange()"
+        (input)="applyFilters(true)"
         placeholder="Search descriptions"
         class="search-input"
         aria-label="Search transactions"
@@ -141,24 +141,32 @@
         label="Category"
         [value]="categoryFilter"
         [options]="categorySelectOptions"
-        (valueChange)="categoryFilter = $event; onCategoryFilterChange()"
+        (valueChange)="categoryFilter = $event; applyFilters()"
       />
       <ui-select
         selectId="tx-merchant-filter"
         label="Merchant"
         [value]="merchantFilter"
         [options]="merchantSelectOptions"
-        (valueChange)="merchantFilter = $event; onMerchantFilterChange()"
+        (valueChange)="merchantFilter = $event; applyFilters()"
       />
       <ui-select
         selectId="tx-account-filter"
         label="Account"
         [value]="accountFilter"
         [options]="accountSelectOptions"
-        (valueChange)="accountFilter = $event; onAccountFilterChange()"
+        (valueChange)="accountFilter = $event; applyFilters()"
       />
-      <label>From <input type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity from date" /></label>
-      <label>Through <input type="date" [(ngModel)]="throughDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity through date" /></label>
+      <ui-select
+        selectId="tx-trip-filter"
+        label="Trip"
+        [value]="tripFilter"
+        [options]="tripSelectOptions"
+        (valueChange)="tripFilter = $event; applyFilters()"
+      />
+      <label>Exact day <input type="date" [ngModel]="selectedCalendarDate || ''" (ngModelChange)="onExactDateChange($event)" /></label>
+      <label>From <input type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChange()" aria-label="From date" /></label>
+      <label>Through <input type="date" [(ngModel)]="throughDate" (ngModelChange)="onDateRangeChange()" aria-label="Through date" /></label>
       <ui-select
         selectId="tx-sort"
         label="Sort"
@@ -171,14 +179,6 @@
           <ui-button variant="ghost" size="sm" (clicked)="clearFilters()">Clear filters</ui-button>
         }
       </div>
-    </div>
-
-    <div class="activity-date-filters" aria-label="Activity date range">
-      <label>From <input name="fromDate" type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity from date" /></label>
-      <label>Through <input name="throughDate" type="date" [(ngModel)]="throughDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity through date" /></label>
-      @if (hasActiveFilters) {
-        <ui-button variant="ghost" size="sm" (clicked)="clearFilters()">Clear filters</ui-button>
-      }
     </div>
 
     @if (filterChips.length) {
@@ -346,8 +346,7 @@
               {{ transactionAmountPrefix(tx) }}{{ tx.amount | money }}
             </td>
             <td class="actions actions--row">
-              <ui-button variant="ghost" size="sm" (clicked)="editTransaction(tx)">Edit</ui-button>
-              <ui-button variant="ghost" size="sm" (clicked)="deleteTransaction(tx)">Delete</ui-button>
+              <ng-container *ngTemplateOutlet="rowActions; context: { $implicit: tx }" />
             </td>
           </tr>
         </tbody>
@@ -377,8 +376,7 @@
             <p><strong>Account</strong><span>{{ tx.account_display || '—' }}</span></p>
             @if (tx.kind === 'ambiguous_credit') { <p><strong>Classification</strong><span>Choose a type to include this credit in spending or income totals.</span></p> }
             <div class="actions actions--row">
-              <ui-button variant="ghost" size="sm" (clicked)="editTransaction(tx)">Edit</ui-button>
-              <ui-button variant="ghost" size="sm" (clicked)="deleteTransaction(tx)">Delete</ui-button>
+              <ng-container *ngTemplateOutlet="rowActions; context: { $implicit: tx }" />
             </div>
           </div>
         </details>
@@ -417,6 +415,11 @@
     <ng-container *ngTemplateOutlet="receiptHistory" />
   }
 </div>
+
+<ng-template #rowActions let-tx>
+  <ui-button variant="ghost" size="sm" [disabled]="isDeleting(tx.id)" (clicked)="editTransaction(tx)">Edit</ui-button>
+  <ui-button variant="ghost" size="sm" [disabled]="isDeleting(tx.id)" (clicked)="deleteTransaction(tx)">Delete</ui-button>
+</ng-template>
 
 <ng-template #receiptHistory>
   <details class="import-history ledger-receipts" [open]="receiptsDetailsOpen" (toggle)="onReceiptsToggle($event)">

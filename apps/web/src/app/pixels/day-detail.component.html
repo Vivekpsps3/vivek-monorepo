@@ -39,15 +39,14 @@
           <a [routerLink]="'/travel/trips/' + detail.tripId">Open trip</a>
         }
       </div>
-      @if (detail.finance.locked) {
-        <div class="row row--locked">
+      <div class="row" [class.row--locked]="detail.finance.locked">
+        @if (detail.finance.locked) {
           <a routerLink="/finance/vault/unlock" [queryParams]="returnQuery(unlockSource())" [state]="context.link(unlockSource())">{{ detail.finance.text }}</a>
-        </div>
-      } @else {
-        <div class="row">
+        } @else {
           <p>{{ detail.finance.text }}</p>
-        </div>
-      }
+        }
+        <a [routerLink]="detail.activityLink" [state]="context.link(unlockSource())">Open Finance Activity</a>
+      </div>
     </div>
   </section>
 }
