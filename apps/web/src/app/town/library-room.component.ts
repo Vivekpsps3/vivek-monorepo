@@ -170,9 +170,15 @@ export class LibraryRoomComponent {
     if (hit) this.selectObject(hit.asset.id);
   }
 
-  protected cancelPointer(event: PointerEvent): void {
+  protected cancelPointer(): void {
     const gesture = this.gesture;
-    if (!gesture || event.pointerId !== gesture.id) return;
+    if (!gesture) return;
+    const viewport = this.viewport()?.nativeElement;
+    try {
+      if (viewport?.hasPointerCapture(gesture.id)) viewport.releasePointerCapture(gesture.id);
+    } catch {
+      // The cancelled pointer is already gone.
+    }
     this.camera.set(gesture.origin);
     this.gesture = null;
   }

@@ -8,7 +8,7 @@
       <div #viewport class="viewport" role="group" aria-labelledby="scene-hint"
         [style.aspect-ratio]="room.bounds.width + ' / ' + room.bounds.height"
         (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
-        (pointerup)="endPointer($event)" (pointercancel)="cancelPointer($event)">
+        (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
         <div class="stage" [style.transform]="cameraTransform()">
           <div class="scene">
             @for (src of [artUrl(room)]; track src) {

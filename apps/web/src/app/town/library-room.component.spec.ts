@@ -124,6 +124,14 @@ describe('Reading Hall load ownership', () => {
 
     pointer('pointerdown', rect.left + screen.x, rect.top + screen.y);
     pointer('pointermove', movedX, movedY);
+    viewport.dispatchEvent(new Event('touchcancel', { bubbles: true }));
+    fixture.detectChanges();
+    expect(stage.style.transform).toBe(zoomed);
+    pointer('pointerup', movedX, movedY);
+    expect(navigate).not.toHaveBeenCalled();
+
+    pointer('pointerdown', rect.left + screen.x, rect.top + screen.y);
+    pointer('pointermove', movedX, movedY);
     user$.next({ id: 2 });
     fixture.detectChanges();
     expect(stage.style.transform).toBe(zoomed);

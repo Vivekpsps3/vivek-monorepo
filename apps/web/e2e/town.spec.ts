@@ -586,23 +586,21 @@ test.describe('Reading Hall', () => {
 
       await objects.getByRole('link', { name: 'Wall calendar' }).click();
       await expect(page).toHaveURL(/object=calendar/);
-      const client = await page.context().newCDPSession(page);
-      const origin = (await desk.boundingBox())!;
-      await client.send('Input.dispatchTouchEvent', {
-        type: 'touchStart',
-        touchPoints: [{ x: viewAfter.x + 80, y: viewAfter.y + 80, id: 3 }],
-      });
-      await client.send('Input.dispatchTouchEvent', {
-        type: 'touchMove',
-        touchPoints: [{ x: viewAfter.x + 24, y: viewAfter.y + 40, id: 3 }],
-      });
-      await expect.poll(async () => Math.abs((await desk.boundingBox())!.x - origin.x)).toBeGreaterThan(20);
-      await client.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+      const committed = await stageMatrix(room);
+      const origin = await sceneOffset(desk, scene);
+      const startX = viewAfter.x + 80;
+      const startY = viewAfter.y + 80;
+      const pointer = { pointerId: 7, pointerType: 'touch' as const, button: 0, clientX: startX, clientY: startY };
+      await scene.dispatchEvent('pointerdown', pointer);
+      await scene.dispatchEvent('pointermove', { ...pointer, clientX: startX - 56, clientY: startY - 40 });
+      await expect.poll(async () => Math.abs((await sceneOffset(desk, scene)).x - origin.x)).toBeGreaterThan(20);
+      expect(await stageMatrix(room)).not.toBe(committed);
+      await scene.dispatchEvent('pointercancel', { ...pointer, clientX: startX - 56, clientY: startY - 40 });
+      await expect.poll(() => stageMatrix(room)).toBe(committed);
       await expect.poll(async () => {
-        const restored = (await desk.boundingBox())!;
-        return Math.abs(restored.x - origin.x) < 2 && Math.abs(restored.y - origin.y) < 2;
-      }).toBe(true);
-      await client.detach();
+        const restored = await sceneOffset(desk, scene);
+        return Math.max(Math.abs(restored.x - origin.x), Math.abs(restored.y - origin.y));
+      }).toBeLessThan(2);
       await expect(page).toHaveURL(/object=calendar/);
       expect(townReads.length).toBe(reads);
       expect(await room.evaluate(el => el.getAnimations({ subtree: true }).length)).toBe(0);
@@ -678,6 +676,12 @@ test.describe('Reading Hall', () => {
 
 function stageMatrix(room: Locator): Promise<string> {
   return room.locator('.stage').evaluate(el => getComputedStyle(el).transform);
+}
+
+async function sceneOffset(target: Locator, frame: Locator): Promise<{ x: number; y: number }> {
+  const [box, view] = await Promise.all([target.boundingBox(), frame.boundingBox()]);
+  if (!box || !view) throw new Error('missing scene bounds');
+  return { x: box.x - view.x, y: box.y - view.y };
 }
 
 async function overlapCenter(first: Locator, second: Locator) {
