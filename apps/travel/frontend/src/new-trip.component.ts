@@ -3,6 +3,7 @@ import {
   DestroyRef,
   ElementRef,
   HostListener,
+  ViewChild,
   inject,
   signal,
 } from "@angular/core";
@@ -38,6 +39,13 @@ import {
   draftRequest,
   settleDraftResponse,
 } from "./draft-model.mjs";
+import { FlightStartComponent } from "./flight-start.component";
+import {
+  destinationProposal,
+  settleAttach,
+  stageStart,
+  type AcceptedFlight,
+} from "./flight-start.mjs";
 import { showDay, showRange } from "./display";
 import { PtoDaysComponent } from "./pto-days.component";
 import { allocationDraft, defaultAllocation } from "./pto-model.mjs";
@@ -57,12 +65,18 @@ import { dateOrderError, requiredText } from "./validate.mjs";
     UiFieldControlDirective,
     UiPageHeaderComponent,
     PtoDaysComponent,
+    FlightStartComponent,
   ],
   template: `<main class="page travel-page">
     <ui-page-header
       backLabel="← Trips"
       backLink="/travel"
       title="Plan a trip"
+    />
+    <travel-flight-start
+      [busy]="pending() !== ''"
+      (staged)="stageFlight($event)"
+      (attach)="attachFlight($event)"
     />
     <ui-card
       ><form
@@ -72,6 +86,28 @@ import { dateOrderError, requiredText } from "./validate.mjs";
       (input)="live()"
       (change)="live()"
     >
+        @if (stagedFlightNumber()) {
+          <p role="status">
+            This flight is on the new trip. The return date is still empty.
+            Saving a draft does not charge PTO.
+          </p>
+        }
+        @if (flightProposal(); as proposed) {
+          @if (!confirmedDestination) {
+            <p>
+              Proposed destination {{ proposed.value }}. It is not the trip city
+              until you use it.
+            </p>
+            <ui-button variant="secondary" type="button" (clicked)="confirmDestination()">
+              Use proposed destination
+            </ui-button>
+          } @else {
+            <p role="status">
+              {{ confirmedDestination }} is the destination. The return date is
+              still empty.
+            </p>
+          }
+        }
         <div class="form-row">
           <ui-field label="Departure date" [required]="true" [error]="field('start')"
             ><input
@@ -292,6 +328,7 @@ export class NewTripComponent {
   private readonly destroy = inject(DestroyRef);
   private readonly confirm = inject(ConfirmService);
   private readonly host = inject(ElementRef<HTMLElement>);
+  @ViewChild(FlightStartComponent) private flightStart?: FlightStartComponent;
   constructor() {
     merge(
       this.session.cleared$,
@@ -329,7 +366,11 @@ export class NewTripComponent {
   transportOpen = false;
   readonly error = signal("");
   readonly notice = signal("");
-  readonly pending = signal<"" | "trip" | "draft">("");
+  readonly pending = signal<"" | "trip" | "draft" | "attach">("");
+  readonly stagedFlightNumber = signal("");
+  readonly flightProposal = signal<AcceptedFlight["proposal"]>(null);
+  confirmedDestination = "";
+  private stagedStart = "";
   private sessionActive = true;
   private epoch = 0;
   private draftId: number | null = null;
@@ -385,7 +426,8 @@ export class NewTripComponent {
   private draftAttemptBody = "";
   private unfinished(): boolean {
     if (this.saved) return false;
-    if (!(this.start || this.end || this.transports.length)) return false;
+    if (this.flightStart?.unfinished()) return true;
+    if (!(this.start || this.end || this.transports.length || this.confirmedDestination)) return false;
     const built = draftRequest(this.draftSnapshot());
     return !(built.ok && this.savedDraftBody === JSON.stringify(built.body));
   }
@@ -428,18 +470,39 @@ export class NewTripComponent {
     this.draftAttemptBody = "";
     this.pending.set("");
     this.transportOpen = false;
+    this.stagedFlightNumber.set("");
+    this.flightProposal.set(null);
+    this.confirmedDestination = "";
+    this.stagedStart = "";
+    this.flightStart?.clear();
   }
   private draftSnapshot() {
     const parts = this.parts();
-    const city = parts.length ? this.model().cities[parts[0].key] || "" : "";
+    const typed = parts.length ? (this.model().cities[parts[0].key] || "").trim() : "";
+    const destination = typed || this.confirmedDestination.trim();
     return {
       start: this.start,
       end: this.end,
       title: this.model().tripName,
-      destination: city,
+      destination,
       transports: this.transports,
-      proposals: [] as { field?: string; value?: string; source?: string }[],
+      proposals: destinationProposal(this.flightProposal(), Boolean(destination)),
     };
+  }
+  private transportPayload(): Record<string, unknown>[] {
+    return this.transports.map((row) => {
+      const copy = { ...row };
+      delete copy["staged"];
+      return copy;
+    });
+  }
+  private applyConfirmedCity(next = this.model()) {
+    if (!this.confirmedDestination) return next;
+    const parts = segments(next);
+    if (!parts.length) return next;
+    const key = parts[0].key;
+    if ((next.cities[key] || "").trim()) return next;
+    return { ...next, cities: { ...next.cities, [key]: this.confirmedDestination } };
   }
   private responseApplies(epoch: number): boolean {
     return this.sessionActive && epoch === this.epoch;
@@ -469,7 +532,7 @@ export class NewTripComponent {
       }
       next = confirmSpan(next);
     }
-    this.model.set(next);
+    this.model.set(this.applyConfirmedCity(next));
     const amounts = { ...this.charges };
     for (const day of this.dates())
       if (amounts[day] === undefined) amounts[day] = defaultAllocation(day);
@@ -478,6 +541,7 @@ export class NewTripComponent {
   }
   city(key: string, value: string): void {
     this.model.update((m) => ({ ...m, cities: { ...m.cities, [key]: value } }));
+    if (this.flightProposal()) this.confirmedDestination = value.trim();
   }
   rename(value: string): void {
     this.model.update((m) => ({ ...m, tripName: value, nameTouched: true }));
@@ -548,7 +612,7 @@ export class NewTripComponent {
         arrive_on: part.arrive,
         leave_on: part.leave,
       })),
-      transports: this.transports,
+      transports: this.transportPayload(),
       pto_dates: allocationDraft(this.dates(), this.charges).payload,
     };
     const encoded = JSON.stringify(payload);
@@ -638,6 +702,75 @@ export class NewTripComponent {
         this.error.set(travelError(e));
       },
     });
+  }
+  stageFlight(event: AcceptedFlight): void {
+    const nextStart = stageStart(this.start, this.stagedStart, event.start);
+    const previous = this.flightProposal()?.value || "";
+    const clearPrevious = Boolean(previous) && this.confirmedDestination === previous;
+    this.stagedStart = event.start;
+    this.confirmedDestination = "";
+    this.start = nextStart;
+    this.model.update((current) => {
+      const cities = { ...current.cities };
+      if (clearPrevious) {
+        for (const key of Object.keys(cities)) {
+          if (cities[key] === previous) cities[key] = "";
+        }
+      }
+      return { ...current, start: nextStart, awaitingEnd: !current.end, cities };
+    });
+    this.transports = [
+      ...this.transports.filter((row) => row["staged"] !== true),
+      { ...event.leg, staged: true },
+    ];
+    this.flightProposal.set(event.proposal);
+    this.stagedFlightNumber.set(event.number);
+    this.error.set("");
+  }
+  confirmDestination(): void {
+    const proposal = this.flightProposal();
+    if (!proposal) return;
+    this.confirmedDestination = proposal.value;
+    this.model.set(this.applyConfirmedCity(this.model()));
+  }
+  attachFlight(event: { tripId: number; leg: Record<string, unknown>; number: string }): void {
+    if (this.pending() || !this.sessionActive) return;
+    const epoch = this.epoch;
+    const submittedNumber = event.number;
+    this.pending.set("attach");
+    this.error.set("");
+    this.http
+      .post<Trip>(`/travel/api/trips/${event.tripId}/transports`, event.leg)
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (trip) => {
+          if (this.pending() === "attach") this.pending.set("");
+          const decision = settleAttach({
+            epoch,
+            currentEpoch: this.epoch,
+            sessionActive: this.sessionActive,
+            ok: true,
+            submittedNumber,
+            currentNumber: this.flightStart?.currentNumber() || submittedNumber,
+          });
+          if (!decision.apply) return;
+          this.saved = true;
+          this.router.navigate(["/travel/trips", trip.id]);
+        },
+        error: (e) => {
+          if (this.pending() === "attach") this.pending.set("");
+          const decision = settleAttach({
+            epoch,
+            currentEpoch: this.epoch,
+            sessionActive: this.sessionActive,
+            ok: false,
+            submittedNumber,
+            currentNumber: this.flightStart?.currentNumber() || submittedNumber,
+          });
+          if (!decision.failed) return;
+          this.error.set(travelError(e));
+        },
+      });
   }
 }
 

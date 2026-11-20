@@ -20,9 +20,11 @@ balance engine. Policy removal must preserve historical entries and conflict beh
 Reuse existing menus, confirmation, date and field controls. Migrate both real
 consumers before deleting repeated editor logic. Preserve keyboard access, save-error
 drafts and chart-only recovery; a failed summary must not hide usable forms.
-FlightAware settings use the same editor from suite Settings and the transport
-dialog. Keep the transport draft mounted in memory and cancel obsolete lookups.
-An incomplete draft on Plan a trip stores a confirmed outbound leg, leaves an
+FlightAware settings use the same editor from suite Settings, the transport
+dialog, and flight-first planning. Keep that draft mounted and cancel obsolete
+lookups. Plan a trip starts with a flight number and date. The route and local
+times stay proposed until the user chooses a candidate, a new trip, or an
+existing trip. An incomplete draft stores the accepted outbound leg, leaves an
 unknown return empty, and creates no PTO charge. Inferred proposals stay off
 confirmed dates. A complete trip still requires a return and still allocates PTO.
 

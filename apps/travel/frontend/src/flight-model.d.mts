@@ -8,6 +8,7 @@ export function lookupStillCurrent(startedEpoch:number,currentEpoch:number):bool
 export function clearPrivateDraft():{values:Record<string,unknown>;overrides:string[];filled:string[];flightDate:string;selected:null};
 export function departureDay(flight:Candidate):string;
 export function arrivalNote(flight:Candidate):string;
+export const FLIGHT_LOOKUP_DELAY: number;
 export function lookupQuery(ident:string,date:string):{ident:string;depart_on:string}|null;
 export function decideCandidates(flights:Candidate[],date:string,options?:{incomplete?:boolean}):{kind:string;flight?:Candidate;flights:Candidate[];note:string};
 export function fillPreview(current:Record<string,unknown>,flight:Candidate,overrides:string[]):{values:Record<string,unknown>;filled:string[];overrides:string[]};

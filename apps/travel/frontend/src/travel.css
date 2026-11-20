@@ -67,6 +67,15 @@
 .travel-page .travel-form label {
   margin-bottom: 1rem;
 }
+.travel-page travel-flight-start {
+  display: block;
+  margin-bottom: 1rem;
+}
+.travel-page .flight-start .ui-btn {
+  max-width: 100%;
+  white-space: normal;
+  text-align: start;
+}
 .travel-page .button-row {
   display: flex;
   align-items: center;

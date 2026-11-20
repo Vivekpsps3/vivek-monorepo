@@ -156,8 +156,8 @@ type HomeTrip = Trip & {
       }
       @if (isEmpty(home)) {
         <ui-empty-state
-          title="Your next trip starts with a date"
-          message="Add a destination and dates. Flights, bookings, and plans can follow."
+          title="Your next trip can start with a flight"
+          message="Enter a flight number and date, or type a destination and dates."
           icon="calendar"
         >
           <ui-button
