@@ -53,8 +53,8 @@ Commands ran in `/tmp/vivek-scene-01` against `315949fa40d9d9a7af12bd00ff9f675dd
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded in the follow-up commit on this branch after the pull request exists. The body may say `Closes #439` and names the parents that stay open.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/551. The body says `Closes #439` and names the parents that stay open.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
-- Merged/activation status (actual evidence, not assumption): not merged when this file was written.
+- Merged/activation status (actual evidence, not assumption): pull request #551 is open. Not merged when this sentence was written.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate. SCENE-02 and SCENE-03 still own their PLACE-04 rows.
 - Next actor: this implementer waits for the required checks, then merges with a merge commit.
