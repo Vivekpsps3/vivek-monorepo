@@ -50,8 +50,8 @@ Commands ran in `/tmp/vivek-room-04`. `make test-fast` and `make build-frontends
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened when this sentence is written.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/557. The body says `Closes #454` and names the parents that stay open.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
-- Merged/activation status (actual evidence, not assumption): `origin/main` `e8ff90ea5d736ea1fd01c73be02c2478e9d7cab0` is merged as `a4c54ddb1857e52bf2e67f858633c3dd80b756b2`. The pull request itself is not opened when this sentence is written.
+- Merged/activation status (actual evidence, not assumption): `origin/main` `e8ff90ea5d736ea1fd01c73be02c2478e9d7cab0` is merged as `a4c54ddb1857e52bf2e67f858633c3dd80b756b2`. The pull request itself is not merged when this sentence is written.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate. Later room leaves own the map, souvenirs, PTO desk, and postcard.
-- Next actor: this implementer pushes the branch, opens the pull request, waits for the required checks, then merges with a merge commit.
+- Next actor: this implementer waits for the required checks, then merges with a merge commit.
