@@ -614,9 +614,30 @@ export class HealthStoreService {
       logged_on: entry.value.logged_on,
       measured_on: value.measured_on || entry.value.measured_on,
     };
-    const checked = this.checkedWorkout(pinned, today);
+    const checked = this.checkedWorkout(pinned, today, entry.clientId);
     if (checked.kind !== 'session') throw new HealthWorkoutError('Save the session draft and try again.');
     checked.logged_on = entry.value.logged_on;
+    const saved = await this.upsert<WorkoutRecord>(ticket, HEALTH_WORKOUTS_COLLECTION, entry, checked);
+    this.guard(ticket);
+    this.workouts = this.workouts.map(item => (item.clientId === entry.clientId ? saved : item));
+    return saved;
+  }
+
+  /**
+   * Update one exercise definition or routine template.
+   * The write is that one record. Sessions that copied it are left untouched.
+   */
+  async updateWorkoutCatalog(
+    entry: HealthEntry<WorkoutRecord>,
+    value: WorkoutRecord,
+    today: string,
+  ): Promise<HealthEntry<WorkoutRecord>> {
+    if (entry.value.kind === 'session' || value.kind === 'session' || entry.value.kind !== value.kind) {
+      throw new HealthWorkoutError('Save the workout draft and try again.');
+    }
+    const ticket = this.publication(false);
+    this.guard(ticket);
+    const checked = this.checkedWorkout(value, today, entry.clientId);
     const saved = await this.upsert<WorkoutRecord>(ticket, HEALTH_WORKOUTS_COLLECTION, entry, checked);
     this.guard(ticket);
     this.workouts = this.workouts.map(item => (item.clientId === entry.clientId ? saved : item));
@@ -631,8 +652,9 @@ export class HealthStoreService {
     await this.remove(this.publication(false), HEALTH_WORKOUTS_COLLECTION, entry);
   }
 
-  private checkedWorkout(value: WorkoutRecord, today: string): WorkoutRecord {
-    const customExerciseCount = this.workouts.filter(item => item.value.kind === 'exercise' && !item.value.archived).length;
+  private checkedWorkout(value: WorkoutRecord, today: string, exceptClientId = ''): WorkoutRecord {
+    const customExerciseCount = this.workouts.filter(item =>
+      item.clientId !== exceptClientId && item.value.kind === 'exercise' && !item.value.archived).length;
     const checked = validateWorkoutRecord(value, customExerciseCount, today);
     const firstError = Object.values(checked.fieldErrors)[0];
     if (firstError) throw new HealthWorkoutError(workoutFieldMessage(firstError));

@@ -9,6 +9,15 @@
           [value]="local().measuredOn" (input)="onMeasured($event)" />
       </ui-field>
       <p class="logged-on">Logged on <time [attr.datetime]="loggedOn()">{{ loggedOn() }}</time></p>
+    }
+    @if (local().kind === 'routine') {
+      <ui-field label="Routine name" [required]="true" [error]="message(errors()['template_name'])">
+        <input uiFieldControl id="health-workout-routine-name" name="template_name" type="text" required autocomplete="off"
+          data-dialog-initial-focus
+          [value]="local().templateName" (input)="onTemplateName($event)" />
+      </ui-field>
+    }
+    @if (local().kind !== 'exercise') {
       @for (line of floorLines(); track line.id; let lineIndex = $index) {
         <article class="floor-line" [attr.data-floor-line]="line.id" [attr.data-exercise-type]="line.exerciseType" [attr.data-active-line]="line.active ? '' : null">
           @if (!line.active) {
@@ -16,6 +25,19 @@
             <p>{{ typeLabel(line.exerciseType) }}</p>
           }
           @if (line.active) {
+            @if (showSavedExercise()) {
+              <ui-field label="Saved exercise" [optional]="true">
+                <select uiFieldControl id="health-workout-definition" name="exercise_id" (change)="onDefinition($event)">
+                  <option value="" [attr.selected]="definitionSelected('') ? '' : null">Type a name</option>
+                  @for (item of definitions(); track item.id) {
+                    <option [value]="item.id" [attr.selected]="definitionSelected(item.id) ? '' : null">{{ definitionLabel(item) }}</option>
+                  }
+                  @if (savedDefinitionMissing()) {
+                    <option [value]="local().exerciseId" [attr.selected]="definitionSelected(local().exerciseId) ? '' : null">{{ local().name }}</option>
+                  }
+                </select>
+              </ui-field>
+            }
             <ui-field label="Exercise" [required]="true" [error]="message(errors()['name'])">
               <input uiFieldControl id="health-workout-name" name="name" type="text" required autocomplete="off"
                 [value]="local().name" (input)="onName($event)" />
@@ -70,6 +92,8 @@
         </article>
       }
       <ui-button id="health-workout-add-exercise" variant="secondary" (clicked)="onAddExercise()">Add exercise</ui-button>
+    }
+    @if (local().kind === 'session') {
       <ui-field label="Note" [optional]="true" [error]="message(errors()['note'] || errors()['record'])">
         <textarea uiFieldControl id="health-workout-note" name="note" rows="3" autocomplete="off"
           [value]="local().note" (input)="onNote($event)"></textarea>
@@ -80,7 +104,7 @@
           <option value="draft">Draft</option>
         </select>
       </ui-field>
-    } @else {
+    } @else if (local().kind === 'exercise') {
       <ui-field [label]="'Name'" [required]="true" [error]="message(errors()['name'])">
         <input uiFieldControl id="health-workout-name" name="name" type="text" required autocomplete="off"
           data-dialog-initial-focus
@@ -93,9 +117,6 @@
           }
         </select>
       </ui-field>
-      @if (local().kind !== 'exercise') {
-        <ng-container *ngTemplateOutlet="openSet" />
-      }
     }
     @if (formError() || errors()['definitions'] || errors()['exercises'] || errors()['sets']) {
       <p class="form-error" id="health-workout-error" role="alert" tabindex="-1">
