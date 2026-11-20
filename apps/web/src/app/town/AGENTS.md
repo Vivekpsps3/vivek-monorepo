@@ -13,7 +13,7 @@ asynchronous stage before publishing plaintext. Preserve corrupt rows, revision
 conflicts, and drafts. Never send private Health values in Town payloads.
 Cross-domain Town views receive approved stages and counts only.
 
-Weight, resting heart rate, blood pressure, sleep, labs, and checkups are created, corrected, and deleted through that store. Each kind shows its latest value and date, a 12-point sparkline with the same text, and 100 records. Show more reveals older rows. Labs group by name and show value, unit, and below, in, above, or no range. Those words only compare typed numbers. A save sends the expected revision. Display units do not rewrite stored kilograms, lab units, or revisions. Logged dates stay on the original day. Deletion requires the exact confirmation phrase.
+Clinic creates, corrects, and deletes weight, heart rate, blood pressure, sleep, labs, and checkups. Each kind shows its latest value, a 12-point sparkline, and 100 records. Show more reveals older rows. Labs group by name and show below, in, above, or no range. Range words compare numbers. Saves send the expected revision. Display units do not rewrite stored values. Logged dates stay immutable. Deletion requires the exact confirmation phrase. Gym registers exercises, routines, and sessions in health_workouts as kilograms, metres, and seconds. Oversized records stay drafts. Personal records stay in health_prs. No plaintext workout endpoint.
 
 Use [health constants](health/health.constants.ts) and existing pure logic for units,
 thresholds, and badges. Do not duplicate conversion or XP math.

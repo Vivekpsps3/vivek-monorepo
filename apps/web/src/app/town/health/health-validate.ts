@@ -11,7 +11,8 @@ export const CONTROL_TEXT_MESSAGE = 'Use letters, numbers and punctuation only.'
 export const normalizeHealthText = (value: string): string =>
   value.normalize('NFC').trim().replace(/\s+/gu, ' ');
 
-const hasForbiddenChars = (text: string): boolean => [...text].some(char => {
+/** C0/C1 controls and bidi overrides. Shared by measurements and workouts. */
+export const hasForbiddenHealthChars = (text: string): boolean => [...text].some(char => {
   const cp = char.codePointAt(0)!;
   return cp <= 0x1f || (cp >= 0x7f && cp <= 0x9f)
     || (cp >= 0x202a && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069);
@@ -47,7 +48,7 @@ function makeChecks(measuredOn: string, today: string): Checks {
     const normalized = normalizeHealthText(value);
     // Check the raw value too: collapsing whitespace must not launder
     // C0/C1 control characters into ordinary spaces.
-    if (hasForbiddenChars(value)) fieldErrors[field] = CONTROL_TEXT_MESSAGE;
+    if (hasForbiddenHealthChars(value)) fieldErrors[field] = CONTROL_TEXT_MESSAGE;
     else if ([...normalized].length < min || [...normalized].length > max) fieldErrors[field] = 'length';
     return normalized;
   };

@@ -266,7 +266,7 @@ The Library and Inn reflect eligible Media/Travel activity. Treasury uses Financ
 
 ### Encrypted Health groundwork
 
-Implemented Health foundations include `health_stats` and `health_prs` vault collections, typed records for weight, resting heart rate, blood pressure, sleep, lab results/checkups and lift/run/custom personal records, unit conversion, validation, personal-record events, XP/badge/stage calculations, revision-aware encrypted persistence, and a narrow stage-only public integration. Approved outputs can represent clinic/gym stages; underlying measurements, records, XP, and counts do not cross that stage-only API.
+Implemented Health foundations include `health_stats`, `health_prs`, and `health_workouts` vault collections. Workout records are exercises, routines, and sessions stored in kilograms, metres, and seconds. The same foundations include typed records for weight, resting heart rate, blood pressure, sleep, lab results/checkups and lift/run/custom personal records, unit conversion, validation, personal-record events, XP/badge/stage calculations, revision-aware encrypted persistence, and a narrow stage-only public integration. Approved outputs can represent clinic/gym stages; underlying measurements, records, XP, and counts do not cross that stage-only API.
 
 Lock/account changes invalidate pending loads, saves, deletes, and returned plaintext after asynchronous stages. Unsupported/corrupt rows and revision conflicts must remain recoverable. Health uses a narrow public vault capability rather than importing the entire Finance store.
 

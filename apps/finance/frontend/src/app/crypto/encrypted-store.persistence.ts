@@ -32,6 +32,7 @@ export type CollectionName = EncryptedCollection;
 export const FINANCE_FOREIGN_COLLECTIONS: ReadonlySet<string> = new Set([
   'health_stats',
   'health_prs',
+  'health_workouts',
 ]);
 
 export interface EncryptedStoreChange {

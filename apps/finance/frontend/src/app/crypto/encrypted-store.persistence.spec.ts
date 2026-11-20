@@ -67,6 +67,15 @@ describe('foreign health collections', () => {
       revision: 1,
       updated_at: '2026-01-01T00:00:00Z',
     },
+    {
+      collection: 'health_workouts',
+      client_id: 'hlt_workouts0001',
+      ciphertext_b64: 'opaque-workouts',
+      schema_version: 2,
+      key_version: 1,
+      revision: 1,
+      updated_at: '2026-01-01T00:00:00Z',
+    },
   ];
 
   it('decrypts Finance rows only and keeps health data out of every bag', async () => {
@@ -92,15 +101,18 @@ describe('foreign health collections', () => {
     }).bags;
     expect(bags['health_stats']).toBeUndefined();
     expect(bags['health_prs']).toBeUndefined();
+    expect(bags['health_workouts']).toBeUndefined();
     const stored = JSON.stringify(Object.values(bags).map(bag => Array.from(bag.values())));
     expect(stored).not.toContain('opaque-stats');
     expect(stored).not.toContain('opaque-prs');
+    expect(stored).not.toContain('opaque-workouts');
     expect(stored).not.toContain('health_stats');
     expect(stored).not.toContain('health_prs');
+    expect(stored).not.toContain('health_workouts');
   });
 
-  it('names exactly health_stats and health_prs', () => {
-    expect(Array.from(FINANCE_FOREIGN_COLLECTIONS).sort()).toEqual(['health_prs', 'health_stats']);
+  it('names exactly the health owner subset', () => {
+    expect(Array.from(FINANCE_FOREIGN_COLLECTIONS).sort()).toEqual(['health_prs', 'health_stats', 'health_workouts']);
   });
 
   it('LOCAL3: an older finance load or save does not decrypt, delete, or rewrite an unknown row', async () => {
@@ -133,6 +145,15 @@ describe('foreign health collections', () => {
         updated_at: '2026-01-01T00:00:00Z',
       },
       {
+        collection: 'health_workouts',
+        client_id: 'hlt_workouts0001',
+        ciphertext_b64: 'opaque-workouts',
+        schema_version: 2,
+        key_version: 1,
+        revision: 1,
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      {
         collection: 'future_private',
         client_id: 'future_private_1',
         ciphertext_b64: 'opaque-future',
@@ -150,7 +171,7 @@ describe('foreign health collections', () => {
       listRecords: () => of(rows),
       decryptPayload: async (ciphertextB64: string, collection: string) => {
         decrypted.push(`${collection}:${ciphertextB64}`);
-        if (ciphertextB64 === 'opaque-future' || ciphertextB64 === 'opaque-stats') {
+        if (ciphertextB64 === 'opaque-future' || ciphertextB64 === 'opaque-stats' || ciphertextB64 === 'opaque-workouts') {
           throw new Error(`decoded a sealed ${collection} row`);
         }
         return ciphertextB64 === 'opaque-legacy' ? { id: 22 } : { id: 11 };
@@ -185,5 +206,7 @@ describe('foreign health collections', () => {
     expect(rows.find(row => row.collection === 'future_private')?.ciphertext_b64).toBe('opaque-future');
     expect(rows.find(row => row.collection === 'future_private')?.revision).toBe(4);
     expect(rows.find(row => row.collection === 'health_stats')?.ciphertext_b64).toBe('opaque-stats');
+    expect(rows.find(row => row.collection === 'health_workouts')?.ciphertext_b64).toBe('opaque-workouts');
+    expect(rows.find(row => row.collection === 'health_workouts')?.revision).toBe(1);
   });
 });
