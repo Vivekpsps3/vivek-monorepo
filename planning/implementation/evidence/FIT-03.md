@@ -56,8 +56,8 @@ Python lint, Python typecheck, and the Python coverage gates were not run. The d
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/556 (`Closes #433` only).
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #90, #134, and #277 stay open. This leaf does not deploy.
-- Next actor: push `agent/fit-03`, open the pull request, wait for green required checks, then merge with a merge commit. The tested implementation commit is `7dd395f1fac15453d58ab718d8adf785bb7fd720`.
+- Next actor: wait for green required checks on pull request #556, then merge with a merge commit. The tested implementation commit is `7dd395f1fac15453d58ab718d8adf785bb7fd720`.
