@@ -2,7 +2,15 @@
 
 from datetime import UTC, datetime
 
-from apps.travel.backend.models import BudgetLine, Parking, PlanItem, Reminder, Stay, Transport
+from apps.travel.backend.models import (
+    BudgetLine,
+    Parking,
+    PlanItem,
+    Reminder,
+    Stay,
+    Transport,
+    TripDraftLeg,
+)
 from apps.travel.backend.services.money import parse_days, parse_money, store_days
 
 
@@ -18,7 +26,7 @@ def _fa_fetched(body) -> datetime | None:
     return None
 
 
-def apply_transport(row: Transport, body) -> None:
+def apply_transport(row: Transport | TripDraftLeg, body) -> None:
     row.role = body.role
     row.mode = body.mode
     row.carrier = body.carrier

@@ -22,6 +22,9 @@ consumers before deleting repeated editor logic. Preserve keyboard access, save-
 drafts and chart-only recovery; a failed summary must not hide usable forms.
 FlightAware settings use the same editor from suite Settings and the transport
 dialog. Keep the transport draft mounted in memory and cancel obsolete lookups.
+An incomplete draft on Plan a trip stores a confirmed outbound leg, leaves an
+unknown return empty, and creates no PTO charge. Inferred proposals stay off
+confirmed dates. A complete trip still requires a return and still allocates PTO.
 
 Read [TRAVEL](../../docs/TRAVEL.md) for the affected journey and root instructions
 for applicable gates. Pure chart/date behavior has Node tests under

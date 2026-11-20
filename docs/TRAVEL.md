@@ -8,6 +8,8 @@ Use the root workflow in [Development](DEVELOPMENT.md). There is one service and
 
 A trip spans departure through return, inclusive. Start with dates and a destination. Add destination changes on the first date at the next city; keep one optional trip-name editor. Every destination needs a name. Reversed dates cannot save. Same-day and one-night trips have explicit wording.
 
+Save draft on Plan a trip stores one confirmed outbound leg when the return is still unknown. The draft keeps the departure date, that leg, and a return date or destination city only when those fields were typed. An arrival time does not become the return date, and the draft does not create a PTO charge. Saving a complete trip still requires the return date and still allocates PTO. A failed or late draft save leaves the current form in place. Signing out clears the private in-memory draft.
+
 Transport and activities appear only on request. Notes, reminders, parking and extra costs use optional editors. Failed saves keep drafts; route and document exit guards protect unsaved changes. A completed create retries the same database-backed user/request key, including after process restarts and concurrent submissions. Missing keys intentionally create separate trips. Deleting a trip removes its children and PTO usage after confirmation; individual rows offer Undo with a retained snapshot and an explicit retry if restoration fails.
 
 Costs on transport, plan and parking rows roll up automatically. Extra budget lines represent other costs. Totals stay separate by currency. Parking records whether it is necessary and booked. Home lists open reminders, needed unbooked parking and PTO overlaps.

@@ -155,6 +155,119 @@ class Transport(Base):
     fa_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class TripDraft(Base):
+    """A partially known trip. A null end_date is an unknown return, not a guess.
+
+    Owner foreign keys to users.id are attached by apps.server.schema.OWNER_TABLES.
+    trip_draft_proposals are not facts. This row never charges PTO.
+    """
+
+    __tablename__ = "trip_drafts"
+    __table_args__ = (
+        Index("uq_trip_draft_attempt", "user_id", "client_request_id", unique=True),
+        CheckConstraint("lifecycle = 'draft'", name="ck_trip_drafts_lifecycle"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    client_request_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # A city the owner typed. Not a stay, lodging, or airport inference.
+    destination_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    origin_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lifecycle: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    legs: Mapped[list["TripDraftLeg"]] = relationship(
+        "TripDraftLeg",
+        cascade="all, delete-orphan",
+        order_by="TripDraftLeg.sort_order",
+    )
+    proposals: Mapped[list["TripDraftProposal"]] = relationship(
+        "TripDraftProposal",
+        cascade="all, delete-orphan",
+        order_by="TripDraftProposal.field",
+    )
+
+
+class TripDraftLeg(Base):
+    """One leg the owner saved on a draft. Arrival time is not a return date."""
+
+    __tablename__ = "trip_draft_legs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    draft_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("trip_drafts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False)
+    carrier: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    number: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    depart_place: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    arrive_place: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    depart_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    arrive_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    depart_tz: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    arrive_tz: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    confirmation: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    seat: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    cost_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="planned")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fa_ident: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    fa_flight_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    fa_status: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    fa_aircraft: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    fa_gate_origin: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    fa_gate_destination: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    fa_terminal_origin: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    fa_terminal_destination: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    fa_baggage_claim: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    fa_delay_departure_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fa_delay_arrival_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fa_scheduled_out: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    fa_estimated_out: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    fa_actual_out: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    fa_scheduled_in: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    fa_estimated_in: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    fa_actual_in: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    fa_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TripDraftProposal(Base):
+    """An inferred value kept off the draft's confirmed columns."""
+
+    __tablename__ = "trip_draft_proposals"
+    __table_args__ = (
+        UniqueConstraint("draft_id", "field", name="uq_trip_draft_proposal"),
+        CheckConstraint(
+            "field IN ('end_date','destination_city','lodging_name','counts_as_pto','duration')",
+            name="ck_trip_draft_proposals_field",
+        ),
+        CheckConstraint("source = 'inferred'", name="ck_trip_draft_proposals_source"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    draft_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("trip_drafts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    field: Mapped[str] = mapped_column(String(40), nullable=False)
+    value: Mapped[str] = mapped_column(String(200), nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+
+
 class PlanItem(Base):
     __tablename__ = "plan_items"
 

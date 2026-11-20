@@ -54,7 +54,7 @@ _REASONS = frozenset(
 DOMAIN_TABLES = {
     "identity": ("users",),
     "finance": ("encrypted_records", "user_vaults", "encrypted_record_indexes"),
-    "travel": ("trips", "pto_policy", "leave_policies", "pto_entries"),
+    "travel": ("trips", "trip_drafts", "pto_policy", "leave_policies", "pto_entries"),
     "media": (
         "user_entries",
         "experiences",

@@ -47,6 +47,17 @@ TIME_RE = r"^([01]\d|2[0-3]):[0-5]\d$"
 _INVISIBLE = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff"), None)
 
 
+def client_request_key(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if re.fullmatch(r"[A-Za-z0-9_-]{8,80}", text) is None:
+        raise ValueError("Use 8 to 80 letters, numbers, hyphens, or underscores for the save id.")
+    return text
+
+
 def trip_title(value) -> str:
     if not isinstance(value, str):
         raise ValueError("Give the trip a name.")
@@ -281,16 +292,7 @@ class TripCreate(BaseModel):
     @field_validator("client_request_id")
     @classmethod
     def request_id_ok(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        text = value.strip()
-        if not text:
-            return None
-        if re.fullmatch(r"[A-Za-z0-9_-]{8,80}", text) is None:
-            raise ValueError(
-                "Use 8 to 80 letters, numbers, hyphens, or underscores for the save id."
-            )
-        return text
+        return client_request_key(value)
 
     @model_validator(mode="after")
     def dates_ok(self):
@@ -306,6 +308,84 @@ class TripCreate(BaseModel):
             if self.pto_days < 0 or self.pto_days > 366:
                 raise ValueError("PTO days have to be between 0 and 366.")
         return self
+
+
+class ProposalIn(BaseModel):
+    """An inferred suggestion. It is stored apart from confirmed draft fields."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: Literal["end_date", "destination_city", "lodging_name", "counts_as_pto", "duration"]
+    value: str
+    source: Literal["inferred"]
+
+    @field_validator("value")
+    @classmethod
+    def value_ok(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("A proposal needs a value.")
+        if len(text) > 200:
+            raise ValueError("Keep this under 200 characters.")
+        return text
+
+
+class TripDraftWrite(BaseModel):
+    """Confirmed draft fields. Omitted return stays unknown and is not inferred."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    start_date: date
+    end_date: date | None = None
+    destination_label: str | None = None
+    origin_label: str | None = None
+    notes: str | None = None
+    legs: list[TransportIn]
+    proposals: list[ProposalIn] = Field(default_factory=list)
+    client_request_id: str | None = None
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def title_ok(cls, value: str) -> str:
+        return trip_title(value)
+
+    @field_validator("destination_label", "origin_label")
+    @classmethod
+    def label_ok(cls, value: str | None) -> str | None:
+        return _blank(value, 200)
+
+    @field_validator("notes")
+    @classmethod
+    def notes_ok(cls, value: str | None) -> str | None:
+        return _blank(value, 8000)
+
+    @field_validator("client_request_id")
+    @classmethod
+    def request_id_ok(cls, value: str | None) -> str | None:
+        return client_request_key(value)
+
+    @model_validator(mode="after")
+    def confirmed_shape(self):
+        if not any(leg.role == "outbound" for leg in self.legs):
+            raise ValueError("Add the outbound leg before saving a draft.")
+        if self.end_date is not None and self.end_date < self.start_date:
+            raise ValueError("The return date has to be on or after the day you leave.")
+        fields = [item.field for item in self.proposals]
+        if len(fields) != len(set(fields)):
+            raise ValueError("Each proposal field can only be sent once.")
+        return self
+
+
+class TripDraftPatch(TripDraftWrite):
+    revision: int
+
+    @field_validator("revision")
+    @classmethod
+    def revision_ok(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("Use the draft revision from the last save.")
+        return value
 
 
 class TripPatch(BaseModel):

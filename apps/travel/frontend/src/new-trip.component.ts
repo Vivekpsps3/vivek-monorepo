@@ -10,6 +10,7 @@ import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { filter, merge, take } from "rxjs";
 import {
   SESSION_CONTEXT,
   ConfirmService,
@@ -32,6 +33,11 @@ import {
   segments,
   summaryText,
 } from "./composer-model.mjs";
+import {
+  clearPrivateTripDraft,
+  draftRequest,
+  settleDraftResponse,
+} from "./draft-model.mjs";
 import { showDay, showRange } from "./display";
 import { PtoDaysComponent } from "./pto-days.component";
 import { allocationDraft, defaultAllocation } from "./pto-model.mjs";
@@ -235,13 +241,27 @@ import { dateOrderError, requiredText } from "./validate.mjs";
         @if (error()) {
           <p role="alert" class="local-error">{{ error() }}</p>
         }
+        @if (notice()) {
+          <p role="status">{{ notice() }}</p>
+        }
+        <p class="muted">
+          Save draft keeps a confirmed outbound leg when the return is still
+          unknown. It does not add a PTO charge.
+        </p>
         <div class="button-row">
           <ui-button
             variant="primary"
             type="submit"
-            [disabled]="saving()"
+            [disabled]="pending() !== ''"
           >
-            {{ saving() ? "Saving trip…" : "Save trip" }}</ui-button
+            {{ pending() === "trip" ? "Saving trip…" : "Save trip" }}</ui-button
+          ><ui-button
+            variant="secondary"
+            type="button"
+            [disabled]="pending() !== ''"
+            (click)="saveDraft()"
+          >
+            {{ pending() === "draft" ? "Saving draft…" : "Save draft" }}</ui-button
           ><a routerLink="/travel">Cancel</a>
         </div>
       </form></ui-card
@@ -272,6 +292,14 @@ export class NewTripComponent {
   private readonly destroy = inject(DestroyRef);
   private readonly confirm = inject(ConfirmService);
   private readonly host = inject(ElementRef<HTMLElement>);
+  constructor() {
+    merge(
+      this.session.cleared$,
+      this.session.user$.pipe(filter((user) => user?.id !== this.ownerId)),
+    )
+      .pipe(take(1), takeUntilDestroyed(this.destroy))
+      .subscribe(() => this.clearOwned());
+  }
   readonly model = signal(blankRange());
   readonly fields = signal<Record<string, string>>({});
   private explained = false;
@@ -300,7 +328,13 @@ export class NewTripComponent {
   transports: Record<string, unknown>[] = [];
   transportOpen = false;
   readonly error = signal("");
-  readonly saving = signal(false);
+  readonly notice = signal("");
+  readonly pending = signal<"" | "trip" | "draft">("");
+  private sessionActive = true;
+  private epoch = 0;
+  private draftId: number | null = null;
+  private draftRevision: number | null = null;
+  private savedDraftBody = "";
   field(name: string): string {
     return this.fields()[name] || "";
   }
@@ -347,11 +381,18 @@ export class NewTripComponent {
   private saved = false;
   private attemptKey = "";
   private attemptBody = "";
+  private draftAttemptKey = "";
+  private draftAttemptBody = "";
+  private unfinished(): boolean {
+    if (this.saved) return false;
+    if (!(this.start || this.end || this.transports.length)) return false;
+    const built = draftRequest(this.draftSnapshot());
+    return !(built.ok && this.savedDraftBody === JSON.stringify(built.body));
+  }
   canLeave(): boolean | Promise<boolean> {
     return (
       !this.ownsSession ||
-      this.saved ||
-      !(this.start || this.end || this.transports.length) ||
+      !this.unfinished() ||
       this.confirm.ask(
         "Leave this trip draft?",
         "This trip has not been saved yet.",
@@ -362,10 +403,46 @@ export class NewTripComponent {
   }
   @HostListener("window:beforeunload", ["$event"])
   unload(event: BeforeUnloadEvent): void {
-    if (this.ownsSession && !this.saved && (this.start || this.end)) {
+    if (this.ownsSession && this.unfinished()) {
       event.preventDefault();
       event.returnValue = "";
     }
+  }
+  private clearOwned(): void {
+    this.sessionActive = false;
+    this.epoch += 1;
+    const cleared = clearPrivateTripDraft();
+    this.start = cleared.start;
+    this.end = cleared.end;
+    this.transports = cleared.transports;
+    this.charges = cleared.charges;
+    this.changeDate = cleared.changeDate;
+    this.model.set(blankRange());
+    this.fields.set({});
+    this.error.set(cleared.error);
+    this.notice.set(cleared.notice);
+    this.draftId = cleared.draftId;
+    this.draftRevision = cleared.revision;
+    this.savedDraftBody = "";
+    this.draftAttemptKey = "";
+    this.draftAttemptBody = "";
+    this.pending.set("");
+    this.transportOpen = false;
+  }
+  private draftSnapshot() {
+    const parts = this.parts();
+    const city = parts.length ? this.model().cities[parts[0].key] || "" : "";
+    return {
+      start: this.start,
+      end: this.end,
+      title: this.model().tripName,
+      destination: city,
+      transports: this.transports,
+      proposals: [] as { field?: string; value?: string; source?: string }[],
+    };
+  }
+  private responseApplies(epoch: number): boolean {
+    return this.sessionActive && epoch === this.epoch;
   }
   async range(): Promise<void> {
     if (this.start && this.end && this.end < this.start) {
@@ -454,7 +531,7 @@ export class NewTripComponent {
     return allocationDraft(this.dates(), this.charges, this.model().pto).total;
   }
   save(): void {
-    if (this.saving()) return;
+    if (this.pending() || !this.sessionActive) return;
     if (this.explain()) return;
     const state = saveState(this.model());
     if (!state.ok) {
@@ -479,7 +556,8 @@ export class NewTripComponent {
       this.attemptKey = crypto.randomUUID();
       this.attemptBody = encoded;
     }
-    this.saving.set(true);
+    const epoch = this.epoch;
+    this.pending.set("trip");
     this.error.set("");
     this.http
       .post<Trip>("/travel/api/trips", {
@@ -489,13 +567,82 @@ export class NewTripComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (trip) => {
+          if (!this.responseApplies(epoch)) return;
           this.saved = true;
+          this.pending.set("");
           this.router.navigate(["/travel/trips", trip.id]);
         },
         error: (e) => {
+          if (!this.responseApplies(epoch)) return;
           this.error.set(travelError(e));
-          this.saving.set(false);
+          this.pending.set("");
         },
       });
   }
+  saveDraft(): void {
+    if (this.pending() || !this.sessionActive) return;
+    const snapshot = this.draftSnapshot();
+    const built = draftRequest(snapshot);
+    if (!built.ok) {
+      this.notice.set("");
+      this.error.set(built.helper);
+      if (built.field === "start" || built.field === "end") this.focusNamed(built.field);
+      return;
+    }
+    const encoded = JSON.stringify(built.body);
+    const creating = this.draftId == null;
+    if (creating && encoded !== this.draftAttemptBody) {
+      this.draftAttemptKey = crypto.randomUUID();
+      this.draftAttemptBody = encoded;
+    }
+    const epoch = this.epoch;
+    this.pending.set("draft");
+    this.error.set("");
+    const request = creating
+      ? this.http.post<DraftSaved>("/travel/api/trip-drafts", {
+          ...built.body,
+          client_request_id: this.draftAttemptKey,
+        })
+      : this.http.patch<DraftSaved>(`/travel/api/trip-drafts/${this.draftId}`, {
+          ...built.body,
+          revision: this.draftRevision,
+        });
+    request.pipe(takeUntilDestroyed(this.destroy)).subscribe({
+      next: (draft) => {
+        if (this.pending() === "draft") this.pending.set("");
+        const decision = settleDraftResponse({
+          epoch,
+          currentEpoch: this.epoch,
+          sessionActive: this.sessionActive,
+          ok: true,
+          submitted: snapshot,
+          current: this.draftSnapshot(),
+        });
+        if (!decision.apply) return;
+        this.draftId = draft.id;
+        this.draftRevision = draft.revision;
+        this.savedDraftBody = encoded;
+        this.notice.set(decision.notice);
+      },
+      error: (e) => {
+        if (this.pending() === "draft") this.pending.set("");
+        const decision = settleDraftResponse({
+          epoch,
+          currentEpoch: this.epoch,
+          sessionActive: this.sessionActive,
+          ok: false,
+          submitted: snapshot,
+          current: this.draftSnapshot(),
+        });
+        if (!decision.failed) return;
+        this.error.set(travelError(e));
+      },
+    });
+  }
+}
+
+interface DraftSaved {
+  id: number;
+  revision: number;
+  end_date: string | null;
 }

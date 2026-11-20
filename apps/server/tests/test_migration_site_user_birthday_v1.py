@@ -42,6 +42,13 @@ LATER_THAN_BIRTHDAY = {
     "add_fk:habit_checkins:fk_habit_checkins_owner:habit_id,user_id",
     "add_constraint:habits:uq_habits_id_user:id,user_id",
     "add_column:transports.fa_flight_id",
+    "add_table:trip_drafts",
+    "add_index:ix_trip_drafts_user_id",
+    "add_index:uq_trip_draft_attempt",
+    "add_table:trip_draft_legs",
+    "add_index:ix_trip_draft_legs_draft_id",
+    "add_table:trip_draft_proposals",
+    "add_index:ix_trip_draft_proposals_draft_id",
 }
 
 

@@ -100,7 +100,8 @@ def client(tmp_path_factory):
 @pytest.mark.parametrize("path,method,name,value", _MISSING_CASES)
 def test_invalid_path_id_matches_unknown(client, path, method, name, value):
     fields = {part.split("}")[0]: "1" for part in path.split("{")[1:]}
-    body = {
+    # Draft writes put a leg list and a revision integer in the same body.
+    body: dict[str, object] = {
         "title": "Seed",
         "city": "Seed",
         "arrive_on": "2026-01-01",
@@ -114,6 +115,14 @@ def test_invalid_path_id_matches_unknown(client, path, method, name, value):
     }
     if "transports" in path:
         body.update(role="outbound", mode="flight")
+    if "trip-drafts" in path:
+        # Draft writes forbid trip fields. A valid body lets a missing id 404.
+        body = {
+            "title": "Seed",
+            "start_date": "2026-06-01",
+            "legs": [{"role": "outbound", "mode": "flight"}],
+            "revision": 1,
+        }
     kwargs = {
         "json": body,
         "params": {"q": "seed"},

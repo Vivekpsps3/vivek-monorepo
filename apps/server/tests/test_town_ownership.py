@@ -39,13 +39,22 @@ PARENT = "site_calendar_feeds_v1"
 REVISION = "site_town_ownership_v1"
 
 
-def _added_columns(diff) -> set[str]:
-    names = set()
+def _later_model(diff) -> tuple[set[str], set[str]]:
+    columns: set[str] = set()
+    tables: set[str] = set()
+    draft_tables = {"trip_drafts", "trip_draft_legs", "trip_draft_proposals"}
     for item in diff:
-        if item[0] != "add_column":
+        if item[0] == "add_column":
+            columns.add(f"{item[2]}.{item[3].name}")
+        elif item[0] == "add_table":
+            tables.add(str(getattr(item[1], "name", None)))
+        elif item[0] == "add_index":
+            table = getattr(getattr(item[1], "table", None), "name", None)
+            if table not in draft_tables:
+                raise AssertionError(item)
+        else:
             raise AssertionError(item)
-        names.add(f"{item[2]}.{item[3].name}")
-    return names
+    return columns, tables
 
 
 TABLES = ("habits", "habit_checkins", "habit_cadences")
@@ -159,9 +168,12 @@ def test_upgrade_preserves_multi_owner_history_and_is_the_only_head(tmp_path: Pa
     digest = _digest(before)
     _upgrade_to(database, REVISION)
     assert current_revision(database) == REVISION
-    assert head_revision() == "site_flight_occurrence_v1"
-    assert ScriptDirectory.from_config(_cfg(database)).get_heads() == ["site_flight_occurrence_v1"]
-    assert _added_columns(model_diff(database)) == {"transports.fa_flight_id"}
+    assert head_revision() == "site_trip_draft_v1"
+    assert ScriptDirectory.from_config(_cfg(database)).get_heads() == ["site_trip_draft_v1"]
+    assert _later_model(model_diff(database)) == (
+        {"transports.fa_flight_id"},
+        {"trip_drafts", "trip_draft_legs", "trip_draft_proposals"},
+    )
     after = _snapshot(database)
     assert after == before
     assert _digest(after) == digest
@@ -230,7 +242,10 @@ def test_upgrade_preserves_multi_owner_history_and_is_the_only_head(tmp_path: Pa
         assert "fk_habit_checkins_owner" not in checkins[0]
     _upgrade_to(database, REVISION)
     assert _snapshot(database) == before
-    assert _added_columns(model_diff(database)) == {"transports.fa_flight_id"}
+    assert _later_model(model_diff(database)) == (
+        {"transports.fa_flight_id"},
+        {"trip_drafts", "trip_draft_legs", "trip_draft_proposals"},
+    )
 
 
 @pytest.mark.parametrize(

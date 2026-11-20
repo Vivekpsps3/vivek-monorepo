@@ -14,6 +14,26 @@ from apps.server.migrations import (
 
 PARENT = "site_town_ownership_v1"
 REVISION = "site_flight_occurrence_v1"
+HEAD = "site_trip_draft_v1"
+DRAFT_GAP = {
+    "add_index:trip_draft_legs:ix_trip_draft_legs_draft_id",
+    "add_index:trip_draft_proposals:ix_trip_draft_proposals_draft_id",
+    "add_index:trip_drafts:ix_trip_drafts_user_id",
+    "add_index:trip_drafts:uq_trip_draft_attempt",
+    "add_table:None:trip_draft_legs",
+    "add_table:None:trip_draft_proposals",
+    "add_table:None:trip_drafts",
+}
+
+
+def _label(item) -> str:
+    kind = item[0]
+    if kind == "add_column":
+        return f"add_column:{item[2]}.{item[3].name}"
+    subject = item[1]
+    table = getattr(subject, "table", None)
+    table_name = getattr(table, "name", None)
+    return f"{kind}:{table_name}:{getattr(subject, 'name', None)}"
 
 
 def test_upgrade_adds_a_nullable_flight_id_and_keeps_the_leg(tmp_path):
@@ -42,8 +62,8 @@ def test_upgrade_adds_a_nullable_flight_id_and_keeps_the_leg(tmp_path):
         db.commit()
     command.upgrade(config, REVISION)
     assert current_revision(database) == REVISION
-    assert head_revision() == REVISION
-    assert model_diff(database) == []
+    assert head_revision() == HEAD
+    assert {_label(item) for item in model_diff(database)} == DRAFT_GAP
     with sqlite3.connect(database) as db:
         info = {row[1]: row for row in db.execute("PRAGMA table_info(transports)")}
         column = info["fa_flight_id"]
