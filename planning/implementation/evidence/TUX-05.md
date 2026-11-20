@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#410](https://github.com/Vivekpsps3/vivek-monorepo/issues/410) TUX-05; parent [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. #277 was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/tux-05`; `/tmp/vivek-tux-05`. The shared checkout was not edited.
-- Base main SHA, current tested SHA: base `aadda6b9bf43cd79d41973d5e18841678199dde7` (TUX-04 merge, pull request #537). The implementation and these command results are `IMPLEMENTATION_COMMIT`. This sentence names that commit; the follow-up only edits this evidence file.
+- Base main SHA, current tested SHA: base `aadda6b9bf43cd79d41973d5e18841678199dde7` (TUX-04 merge, pull request #537). The implementation and these command results are `023fec54ea9147938e2d2df33b4da2e013e4d2b9`. This sentence names that commit; the follow-up only edits this evidence file.
 - Fresh-main/prerequisite/active-PR checks: `git fetch origin main` on 2026-11-20 still returned `aadda6b9bf43cd79d41973d5e18841678199dde7`. TUX-03 trip drafts and TUX-04 flight-first review are on that tree (`POST /travel/api/trip-drafts`, `travel-flight-start`, `apps/travel/e2e/trip-draft.spec.js`, `apps/travel/e2e/flight-start.spec.js`). STYLE-02 44px controls are on that tree (`packages/ui/src/ui-button/ui-button.component.css`). `gh pr list --state open` returned no pull requests. No open `travel-forms` or `travel-ui` pull request.
 
 ## Acceptance
@@ -40,17 +40,17 @@ Commands ran in `/tmp/vivek-tux-05`. `make test-fast` used `PATH="/tmp/vivek-tux
 
 | Command | Tested SHA | Result |
 | --- | --- | --- |
-| `PATH="/tmp/vivek-tux-05/.venv/bin:$PATH" make test-fast` | `IMPLEMENTATION_COMMIT` | PASS. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. Rerun after the Travel overview sentence. |
-| `make lint-python` | `IMPLEMENTATION_COMMIT` | PASS. 258 files formatted. Ruff 90 findings match the baseline. Suppressions 6 match the baseline. |
-| `make typecheck-python` | `IMPLEMENTATION_COMMIT` | PASS. mypy 79 findings match the baseline. |
-| `make lint-web` | `IMPLEMENTATION_COMMIT` | PASS. eslint-finance 345, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. The baseline was not raised. |
-| `make typecheck-web` | `IMPLEMENTATION_COMMIT` | PASS. `tsc` noEmit for web, finance, packages, and site. |
-| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | `IMPLEMENTATION_COMMIT` | PASS. 418 SUCCESS. Statements 72.6% (5824/8022). |
-| `node --test apps/travel/backend/static/tests/*.test.mjs` | `IMPLEMENTATION_COMMIT` | PASS. 64 pass / 0 fail. Three of those are `calendar-booking.test.mjs`. |
-| `./scripts/coverage-gate.sh travel` | `IMPLEMENTATION_COMMIT` | PASS. 221 passed. Total coverage 89.03% (4083 statements, 448 missing). Floor 80.41%. `calendar_booking.py` 90.22% (276 statements, 27 missing). `calendar_bookings.py` 100%. Floor was not pinned. |
-| `./scripts/coverage-gate.sh server` | `IMPLEMENTATION_COMMIT` | PASS. 425 passed, then the server perf check 1 passed. Total coverage 79.40% (5675 statements, 1169 missing). Floor 61.53%. Floor was not pinned. |
-| `make build-frontends` | `IMPLEMENTATION_COMMIT` | PASS. Output `/tmp/vivek-tux-05/dist/web`. Initial-bundle warning 674.96 kB. Exit 0. |
-| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --config apps/travel/e2e/playwright.config.js` | `IMPLEMENTATION_COMMIT` | PASS. 174 passed. The ten `calendar-import.spec.js` tests are included. |
+| `PATH="/tmp/vivek-tux-05/.venv/bin:$PATH" make test-fast` | `023fec54ea9147938e2d2df33b4da2e013e4d2b9` | PASS. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. Rerun after the Travel overview sentence. |
+| `make lint-python` | `023fec54ea9147938e2d2df33b4da2e013e4d2b9` | PASS. 258 files formatted. Ruff 90 findings match the baseline. Suppressions 6 match the baseline. |
+| `make typecheck-python` | `023fec54ea9147938e2d2df33b4da2e013e4d2b9` | PASS. mypy 79 findings match the baseline. |
+| `make lint-web` | `023fec54ea9147938e2d2df33b4da2e013e4d2b9` | PASS. eslint-finance 345, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. The baseline was not raised. |
+| `make typecheck-web` | `023fec54ea9147938e2d2df33b4da2e013e4d2b9` | PASS. `tsc` noEmit for web, finance, packages, and site. |
+| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | `023fec54ea9147938e2d2df33b4da2e013e4d2b9` | PASS. 418 SUCCESS. Statements 72.6% (5824/8022). |
+| `node --test apps/travel/backend/static/tests/*.test.mjs` | `023fec54ea9147938e2d2df33b4da2e013e4d2b9` | PASS. 64 pass / 0 fail. Three of those are `calendar-booking.test.mjs`. |
+| `./scripts/coverage-gate.sh travel` | `023fec54ea9147938e2d2df33b4da2e013e4d2b9` | PASS. 221 passed. Total coverage 89.03% (4083 statements, 448 missing). Floor 80.41%. `calendar_booking.py` 90.22% (276 statements, 27 missing). `calendar_bookings.py` 100%. Floor was not pinned. |
+| `./scripts/coverage-gate.sh server` | `023fec54ea9147938e2d2df33b4da2e013e4d2b9` | PASS. 425 passed, then the server perf check 1 passed. Total coverage 79.40% (5675 statements, 1169 missing). Floor 61.53%. Floor was not pinned. |
+| `make build-frontends` | `023fec54ea9147938e2d2df33b4da2e013e4d2b9` | PASS. Output `/tmp/vivek-tux-05/dist/web`. Initial-bundle warning 674.96 kB. Exit 0. |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --config apps/travel/e2e/playwright.config.js` | `023fec54ea9147938e2d2df33b4da2e013e4d2b9` | PASS. 174 passed. The ten `calendar-import.spec.js` tests are included. |
 
 Finance coverage, Media coverage, Finance Karma, site Karma, Finance Playwright, Media Playwright, and Town Playwright were not run. The diff does not change those screens. `make e2e` is the Finance Playwright gate and was not run.
 
