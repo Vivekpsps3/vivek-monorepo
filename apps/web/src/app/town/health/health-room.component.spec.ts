@@ -1,8 +1,9 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Injectable, Injector } from '@angular/core';
+import { Component, Injectable, Injector } from '@angular/core';
 import { ComponentFixture, TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
 import { provideRouter, ActivatedRoute, convertToParamMap } from '@angular/router';
 import { localTodayIso } from '@vivek/browser';
+import { UiConfirmDialogComponent } from '@vivek/ui';
 import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
 import {
   DEK_STORE,
@@ -12,6 +13,7 @@ import {
   type VaultRecordEnvelope,
 } from '../../../../../finance/frontend/src/public-api';
 import { SessionService } from '../../platform/session.service';
+import { healthDeletePhrase } from './health-entry';
 import { displayWeight, lbToKg } from './health-units';
 import { HEALTH_VAULT_EXISTS, HealthRoomComponent } from './health-room.component';
 import {
@@ -56,16 +58,21 @@ class FakeVault implements VaultRecordCapability {
   rows: VaultRecordEnvelope[] = [];
   listed: string[] = [];
   upserted: unknown[] = [];
+  deleted: unknown[] = [];
   decryptCalls: string[] = [];
   encryptCalls: unknown[] = [];
   holdList = false;
   holdUpsert = false;
+  holdDelete = false;
   failUpsert = false;
+  failDelete = false;
   conflict = false;
   listCancelled = 0;
   upsertCancelled = 0;
+  deleteCancelled = 0;
   readonly listRelease: Array<() => void> = [];
   readonly upsertRelease: Array<() => void> = [];
+  readonly deleteRelease: Array<() => void> = [];
 
   listRecords(collection: string): Observable<VaultRecordEnvelope[]> {
     this.listed.push(collection);
@@ -98,17 +105,35 @@ class FakeVault implements VaultRecordCapability {
     const run = (): VaultRecordEnvelope[] => {
       this.upserted.push(records);
       return records.map(record => {
-        const item = record as { collection: string; client_id: string; ciphertext_b64: string; schema_version: number; key_version: number };
+        const item = record as {
+          collection: string;
+          client_id: string;
+          ciphertext_b64: string;
+          schema_version: number;
+          key_version: number;
+          expected_revision: number | null;
+        };
+        const index = this.rows.findIndex(existing => existing.collection === item.collection && existing.client_id === item.client_id);
+        const previous = index >= 0 ? this.rows[index] : undefined;
+        if ((previous?.revision ?? null) !== item.expected_revision) throw new HttpErrorResponse({ status: 409 });
         const saved = row(item.collection, item.client_id, {}, {
           ciphertext_b64: item.ciphertext_b64,
           schema_version: item.schema_version,
           key_version: item.key_version,
+          revision: (previous?.revision ?? 0) + 1,
         });
-        this.rows.push(saved);
+        if (index >= 0) this.rows[index] = saved;
+        else this.rows.push(saved);
         return saved;
       });
     };
-    if (!this.holdUpsert) return of(run());
+    if (!this.holdUpsert) {
+      try {
+        return of(run());
+      } catch (error) {
+        return throwError(() => error);
+      }
+    }
     return new Observable(subscriber => {
       this.upsertRelease.push(() => {
         if (subscriber.closed) return;
@@ -123,10 +148,49 @@ class FakeVault implements VaultRecordCapability {
     });
   }
 
-  deleteRecords(): Observable<{ deleted: number }> {
-    return of({ deleted: 0 });
+  deleteRecords(records: readonly { collection: string; client_id: string; expected_revision: number }[]): Observable<{ deleted: number }> {
+    if (this.failDelete) return throwError(() => new Error('delete failed'));
+    const run = (): { deleted: number } => {
+      for (const record of records) {
+        const index = this.rows.findIndex(item => item.collection === record.collection && item.client_id === record.client_id);
+        if (index < 0 || this.rows[index].revision !== record.expected_revision) {
+          throw new HttpErrorResponse({ status: 409 });
+        }
+      }
+      for (const record of records) {
+        const index = this.rows.findIndex(item => item.collection === record.collection && item.client_id === record.client_id);
+        this.rows.splice(index, 1);
+      }
+      this.deleted.push(records);
+      return { deleted: records.length };
+    };
+    if (!this.holdDelete) {
+      try {
+        return of(run());
+      } catch (error) {
+        return throwError(() => error);
+      }
+    }
+    return new Observable(subscriber => {
+      this.deleteRelease.push(() => {
+        if (subscriber.closed) return;
+        try {
+          subscriber.next(run());
+          subscriber.complete();
+        } catch (error) {
+          subscriber.error(error);
+        }
+      });
+      return () => { this.deleteCancelled += 1; };
+    });
   }
 }
+
+@Component({
+  imports: [HealthRoomComponent, UiConfirmDialogComponent],
+  template: '<app-health-room /><ui-confirm-dialog />',
+})
+class HealthRoomSpecHost {}
 
 class SessionDouble {
   readonly users = new BehaviorSubject<{ id: number } | null>({ id: 7 });
@@ -208,7 +272,7 @@ async function until(ready: () => boolean): Promise<void> {
   if (!ready()) throw new Error('timed out waiting for the health shell');
 }
 
-async function settle(fixture: ComponentFixture<HealthRoomComponent>): Promise<void> {
+async function settle(fixture: { detectChanges(): void; whenStable(): Promise<unknown> }): Promise<void> {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     fixture.detectChanges();
     await Promise.resolve();
@@ -217,10 +281,24 @@ async function settle(fixture: ComponentFixture<HealthRoomComponent>): Promise<v
   fixture.detectChanges();
 }
 
-async function show(): Promise<{ fixture: ComponentFixture<HealthRoomComponent>; el: HTMLElement }> {
-  const fixture = TestBed.createComponent(HealthRoomComponent);
+async function show(): Promise<{ fixture: ComponentFixture<HealthRoomSpecHost>; el: HTMLElement }> {
+  const fixture = TestBed.createComponent(HealthRoomSpecHost);
   await settle(fixture);
-  return { fixture, el: fixture.nativeElement as HTMLElement };
+  const el = fixture.nativeElement.querySelector('app-health-room');
+  if (!(el instanceof HTMLElement)) throw new Error('missing health room');
+  return { fixture, el };
+}
+
+function clickConfirm(fixture: ComponentFixture<HealthRoomSpecHost>, phrase: string): void {
+  const input = fixture.nativeElement.querySelector('#confirm-phrase-field');
+  if (!(input instanceof HTMLInputElement)) throw new Error('missing confirmation phrase');
+  input.value = phrase;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  fixture.detectChanges();
+  const confirm = [...fixture.nativeElement.querySelectorAll('button')].find(item => item.textContent?.includes('Delete measurement'));
+  if (!(confirm instanceof HTMLButtonElement)) throw new Error('missing Delete measurement');
+  confirm.click();
+  fixture.detectChanges();
 }
 
 describe('Health room shell', () => {
@@ -232,7 +310,7 @@ describe('Health room shell', () => {
     gate = { exists: true };
     vaultCalls = 0;
     TestBed.configureTestingModule({
-      imports: [HealthRoomComponent],
+      imports: [HealthRoomComponent, HealthRoomSpecHost],
       providers: [
         provideRouter([]),
         { provide: ActivatedRoute, useValue: route },
@@ -599,5 +677,293 @@ describe('Health room shell', () => {
     expect(el.textContent).toBe(before);
     expect(visible(el)).not.toContain('176.4');
     expect(visible(el)).not.toContain('64.25');
+  });
+
+  it('edits each vital in both weight units without rewriting an unchanged record', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    const seedRow = () => fake.rows.find(item => item.client_id === WEIGHT_ID);
+    const before = seedRow()?.ciphertext_b64;
+    const today = localTodayIso();
+    button(el, 'Edit').click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Edit weight');
+    expect(el.querySelector('#health-logged-on')?.textContent).toContain(DAY);
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('176.4');
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fake.encryptCalls).toEqual([]);
+    expect(fake.upserted).toEqual([]);
+    expect(seedRow()?.ciphertext_b64).toBe(before);
+    expect(seedRow()?.revision).toBe(1);
+
+    button(el, 'Edit').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', today);
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fake.encryptCalls).toEqual([jasmine.objectContaining({
+      kind: 'weight', kg: 80, measured_on: today, logged_on: DAY,
+    })]);
+    const update = fake.upserted.at(-1) as Array<{ expected_revision: number }>;
+    expect(update[0].expected_revision).toBe(1);
+    expect(seedRow()?.revision).toBe(2);
+    expect(JSON.parse(atob(String(seedRow()?.ciphertext_b64).slice(3))).kg).toBe(80);
+    button(el, 'Edit').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#health-logged-on')?.textContent).toContain(DAY);
+    expect(el.querySelector<HTMLInputElement>('#health-measured-on')?.value).toBe(today);
+    button(el, 'Cancel').click();
+    fixture.detectChanges();
+
+    button(el, 'Kilograms').click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain(`Weight · 80.0 kg · ${today}`);
+    expect(seedRow()?.revision).toBe(2);
+    button(el, 'Edit').click();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('80.0');
+    typeInto(el, '#health-weight', '70');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fake.encryptCalls.at(-1)).toEqual(jasmine.objectContaining({ kind: 'weight', kg: 70, logged_on: DAY }));
+    expect((fake.upserted.at(-1) as Array<{ expected_revision: number }>)[0].expected_revision).toBe(2);
+    expect(el.textContent).toContain(`Weight · 70.0 kg · ${today}`);
+
+    button(el, 'Add resting heart rate').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', today);
+    typeInto(el, '#health-bpm', '24');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(el.querySelector('#health-bpm'));
+    expect(el.textContent).toContain('That value is outside the allowed range.');
+    typeInto(el, '#health-bpm', '62');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain(`Resting heart rate · 62 bpm · ${today}`);
+
+    button(el, 'Add blood pressure').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', today);
+    typeInto(el, '#health-systolic', '90');
+    typeInto(el, '#health-diastolic', '90');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(el.querySelector('#health-systolic'));
+    expect(el.textContent).toContain('Systolic must be higher than diastolic.');
+    typeInto(el, '#health-systolic', '118');
+    typeInto(el, '#health-diastolic', '76');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain(`Blood pressure · 118/76 · ${today}`);
+
+    button(el, 'Add sleep').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', today);
+    typeInto(el, '#health-sleep', '7.3');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(el.querySelector('#health-sleep'));
+    expect(el.textContent).toContain('Use a quarter-hour step.');
+    typeInto(el, '#health-sleep', '7.25');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain(`Sleep · 7.25 h · ${today}`);
+    expect(JSON.parse(atob(String(seedRow()?.ciphertext_b64).slice(3))).kg).toBe(70);
+  });
+
+  it('keeps the draft and the previous record when an edit conflicts or fails', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    const today = localTodayIso();
+    button(el, 'Edit').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-weight', '150');
+    fixture.detectChanges();
+    fake.failUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(el.textContent).toContain('Could not save this entry. Try again.');
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('150');
+    expect(document.activeElement).toBe(el.querySelector('#health-form-error'));
+    expect(el.textContent).toContain('176.4 lb');
+    expect(fake.rows.find(item => item.client_id === WEIGHT_ID)?.revision).toBe(1);
+
+    fake.failUpsert = false;
+    fake.conflict = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(el.textContent).toContain(HEALTH_CONFLICT_MESSAGE);
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('150');
+    expect(document.activeElement).toBe(el.querySelector('#health-form-error'));
+    expect(el.textContent).toContain('176.4 lb');
+    expect(JSON.parse(atob(String(fake.rows.find(item => item.client_id === WEIGHT_ID)?.ciphertext_b64).slice(3))).kg).toBe(80);
+    expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('requires the exact phrase and retries a delete with the current revision', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    const remove = el.querySelector<HTMLButtonElement>(`#health-delete-${WEIGHT_ID} button`);
+    if (!remove) throw new Error('missing delete');
+    remove.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain(healthDeletePhrase('weight'));
+    expect(fixture.nativeElement.textContent).toContain(`measured on ${DAY}`);
+    clickConfirm(fixture, 'delete weight');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('176.4 lb');
+    expect(fake.deleted).toEqual([]);
+
+    const kept = [...fixture.nativeElement.querySelectorAll('button')].find(item => item.textContent?.includes('Keep measurement'));
+    if (!(kept instanceof HTMLButtonElement)) throw new Error('missing keep');
+    kept.click();
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(fixture.nativeElement.querySelector('#confirm-phrase-field')).toBeNull();
+    expect(el.textContent).toContain('176.4 lb');
+
+    remove.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const weight = fake.rows.find(item => item.client_id === WEIGHT_ID);
+    if (!weight) throw new Error('missing weight row');
+    weight.revision = 9;
+    clickConfirm(fixture, healthDeletePhrase('weight'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(el.textContent).toContain('176.4 lb');
+    expect(fixture.nativeElement.textContent).toContain('Could not delete this entry. It is still saved. Try again.');
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#confirm-phrase-field'));
+
+    clickConfirm(fixture, healthDeletePhrase('weight'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).not.toContain('176.4 lb');
+    expect(fake.deleted).toHaveSize(1);
+    const deleted = fake.deleted[0] as Array<{ client_id: string; expected_revision: number }>;
+    expect(deleted[0]).toEqual(jasmine.objectContaining({ client_id: WEIGHT_ID, expected_revision: 9 }));
+    fixture.detectChanges();
+    await new Promise(resolve => setTimeout(resolve));
+    expect(document.activeElement).toBe(el.querySelector('#health-add-weight button'));
+  });
+
+  it('keeps a newer draft when a late save succeeds and drops it when the owner changes', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    button(el, 'Add weight').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', localTodayIso());
+    typeInto(el, '#health-weight', '200');
+    fixture.detectChanges();
+    fake.holdUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await until(() => fake.upsertRelease.length === 1);
+    typeInto(el, '#health-weight', '210');
+    fixture.detectChanges();
+    fake.upsertRelease.shift()?.();
+    await settle(fixture);
+    expect(el.textContent).toContain(`${displayWeight(lbToKg(200), 'lb')} lb`);
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('210');
+    expect(fake.encryptCalls).toEqual([jasmine.objectContaining({ kg: lbToKg(200) })]);
+
+    fake.holdUpsert = false;
+    fake.holdList = true;
+    fake.rows = [row('health_stats', WEIGHT_ID, { ...WEIGHT, kg: 70 })];
+    session.users.next({ id: 8 });
+    fixture.detectChanges();
+    await until(() => el.getAttribute('data-health-state') === 'loading');
+    expect(visible(el)).not.toContain('210');
+    expect(visible(el)).not.toContain('176.4');
+    fake.listRelease.splice(0).forEach(release => release());
+    await settle(fixture);
+    expect(el.textContent).toContain(`${displayWeight(70, 'lb')} lb`);
+    expect(visible(el)).not.toContain('210');
+  });
+
+  it('ignores a delete that loses to a lock', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    const remove = el.querySelector<HTMLButtonElement>(`#health-delete-${WEIGHT_ID} button`);
+    if (!remove) throw new Error('missing delete');
+    remove.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fake.holdDelete = true;
+    clickConfirm(fixture, healthDeletePhrase('weight'));
+    await until(() => fake.deleteRelease.length === 1);
+    const locking = lockFinance(TestBed.inject(Injector));
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      fixture.detectChanges();
+      if (fake.deleteCancelled > 0 && el.getAttribute('data-health-state') === 'locked') break;
+      await Promise.resolve();
+    }
+    expect(fake.deleteCancelled).toBeGreaterThan(0);
+    fake.deleteRelease.shift()?.();
+    await locking.catch(() => undefined);
+    fixture.detectChanges();
+    expect(el.getAttribute('data-health-state')).toBe('locked');
+    expect(visible(el)).not.toContain('176.4');
+    expect(visible(el)).not.toMatch(/\d/);
+    expect(fake.deleted).toEqual([]);
+    expect(fake.rows.some(item => item.client_id === WEIGHT_ID)).toBeTrue();
+  });
+
+  it('shows a saved lab without an editor', async () => {
+    unlock();
+    seed();
+    const labId = 'hlt_SyntheticLabEntryABCD';
+    fake.rows.push(row('health_stats', labId, {
+      v: 1, kind: 'lab', measured_on: DAY, logged_on: DAY, lab: { name: 'Iron', value: 12, unit: 'ng/mL' },
+    }));
+    const { el } = await show();
+    expect(el.textContent).toContain('Lab · Iron · 12 ng/mL');
+    expect(el.querySelector(`#health-edit-${labId}`)).toBeNull();
+    expect(el.querySelector(`#health-delete-${labId}`)).toBeNull();
+    expect(el.querySelector(`#health-edit-${WEIGHT_ID}`)).not.toBeNull();
   });
 });

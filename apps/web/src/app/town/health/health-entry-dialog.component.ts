@@ -6,10 +6,12 @@ import {
   healthFieldId,
   healthFieldMessage,
   parseHealthNumber,
+  vitalStatFromDraft,
   type HealthDraft,
+  type HealthEditorKind,
 } from './health-entry';
 import type { HealthPr, HealthStat } from './health.types';
-import { validateHealthPr, validateHealthStat, type FieldErrors } from './health-validate';
+import { validateHealthPr, type FieldErrors } from './health-validate';
 
 export type HealthEntryValue = HealthStat | HealthPr;
 
@@ -23,6 +25,7 @@ export type HealthEntryValue = HealthStat | HealthPr;
 export class HealthEntryDialogComponent {
   readonly open = input(false);
   readonly room = input.required<'clinic' | 'gym'>();
+  readonly kind = input<HealthEditorKind>('weight');
   readonly today = input.required<string>();
   readonly weightUnit = input<'kg' | 'lb'>('lb');
   readonly draft = input<HealthDraft>(EMPTY_HEALTH_DRAFT);
@@ -34,17 +37,46 @@ export class HealthEntryDialogComponent {
   readonly errors = signal<FieldErrors>({});
   protected readonly local = signal<HealthDraft>(EMPTY_HEALTH_DRAFT);
   protected readonly message = healthFieldMessage;
+  private formErrorSeen = '';
 
   constructor() {
     effect(() => {
       this.local.set(this.draft());
     });
     afterRenderEffect(() => {
-      if (!this.open()) return;
-      const field = firstHealthField(this.errors(), this.room());
-      if (!field) return;
-      document.getElementById(healthFieldId(field))?.focus();
+      if (!this.open()) {
+        this.formErrorSeen = '';
+        return;
+      }
+      const field = firstHealthField(this.errors(), this.room(), this.kind());
+      if (field) {
+        document.getElementById(healthFieldId(field))?.focus();
+        return;
+      }
+      const message = this.formError();
+      if (!message) {
+        this.formErrorSeen = '';
+        return;
+      }
+      if (message === this.formErrorSeen) return;
+      this.formErrorSeen = message;
+      document.getElementById('health-form-error')?.focus();
     });
+  }
+
+  protected heading(): string {
+    const editing = this.local().clientId != null;
+    switch (this.kind()) {
+      case 'weight': return editing ? 'Edit weight' : 'Add weight';
+      case 'rhr': return editing ? 'Edit resting heart rate' : 'Add resting heart rate';
+      case 'bp': return editing ? 'Edit blood pressure' : 'Add blood pressure';
+      case 'sleep': return editing ? 'Edit sleep' : 'Add sleep';
+      case 'lift': return 'Add lift';
+    }
+  }
+
+  protected loggedOn(): string {
+    return this.local().loggedOn || this.today();
   }
 
   protected weightLabel(): string {
@@ -67,31 +99,43 @@ export class HealthEntryDialogComponent {
     this.patch({ reps: this.text(event) });
   }
 
+  protected onBpm(event: Event): void {
+    this.patch({ bpm: this.text(event) });
+  }
+
+  protected onSys(event: Event): void {
+    this.patch({ sys: this.text(event) });
+  }
+
+  protected onDia(event: Event): void {
+    this.patch({ dia: this.text(event) });
+  }
+
+  protected onHours(event: Event): void {
+    this.patch({ hours: this.text(event) });
+  }
+
   protected onSubmit(event: Event): void {
     event.preventDefault();
     if (this.busy()) return;
     const draft = this.local();
     const today = this.today();
-    const weight = parseHealthNumber(draft.weight);
-    const result = this.room() === 'clinic'
-      ? validateHealthStat({
-        v: 1,
-        kind: 'weight',
-        measured_on: draft.measuredOn,
-        logged_on: today,
-        kg: weight,
-      }, today, this.weightUnit())
-      : validateHealthPr({
+    const result = this.kind() === 'lift'
+      ? validateHealthPr({
         v: 1,
         kind: 'lift',
         measured_on: draft.measuredOn,
-        logged_on: today,
+        logged_on: draft.loggedOn || today,
         exercise: draft.exercise,
-        kg: weight,
+        kg: parseHealthNumber(draft.weight),
         reps: parseHealthNumber(draft.reps),
-      }, today, this.weightUnit());
+      }, today, this.weightUnit())
+      : vitalStatFromDraft({ ...draft, kind: this.kind() }, today, this.weightUnit());
     this.errors.set(result.fieldErrors);
-    if (Object.keys(result.fieldErrors).length > 0) return;
+    if (Object.keys(result.fieldErrors).length > 0) {
+      this.draftChange.emit(draft);
+      return;
+    }
     this.save.emit(result.value);
   }
 

@@ -1,16 +1,22 @@
-import { displayWeight } from './health-units';
+import { displayWeight, lbToKg } from './health-units';
 import {
   DEFAULT_HEALTH_UNITS,
   EMPTY_HEALTH_DRAFT,
   corruptNotice,
+  draftFromStat,
   firstHealthField,
   formatHealthPr,
   formatHealthStat,
+  healthDeletePhrase,
   healthFieldId,
   healthFieldMessage,
   parseHealthNumber,
   readHealthUnits,
+  reformatWeightDraft,
+  sameStoredStat,
+  vitalStatFromDraft,
   writeHealthUnits,
+  type HealthDraft,
 } from './health-entry';
 import { CONTROL_TEXT_MESSAGE } from './health-validate';
 import type { HealthPr, HealthStat } from './health.types';
@@ -68,7 +74,10 @@ describe('Health entry shell helpers', () => {
     expect(() => writeHealthUnits(7, { weight: 'kg', distance: 'km' }, {
       setItem: () => { throw new Error('blocked'); },
     })).not.toThrow();
-    expect(EMPTY_HEALTH_DRAFT).toEqual({ measuredOn: '', weight: '', exercise: '', reps: '' });
+    expect(EMPTY_HEALTH_DRAFT).toEqual({
+      kind: 'weight', clientId: null, measuredOn: '', loggedOn: '', weight: '',
+      bpm: '', sys: '', dia: '', hours: '', sourceKg: null, exercise: '', reps: '',
+    });
   });
 
   it('maps the first invalid field without echoing the typed value', () => {
@@ -80,14 +89,23 @@ describe('Health entry shell helpers', () => {
     expect(healthFieldMessage('required')).toBe('Enter a value.');
     expect(healthFieldMessage('length')).toBe('Use a shorter or longer value within the limit.');
     expect(healthFieldMessage(CONTROL_TEXT_MESSAGE)).toBe(CONTROL_TEXT_MESSAGE);
-    expect(healthFieldMessage('step')).toBe('Check this field and try again.');
+    expect(healthFieldMessage('step')).toBe('Use a quarter-hour step.');
+    expect(healthFieldMessage('greater_than_dia')).toBe('Systolic must be higher than diastolic.');
+    expect(healthFieldMessage('mystery')).toBe('Check this field and try again.');
     expect(healthFieldMessage('range')).not.toContain('1');
     expect(firstHealthField({ measured_on: 'date_range', kg: 'range' }, 'clinic')).toBe('measured_on');
     expect(firstHealthField({ kg: 'range' }, 'clinic')).toBe('kg');
     expect(firstHealthField({ kg: 'range', exercise: 'required' }, 'gym')).toBe('exercise');
+    expect(firstHealthField({ bpm: 'range', sys: 'range' }, 'clinic', 'rhr')).toBe('bpm');
+    expect(firstHealthField({ sys: 'greater_than_dia', dia: 'range' }, 'clinic', 'bp')).toBe('sys');
+    expect(firstHealthField({ hours: 'step' }, 'clinic', 'sleep')).toBe('hours');
     expect(firstHealthField({}, 'gym')).toBeNull();
     expect(healthFieldId('kg')).toBe('health-weight');
     expect(healthFieldId('measured_on')).toBe('health-measured-on');
+    expect(healthFieldId('bpm')).toBe('health-bpm');
+    expect(healthFieldId('sys')).toBe('health-systolic');
+    expect(healthFieldId('dia')).toBe('health-diastolic');
+    expect(healthFieldId('hours')).toBe('health-sleep');
     expect(healthFieldId('exercise')).toBe('health-exercise');
     expect(healthFieldId('reps')).toBe('health-reps');
     expect(parseHealthNumber(' 80 ')).toBe(80);
@@ -98,5 +116,64 @@ describe('Health entry shell helpers', () => {
     expect(corruptNotice(0)).toBe('');
     expect(corruptNotice(1)).toBe('1 saved entry could not be read. It stays in the vault.');
     expect(corruptNotice(2)).toBe('2 saved entries could not be read. They stay in the vault.');
+  });
+
+  it('roundtrips each vital in its supported unit without rewriting a stored weight', () => {
+    const units = { weight: 'lb' as const, distance: 'mi' as const };
+    const stored = draftFromStat({ clientId: 'hlt_SyntheticWeightEntryAB', value: weight }, units);
+    expect(stored?.weight).toBe('176.4');
+    expect(stored?.sourceKg).toBe(80);
+    expect(stored?.loggedOn).toBe(DAY);
+    const kept = vitalStatFromDraft(stored!, '2026-11-20', 'lb');
+    expect(kept.fieldErrors).toEqual({});
+    expect(kept.value.kg).toBe(80);
+    expect(kept.value.logged_on).toBe(DAY);
+    expect(sameStoredStat(weight, kept.value)).toBeTrue();
+
+    const kilograms = reformatWeightDraft(stored!, 'lb', 'kg');
+    expect(kilograms.weight).toBe('80.0');
+    expect(kilograms.sourceKg).toBe(80);
+    expect(vitalStatFromDraft(kilograms, '2026-11-20', 'kg').value.kg).toBe(80);
+
+    const changed = vitalStatFromDraft({ ...stored!, weight: '150' }, '2026-11-20', 'lb');
+    expect(changed.value.kg).toBe(lbToKg(150));
+    expect(changed.value.kg).not.toBe(80);
+    expect(sameStoredStat(weight, changed.value)).toBeFalse();
+
+    let typed: HealthDraft = { ...EMPTY_HEALTH_DRAFT, kind: 'weight', weight: '200', measuredOn: DAY };
+    typed = reformatWeightDraft(typed, 'lb', 'kg');
+    typed = reformatWeightDraft(typed, 'kg', 'lb');
+    expect(vitalStatFromDraft(typed, '2026-11-20', 'lb').value.kg).toBe(lbToKg(200));
+
+    const directKg = vitalStatFromDraft({ ...EMPTY_HEALTH_DRAFT, kind: 'weight', measuredOn: DAY, weight: '70' }, '2026-11-20', 'kg');
+    expect(directKg.value.kg).toBe(70);
+
+    const heart = vitalStatFromDraft({ ...EMPTY_HEALTH_DRAFT, kind: 'rhr', measuredOn: DAY, bpm: '62' }, '2026-11-20', 'lb');
+    expect(heart.fieldErrors).toEqual({});
+    expect(heart.value).toEqual(jasmine.objectContaining({ kind: 'rhr', bpm: 62, logged_on: '2026-11-20' }));
+    expect(vitalStatFromDraft({ ...EMPTY_HEALTH_DRAFT, kind: 'rhr', measuredOn: DAY, bpm: '24' }, '2026-11-20', 'lb').fieldErrors['bpm']).toBe('range');
+
+    const pressure = vitalStatFromDraft({ ...EMPTY_HEALTH_DRAFT, kind: 'bp', measuredOn: DAY, sys: '118', dia: '76' }, '2026-11-20', 'kg');
+    expect(pressure.fieldErrors).toEqual({});
+    expect(pressure.value.sys).toBe(118);
+    expect(pressure.value.dia).toBe(76);
+    const backwards = vitalStatFromDraft({ ...EMPTY_HEALTH_DRAFT, kind: 'bp', measuredOn: DAY, sys: '90', dia: '90' }, '2026-11-20', 'kg');
+    expect(backwards.fieldErrors['sys']).toBe('greater_than_dia');
+    expect(firstHealthField(backwards.fieldErrors, 'clinic', 'bp')).toBe('sys');
+
+    const sleep = vitalStatFromDraft({ ...EMPTY_HEALTH_DRAFT, kind: 'sleep', measuredOn: DAY, hours: '7.25' }, '2026-11-20', 'lb');
+    expect(sleep.fieldErrors).toEqual({});
+    expect(sleep.value.hours).toBe(7.25);
+    const step = vitalStatFromDraft({ ...EMPTY_HEALTH_DRAFT, kind: 'sleep', measuredOn: DAY, hours: '7.3' }, '2026-11-20', 'lb');
+    expect(step.fieldErrors['hours']).toBe('step');
+    expect(firstHealthField(step.fieldErrors, 'clinic', 'sleep')).toBe('hours');
+
+    const lab = { v: 1 as const, kind: 'lab' as const, measured_on: DAY, logged_on: DAY, lab: { name: 'Iron', value: 12, unit: 'ng/mL' } };
+    expect(draftFromStat({ clientId: 'hlt_SyntheticLabEntryABCD', value: lab }, units)).toBeNull();
+    expect(healthDeletePhrase('weight')).toBe('DELETE WEIGHT');
+    expect(healthDeletePhrase('rhr')).toBe('DELETE HEART RATE');
+    expect(healthDeletePhrase('bp')).toBe('DELETE BLOOD PRESSURE');
+    expect(healthDeletePhrase('sleep')).toBe('DELETE SLEEP');
+    expect(weight.kg).toBe(80);
   });
 });

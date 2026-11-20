@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import { displayWeight, lbToKg } from '../src/app/town/health/health-units';
 import { SYNTHETIC_VAULT_PASSPHRASE, syntheticVault } from '../../../tests/e2e/synthetic-vault-harness';
 import { expect, test, type Locator, type Page } from '../../../tests/e2e/fixtures';
 
@@ -199,5 +200,229 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       else await setup.click();
       await expect(page).toHaveURL(url => url.pathname === '/finance/vault/setup' && url.searchParams.get('next') === CLINIC);
     });
+
+    test('saves, reopens, and deletes each vital in both units', async ({ page }) => {
+      test.setTimeout(240_000);
+      const touch = width === 390;
+      const writes: Array<{ expected: number | null }> = [];
+      let failUpsert = false;
+      let failDelete = false;
+      await page.route('**/api/vault/records/upsert', async route => {
+        const body = route.request().postDataJSON() as { records?: Array<{ collection?: string; expected_revision?: number | null }> };
+        const health = (body.records ?? []).filter(record => record.collection === 'health_stats');
+        if (failUpsert && health.length > 0) {
+          failUpsert = false;
+          writes.push({ expected: health[0].expected_revision ?? null });
+          await route.fulfill({ status: 409, contentType: 'application/json', body: '{"detail":"Revision conflict"}' });
+          return;
+        }
+        for (const record of health) writes.push({ expected: record.expected_revision ?? null });
+        await route.fallback();
+      });
+      await page.route('**/api/vault/records/delete', async route => {
+        if (failDelete) {
+          failDelete = false;
+          await route.fulfill({ status: 503, contentType: 'application/json', body: '{"detail":"Synthetic delete failed"}' });
+          return;
+        }
+        await route.fallback();
+      });
+      await syntheticVault(page, SEED);
+      await page.goto(CLINIC);
+      const room = page.locator('app-health-room');
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await expect(room).toContainText('176.4 lb');
+
+      const snapshot = async () => page.evaluate(async () => {
+        const response = await fetch('/api/vault/records?collection=health_stats');
+        const rows = await response.json() as Array<{ client_id: string; ciphertext_b64: string; revision: number }>;
+        return rows.find(item => item.client_id === 'hlt_SyntheticWeightEntryAB') ?? null;
+      });
+      const saved = await snapshot();
+      expect(saved?.revision).toBe(1);
+      const ciphertext = saved?.ciphertext_b64;
+      await activate(page, room.getByRole('radio', { name: 'Kilograms' }), touch);
+      await expect(room).toContainText('80.0 kg');
+      expect(await snapshot()).toEqual(saved);
+      await activate(page, room.getByRole('radio', { name: 'Pounds' }), touch);
+      await expect(room).toContainText('176.4 lb');
+      expect(writes).toEqual([]);
+
+      const edit = room.getByRole('button', { name: 'Edit Weight · 176.4 lb · 2026-10-28' });
+      await target(edit);
+      await activate(page, edit, touch);
+      const editor = page.getByRole('dialog', { name: 'Edit weight' });
+      await expect(editor).toBeVisible();
+      await expect(editor.locator('#health-logged-on')).toContainText(DAY);
+      await expect(editor.locator('#health-weight')).toHaveValue('176.4');
+      if (touch) await editor.getByRole('button', { name: 'Save' }).tap();
+      else await editor.getByRole('button', { name: 'Save' }).click();
+      await expect(editor).toHaveCount(0);
+      expect(writes).toEqual([]);
+      expect(await snapshot()).toEqual(saved);
+
+      const createdLb = displayWeight(lbToKg(200), 'lb');
+      const createdKg = displayWeight(lbToKg(200), 'kg');
+      const seventyLb = displayWeight(70, 'lb');
+      await saveVital(page, room, touch, 'Add resting heart rate', 'Add resting heart rate', async dialog => {
+        await enter(page, dialog.locator('#health-bpm'), '62', touch);
+      }, `Resting heart rate · 62 bpm · ${DAY}`);
+      await saveVital(page, room, touch, 'Add blood pressure', 'Add blood pressure', async dialog => {
+        await enter(page, dialog.locator('#health-systolic'), '80', touch);
+        await enter(page, dialog.locator('#health-diastolic'), '90', touch);
+        if (touch) await dialog.getByRole('button', { name: 'Save' }).tap();
+        else {
+          await dialog.locator('#health-diastolic').focus();
+          await page.keyboard.press('Enter');
+        }
+        await expect(dialog.locator('#health-systolic')).toBeFocused();
+        await expect(dialog).toContainText('Systolic must be higher than diastolic.');
+        await enter(page, dialog.locator('#health-systolic'), '118', touch);
+        await enter(page, dialog.locator('#health-diastolic'), '76', touch);
+      }, `Blood pressure · 118/76 · ${DAY}`);
+      await saveVital(page, room, touch, 'Add sleep', 'Add sleep', async dialog => {
+        await enter(page, dialog.locator('#health-sleep'), '7.3', touch);
+        if (touch) await dialog.getByRole('button', { name: 'Save' }).tap();
+        else await page.keyboard.press('Enter');
+        await expect(dialog.locator('#health-sleep')).toBeFocused();
+        await expect(dialog).toContainText('Use a quarter-hour step.');
+        await enter(page, dialog.locator('#health-sleep'), '7.25', touch);
+      }, `Sleep · 7.25 h · ${DAY}`);
+      await saveVital(page, room, touch, 'Add weight', 'Add weight', async dialog => {
+        await expect(dialog.locator('#health-logged-on')).toContainText('2026-10-29');
+        await enter(page, dialog.locator('#health-weight'), '200', touch);
+      }, `Weight · ${createdLb} lb · ${DAY}`);
+      expect(writes.every(item => item.expected === null)).toBe(true);
+      expect((await snapshot())?.ciphertext_b64).toBe(ciphertext);
+
+      await activate(page, room.getByRole('radio', { name: 'Kilograms' }), touch);
+      await expect(room).toContainText('80.0 kg');
+      await expect(room).toContainText(`Weight · ${createdKg} kg · ${DAY}`);
+      expect((await snapshot())?.ciphertext_b64).toBe(ciphertext);
+      await saveVital(page, room, touch, 'Add weight', 'Add weight', async dialog => {
+        await enter(page, dialog.locator('#health-weight'), '70', touch);
+      }, `Weight · 70.0 kg · ${DAY}`);
+      await activate(page, room.getByRole('radio', { name: 'Pounds' }), touch);
+      await expect(room).toContainText('176.4 lb');
+      await expect(room).toContainText(`Weight · ${createdLb} lb · ${DAY}`);
+      await expect(room).toContainText(`Weight · ${seventyLb} lb · ${DAY}`);
+
+      const heart = room.getByRole('button', { name: `Edit Resting heart rate · 62 bpm · ${DAY}` });
+      await activate(page, heart, touch);
+      const heartDialog = page.getByRole('dialog', { name: 'Edit resting heart rate' });
+      await enter(page, heartDialog.locator('#health-bpm'), '64', touch);
+      if (touch) await heartDialog.getByRole('button', { name: 'Save' }).tap();
+      else await heartDialog.getByRole('button', { name: 'Save' }).click();
+      await expect(room).toContainText(`Resting heart rate · 64 bpm · ${DAY}`);
+      await expect(room).not.toContainText('62 bpm');
+      const revised = await snapshot();
+      expect(revised?.revision).toBe(1);
+      expect(revised?.ciphertext_b64).toBe(ciphertext);
+
+      await activate(page, room.getByRole('button', { name: 'Edit Weight · 176.4 lb · 2026-10-28' }), touch);
+      const weightDialog = page.getByRole('dialog', { name: 'Edit weight' });
+      await enter(page, weightDialog.locator('#health-weight'), '150', touch);
+      failUpsert = true;
+      if (touch) await weightDialog.getByRole('button', { name: 'Save' }).tap();
+      else await weightDialog.getByRole('button', { name: 'Save' }).click();
+      await expect(weightDialog.locator('#health-form-error')).toBeFocused();
+      await expect(weightDialog).toContainText('This entry changed in another tab. Reload and try again.');
+      await expect(weightDialog.locator('#health-weight')).toHaveValue('150');
+      await expect(room).toContainText('176.4 lb');
+      expect(writes.at(-1)?.expected).toBe(1);
+      expect(await snapshot()).toEqual(revised);
+      await page.keyboard.press('Escape');
+      await expect(weightDialog).toHaveCount(0);
+
+      const sleepDelete = room.getByRole('button', { name: `Delete Sleep · 7.25 h · ${DAY}` });
+      await target(sleepDelete);
+      await activate(page, sleepDelete, touch);
+      const confirm = page.getByRole('dialog', { name: 'Delete this measurement?' });
+      await expect(confirm).toContainText('DELETE SLEEP');
+      await confirm.locator('#confirm-phrase-field').fill('DELETE');
+      const blocked = confirm.getByRole('button', { name: 'Delete measurement' });
+      await expect(blocked).toHaveAttribute('aria-disabled', 'true');
+      await expect(confirm).toBeVisible();
+      await expect(room).toContainText(`Sleep · 7.25 h · ${DAY}`);
+      await confirm.locator('#confirm-phrase-field').fill('DELETE SLEEP');
+      if (touch) await confirm.getByRole('button', { name: 'Delete measurement' }).tap();
+      else await page.keyboard.press('Enter');
+      await expect(confirm).toHaveCount(0);
+      await expect(room).not.toContainText('7.25 h');
+
+      failDelete = true;
+      await activate(page, room.getByRole('button', { name: `Delete Resting heart rate · 64 bpm · ${DAY}` }), touch);
+      const failed = page.getByRole('dialog', { name: 'Delete this measurement?' });
+      await failed.locator('#confirm-phrase-field').fill('DELETE HEART RATE');
+      if (touch) await failed.getByRole('button', { name: 'Delete measurement' }).tap();
+      else await failed.getByRole('button', { name: 'Delete measurement' }).click();
+      await expect(failed).toContainText('Could not delete this entry. It is still saved. Try again.');
+      await expect(failed.locator('#confirm-phrase-field')).toBeFocused();
+      await expect(room).toContainText('64 bpm');
+      if (touch) await failed.getByRole('button', { name: 'Keep measurement' }).tap();
+      else await failed.getByRole('button', { name: 'Keep measurement' }).click();
+      await expect(room.getByRole('button', { name: `Delete Resting heart rate · 64 bpm · ${DAY}` })).toBeFocused();
+
+      const readyMotion = await room.locator('.health-room').evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(readyMotion).toBe('0s');
+      await target(room.getByRole('button', { name: 'Add sleep' }));
+      await target(room.getByRole('button', { name: 'Add blood pressure' }));
+      const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+
+      await page.reload();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await expect(room).toContainText('176.4 lb');
+      await expect(room).toContainText(`Weight · ${createdLb} lb · ${DAY}`);
+      await expect(room).toContainText(`Weight · ${seventyLb} lb · ${DAY}`);
+      await expect(room).toContainText('64 bpm');
+      await expect(room).toContainText('118/76');
+      await expect(room).not.toContainText('7.25 h');
+      await expect(room).not.toContainText('62 bpm');
+    });
   });
+}
+
+async function enter(page: Page, locator: Locator, value: string, touch: boolean): Promise<void> {
+  await target(locator);
+  if (touch) {
+    await locator.tap();
+    await locator.fill(value);
+    return;
+  }
+  await locator.focus();
+  await locator.fill(value);
+}
+
+async function saveVital(
+  page: Page,
+  room: Locator,
+  touch: boolean,
+  addName: string,
+  dialogName: string,
+  fill: (dialog: Locator) => Promise<void>,
+  saved: string,
+): Promise<void> {
+  const add = room.getByRole('button', { name: addName, exact: true });
+  await target(add);
+  await activate(page, add, touch);
+  const dialog = page.getByRole('dialog', { name: dialogName });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('#health-measured-on')).toBeFocused();
+  const date = dialog.locator('#health-measured-on');
+  await target(date);
+  if (touch) {
+    await date.tap();
+    await date.fill(DAY);
+  } else {
+    await date.fill(DAY);
+  }
+  await fill(dialog);
+  if (touch) await dialog.getByRole('button', { name: 'Save' }).tap();
+  else await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(room).toContainText(saved);
 }

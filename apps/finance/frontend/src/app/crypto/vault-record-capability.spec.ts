@@ -78,6 +78,22 @@ describe('vault record capability', () => {
     await deleteFinanceVaultDb();
   });
 
+  it('waits until the vault finishes restoring a saved key', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    spyOn(service, 'whenReady').and.returnValue(gate);
+    let opened = false;
+    const pending = openVaultRecords(TestBed.inject(Injector)).then(value => {
+      opened = true;
+      return value;
+    });
+    await Promise.resolve();
+    expect(opened).toBeFalse();
+    release();
+    expect(typeof (await pending).decryptPayload).toBe('function');
+    expect(opened).toBeTrue();
+  });
+
   it('round-trips a v2 record and refuses a changed collection, client id, or key version', async () => {
     expect(Object.keys(capability).sort()).toEqual([
       'decryptPayload',

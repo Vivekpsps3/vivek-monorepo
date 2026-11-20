@@ -43,17 +43,34 @@
       } @else {
         <ul class="entries" [attr.aria-label]="room() === 'clinic' ? 'Measurements' : 'Personal records'">
           @for (row of rows(); track row.clientId) {
-            <li [id]="'health-entry-' + row.clientId" tabindex="-1" [appHealthLinkedFocus]="row.clientId === entryId() && !dialogOpen()" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.label }}</li>
+            <li [attr.data-health-kind]="row.kind">
+              <span class="entry-label" [id]="'health-entry-' + row.clientId" tabindex="-1" [appHealthLinkedFocus]="row.clientId === entryId() && !dialogOpen()" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.label }}</span>
+              @if (row.vital) {
+                <span class="entry-actions">
+                  <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="openEdit(row.clientId)">Edit</ui-button>
+                  <ui-button variant="danger" [attr.id]="'health-delete-' + row.clientId" [ariaLabel]="'Delete ' + row.label" (clicked)="removeEntry(row.clientId)">Delete</ui-button>
+                </span>
+              }
+            </li>
           }
         </ul>
       }
-      <ui-button (clicked)="openDialog()">{{ room() === 'clinic' ? 'Add weight' : 'Add lift' }}</ui-button>
+      @if (room() === 'clinic') {
+        <div class="add-actions">
+          @for (item of vitalAdds; track item.kind) {
+            <ui-button [attr.id]="item.id" (clicked)="openCreate(item.kind)">{{ item.label }}</ui-button>
+          }
+        </div>
+      } @else {
+        <ui-button id="health-add-lift" (clicked)="openLift()">Add lift</ui-button>
+      }
     </div>
   }
 </main>
 <app-health-entry-dialog
   [open]="dialogOpen()"
   [room]="room()"
+  [kind]="editorKind()"
   [today]="today()"
   [weightUnit]="units().weight"
   [draft]="draft() ?? emptyDraft"
