@@ -16,6 +16,20 @@ export async function loadFinanceRoutes(): Promise<Routes> { return (await impor
 export async function createFinanceVaultMaterial(passphrase: string) { return (await import('./app/crypto/vault-crypto')).createVaultMaterial(passphrase); }
 /** Settings, search, and auth still open the Finance vault. Health uses openVaultRecords. */
 export async function openFinanceVault(injector: Injector) { return injector.get((await import('./app/crypto/vault.service')).VaultService); }
+
+/**
+ * Whether this account has a vault, without decrypting records.
+ * Null means the status read failed. Callers must not treat that as a new vault.
+ */
+export async function financeVaultExists(injector: Injector): Promise<boolean | null> {
+  try {
+    const vault = await openFinanceVault(injector);
+    const status = await vault.refreshStatus();
+    return status.exists === true;
+  } catch {
+    return null;
+  }
+}
 export type {
   VaultRecordCapability,
   VaultRecordDelete,

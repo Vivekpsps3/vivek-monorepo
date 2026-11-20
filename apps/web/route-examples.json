@@ -111,13 +111,13 @@
       "id": "town-clinic",
       "path": "town/clinic",
       "owner": "town",
-      "status": "reserved"
+      "status": "mounted"
     },
     {
       "id": "town-gym",
       "path": "town/gym",
       "owner": "town",
-      "status": "reserved"
+      "status": "mounted"
     },
     {
       "id": "public-root",

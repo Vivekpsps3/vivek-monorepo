@@ -1,0 +1,603 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import { Injectable, Injector } from '@angular/core';
+import { ComponentFixture, TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
+import { provideRouter, ActivatedRoute, convertToParamMap } from '@angular/router';
+import { localTodayIso } from '@vivek/browser';
+import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
+import {
+  DEK_STORE,
+  VAULT_PRESENCE,
+  lockFinance,
+  type VaultRecordCapability,
+  type VaultRecordEnvelope,
+} from '../../../../../finance/frontend/src/public-api';
+import { SessionService } from '../../platform/session.service';
+import { displayWeight, lbToKg } from './health-units';
+import { HEALTH_VAULT_EXISTS, HealthRoomComponent } from './health-room.component';
+import {
+  HEALTH_CONFLICT_MESSAGE,
+  HEALTH_LOAD_DEADLINE_MS,
+  HealthStoreService,
+} from './health-store.service';
+
+const WEIGHT_ID = 'hlt_SyntheticWeightEntryAB';
+const LIFT_ID = 'hlt_SyntheticLiftEntryABCD';
+const CORRUPT_ID = 'hlt_CorruptRowNoticeABCDEF';
+const MISSING_ID = 'hlt_MissingEntryNoticeABCD';
+const DAY = '2026-10-28';
+
+function encode(value: unknown): string {
+  return `ct:${btoa(JSON.stringify(value))}`;
+}
+
+function row(
+  collection: string,
+  clientId: string,
+  value: unknown,
+  extra: Partial<VaultRecordEnvelope> = {},
+): VaultRecordEnvelope {
+  return {
+    collection,
+    client_id: clientId,
+    ciphertext_b64: encode(value),
+    schema_version: 2,
+    key_version: 1,
+    revision: 1,
+    updated_at: '2026-10-28T00:00:00Z',
+    ...extra,
+  };
+}
+
+const WEIGHT = { v: 1, kind: 'weight', measured_on: DAY, logged_on: DAY, kg: 80 };
+const LIFT = { v: 1, kind: 'lift', measured_on: DAY, logged_on: DAY, exercise: 'Squat', kg: 100, reps: 5 };
+const CORRUPT = { v: 1, kind: 'weight', measured_on: DAY, logged_on: DAY, kg: 64.25 };
+
+class FakeVault implements VaultRecordCapability {
+  rows: VaultRecordEnvelope[] = [];
+  listed: string[] = [];
+  upserted: unknown[] = [];
+  decryptCalls: string[] = [];
+  encryptCalls: unknown[] = [];
+  holdList = false;
+  holdUpsert = false;
+  failUpsert = false;
+  conflict = false;
+  listCancelled = 0;
+  upsertCancelled = 0;
+  readonly listRelease: Array<() => void> = [];
+  readonly upsertRelease: Array<() => void> = [];
+
+  listRecords(collection: string): Observable<VaultRecordEnvelope[]> {
+    this.listed.push(collection);
+    const rows = this.rows.filter(item => item.collection === collection);
+    if (!this.holdList) return of(rows);
+    return new Observable(subscriber => {
+      this.listRelease.push(() => {
+        if (subscriber.closed) return;
+        subscriber.next(this.rows.filter(item => item.collection === collection));
+        subscriber.complete();
+      });
+      return () => { this.listCancelled += 1; };
+    });
+  }
+
+  async encryptPayload(value: unknown): Promise<string> {
+    this.encryptCalls.push(value);
+    return encode(value);
+  }
+
+  async decryptPayload<T>(ciphertextB64: string, _collection: string, clientId: string): Promise<T> {
+    this.decryptCalls.push(clientId);
+    if (!ciphertextB64.startsWith('ct:')) throw new Error('undecryptable');
+    return JSON.parse(atob(ciphertextB64.slice(3))) as T;
+  }
+
+  upsertRecords(records: readonly unknown[]): Observable<VaultRecordEnvelope[]> {
+    if (this.failUpsert) return throwError(() => new Error('save failed'));
+    if (this.conflict) return throwError(() => new HttpErrorResponse({ status: 409 }));
+    const run = (): VaultRecordEnvelope[] => {
+      this.upserted.push(records);
+      return records.map(record => {
+        const item = record as { collection: string; client_id: string; ciphertext_b64: string; schema_version: number; key_version: number };
+        const saved = row(item.collection, item.client_id, {}, {
+          ciphertext_b64: item.ciphertext_b64,
+          schema_version: item.schema_version,
+          key_version: item.key_version,
+        });
+        this.rows.push(saved);
+        return saved;
+      });
+    };
+    if (!this.holdUpsert) return of(run());
+    return new Observable(subscriber => {
+      this.upsertRelease.push(() => {
+        if (subscriber.closed) return;
+        try {
+          subscriber.next(run());
+          subscriber.complete();
+        } catch (error) {
+          subscriber.error(error);
+        }
+      });
+      return () => { this.upsertCancelled += 1; };
+    });
+  }
+
+  deleteRecords(): Observable<{ deleted: number }> {
+    return of({ deleted: 0 });
+  }
+}
+
+class SessionDouble {
+  readonly users = new BehaviorSubject<{ id: number } | null>({ id: 7 });
+  readonly cleared = new Subject<void>();
+  readonly user$ = this.users.asObservable();
+  readonly cleared$ = this.cleared.asObservable();
+  get currentUser(): { id: number } | null { return this.users.value; }
+}
+
+class RouteDouble {
+  readonly query = new BehaviorSubject(convertToParamMap({ entry: WEIGHT_ID }));
+  readonly routeData = new BehaviorSubject<{ healthRoom: string }>({ healthRoom: 'clinic' });
+  readonly queryParamMap = this.query.asObservable();
+  readonly data = this.routeData.asObservable();
+}
+
+@Injectable()
+class TestStore extends HealthStoreService {
+  protected override vault(): Promise<VaultRecordCapability> {
+    vaultCalls += 1;
+    return Promise.resolve(fake);
+  }
+}
+
+let fake: FakeVault;
+let session: SessionDouble;
+let route: RouteDouble;
+let gate: { exists: boolean | null };
+let vaultCalls = 0;
+
+function clearStorage(): void {
+  localStorage.removeItem(DEK_STORE);
+  localStorage.removeItem(VAULT_PRESENCE);
+  localStorage.removeItem('finance-vault-lock');
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith('town.health.units.v1.')) localStorage.removeItem(key);
+  }
+}
+
+function unlock(): void {
+  localStorage.setItem(DEK_STORE, 'present');
+}
+
+function seed(): void {
+  fake.rows = [
+    row('health_stats', WEIGHT_ID, WEIGHT),
+    row('health_stats', CORRUPT_ID, CORRUPT, { schema_version: 1, ciphertext_b64: 'garbage' }),
+    row('health_prs', LIFT_ID, LIFT),
+  ];
+}
+
+function button(el: HTMLElement, name: string): HTMLButtonElement {
+  const found = [...el.querySelectorAll('button')].find(item => item.textContent?.includes(name));
+  if (!(found instanceof HTMLButtonElement)) throw new Error(`missing ${name}`);
+  return found;
+}
+
+function typeInto(el: HTMLElement, selector: string, value: string): HTMLInputElement {
+  const input = el.querySelector<HTMLInputElement>(selector);
+  if (!input) throw new Error(`missing ${selector}`);
+  input.value = value;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  return input;
+}
+
+function href(el: HTMLElement, label: string): string {
+  const link = [...el.querySelectorAll('a')].find(item => item.textContent?.includes(label));
+  if (!(link instanceof HTMLAnchorElement)) throw new Error(`missing ${label}`);
+  return link.getAttribute('href') ?? '';
+}
+
+function visible(el: HTMLElement): string {
+  const inputs = [...el.querySelectorAll('input, textarea')].map(item => (item as HTMLInputElement).value);
+  return `${el.textContent ?? ''}\n${inputs.join('\n')}`;
+}
+
+async function until(ready: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50 && !ready(); attempt += 1) await Promise.resolve();
+  if (!ready()) throw new Error('timed out waiting for the health shell');
+}
+
+async function settle(fixture: ComponentFixture<HealthRoomComponent>): Promise<void> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    fixture.detectChanges();
+    await Promise.resolve();
+  }
+  await fixture.whenStable();
+  fixture.detectChanges();
+}
+
+async function show(): Promise<{ fixture: ComponentFixture<HealthRoomComponent>; el: HTMLElement }> {
+  const fixture = TestBed.createComponent(HealthRoomComponent);
+  await settle(fixture);
+  return { fixture, el: fixture.nativeElement as HTMLElement };
+}
+
+describe('Health room shell', () => {
+  beforeEach(() => {
+    clearStorage();
+    fake = new FakeVault();
+    session = new SessionDouble();
+    route = new RouteDouble();
+    gate = { exists: true };
+    vaultCalls = 0;
+    TestBed.configureTestingModule({
+      imports: [HealthRoomComponent],
+      providers: [
+        provideRouter([]),
+        { provide: ActivatedRoute, useValue: route },
+        { provide: SessionService, useValue: session as unknown as SessionService },
+        { provide: HealthStoreService, useClass: TestStore },
+        { provide: HEALTH_VAULT_EXISTS, useValue: () => Promise.resolve(gate.exists) },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    clearStorage();
+  });
+
+  it('keeps a locked deep link free of measurement digits and returns to it', async () => {
+    seed();
+    const { el } = await show();
+    expect(el.getAttribute('data-health-state')).toBe('locked');
+    expect(el.getAttribute('data-health-room')).toBe('clinic');
+    expect(visible(el)).not.toMatch(/\d/);
+    expect(el.querySelectorAll('input, textarea')).toHaveSize(0);
+    expect(fake.listed).toEqual([]);
+    expect(fake.decryptCalls).toEqual([]);
+    const locked = new URL(href(el, 'Unlock'), 'http://localhost');
+    expect(locked.pathname).toBe('/finance/vault/unlock');
+    expect(locked.searchParams.get('next')).toBe(`/town/clinic?entry=${WEIGHT_ID}`);
+
+    route.query.next(convertToParamMap({ entry: LIFT_ID }));
+    route.routeData.next({ healthRoom: 'gym' });
+    const fixture = TestBed.createComponent(HealthRoomComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const gym = fixture.nativeElement as HTMLElement;
+    expect(gym.getAttribute('data-health-state')).toBe('locked');
+    expect(visible(gym)).not.toMatch(/\d/);
+    expect(visible(gym)).not.toContain('Squat');
+    const setup = new URL(href(gym, 'Unlock'), 'http://localhost');
+    expect(setup.searchParams.get('next')).toBe(`/town/gym?entry=${LIFT_ID}`);
+  });
+
+  it('links setup back to the same room when no vault exists', async () => {
+    seed();
+    gate.exists = false;
+    const { el } = await show();
+    expect(el.getAttribute('data-health-state')).toBe('setup');
+    expect(visible(el)).not.toMatch(/\d/);
+    expect(fake.decryptCalls).toEqual([]);
+    const link = new URL(href(el, 'Set up Finance'), 'http://localhost');
+    expect(link.pathname).toBe('/finance/vault/setup');
+    expect(link.searchParams.get('next')).toBe(`/town/clinic?entry=${WEIGHT_ID}`);
+  });
+
+  it('retries an unavailable status without treating it as a new vault', async () => {
+    seed();
+    gate.exists = null;
+    const first = await show();
+    expect(first.el.getAttribute('data-health-state')).toBe('unavailable');
+    expect(visible(first.el)).toContain('Clinic is unavailable right now.');
+    expect(visible(first.el)).not.toMatch(/\d/);
+    expect(fake.listed).toEqual([]);
+    gate.exists = true;
+    button(first.el, 'Retry').click();
+    first.fixture.detectChanges();
+    await first.fixture.whenStable();
+    first.fixture.detectChanges();
+    expect(first.el.getAttribute('data-health-state')).toBe('locked');
+    expect(visible(first.el)).not.toMatch(/\d/);
+
+    session.users.next(null);
+    gate.exists = false;
+    const second = await show();
+    expect(second.el.getAttribute('data-health-state')).toBe('unavailable');
+    expect(second.el.textContent).not.toContain('Set up Finance');
+  });
+
+  it('shows canonical units, the corrupt notice, and a missing entry without the id', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    expect(el.getAttribute('data-health-state')).toBe('ready');
+    expect(vaultCalls).toBe(1);
+    expect(el.textContent).toContain('176.4 lb');
+    expect(el.textContent).toContain('1 saved entry could not be read. It stays in the vault.');
+    expect(el.textContent).not.toContain('64.25');
+    expect(el.textContent).not.toContain('Squat');
+    expect(fake.decryptCalls).not.toContain(CORRUPT_ID);
+    expect(document.activeElement).toBe(el.querySelector(`#health-entry-${WEIGHT_ID}`));
+    const savedKg = (fake.rows.find(item => item.client_id === WEIGHT_ID) as { ciphertext_b64: string }).ciphertext_b64;
+    const upserts = fake.upserted.length;
+    button(el, 'Kilograms').click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('80.0 kg');
+    expect(el.textContent).not.toContain('176.4');
+    expect(fake.upserted).toHaveSize(upserts);
+    expect((fake.rows.find(item => item.client_id === WEIGHT_ID) as { ciphertext_b64: string }).ciphertext_b64).toBe(savedKg);
+    expect(JSON.parse(atob(savedKg.slice(3))).kg).toBe(80);
+
+    route.query.next(convertToParamMap({ entry: MISSING_ID }));
+    fixture.detectChanges();
+    expect(el.textContent).toContain('That entry is not in this room.');
+    expect(el.textContent).not.toContain(MISSING_ID);
+  });
+
+  it('focuses the invalid weight and keeps the same-session draft', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    button(el, 'Add weight').click();
+    fixture.detectChanges();
+    const today = localTodayIso();
+    typeInto(el, '#health-measured-on', today);
+    typeInto(el, '#health-weight', '1');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const weight = el.querySelector<HTMLInputElement>('#health-weight');
+    expect(weight).withContext('draft field').not.toBeNull();
+    expect(document.activeElement).toBe(weight);
+    expect(weight?.value).toBe('1');
+    expect(weight?.getAttribute('aria-invalid')).toBe('true');
+    expect(weight?.getAttribute('aria-describedby')).toBe('health-weight-error');
+    expect(el.textContent).toContain('That value is outside the allowed range.');
+    expect(fake.upserted).toEqual([]);
+    expect(fake.encryptCalls).toEqual([]);
+
+    button(el, 'Cancel').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#health-weight')).toBeNull();
+    button(el, 'Add weight').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('1');
+    expect(el.querySelector<HTMLInputElement>('#health-measured-on')?.value).toBe(today);
+  });
+
+  it('keeps a recoverable draft when a save fails or conflicts', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    const today = localTodayIso();
+    button(el, 'Add weight').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', today);
+    typeInto(el, '#health-weight', '200');
+    fixture.detectChanges();
+    fake.failUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Could not save this entry. Try again.');
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('200');
+    expect(fake.upserted).toEqual([]);
+    expect(el.textContent).toContain('176.4 lb');
+
+    fake.failUpsert = false;
+    fake.conflict = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain(HEALTH_CONFLICT_MESSAGE);
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('200');
+    expect(el.getAttribute('data-health-state')).toBe('ready');
+  });
+
+  it('stores a canonical kilogram weight and clears the draft after success', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    button(el, 'Add weight').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', localTodayIso());
+    typeInto(el, '#health-weight', '200');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const stored = lbToKg(200);
+    expect(fake.encryptCalls).toEqual([jasmine.objectContaining({ kind: 'weight', kg: stored, logged_on: localTodayIso() })]);
+    expect(el.textContent).toContain(`${displayWeight(stored, 'lb')} lb`);
+    expect(el.querySelector('#health-weight')).toBeNull();
+    expect(stored).not.toBe(200);
+  });
+
+  it('shows the gym lift from the same store and focuses a blank exercise first', async () => {
+    unlock();
+    seed();
+    route.routeData.next({ healthRoom: 'gym' });
+    route.query.next(convertToParamMap({ entry: LIFT_ID }));
+    const { fixture, el } = await show();
+    expect(el.getAttribute('data-health-room')).toBe('gym');
+    expect(el.textContent).toContain('220.5 lb');
+    expect(el.textContent).toContain('Squat');
+    expect(el.textContent).not.toContain('176.4');
+    expect(el.textContent).not.toContain('64.25');
+    expect(document.activeElement).toBe(el.querySelector(`#health-entry-${LIFT_ID}`));
+    button(el, 'Add lift').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', localTodayIso());
+    typeInto(el, '#health-weight', '1');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(el.querySelector('#health-exercise'));
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('1');
+    expect(fake.encryptCalls).toEqual([]);
+  });
+
+  it('clears a draft when the room changes and shows that room only', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    button(el, 'Add weight').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-weight', '155.5');
+    fixture.detectChanges();
+    const calls = vaultCalls;
+    route.routeData.next({ healthRoom: 'gym' });
+    route.query.next(convertToParamMap({ entry: LIFT_ID }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(vaultCalls).toBe(calls);
+    expect(fake.upserted).toEqual([]);
+    expect(el.textContent).toContain('Squat');
+    expect(el.textContent).toContain('220.5 lb');
+    expect(el.textContent).not.toContain('176.4');
+    expect(visible(el)).not.toContain('155.5');
+    expect(el.querySelector('#health-weight')).toBeNull();
+  });
+
+  it('drops a draft and the previous measurement when the owner changes', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    button(el, 'Add weight').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-weight', '155.5');
+    fixture.detectChanges();
+    fake.holdList = true;
+    fake.rows = [row('health_stats', WEIGHT_ID, { ...WEIGHT, kg: 70 })];
+    session.users.next({ id: 8 });
+    fixture.detectChanges();
+    await until(() => el.getAttribute('data-health-state') === 'loading' && fake.listRelease.length >= 2);
+    expect(visible(el)).not.toContain('176.4');
+    expect(visible(el)).not.toContain('155.5');
+    expect(visible(el)).not.toContain('64.25');
+    fake.listRelease.splice(0).forEach(release => release());
+    await settle(fixture);
+    expect(el.getAttribute('data-health-state')).toBe('ready');
+    expect(el.textContent).toContain(`${displayWeight(70, 'lb')} lb`);
+    expect(el.textContent).not.toContain('176.4');
+    expect(visible(el)).not.toContain('155.5');
+  });
+
+  it('clears a draft when the session is cleared and reloads the current vault', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    button(el, 'Add weight').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-weight', '155.5');
+    fixture.detectChanges();
+    session.cleared.next();
+    await settle(fixture);
+    expect(el.getAttribute('data-health-state')).toBe('ready');
+    expect(el.textContent).toContain('176.4 lb');
+    expect(visible(el)).not.toContain('155.5');
+    expect(el.querySelector('#health-weight')).toBeNull();
+  });
+
+  it('ignores a load that loses the eight-second deadline', fakeAsync(() => {
+    expect(HEALTH_LOAD_DEADLINE_MS).toBe(8000);
+    unlock();
+    seed();
+    fake.holdList = true;
+    const fixture = TestBed.createComponent(HealthRoomComponent);
+    fixture.detectChanges();
+    for (let attempt = 0; attempt < 30 && fake.listed.length < 2; attempt += 1) flushMicrotasks();
+    expect(fake.listed).toEqual(['health_stats', 'health_prs']);
+    const el = fixture.nativeElement as HTMLElement;
+    tick(HEALTH_LOAD_DEADLINE_MS - 1);
+    flushMicrotasks();
+    fixture.detectChanges();
+    expect(el.getAttribute('data-health-state')).toBe('loading');
+    expect(visible(el)).not.toContain('176.4');
+    expect(visible(el)).not.toContain('64.25');
+    tick(1);
+    flushMicrotasks();
+    fixture.detectChanges();
+    expect(el.getAttribute('data-health-state')).toBe('unavailable');
+    expect(fake.listCancelled).toBeGreaterThan(0);
+    fake.listRelease.splice(0).forEach(release => release());
+    flushMicrotasks();
+    fixture.detectChanges();
+    expect(el.getAttribute('data-health-state')).toBe('unavailable');
+    expect(visible(el)).not.toContain('176.4');
+    expect(visible(el)).not.toContain('64.25');
+    expect(visible(el)).not.toContain('Squat');
+
+    fake.holdList = false;
+    button(el, 'Retry').click();
+    for (let attempt = 0; attempt < 30; attempt += 1) flushMicrotasks();
+    fixture.detectChanges();
+    expect(el.getAttribute('data-health-state')).toBe('ready');
+    expect(el.textContent).toContain('176.4 lb');
+    expect(el.textContent).toContain('1 saved entry could not be read. It stays in the vault.');
+    expect(el.textContent).not.toContain('64.25');
+    tick();
+  }));
+
+  it('ignores a save that loses to a lock', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    button(el, 'Add weight').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', localTodayIso());
+    typeInto(el, '#health-weight', '155.5');
+    fixture.detectChanges();
+    fake.holdUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await until(() => fake.upsertRelease.length === 1);
+    const locking = lockFinance(TestBed.inject(Injector));
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      fixture.detectChanges();
+      if (fake.upsertCancelled > 0 && el.getAttribute('data-health-state') === 'locked') break;
+      await Promise.resolve();
+    }
+    expect(fake.upsertCancelled).toBeGreaterThan(0);
+    fake.upsertRelease.shift()?.();
+    await locking.catch(() => undefined);
+    fixture.detectChanges();
+    expect(el.getAttribute('data-health-state')).toBe('locked');
+    expect(visible(el)).not.toContain('155.5');
+    expect(visible(el)).not.toContain('176.4');
+    expect(visible(el)).not.toContain('64.25');
+    expect(visible(el)).not.toContain('Squat');
+    expect(fake.upserted).toEqual([]);
+  });
+
+  it('drops a late load after the room is gone', async () => {
+    unlock();
+    seed();
+    fake.holdList = true;
+    const fixture = TestBed.createComponent(HealthRoomComponent);
+    fixture.detectChanges();
+    await until(() => fake.listRelease.length >= 2);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.getAttribute('data-health-state')).toBe('loading');
+    const before = el.textContent;
+    fixture.destroy();
+    fake.listRelease.splice(0).forEach(release => release());
+    await until(() => fake.listRelease.length === 0);
+    expect(el.textContent).toBe(before);
+    expect(visible(el)).not.toContain('176.4');
+    expect(visible(el)).not.toContain('64.25');
+  });
+});
