@@ -11,6 +11,7 @@ describe('return context', () => {
       '/media/library?kind=artist&sort=title&offset=24',
       '/media/calendar?month=2026-11',
       '/travel/calendar?month=2026-11',
+      '/travel/terminal?object=board&trip=4&leg=9&day=2026-12-12',
       '/settings/calendars',
       '/town/clinic?entry=hlt_SyntheticWeightEntryAB',
       '/town/gym?entry=hlt_SyntheticLiftEntryABCD',
@@ -47,6 +48,8 @@ describe('return context', () => {
     expect(returnPath('/town/clinic?entry=hlt_short&kg=80')).toBe('/town/clinic');
     expect(returnPath('/town/clinic?entry=hlt_SyntheticWeightEntryAB&entry=hlt_SyntheticLiftEntryABCD')).toBe('/town/clinic');
     expect(returnPath('/town/gym?entry=80&weight=176.4')).toBe('/town/gym');
+    expect(returnPath('/travel/terminal?object=ferry&trip=0&leg=9&day=2026-02-31&note=private'))
+      .toBe('/travel/terminal?leg=9');
   });
 
   it('rejects external, unknown, and recursive authentication destinations', () => {

@@ -1,0 +1,76 @@
+.terminal-hall {
+  border-top: 3px solid var(--brass);
+}
+
+.terminal-objects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 1.25rem;
+}
+
+.terminal-objects button,
+.terminal-hall table button,
+.terminal-hall > button,
+.terminal-hall section > button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.5rem 0.75rem;
+  color: var(--text);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.terminal-objects button[aria-pressed="true"] {
+  border-color: var(--brass);
+}
+
+.terminal-hall section {
+  margin: 0 0 1.5rem;
+}
+
+.terminal-hall section:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.terminal-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.terminal-hall table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text);
+  background: var(--card-bg);
+}
+
+.terminal-hall caption {
+  margin: 0 0 0.5rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+.terminal-hall th,
+.terminal-hall td {
+  padding: 0.5rem;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+
+.terminal-hall button:focus-visible,
+.terminal-objects button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-hall,
+  .terminal-hall * {
+    animation: none;
+    transition: none;
+  }
+}

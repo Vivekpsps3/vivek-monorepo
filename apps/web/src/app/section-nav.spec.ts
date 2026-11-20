@@ -65,6 +65,7 @@ describe('section nav', () => {
       ['/finance/spending?t=activity&receipts=1', '/finance/imports'],
       ['/finance/imports?start=bank', '/finance/imports'],
       ['/travel/trips/9', '/travel'],
+      ['/travel/terminal?object=desk', '/travel/terminal'],
       ['/travel/trips/2', '/travel'],
       ['/travel/calendar', '/travel/calendar'],
       ['/media/library?kind=book&q=harbor&offset=24', '/media/library?kind=book'],

@@ -19,6 +19,7 @@ import { Subscription, filter, firstValueFrom, merge, take } from "rxjs";
 import {
   SESSION_CONTEXT,
   ConfirmService,
+  ReturnContext,
   ToastService,
   silentErrorToast,
   UiBadgeComponent,
@@ -199,6 +200,8 @@ export class TripComponent {
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly returns = inject(ReturnContext);
+  private appliedTransport = "";
   private readonly destroy = inject(DestroyRef);
   private readonly confirm = inject(ConfirmService);
   private readonly toast = inject(ToastService);
@@ -586,6 +589,7 @@ export class TripComponent {
     this.destroy.onDestroy(() => clearInterval(clock));
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((p) => {
       this.id = Number(p.get("id"));
+      this.appliedTransport = "";
       this.dropEditorDraft();
       this.selectedDay = "";
       this.rovingDay = "";
@@ -596,6 +600,30 @@ export class TripComponent {
       this.applyRouteDay();
     });
   }
+  hallBack(): string {
+    const origin = this.returns.origin();
+    return origin?.startsWith("/travel/terminal") ? origin : "/travel";
+  }
+
+  hallBackLabel(): string {
+    return this.hallBack().startsWith("/travel/terminal") ? "← Terminal" : "← Trips";
+  }
+
+  private openSavedLeg(): void {
+    const raw = this.route.snapshot.queryParamMap.get("transport") || "";
+    if (!/^[1-9]\d{0,15}$/.test(raw)) return;
+    const key = String(this.id) + ":" + raw;
+    if (this.appliedTransport === key) return;
+    const trip = this.data();
+    if (!trip) return;
+    const item = trip.transports.find((row) => String(row.id) === raw);
+    this.appliedTransport = key;
+    if (!item) return;
+    const day = String(item.depart_at || "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) this.selectDay(day);
+    if (!this.editor) this.open("transport", item);
+  }
+
   private path(): string {
     return "/trips/" + this.id;
   }
@@ -639,6 +667,7 @@ export class TripComponent {
             counts_as_pto: d.counts_as_pto,
           };
           this.applyRouteDay();
+          this.openSavedLeg();
         },
         error: (e) => this.error.set(travelError(e)),
       });

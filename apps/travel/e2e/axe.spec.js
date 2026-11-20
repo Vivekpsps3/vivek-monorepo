@@ -9,7 +9,7 @@ test('axe on all native Travel screens in light and dark at phone and desktop wi
     title: 'Kyoto', start_date: '2026-10-24', end_date: '2026-10-30',
     stays: [{ city: 'Kyoto', arrive_on: '2026-10-24', leave_on: '2026-10-30' }],
   } })).json();
-  const routes = ['/travel', '/travel/calendar?month=2026-10', '/travel/trips/new', '/travel/trips/' + created.id, '/travel/pto', '/travel/settings', '/travel/memories'];
+  const routes = ['/travel', '/travel/terminal', '/travel/calendar?month=2026-10', '/travel/trips/new', '/travel/trips/' + created.id, '/travel/pto', '/travel/settings', '/travel/memories'];
   for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width, height: 900 });
     for (const route of routes) {

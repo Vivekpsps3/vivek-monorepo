@@ -1,0 +1,135 @@
+<main class="page travel-page terminal-hall">
+  <ui-page-header backLabel="← Trips" backLink="/travel" title="Terminal" eyebrow="Harbor">
+    <p>
+      The departure board opens a saved leg. The booking desk starts with a
+      flight number. The itinerary table opens a saved day.
+    </p>
+  </ui-page-header>
+  <nav class="terminal-objects" aria-label="Terminal hall">
+    <button
+      type="button"
+      [attr.aria-pressed]="selection().object === 'board'"
+      (click)="focusObject('board')"
+    >
+      Departure board
+    </button>
+    <button
+      type="button"
+      [attr.aria-pressed]="selection().object === 'desk'"
+      (click)="focusObject('desk')"
+    >
+      Booking desk
+    </button>
+    <button
+      type="button"
+      [attr.aria-pressed]="selection().object === 'table'"
+      (click)="focusObject('table')"
+    >
+      Itinerary table
+    </button>
+  </nav>
+  @if (closed()) {
+    <p>Sign in to see this terminal.</p>
+  } @else {
+    @if (error()) {
+      <p class="local-error" role="alert">{{ error() }}</p>
+      <button id="terminal-retry" type="button" (click)="load()">Retry departures</button>
+    }
+    @if (!home() && !error()) {
+      <p role="status">Loading departures…</p>
+    }
+    <section id="terminal-board" tabindex="-1" aria-labelledby="terminal-board-title">
+      <h2 id="terminal-board-title">Departure board</h2>
+      @if (error() && !home()) {
+        <p>Departures are unavailable.</p>
+      } @else if (home() && !departures().length) {
+        <p>
+          No saved departures. Start with a flight number at the booking desk,
+          or type the times manually.
+        </p>
+      }
+      @if (departures().length) {
+        <div class="terminal-scroll">
+          <table>
+            <caption>Saved departures and returns</caption>
+            <thead>
+              <tr>
+                <th scope="col">Leg</th>
+                <th scope="col">When</th>
+                <th scope="col">Trip</th>
+                <th scope="col">Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of departures(); track row.transportId) {
+                <tr [attr.aria-current]="chosenLeg()?.transportId === row.transportId ? 'true' : null">
+                  <td>{{ row.roleLabel }} {{ row.number }} {{ row.from }} → {{ row.to }}</td>
+                  <td>{{ whenText(row) }}</td>
+                  <td>{{ row.title }}</td>
+                  <td>
+                    <button
+                      type="button"
+                      [id]="'terminal-leg-' + row.transportId"
+                      [attr.aria-label]="legActionLabel(row)"
+                      (click)="openLeg(row)"
+                    >
+                      Open {{ row.roleLabel.toLowerCase() }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+    <section id="terminal-desk" aria-label="Booking desk">
+      @if (actionError()) {
+        <p class="local-error" role="alert">{{ actionError() }}</p>
+      }
+      <travel-flight-start [busy]="pending()" (staged)="planNew($event)" (attach)="addLeg($event)" />
+    </section>
+    <section id="terminal-table" tabindex="-1" aria-labelledby="terminal-table-title">
+      <h2 id="terminal-table-title">Itinerary table</h2>
+      @if (error() && !home()) {
+        <p>Trip days are unavailable.</p>
+      } @else if (home() && !days().length) {
+        <p>No trip days yet. A saved trip shows each local day here.</p>
+      }
+      @if (days().length) {
+        <div class="terminal-scroll">
+          <table>
+            <caption>Saved trip days</caption>
+            <thead>
+              <tr>
+                <th scope="col">Day</th>
+                <th scope="col">Trip</th>
+                <th scope="col">City</th>
+                <th scope="col">Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of days(); track row.tripId + row.day) {
+                <tr [attr.aria-current]="chosenDay()?.tripId === row.tripId && chosenDay()?.day === row.day ? 'true' : null">
+                  <td>{{ formatDay(row.day) }}</td>
+                  <td>{{ row.title }}</td>
+                  <td>{{ row.city || "No city saved" }}</td>
+                  <td>
+                    <button
+                      type="button"
+                      [id]="'terminal-day-' + row.tripId + '-' + row.day"
+                      [attr.aria-label]="dayActionLabel(row)"
+                      (click)="openDay(row)"
+                    >
+                      Open day
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</main>
