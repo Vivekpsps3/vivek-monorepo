@@ -131,7 +131,9 @@
   .travel-page .trip-postcard *,
   .travel-page .pto-allocation,
   .travel-page .pto-day--weekend,
-  .travel-page .pto-overlap {
+  .travel-page .pto-overlap,
+  .travel-page .memory-card,
+  .travel-page .memory-card * {
     animation: none;
     transition: none;
   }
@@ -153,7 +155,8 @@
   margin-bottom: 1rem;
 }
 .travel-page .flight-start .ui-btn,
-.travel-page .calendar-import .ui-btn {
+.travel-page .calendar-import .ui-btn,
+.travel-page .memory-card .ui-btn {
   max-width: 100%;
   white-space: normal;
   text-align: start;

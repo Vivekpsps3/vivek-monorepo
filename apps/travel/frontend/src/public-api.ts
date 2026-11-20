@@ -29,6 +29,13 @@ export const routes: Routes = [
           import("./trip.component").then((m) => m.TripComponent),
       },
       {
+        path: "memories",
+        title: "Travel · Trip memories",
+        canDeactivate: [leave],
+        loadComponent: () =>
+          import("./memories.component").then((m) => m.MemoriesComponent),
+      },
+      {
         path: "pto",
         title: "Travel · PTO",
         canDeactivate: [leave],
