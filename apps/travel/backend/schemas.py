@@ -768,6 +768,14 @@ class FlightAwareKeyIn(BaseModel):
     api_key: str = ""
 
 
+class CalendarBookingIn(BaseModel):
+    """Calendar text for a read-only preview. The route does not save it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(max_length=40000)
+
+
 class SessionIn(BaseModel):
     token: str
 
