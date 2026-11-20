@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#409](https://github.com/Vivekpsps3/vivek-monorepo/issues/409) TUX-04; parent [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. OPS-06 / #277 was not edited. TUX-02 / #407 stays merged as #535. TUX-03 / #408 stays merged as #536.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/tux-04`; `/tmp/vivek-tux-04`. The shared checkout was not edited.
-- Base main SHA, current tested SHA: base `1b933def10cb00216d1103fe02f5e7d403947aad` (TUX-03 merge, pull request #536). Commands below ran on that working tree before the commit that adds this file. The implementation commit SHA is recorded after that commit.
+- Base main SHA, current tested SHA: base `1b933def10cb00216d1103fe02f5e7d403947aad` (TUX-03 merge, pull request #536). The implementation and these command results are `d74f1e8d0ef33144b77e8a45067fe595d31e549e`. This sentence names that commit; the follow-up only edits this evidence file.
 - Fresh-main/prerequisite/active-PR checks: `git fetch origin main` on 2026-11-20 still returned `1b933def10cb00216d1103fe02f5e7d403947aad`. That commit is the TUX-03 merge. TUX-02 flight lookup, TUX-03 draft save, NAV-02 settings return, and STYLE-02 44px controls are on that tree: `apps/travel/e2e/flights.spec.js` and `apps/travel/e2e/trip-draft.spec.js` passed in the Travel Playwright run below. `gh pr list --state open` returned no pull requests. No open `travel-forms` or `travel-ui` pull request.
 
 ## Acceptance
@@ -40,13 +40,13 @@ Commands ran in `/tmp/vivek-tux-04`. `make test-fast` used `PATH="/tmp/vivek-tux
 
 | Command | Tested SHA | Result |
 | --- | --- | --- |
-| `PATH="/tmp/vivek-tux-04/.venv/bin:$PATH" make test-fast` | working tree on `1b933def` | PASS. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. |
-| `make lint-web` | working tree on `1b933def` | PASS. eslint-finance 345, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. One new template `==` was changed to `===` before this pass. The baseline was not raised. |
-| `make typecheck-web` | working tree on `1b933def` | PASS. `tsc` noEmit for web, finance, packages, and site. |
-| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | working tree on `1b933def` | PASS. 418 SUCCESS. Statements 72.6% (5824/8022). |
-| `node --test apps/travel/backend/static/tests/*.test.mjs` | working tree on `1b933def` | PASS. 61 pass / 0 fail. |
-| `make build-frontends` | working tree on `1b933def` | PASS. Output `/tmp/vivek-tux-04/dist/web`. Initial-bundle warning 674.82 kB. Exit 0. |
-| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --config apps/travel/e2e/playwright.config.js` | working tree on `1b933def` | PASS. 164 passed. The nine `flight-start.spec.js` tests are included. |
+| `PATH="/tmp/vivek-tux-04/.venv/bin:$PATH" make test-fast` | `d74f1e8d0ef33144b77e8a45067fe595d31e549e` | PASS. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. |
+| `make lint-web` | `d74f1e8d0ef33144b77e8a45067fe595d31e549e` | PASS. eslint-finance 345, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. One new template `==` was changed to `===` before this pass. The baseline was not raised. |
+| `make typecheck-web` | `d74f1e8d0ef33144b77e8a45067fe595d31e549e` | PASS. `tsc` noEmit for web, finance, packages, and site. |
+| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | `d74f1e8d0ef33144b77e8a45067fe595d31e549e` | PASS. 418 SUCCESS. Statements 72.6% (5824/8022). |
+| `node --test apps/travel/backend/static/tests/*.test.mjs` | `d74f1e8d0ef33144b77e8a45067fe595d31e549e` | PASS. 61 pass / 0 fail. |
+| `make build-frontends` | `d74f1e8d0ef33144b77e8a45067fe595d31e549e` | PASS. Output `/tmp/vivek-tux-04/dist/web`. Initial-bundle warning 674.82 kB. Exit 0. |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --config apps/travel/e2e/playwright.config.js` | `d74f1e8d0ef33144b77e8a45067fe595d31e549e` | PASS. 164 passed. The nine `flight-start.spec.js` tests are included. |
 
 `make lint-python`, `make typecheck-python`, `./scripts/coverage-gate.sh travel`, and `./scripts/coverage-gate.sh server` were not run: the diff has no Python. Finance coverage, Media coverage, Finance Karma, site Karma, Finance Playwright, Media Playwright, and Town Playwright were not run: the diff has no Finance, Media, or Town screen. `make e2e` is the Finance Playwright gate and was not run.
 
