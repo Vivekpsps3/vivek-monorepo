@@ -688,7 +688,236 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
       expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
     });
+
+    test('saves a workout, restores it with the existing backup, and rejects an oversized record', async ({ page }) => {
+      test.setTimeout(240_000);
+      const touch = width === 390;
+      const today = '2026-10-29';
+      const storedKg = lbToKg(100);
+      const pounds = displayWeight(storedKg, 'lb');
+      const kilos = displayWeight(storedKg, 'kg');
+      const sessionLabel = `Session · Synthetic press · ${today} · ${pounds} lb · 5 reps`;
+      const kiloLabel = `Session · Synthetic press · ${today} · ${kilos} kg · 5 reps`;
+      await syntheticVault(page, SEED);
+      await page.goto('/town/gym');
+      const room = page.locator('app-health-room');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(room).toHaveAttribute('data-health-state', 'locked');
+      const locked = await room.evaluate(node => ({
+        text: (node as HTMLElement).innerText,
+        inputs: [...node.querySelectorAll('input, textarea')].map(item => (item as HTMLInputElement).value),
+      }));
+      noMeasurementDigits(locked.text);
+      expect(locked.text).not.toContain('Synthetic press');
+      expect(locked.inputs.join('')).not.toMatch(/\d/);
+      expect(await room.locator('#health-workout-name').count()).toBe(0);
+      const motion = await room.locator('.health-room').evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(motion).toBe('0s');
+
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await expect(room).toContainText('Squat');
+      await expect(room).toContainText('220.5 lb');
+      await expect(room).toContainText('No workouts yet.');
+      const before = await collectionCipher(page);
+      const add = room.getByRole('button', { name: 'Add session' });
+      await target(add);
+      await activate(page, add, touch);
+      const dialog = page.getByRole('dialog', { name: 'Add session' });
+      await expect(dialog).toBeVisible();
+      const name = dialog.locator('#health-workout-name');
+      const load = dialog.locator('#health-workout-load');
+      const reps = dialog.locator('#health-workout-reps');
+      await expect(dialog.locator('#health-workout-measured-on')).toBeFocused();
+      await target(name);
+      await target(load);
+      await target(reps);
+      await target(dialog.getByRole('button', { name: 'Save' }));
+      await target(dialog.getByRole('button', { name: 'Cancel' }));
+      if (touch) {
+        await name.tap();
+        await name.fill('Synthetic press');
+      } else {
+        await focusControl(page, '#health-workout-name');
+        await page.keyboard.type('Synthetic press');
+      }
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
+      await expect(add).toBeFocused();
+      await activate(page, add, touch);
+      await expect(name).toHaveValue('Synthetic press');
+      await name.fill('');
+      if (touch) await dialog.getByRole('button', { name: 'Save' }).tap();
+      else await page.keyboard.press('Enter');
+      await expect(name).toBeFocused();
+      await expect(name).toHaveAttribute('aria-invalid', 'true');
+      await expect(name).toHaveValue('');
+      expect(await collectionCipher(page)).toEqual(before);
+
+      if (touch) {
+        await name.tap();
+        await name.fill('Synthetic press');
+        await load.tap();
+        await load.fill('100');
+        await reps.tap();
+        await reps.fill('5');
+        await dialog.getByRole('button', { name: 'Save' }).tap();
+      } else {
+        await name.fill('Synthetic press');
+        await focusControl(page, '#health-workout-load');
+        await page.keyboard.type('100');
+        await focusControl(page, '#health-workout-reps');
+        await page.keyboard.type('5');
+        await page.keyboard.press('Enter');
+      }
+      await expect(dialog).toHaveCount(0);
+      await expect(room).toContainText(sessionLabel);
+      const workoutRow = room.locator('[data-workout-kind="session"] .entry-label');
+      await target(workoutRow);
+      const saved = await collectionCipher(page);
+      expect(saved.health_prs).toEqual(before.health_prs);
+      expect(saved.health_stats).toEqual(before.health_stats);
+      expect(saved.health_workouts).toHaveLength(1);
+
+      await activate(page, room.getByRole('radio', { name: 'Kilograms' }), touch);
+      await expect(room).toContainText(kiloLabel);
+      await expect(room).toContainText('100.0 kg');
+      expect(await collectionCipher(page)).toEqual(saved);
+      const backup = await vaultCall(page, '/api/vault/recovery-snapshot');
+      const workoutId = saved.health_workouts[0].client_id;
+      await vaultCall(page, '/api/vault/records/delete', {
+        method: 'POST',
+        body: { records: [{ collection: 'health_workouts', client_id: workoutId, expected_revision: saved.health_workouts[0].revision }] },
+      });
+      await page.reload();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await expect(room).not.toContainText('Synthetic press');
+      await expect(room).toContainText('Squat');
+      await expect(room).toContainText('100.0 kg');
+      const removed = await collectionCipher(page);
+      expect(removed.health_workouts).toEqual([]);
+      expect(removed.health_prs).toEqual(saved.health_prs);
+
+      const current = await vaultCall(page, '/api/vault/recovery-snapshot');
+      const counts: Record<string, number> = {};
+      for (const row of current.collections as Array<{ collection: string }>) {
+        counts[row.collection] = (backup.records as Array<{ collection: string }>).filter(item => item.collection === row.collection).length;
+      }
+      const stage = await vaultCall(page, '/api/vault/restore/stages', {
+        method: 'POST',
+        body: {
+          source_hash: 'a'.repeat(64),
+          base_fingerprint: current.fingerprint,
+          mode: 'replace',
+          key_version: 1,
+          expected_counts: counts,
+          batch_count: 1,
+        },
+      });
+      await vaultCall(page, `/api/vault/restore/stages/${stage.id}/batches`, {
+        method: 'PUT',
+        body: {
+          batch_index: 0,
+          records: (backup.records as Array<Record<string, unknown>>).map(row => ({
+            collection: row['collection'],
+            client_id: row['client_id'],
+            ciphertext_b64: row['ciphertext_b64'],
+            schema_version: row['schema_version'],
+            key_version: row['key_version'],
+            expected_revision: null,
+            indexes: [],
+          })),
+        },
+      });
+      await vaultCall(page, `/api/vault/restore/stages/${stage.id}/activate`, {
+        method: 'POST',
+        body: { confirmation: 'REPLACE' },
+      });
+      await page.reload();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await expect(room).toContainText(kiloLabel);
+      await expect(room).toContainText('Squat');
+      const restored = await collectionCipher(page);
+      expect(cipherOnly(restored.health_stats)).toEqual(cipherOnly(cipherOf(backup, 'health_stats')));
+      expect(cipherOnly(restored.health_prs)).toEqual(cipherOnly(cipherOf(backup, 'health_prs')));
+      expect(cipherOnly(restored.health_workouts)).toEqual(cipherOnly(cipherOf(backup, 'health_workouts')));
+
+      await activate(page, room.getByRole('button', { name: 'Add session' }), touch);
+      const again = page.getByRole('dialog', { name: 'Add session' });
+      await again.locator('#health-workout-name').fill('Synthetic press');
+      await again.locator('#health-workout-load').fill('40');
+      await again.locator('#health-workout-reps').fill('5');
+      await again.locator('#health-workout-note').fill('x'.repeat(40_000));
+      const save = again.getByRole('button', { name: 'Save' });
+      await target(save);
+      if (touch) await save.tap();
+      else {
+        await save.focus();
+        await page.keyboard.press('Enter');
+      }
+      await expect(again).toContainText('This workout is too large to save. Shorten it and try again.');
+      await expect(again.locator('#health-workout-note')).toHaveValue('x'.repeat(40_000));
+      await expect(again.locator('#health-workout-note')).toBeFocused();
+      const rejected = await collectionCipher(page);
+      expect(rejected.health_workouts).toEqual(restored.health_workouts);
+      expect(rejected.health_prs).toEqual(restored.health_prs);
+      expect(rejected.health_stats).toEqual(restored.health_stats);
+      const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+    });
   });
+}
+
+async function focusControl(page: Page, selector: string): Promise<void> {
+  for (let step = 0; step < 12; step += 1) {
+    const focused = await page.evaluate(sel => document.activeElement instanceof Element && document.activeElement.matches(sel), selector);
+    if (focused) return;
+    await page.keyboard.press('Tab');
+  }
+  await expect(page.locator(selector)).toBeFocused();
+}
+
+async function vaultCall(page: Page, path: string, init?: { method?: string; body?: unknown }): Promise<VaultBody> {
+  return page.evaluate(async ({ path, init }) => {
+    const response = await fetch(path, {
+      method: init?.method ?? 'GET',
+      headers: init?.body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`${response.status} ${path} ${text}`);
+    return text ? JSON.parse(text) : null;
+  }, { path, init: init ?? null });
+}
+
+async function collectionCipher(page: Page): Promise<Record<string, Array<{ client_id: string; ciphertext_b64: string; revision: number }>>> {
+  const names = ['health_stats', 'health_prs', 'health_workouts'];
+  const out: Record<string, Array<{ client_id: string; ciphertext_b64: string; revision: number }>> = {};
+  for (const name of names) {
+    const rows = await vaultCall(page, `/api/vault/records?collection=${name}`) as Array<{ client_id: string; ciphertext_b64: string; revision: number }>;
+    out[name] = rows.map(row => ({ client_id: row.client_id, ciphertext_b64: row.ciphertext_b64, revision: row.revision }))
+      .sort((a, b) => a.client_id.localeCompare(b.client_id));
+  }
+  return out;
+}
+
+interface VaultBody {
+  fingerprint?: string;
+  id?: string;
+  collections?: Array<{ collection: string }>;
+  records?: Array<{ collection: string; client_id: string; ciphertext_b64: string; schema_version: number; key_version: number; revision: number }>;
+}
+
+function cipherOnly(rows: Array<{ client_id: string; ciphertext_b64: string }>): Array<{ client_id: string; ciphertext_b64: string }> {
+  return rows.map(row => ({ client_id: row.client_id, ciphertext_b64: row.ciphertext_b64 }));
+}
+
+function cipherOf(snapshot: { records?: VaultBody['records'] }, collection: string) {
+  return (snapshot.records ?? []).filter(row => row.collection === collection)
+    .map(row => ({ client_id: row.client_id, ciphertext_b64: row.ciphertext_b64, revision: row.revision }))
+    .sort((a, b) => a.client_id.localeCompare(b.client_id));
 }
 
 function historyId(mark: string, index: number): string {

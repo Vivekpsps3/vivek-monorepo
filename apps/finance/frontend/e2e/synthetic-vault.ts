@@ -198,7 +198,7 @@ export async function syntheticVault(
         : `synthetic_${collection}_${data.id}`;
       delete data.schema_version;
       delete data.client_id;
-      if (collection === 'health_stats' || collection === 'health_prs') delete data.id;
+      if (collection.startsWith('health_')) delete data.id;
       const row: RecordRow = {
         collection, client_id: clientId, ciphertext_b64: '',
         schema_version: schemaVersion, key_version: 1, revision: 1, updated_at: new Date().toISOString(),

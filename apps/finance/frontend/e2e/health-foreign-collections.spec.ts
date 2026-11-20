@@ -16,6 +16,9 @@ test('Finance loads unchanged with health collections present', async ({ page })
     health_prs: [
       { id: 2, v: 1, kind: 'lift', measured_on: '2026-10-28', logged_on: '2026-10-28', exercise: 'Squat', kg: 100, reps: 5 },
     ],
+    health_workouts: [
+      { id: 3, v: 1, kind: 'exercise', name: 'Synthetic press', exercise_type: 'load-reps', archived: false },
+    ],
   });
 
   await vault.open('/');
@@ -31,6 +34,9 @@ test('Finance loads unchanged with health collections present', async ({ page })
   expect(vault.data('health_stats')[0]).toMatchObject({ kind: 'weight', kg: 80 });
   expect(vault.data('health_prs')).toHaveLength(1);
   expect(vault.data('health_prs')[0]).toMatchObject({ kind: 'lift', exercise: 'Squat', kg: 100 });
+  expect(vault.data('health_workouts')).toHaveLength(1);
+  expect(vault.data('health_workouts')[0]).toMatchObject({ kind: 'exercise', name: 'Synthetic press' });
+  await expect(page.locator('body')).not.toContainText('Synthetic press');
   const healthWrites = vault.mutations.filter(mutation =>
     JSON.stringify(mutation.body).includes('health_'),
   );

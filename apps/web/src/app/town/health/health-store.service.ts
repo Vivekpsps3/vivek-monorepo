@@ -10,20 +10,27 @@ import {
 } from '../../../../../finance/frontend/src/public-api';
 import { SessionService } from '../../platform/session.service';
 import type { HealthPr, HealthStat } from './health.types';
+import {
+  validateWorkoutRecord,
+  workoutFieldMessage,
+  workoutParsable,
+  type WorkoutRecord,
+} from './workout';
 
 /**
- * Town Health vault store (THC2). Reads and writes only the health_stats
- * and health_prs collections through Finance's record capability. Decrypted
- * records live in memory only; nothing is cached to storage. Envelope
- * schema_version is always 2 on write, and rows that are not version 2 are
- * refused on read (Security, 2026-10-30): skipped and counted like
- * undecryptable rows, never deleted.
+ * Town Health vault store (THC2). Reads and writes health_stats, health_prs,
+ * and health_workouts through Finance's record capability. Decrypted records
+ * live in memory only; nothing is cached to storage. Envelope schema_version
+ * is always 2 on write, and rows that are not version 2 are refused on read
+ * (Security, 2026-10-30): skipped and counted like undecryptable rows, never
+ * deleted. Workout kinds stay in the one health_workouts collection.
  */
 
 /** Health-owned collections. Finance bags are a different subset. */
-export const HEALTH_OWNER_COLLECTIONS = ['health_stats', 'health_prs'] as const;
+export const HEALTH_OWNER_COLLECTIONS = ['health_stats', 'health_prs', 'health_workouts'] as const;
 export const HEALTH_STATS_COLLECTION = HEALTH_OWNER_COLLECTIONS[0];
 export const HEALTH_PRS_COLLECTION = HEALTH_OWNER_COLLECTIONS[1];
+export const HEALTH_WORKOUTS_COLLECTION = HEALTH_OWNER_COLLECTIONS[2];
 export const HEALTH_SCHEMA_VERSION = 2;
 export const HEALTH_LOAD_DEADLINE_MS = 8_000;
 export const HEALTH_CONFLICT_MESSAGE =
@@ -43,6 +50,7 @@ export type HealthLoadResult =
       state: 'ready';
       stats: HealthEntry<HealthStat>[];
       prs: HealthEntry<HealthPr>[];
+      workouts: HealthEntry<WorkoutRecord>[];
       /** Rows skipped: undecryptable, unparsable, or refused (not v2). */
       unreadable: number;
     };
@@ -61,7 +69,15 @@ export class HealthConflictError extends Error {
   }
 }
 
-type Collection = typeof HEALTH_STATS_COLLECTION | typeof HEALTH_PRS_COLLECTION;
+/** The record was refused before any vault write. The caller's draft stays. */
+export class HealthWorkoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HealthWorkoutError';
+  }
+}
+
+type Collection = typeof HEALTH_STATS_COLLECTION | typeof HEALTH_PRS_COLLECTION | typeof HEALTH_WORKOUTS_COLLECTION;
 
 const STAT_KINDS: ReadonlySet<string> = new Set(['weight', 'rhr', 'bp', 'sleep', 'lab', 'checkup']);
 const PR_KINDS: ReadonlySet<string> = new Set(['lift', 'run', 'other']);
@@ -112,6 +128,7 @@ export class HealthStoreService {
   private readonly session = inject(SessionService);
   private stats: HealthEntry<HealthStat>[] = [];
   private prs: HealthEntry<HealthPr>[] = [];
+  private workouts: HealthEntry<WorkoutRecord>[] = [];
   private unreadable = 0;
   /** Bumped on lock, logout, owner change, and disposal. In-flight work keeps the old value. */
   private generation = 0;
@@ -149,6 +166,10 @@ export class HealthStoreService {
     return this.prs;
   }
 
+  get workoutsSnapshot(): readonly HealthEntry<WorkoutRecord>[] {
+    return this.workouts;
+  }
+
   get unreadableCount(): number {
     return this.unreadable;
   }
@@ -156,6 +177,7 @@ export class HealthStoreService {
   private clearMemory(): void {
     this.stats = [];
     this.prs = [];
+    this.workouts = [];
     this.unreadable = 0;
   }
 
@@ -254,6 +276,7 @@ export class HealthStoreService {
         state: 'ready',
         stats: [...this.stats],
         prs: [...this.prs],
+        workouts: [...this.workouts],
         unreadable: this.unreadable,
       };
     } finally {
@@ -264,19 +287,22 @@ export class HealthStoreService {
   private async loadAll(signal: AbortSignal, ticket: Publication): Promise<void> {
     const vault = await this.vault();
     this.guard(ticket, signal);
-    const [statRows, prRows] = await Promise.all([
+    const [statRows, prRows, workoutRows] = await Promise.all([
       this.observe(vault.listRecords(HEALTH_STATS_COLLECTION, { silent: true }), signal),
       this.observe(vault.listRecords(HEALTH_PRS_COLLECTION, { silent: true }), signal),
+      this.observe(vault.listRecords(HEALTH_WORKOUTS_COLLECTION, { silent: true }), signal),
     ]);
     this.guard(ticket, signal);
-    const [stats, prs] = await Promise.all([
+    const [stats, prs, workouts] = await Promise.all([
       this.decryptAll<HealthStat>(vault, HEALTH_STATS_COLLECTION, statRows, STAT_KINDS, signal, ticket),
       this.decryptAll<HealthPr>(vault, HEALTH_PRS_COLLECTION, prRows, PR_KINDS, signal, ticket),
+      this.decryptWorkouts(vault, workoutRows, signal, ticket),
     ]);
     this.guard(ticket, signal);
     this.stats = stats.entries;
     this.prs = prs.entries;
-    this.unreadable = stats.skipped + prs.skipped;
+    this.workouts = workouts.entries;
+    this.unreadable = stats.skipped + prs.skipped + workouts.skipped;
   }
 
   private async decryptAll<T>(
@@ -306,6 +332,47 @@ export class HealthStoreService {
         );
         this.guard(ticket, signal);
         if (!parsable(value, kinds)) {
+          skipped += 1;
+          continue;
+        }
+        entries.push({
+          clientId: row.client_id,
+          revision: row.revision,
+          keyVersion: row.key_version,
+          value,
+        });
+      } catch (error) {
+        if (signal.aborted || !this.eligible(ticket)) throw error;
+        skipped += 1;
+      }
+    }
+    return { entries, skipped };
+  }
+
+  private async decryptWorkouts(
+    vault: VaultRecordCapability,
+    rows: readonly VaultRecordEnvelope[],
+    signal: AbortSignal,
+    ticket: Publication,
+  ): Promise<{ entries: HealthEntry<WorkoutRecord>[]; skipped: number }> {
+    const entries: HealthEntry<WorkoutRecord>[] = [];
+    let skipped = 0;
+    for (const row of rows) {
+      this.guard(ticket, signal);
+      if (row.schema_version !== HEALTH_SCHEMA_VERSION) {
+        skipped += 1;
+        continue;
+      }
+      try {
+        const value = await vault.decryptPayload<unknown>(
+          row.ciphertext_b64,
+          HEALTH_WORKOUTS_COLLECTION,
+          row.client_id,
+          row.schema_version,
+          row.key_version,
+        );
+        this.guard(ticket, signal);
+        if (!workoutParsable(value)) {
           skipped += 1;
           continue;
         }
@@ -390,12 +457,17 @@ export class HealthStoreService {
       this.guard(ticket, signal);
       this.stats = entries;
       this.unreadable = skipped;
-    } else {
+    } else if (collection === HEALTH_PRS_COLLECTION) {
       const { entries, skipped } = await this.decryptAll<HealthPr>(
         vault, collection, rows, PR_KINDS, signal, ticket,
       );
       this.guard(ticket, signal);
       this.prs = entries;
+      this.unreadable = skipped;
+    } else {
+      const { entries, skipped } = await this.decryptWorkouts(vault, rows, signal, ticket);
+      this.guard(ticket, signal);
+      this.workouts = entries;
       this.unreadable = skipped;
     }
   }
@@ -499,5 +571,27 @@ export class HealthStoreService {
 
   async deletePr(entry: HealthEntry<HealthPr>): Promise<void> {
     await this.remove(this.publication(false), HEALTH_PRS_COLLECTION, entry);
+  }
+
+  /**
+   * One workout record. Invalid and oversized records throw before encrypt
+   * or upsert, so a refusal cannot leave a partial or cross-collection write.
+   */
+  async createWorkout(value: WorkoutRecord, today: string): Promise<HealthEntry<WorkoutRecord>> {
+    const ticket = this.publication(false);
+    this.guard(ticket);
+    const customExerciseCount = this.workouts.filter(item => item.value.kind === 'exercise' && !item.value.archived).length;
+    const checked = validateWorkoutRecord(value, customExerciseCount, today);
+    const firstError = Object.values(checked.fieldErrors)[0];
+    if (firstError) throw new HealthWorkoutError(workoutFieldMessage(firstError));
+    const entry = await this.upsert<WorkoutRecord>(
+      ticket,
+      HEALTH_WORKOUTS_COLLECTION,
+      { clientId: newHealthClientId(), revision: null, keyVersion: 1 },
+      checked.value,
+    );
+    this.guard(ticket);
+    this.workouts = [...this.workouts, entry];
+    return entry;
   }
 }

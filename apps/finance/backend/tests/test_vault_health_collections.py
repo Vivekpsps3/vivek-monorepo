@@ -17,6 +17,7 @@ from apps.finance.backend.tests.conftest import authenticated_client
 _HEALTH = (
     ("health_stats", "hlt_stats0001"),
     ("health_prs", "hlt_prs000001"),
+    ("health_workouts", "hlt_workouts0001"),
 )
 
 
@@ -61,7 +62,7 @@ def _upsert(client, collection: str, client_id: str, *, expected_revision: int |
 
 
 def test_allowed_collections_include_health():
-    assert {"health_stats", "health_prs"} <= ALLOWED_COLLECTIONS
+    assert {"health_stats", "health_prs", "health_workouts"} <= ALLOWED_COLLECTIONS
 
 
 def test_health_collections_roundtrip_conflict_counts_and_delete():
@@ -93,6 +94,7 @@ def test_health_collections_roundtrip_conflict_counts_and_delete():
     assert counts.status_code == 200
     assert counts.json()["counts"]["health_stats"] == 1
     assert counts.json()["counts"]["health_prs"] == 1
+    assert counts.json()["counts"]["health_workouts"] == 1
 
     deleted = client.post(
         "/api/vault/records/delete",
@@ -104,7 +106,7 @@ def test_health_collections_roundtrip_conflict_counts_and_delete():
         },
     )
     assert deleted.status_code == 200
-    assert deleted.json()["deleted"] == 2
+    assert deleted.json()["deleted"] == 3
     for collection, _client_id in _HEALTH:
         assert client.get(f"/api/vault/records?collection={collection}").json() == []
 
@@ -199,7 +201,11 @@ def test_wipe_encrypted_user_data_removes_health_rows():
             .order_by(EncryptedRecord.collection)
             .all()
         )
-        assert [row.collection for row in owned] == ["health_prs", "health_stats"]
+        assert [row.collection for row in owned] == [
+            "health_prs",
+            "health_stats",
+            "health_workouts",
+        ]
         wipe_encrypted_user_data(db, owner_id)
         db.commit()
         assert db.query(EncryptedRecord).filter(EncryptedRecord.user_id == owner_id).count() == 0
