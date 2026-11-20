@@ -14,6 +14,20 @@ export const HEALTH_LIMITS = Object.freeze({
   prRepsMax: 12, distanceM: Object.freeze([100, 400000] as const),
   seconds: Object.freeze([1, 259200] as const), measuredOnMin: '1900-01-01',
 } as const);
+/** One workout collection. Canonical stored units are kilograms, metres, and seconds. */
+export const WORKOUT_LIMITS = Object.freeze({
+  exercises: 32,
+  sets: 20,
+  recordBytes: 32 * 1024,
+  customExercises: 200,
+  nameMax: 80,
+  kg: Object.freeze([0, 600] as const),
+  reps: Object.freeze([1, 50] as const),
+  metres: Object.freeze([1, 400000] as const),
+  seconds: Object.freeze([1, 259200] as const),
+  effort: Object.freeze([1, 10] as const),
+  duration: Object.freeze([1, 86400] as const),
+} as const);
 export const RUN_DISTANCES = Object.freeze({ '5k': 5000, '10k': 10000, half: 21097.5, full: 42195 } as const);
 export const RUN_TOLERANCE = Object.freeze(1.02 as const);
 const round = (value: number, places: number): number => Number(value.toFixed(places));

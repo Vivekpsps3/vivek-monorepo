@@ -484,6 +484,71 @@ def test_new_registered_collection_restores_without_another_membership_list(monk
     assert snapshot(c)["records"][0]["collection"] == "future_review"
 
 
+def test_fit01_existing_backup_restores_prs_stats_and_workouts_unchanged():
+    """A PR and stat backup restores those ciphertexts, and a workout backup restores with them."""
+    owner = client("fit01-owner@example.com")
+    other = client("fit01-other@example.com")
+    stat = wire("health_stats", "fit01_stat", b64(b"fit01-stat-original"))
+    pr = wire("health_prs", "fit01_pr", b64(b"fit01-pr-original"))
+    workout = wire("health_workouts", "fit01_workout", b64(b"fit01-workout-original"))
+    other_row = wire("health_prs", "fit01_other_pr", b64(b"fit01-other-pr"))
+    assert owner.post("/api/vault/records/upsert", json={"records": [stat, pr]}).status_code == 200
+    assert other.post("/api/vault/records/upsert", json={"records": [other_row]}).status_code == 200
+    changed = {**stat, "ciphertext_b64": b64(b"fit01-stat-changed"), "expected_revision": 1}
+    assert owner.post("/api/vault/records/upsert", json={"records": [changed]}).status_code == 200
+    other_before = snapshot(other)
+
+    stage, _ = create(owner, [stat, pr], "replace")
+    assert stage["expected_counts"]["health_workouts"] == 0
+    assert stage["expected_counts"]["health_stats"] == 1
+    assert stage["expected_counts"]["health_prs"] == 1
+    assert upload(owner, stage, 0, [stat, pr]).status_code == 200
+    restored = activate(owner, stage, "REPLACE")
+    assert restored.status_code == 200, restored.text
+    rows = {row["client_id"]: row for row in snapshot(owner)["records"]}
+    assert rows[stat["client_id"]]["ciphertext_b64"] == stat["ciphertext_b64"]
+    assert rows[pr["client_id"]]["ciphertext_b64"] == pr["ciphertext_b64"]
+    assert workout["client_id"] not in rows
+    assert snapshot(other) == other_before
+
+    assert owner.post("/api/vault/records/upsert", json={"records": [workout]}).status_code == 200
+    live = {row["client_id"]: row for row in snapshot(owner)["records"]}
+    changed_again = {
+        **stat,
+        "ciphertext_b64": b64(b"fit01-stat-changed-again"),
+        "expected_revision": live[stat["client_id"]]["revision"],
+    }
+    assert (
+        owner.post("/api/vault/records/upsert", json={"records": [changed_again]}).status_code
+        == 200
+    )
+    removed = owner.post(
+        "/api/vault/records/delete",
+        json={
+            "records": [
+                {
+                    "collection": "health_workouts",
+                    "client_id": workout["client_id"],
+                    "expected_revision": 1,
+                }
+            ]
+        },
+    )
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["deleted"] == 1
+    stage, _ = create(owner, [stat, pr, workout], "replace")
+    assert stage["expected_counts"]["health_workouts"] == 1
+    assert upload(owner, stage, 0, [stat, pr, workout]).status_code == 200
+    restored = activate(owner, stage, "REPLACE")
+    assert restored.status_code == 200, restored.text
+    rows = {row["client_id"]: row for row in snapshot(owner)["records"]}
+    assert rows[stat["client_id"]]["ciphertext_b64"] == stat["ciphertext_b64"]
+    assert rows[pr["client_id"]]["ciphertext_b64"] == pr["ciphertext_b64"]
+    assert rows[workout["client_id"]]["ciphertext_b64"] == workout["ciphertext_b64"]
+    assert rows[workout["client_id"]]["collection"] == "health_workouts"
+    assert snapshot(other) == other_before
+
+
 @pytest.mark.parametrize("operation", ["upsert", "reindex"])
 def test_read_held_before_activation_cannot_overwrite_the_restored_revision(operation):
     from fastapi import HTTPException

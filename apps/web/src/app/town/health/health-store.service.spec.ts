@@ -15,10 +15,12 @@ import {
   HEALTH_CONFLICT_MESSAGE,
   HealthConflictError,
   HealthStoreService,
+  HealthWorkoutError,
   newHealthClientId,
   type HealthLoadResult,
 } from './health-store.service';
 import type { HealthPr, HealthStat } from './health.types';
+import { emptyWorkoutDraft, workoutFromDraft, type WorkoutRecord } from './workout';
 
 type EncryptedRecordDto = VaultRecordEnvelope;
 
@@ -320,7 +322,7 @@ describe('HealthStoreService', () => {
       row('transactions', 'txn_1', { note: MARKER }),
     ];
     const result = await store.load();
-    expect(fake.listed).toEqual(['health_stats', 'health_prs']);
+    expect(fake.listed).toEqual(['health_stats', 'health_prs', 'health_workouts']);
     expect(result.state).toBe('ready');
     if (result.state !== 'ready') return;
     expect(result.stats.map(entry => entry.clientId)).toEqual(['hlt_a']);
@@ -343,7 +345,7 @@ describe('HealthStoreService', () => {
     if (result.state !== 'ready') return;
     expect(result.stats.map(entry => entry.clientId)).toEqual(['hlt_a']);
     expect(result.prs.map(entry => entry.clientId)).toEqual(['hlt_b']);
-    expect(fake.listed).toEqual(['health_stats', 'health_prs']);
+    expect(fake.listed).toEqual(['health_stats', 'health_prs', 'health_workouts']);
     expect(fake.decryptCalls).toEqual(['hlt_a', 'hlt_b']);
     expect(fake.deleted).toEqual([]);
     expect(fake.upserted).toEqual([]);
@@ -367,7 +369,7 @@ describe('HealthStoreService', () => {
     const result = await store.load();
     expect(result.state).toBe('ready');
     if (result.state !== 'ready') return;
-    expect(fake.listed).toEqual(['health_stats', 'health_prs']);
+    expect(fake.listed).toEqual(['health_stats', 'health_prs', 'health_workouts']);
     expect(fake.decryptCalls).toEqual(['hlt_a']);
     expect(fake.deleted).toEqual([]);
     await store.createStat(STAT);
@@ -630,7 +632,7 @@ describe('HealthStoreService', () => {
     fake.rows = [row('health_stats', 'hlt_a', { ...STAT, note: MARKER })];
     const controller = new AbortController();
     const pending = store.load({ signal: controller.signal });
-    await until(() => fake.listed.length === 2);
+    await until(() => fake.listed.length === 3);
     controller.abort();
     expect(fake.listCancelled).toBeGreaterThan(0);
     fake.listRelease.splice(0).forEach(release => release());
@@ -718,6 +720,152 @@ describe('HealthStoreService', () => {
     expect(textOf(stage)).not.toContain(MARKER);
     expect(store.statsSnapshot).toEqual([]);
   }));
+});
+
+const WORKOUT_TODAY = '2026-10-29';
+
+function workoutRecord(note = ''): WorkoutRecord {
+  return workoutFromDraft({
+    ...emptyWorkoutDraft('session', WORKOUT_TODAY),
+    name: 'Synthetic press',
+    load: '40',
+    reps: '5',
+    note,
+  }, WORKOUT_TODAY, { weight: 'kg', distance: 'km' });
+}
+
+describe('Health workout collection', () => {
+  let store: HealthStoreService;
+
+  beforeEach(() => {
+    fake = new FakeVault();
+    session = new SessionDouble();
+    vaultCalls = 0;
+    unlockVault();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: HealthStoreService, useClass: TestStore },
+        { provide: SessionService, useValue: session as unknown as SessionService },
+      ],
+    });
+    store = TestBed.inject(HealthStoreService);
+  });
+
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    localStorage.removeItem('finance-dek');
+    localStorage.removeItem('finance-vault-present');
+  });
+
+  it('loads a workout beside a personal record and skips a non-v2 workout row', async () => {
+    const prCipher = row('health_prs', 'hlt_b', PR).ciphertext_b64;
+    fake.rows = [
+      row('health_prs', 'hlt_b', PR),
+      row('health_workouts', 'hlt_w', { v: 1, kind: 'exercise', name: 'Synthetic press', exercise_type: 'load-reps', archived: false }),
+      row('health_workouts', 'hlt_old', { v: 1, kind: 'exercise', name: 'Synthetic old', exercise_type: 'load-reps', archived: false }, { schema_version: 1 }),
+    ];
+    const result = await store.load();
+    expect(result.state).toBe('ready');
+    if (result.state !== 'ready') return;
+    expect(result.prs.map(entry => entry.clientId)).toEqual(['hlt_b']);
+    expect(result.workouts.map(entry => entry.clientId)).toEqual(['hlt_w']);
+    expect(result.unreadable).toBe(1);
+    expect(fake.deleted).toEqual([]);
+    expect(fake.rows).toHaveSize(3);
+    expect(fake.rows.find(item => item.client_id === 'hlt_b')?.ciphertext_b64).toBe(prCipher);
+  });
+
+  it('writes one workout and leaves the personal-record ciphertext unchanged', async () => {
+    fake.rows = [row('health_prs', 'hlt_b', PR), row('transactions', 'txn_1', { note: MARKER })];
+    await store.load();
+    const pr = fake.rows.find(item => item.client_id === 'hlt_b');
+    const finance = fake.rows.find(item => item.client_id === 'txn_1');
+    const prCipher = pr?.ciphertext_b64;
+    const financeCipher = finance?.ciphertext_b64;
+    const dirty = { ...workoutRecord(), extra: 'nope' } as unknown as WorkoutRecord;
+    const saved = await store.createWorkout(dirty, WORKOUT_TODAY);
+    expect(saved.clientId).toMatch(/^hlt_[A-Za-z0-9_-]{22}$/);
+    expect(saved.value.kind).toBe('session');
+    expect(JSON.stringify(saved.value)).not.toContain('note');
+    expect(JSON.stringify(fake.encryptCalls)).not.toContain('nope');
+    expect(fake.upserted).toHaveSize(1);
+    expect(fake.upserted[0].every(item => item.collection === 'health_workouts')).toBeTrue();
+    expect(pr?.ciphertext_b64).toBe(prCipher);
+    expect(pr?.revision).toBe(1);
+    expect(finance?.ciphertext_b64).toBe(financeCipher);
+    expect(store.prsSnapshot.map(entry => entry.clientId)).toEqual(['hlt_b']);
+    expect(store.workoutsSnapshot).toHaveSize(1);
+  });
+
+  it('refuses an oversized or over-limit workout before encrypt or upsert', async () => {
+    fake.rows = [
+      row('health_prs', 'hlt_b', PR),
+      ...Array.from({ length: 200 }, (_, index) => row(
+        'health_workouts',
+        `hlt_${String(index).padStart(22, '0')}`,
+        { v: 1, kind: 'exercise', name: `Synthetic ${index}`, exercise_type: 'load-reps', archived: false },
+      )),
+    ];
+    await store.load();
+    const prCipher = fake.rows.find(item => item.client_id === 'hlt_b')?.ciphertext_b64;
+    const huge = workoutRecord('x'.repeat(40_000));
+    await expectAsync(store.createWorkout(huge, WORKOUT_TODAY)).toBeRejectedWithError(HealthWorkoutError, /too large/);
+    const another = workoutFromDraft({
+      ...emptyWorkoutDraft('exercise', WORKOUT_TODAY),
+      name: 'Synthetic extra',
+    }, WORKOUT_TODAY, { weight: 'kg', distance: 'km' });
+    await expectAsync(store.createWorkout(another, WORKOUT_TODAY)).toBeRejectedWithError(HealthWorkoutError, /200 custom exercises/);
+    const session = workoutRecord();
+    if (session.kind !== 'session') return;
+    session.exercises[0].sets = Array.from({ length: 21 }, (_, index) => ({
+      id: `wst_${String(index).padStart(8, 'd')}`,
+      set_type: 'work' as const,
+      completed: true,
+      kg: 40,
+      reps: 5,
+    }));
+    await expectAsync(store.createWorkout(session, WORKOUT_TODAY)).toBeRejectedWithError(HealthWorkoutError, /20 sets/);
+    expect(fake.encryptCalls).toEqual([]);
+    expect(fake.upserted).toEqual([]);
+    expect(store.workoutsSnapshot).toHaveSize(200);
+    expect(fake.rows.find(item => item.client_id === 'hlt_b')?.ciphertext_b64).toBe(prCipher);
+    expect(fake.rows.filter(item => item.collection === 'transactions')).toEqual([]);
+  });
+
+  it('drops a late or cross-owner workout write without publishing plaintext', async () => {
+    fake.rows = [row('health_prs', 'hlt_b', { ...PR, note: MARKER } as HealthPr)];
+    await store.load();
+    const prCipher = fake.rows[0].ciphertext_b64;
+    fake.holdEncrypt = true;
+    const crossed = store.createWorkout(workoutRecord(), WORKOUT_TODAY);
+    await until(() => fake.encryptRelease.length === 1);
+    localStorage.removeItem('finance-dek');
+    session.become(8);
+    unlockVault();
+    fake.encryptRelease.shift()?.();
+    await expectAsync(crossed).toBeRejected();
+    expect(fake.upserted).toEqual([]);
+    expect(store.workoutsSnapshot).toEqual([]);
+    expect(store.prsSnapshot).toEqual([]);
+    expect(fake.rows[0].ciphertext_b64).toBe(prCipher);
+    expect(textOf(store.workoutsSnapshot)).not.toContain('Synthetic press');
+
+    fake.holdEncrypt = false;
+    session.become(7);
+    await store.load();
+    fake.holdUpsert = true;
+    const late = store.createWorkout(workoutRecord(), WORKOUT_TODAY);
+    await until(() => fake.upsertRelease.length === 1);
+    localStorage.removeItem('finance-dek');
+    session.become(null);
+    expect(fake.upsertCancelled).toBe(1);
+    fake.upsertRelease.shift()?.();
+    await expectAsync(late).toBeRejected();
+    expect(store.workoutsSnapshot).toEqual([]);
+    expect(fake.rows.filter(item => item.collection === 'health_workouts')).toEqual([]);
+    expect(fake.rows[0].ciphertext_b64).toBe(prCipher);
+    expect(textOf(fake.upserted)).not.toContain('Synthetic press');
+  });
 });
 
 describe('loadTownHealthStages (barrel)', () => {

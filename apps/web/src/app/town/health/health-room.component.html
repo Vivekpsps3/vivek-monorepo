@@ -126,6 +126,25 @@
         </div>
       } @else {
         <ui-button id="health-add-lift" (clicked)="openLift()">Add lift</ui-button>
+        <section class="workouts" aria-labelledby="health-workouts-title">
+          <h2 id="health-workouts-title">Workouts</h2>
+          @if (workoutRows().length === 0) {
+            <p>No workouts yet.</p>
+          } @else {
+            <ul class="entries" aria-label="Workouts">
+              @for (row of workoutRows(); track row.clientId) {
+                <li [attr.data-workout-kind]="row.kind">
+                  <span class="entry-label" [id]="'health-workout-' + row.clientId" tabindex="-1">{{ row.label }}</span>
+                </li>
+              }
+            </ul>
+          }
+          <div class="add-actions">
+            <ui-button id="health-add-exercise" (clicked)="openWorkout('exercise')">Add exercise</ui-button>
+            <ui-button id="health-add-routine" (clicked)="openWorkout('routine')">Add routine</ui-button>
+            <ui-button id="health-add-session" (clicked)="openWorkout('session')">Add session</ui-button>
+          </div>
+        </section>
       }
     </div>
   }
@@ -142,3 +161,14 @@
   (draftChange)="onDraft($event)"
   (save)="save($event)"
   (closed)="onDialogClosed()" />
+<app-health-workout-dialog
+  [open]="workoutDialogOpen()"
+  [today]="today()"
+  [units]="units()"
+  [draft]="workoutDraft() ?? idleWorkoutDraft"
+  [customExerciseCount]="customExerciseCount()"
+  [formError]="workoutFormError()"
+  [busy]="workoutBusy()"
+  (draftChange)="onWorkoutDraft($event)"
+  (save)="saveWorkout($event)"
+  (closed)="onWorkoutClosed()" />

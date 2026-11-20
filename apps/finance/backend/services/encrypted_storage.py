@@ -60,7 +60,7 @@ FINANCE_OWNER_COLLECTIONS = frozenset(
         "stock_lab_scenarios",
     }
 )
-HEALTH_OWNER_COLLECTIONS = frozenset({"health_stats", "health_prs"})
+HEALTH_OWNER_COLLECTIONS = frozenset({"health_stats", "health_prs", "health_workouts"})
 COLLECTION_POLICY = CollectionPolicy(
     finance=FINANCE_OWNER_COLLECTIONS,
     health=HEALTH_OWNER_COLLECTIONS,

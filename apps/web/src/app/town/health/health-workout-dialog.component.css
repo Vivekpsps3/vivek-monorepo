@@ -1,0 +1,38 @@
+form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 44px;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.logged-on {
+  margin: 0;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.form-error:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host {
+    transition: none;
+    animation: none;
+  }
+}
