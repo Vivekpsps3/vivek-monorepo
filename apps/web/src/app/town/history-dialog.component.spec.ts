@@ -91,4 +91,56 @@ describe('History dialog', () => {
     expect(dirty).toHaveBeenCalled();
   });
 
+  it('keeps yesterday unmarked while history is loading or failed, and ignores a second post', () => {
+    const fixture = TestBed.createComponent(HistoryDialogComponent);
+    fixture.componentRef.setInput('data', snapshot());
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const yesterday = () => [...el.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Mark yesterday')!;
+    expect(yesterday().getAttribute('aria-disabled')).toBe('true');
+    expect(el.textContent).toContain('History is still loading. Yesterday cannot be marked yet.');
+    yesterday().click();
+    expect(api.checkin).not.toHaveBeenCalled();
+    checks.error({ error: { message: 'Town is unavailable right now.' } });
+    fixture.detectChanges();
+    expect(yesterday().getAttribute('aria-disabled')).toBe('true');
+    expect(el.textContent).toContain('History failed to load. Yesterday cannot be marked.');
+    yesterday().click();
+    expect(api.checkin).not.toHaveBeenCalled();
+    const marks = [...el.querySelectorAll('.legend .mark')].map(mark => mark.getAttribute('data-kind'));
+    expect(marks).toEqual(['done', 'rest', 'miss', 'pending', 'empty']);
+    expect(el.querySelector('[aria-label="History legend"]')?.textContent).toContain('Done');
+    expect(el.querySelector('[aria-label="History legend"]')?.textContent).toContain('Missed');
+    expect(el.querySelector('[aria-label="History legend"]')?.textContent).toContain('No check');
+    const shapes = marks.map(kind => getComputedStyle(el.querySelector(`.legend .mark[data-kind="${kind}"]`)!).borderRadius);
+    expect(new Set(shapes).size).toBeGreaterThan(1);
+  });
+
+  it('ignores a late yesterday response after the snapshot changes or the dialog closes', () => {
+    const fixture = TestBed.createComponent(HistoryDialogComponent);
+    fixture.componentRef.setInput('data', snapshot());
+    fixture.detectChanges();
+    checks.next({ days: [] });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const yesterday = () => [...el.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Mark yesterday')!;
+    const dirty = jasmine.createSpy();
+    fixture.componentInstance.dirty.subscribe(dirty);
+    yesterday().click();
+    yesterday().click();
+    expect(api.checkin).toHaveBeenCalledTimes(1);
+    const next = snapshot();
+    next.town = { ...next.town, xp: 341 };
+    fixture.componentRef.setInput('data', next);
+    fixture.detectChanges();
+    checkin.next({} as CheckinResult);
+    fixture.detectChanges();
+    expect(dirty).not.toHaveBeenCalled();
+    expect(el.textContent).not.toContain('Saving yesterday.');
+    yesterday().click();
+    fixture.destroy();
+    checkin.next({} as CheckinResult);
+    expect(dirty).not.toHaveBeenCalled();
+  });
+
 });
