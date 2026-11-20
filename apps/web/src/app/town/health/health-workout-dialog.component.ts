@@ -1,14 +1,22 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, afterRenderEffect, effect, input, output, signal } from '@angular/core';
 import { UiButtonComponent, UiDialogComponent, UiFieldComponent, UiFieldControlDirective } from '@vivek/ui';
 import type { HealthUnits } from './health-entry';
 import {
   EXERCISE_TYPES,
   SET_TYPES,
+  activateDraftLine,
+  canonicalPreview,
   commitEnteredSet,
+  commitExerciseLine,
   emptyWorkoutDraft,
   exerciseTypeLabel,
   firstWorkoutField,
   formatEnteredSet,
+  moveDraftSet,
+  openCanonicalPreview,
+  removeDraftSet,
+  retagDraftSet,
   setTypeLabel,
   workoutFieldId,
   workoutFieldMessage,
@@ -17,13 +25,22 @@ import {
   type ExerciseType,
   type SetType,
   type WorkoutDraft,
+  type WorkoutDraftSet,
   type WorkoutRecord,
 } from './workout';
 import type { FieldErrors } from './health-validate';
 
+interface FloorLineView {
+  id: string;
+  name: string;
+  exerciseType: ExerciseType;
+  sets: WorkoutDraftSet[];
+  active: boolean;
+}
+
 @Component({
   selector: 'app-health-workout-dialog',
-  imports: [UiButtonComponent, UiDialogComponent, UiFieldComponent, UiFieldControlDirective],
+  imports: [NgTemplateOutlet, UiButtonComponent, UiDialogComponent, UiFieldComponent, UiFieldControlDirective],
   templateUrl: './health-workout-dialog.component.html',
   styleUrl: './health-workout-dialog.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -46,6 +63,7 @@ export class HealthWorkoutDialogComponent {
   protected readonly typeLabel = exerciseTypeLabel;
   protected readonly setLabel = setTypeLabel;
   protected readonly enteredLabel = formatEnteredSet;
+  protected readonly storedLabel = canonicalPreview;
   protected readonly message = workoutFieldMessage;
   private formErrorSeen = '';
 
@@ -76,12 +94,35 @@ export class HealthWorkoutDialogComponent {
 
   protected heading(): string {
     const draft = this.local();
-    if (draft.kind === 'session' && draft.clientId) return 'Resume session';
+    if (draft.kind === 'session' && draft.clientId) {
+      return draft.state === 'draft' ? 'Resume session' : 'Edit session';
+    }
     switch (draft.kind) {
       case 'exercise': return 'Add exercise';
       case 'routine': return 'Add routine';
       case 'session': return 'Add session';
     }
+  }
+
+  protected floorLines(): FloorLineView[] {
+    const draft = this.local();
+    if (draft.kind !== 'session') return [];
+    const lines: FloorLineView[] = [
+      ...draft.floorBefore.map(line => ({ ...line, active: false })),
+      {
+        id: draft.exerciseLineId,
+        name: draft.name,
+        exerciseType: draft.exerciseType,
+        sets: draft.sets,
+        active: true,
+      },
+      ...draft.floorAfter.map(line => ({ ...line, active: false })),
+    ];
+    return lines.filter(line => line.active || line.sets.length > 0);
+  }
+
+  protected openPreview(): string {
+    return openCanonicalPreview(this.local(), this.units());
   }
 
   protected loggedOn(): string {
@@ -157,11 +198,47 @@ export class HealthWorkoutDialogComponent {
 
   protected onAddSet(): void {
     if (this.busy()) return;
-    const result = commitEnteredSet(this.local(), this.units(), this.today());
+    this.applyFloor(commitEnteredSet(this.local(), this.units(), this.today()));
+  }
+
+  protected onAddExercise(): void {
+    if (this.busy()) return;
+    const result = commitExerciseLine(this.local(), this.units(), this.today());
     this.errors.set(result.fieldErrors);
     if (Object.keys(result.fieldErrors).length > 0) return;
-    this.local.set(result.draft);
-    this.draftChange.emit(result.draft);
+    this.publish(result.draft);
+    this.focusField('health-workout-name');
+  }
+
+  protected onActivate(lineId: string): void {
+    if (this.busy()) return;
+    const result = activateDraftLine(this.local(), lineId, this.units(), this.today());
+    this.errors.set(result.fieldErrors);
+    if (Object.keys(result.fieldErrors).length > 0) return;
+    this.publish(result.draft);
+    this.focusField('health-workout-name');
+  }
+
+  protected onMove(setId: string, direction: -1 | 1): void {
+    if (this.busy()) return;
+    const next = moveDraftSet(this.local(), setId, direction);
+    if (next === this.local()) return;
+    this.publish(next);
+    this.focusField(`health-move-earlier-${setId}`, `health-move-later-${setId}`);
+  }
+
+  protected onRemove(setId: string): void {
+    if (this.busy()) return;
+    const next = removeDraftSet(this.local(), setId);
+    if (next === this.local()) return;
+    this.publish(next);
+    this.focusField('health-workout-add-set');
+  }
+
+  protected onRetag(setId: string, event: Event): void {
+    const value = this.text(event);
+    if (!(SET_TYPES as readonly string[]).includes(value)) return;
+    this.publish(retagDraftSet(this.local(), setId, value as SetType));
   }
 
   protected onSubmit(event: Event): void {
@@ -184,11 +261,29 @@ export class HealthWorkoutDialogComponent {
     this.closed.emit();
   }
 
-  private patch(change: Partial<WorkoutDraft>): void {
-    const next = { ...this.local(), ...change };
+  private applyFloor(result: { draft: WorkoutDraft; fieldErrors: FieldErrors }): void {
+    this.errors.set(result.fieldErrors);
+    if (Object.keys(result.fieldErrors).length > 0) return;
+    this.publish(result.draft);
+  }
+
+  private publish(next: WorkoutDraft): void {
     this.local.set(next);
     this.errors.set({});
     this.draftChange.emit(next);
+  }
+
+  private focusField(primary: string, fallback = ''): void {
+    queueMicrotask(() => {
+      const preferred = document.getElementById(primary)?.querySelector('button') ?? document.getElementById(primary);
+      const alternate = fallback ? document.getElementById(fallback)?.querySelector('button') ?? document.getElementById(fallback) : null;
+      const target = preferred instanceof HTMLButtonElement && preferred.disabled ? alternate : preferred;
+      if (target instanceof HTMLElement) target.focus();
+    });
+  }
+
+  private patch(change: Partial<WorkoutDraft>): void {
+    this.publish({ ...this.local(), ...change });
   }
 
   private text(event: Event): string {

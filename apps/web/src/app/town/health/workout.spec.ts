@@ -2,10 +2,17 @@ import { lbToKg, milesToMetres, displayDistance, displayWeight } from './health-
 import { WORKOUT_LIMITS } from './health.constants';
 import { CONTROL_TEXT_MESSAGE } from './health-validate';
 import {
+  activateDraftLine,
+  canonicalPreview,
   commitEnteredSet,
+  commitExerciseLine,
   draftFromSession,
   emptyWorkoutDraft,
   formatWorkout,
+  moveDraftSet,
+  openCanonicalPreview,
+  removeDraftSet,
+  retagDraftSet,
   reformatWorkoutDraft,
   staticExerciseId,
   validateWorkoutRecord,
@@ -191,5 +198,103 @@ describe('workout records', () => {
     expect(again.measured_on).toBe(TODAY);
     expect(again.exercises[0].sets).toEqual(saved.exercises[0].sets);
     expect(formatWorkout(saved, LB)).toBe(`Draft session · Synthetic press · ${TODAY} · 2 sets`);
+  });
+
+  it('stores a lift, an assisted set, a bodyweight set, and a run without inventing a set', () => {
+    const source = emptyWorkoutDraft('session', TODAY);
+    const warmup = commitEnteredSet({
+      ...source,
+      name: 'Synthetic press',
+      setType: 'warmup',
+      load: '100',
+      reps: '5',
+      state: 'completed',
+    }, LB, TODAY);
+    const work = commitEnteredSet({ ...warmup.draft, setType: 'work', load: '80', reps: '3' }, LB, TODAY);
+    const extra = commitEnteredSet({ ...work.draft, load: '60', reps: '1' }, LB, TODAY);
+    const moved = moveDraftSet(extra.draft, extra.draft.sets[2].id, -1);
+    expect(moved.sets.map(set => set.reps)).toEqual([5, 1, 3]);
+    const removed = removeDraftSet(moved, extra.draft.sets[2].id);
+    expect(removed.sets.map(set => set.reps)).toEqual([5, 3]);
+    expect(removed.sets.map(set => set.id)).toEqual([warmup.draft.sets[0].id, work.draft.sets[1].id]);
+    expect(moveDraftSet(removed, removed.sets[0].id, -1)).toBe(removed);
+    const retagged = retagDraftSet(removed, removed.sets[1].id, 'drop');
+    expect(retagged.sets[1].setType).toBe('drop');
+    expect(retagged.sets[1].kg).toBe(removed.sets[1].kg);
+    expect(retagged.sets[1].reps).toBe(3);
+    const restored = retagDraftSet(retagged, removed.sets[1].id, 'work');
+    expect(restored.sets.map(set => set.setType)).toEqual(['warmup', 'work']);
+    expect(canonicalPreview(restored.sets[0])).toBe(`Stored as ${lbToKg(100).toFixed(2)} kg · 5 reps`);
+    expect(openCanonicalPreview({ ...restored, load: '80', reps: '3' }, LB)).toBe(`Stored as ${lbToKg(80).toFixed(2)} kg · 3 reps`);
+    expect(openCanonicalPreview(restored, LB)).toBe('');
+
+    const lift = commitExerciseLine(restored, LB, TODAY);
+    expect(lift.fieldErrors).toEqual({});
+    expect(lift.draft.sets).toEqual([]);
+    expect(lift.draft.floorBefore).toHaveSize(1);
+    const blankExercise = commitExerciseLine(lift.draft, LB, TODAY);
+    expect(blankExercise.draft.floorBefore).toHaveSize(1);
+    expect(blankExercise.fieldErrors['kg']).toBe('required');
+
+    const body = commitEnteredSet({
+      ...lift.draft,
+      name: 'Synthetic pull',
+      exerciseType: 'bodyweight-reps',
+      reps: '8',
+    }, LB, TODAY);
+    expect(body.draft.sets[0].kg).toBeUndefined();
+    expect(canonicalPreview(body.draft.sets[0])).toBe('Stored as 8 reps');
+    const bodyLine = commitExerciseLine(body.draft, LB, TODAY);
+    const assisted = commitEnteredSet({
+      ...bodyLine.draft,
+      name: 'Synthetic assist',
+      exerciseType: 'assisted-reps',
+      load: '20',
+      reps: '6',
+      setType: 'drop',
+    }, LB, TODAY);
+    expect(assisted.fieldErrors).toEqual({});
+    expect(assisted.draft.sets[0].kg).toBe(lbToKg(20));
+    const assistLine = commitExerciseLine(assisted.draft, LB, TODAY);
+    const run = commitEnteredSet({
+      ...assistLine.draft,
+      name: 'Synthetic run',
+      exerciseType: 'time-distance',
+      setType: 'drop',
+      seconds: '1200',
+      distance: '1',
+    }, LB, TODAY);
+    const saved = workoutFromDraft({ ...run.draft, seconds: '', distance: '' }, TODAY, LB);
+    if (saved.kind !== 'session') return;
+    expect(saved.exercises.map(line => line.exercise_type)).toEqual([
+      'load-reps', 'bodyweight-reps', 'assisted-reps', 'time-distance',
+    ]);
+    expect(saved.exercises[0].sets.map(set => set.set_type)).toEqual(['warmup', 'work']);
+    expect(saved.exercises[0].sets.map(set => set.kg)).toEqual([lbToKg(100), lbToKg(80)]);
+    expect(saved.exercises[0].sets.map(set => set.reps)).toEqual([5, 3]);
+    expect(saved.exercises[1].sets).toEqual([jasmine.objectContaining({ reps: 8, set_type: 'work' })]);
+    expect(saved.exercises[1].sets[0].kg).toBeUndefined();
+    expect(saved.exercises[2].sets[0].kg).toBe(lbToKg(20));
+    expect(saved.exercises[2].sets[0].reps).toBe(6);
+    expect(saved.exercises[2].sets[0].set_type).toBe('drop');
+    expect(saved.exercises[3].sets[0].seconds).toBe(1200);
+    expect(saved.exercises[3].sets[0].metres).toBe(Number(milesToMetres(1).toFixed(2)));
+    expect(saved.exercises[3].sets[0].kg).toBeUndefined();
+    expect(saved.exercises[3].sets[0].set_type).toBe('drop');
+    expect(saved.exercises.every(line => line.sets.every(set => set.completed))).toBeTrue();
+    expect(JSON.stringify(saved)).not.toContain('"reps":1');
+
+    const resumed = draftFromSession({ clientId: 'hlt_sessionfloor000000001', revision: 4, value: saved });
+    const again = workoutFromDraft(resumed, '2026-11-20', KG);
+    if (again.kind !== 'session') return;
+    expect(again.logged_on).toBe(TODAY);
+    expect(again.exercises).toEqual(saved.exercises);
+    expect(resumed.load).toBe('');
+    expect(resumed.distance).toBe('');
+    const switched = activateDraftLine(resumed, saved.exercises[0].id, LB, '2026-11-20');
+    const roundTrip = workoutFromDraft(switched.draft, '2026-11-20', LB);
+    if (roundTrip.kind !== 'session') return;
+    expect(roundTrip.exercises.map(line => line.id)).toEqual(saved.exercises.map(line => line.id));
+    expect(formatWorkout(saved, LB)).toBe(`Session · 4 exercises · ${TODAY} · 5 sets`);
   });
 });

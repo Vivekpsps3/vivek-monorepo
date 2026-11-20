@@ -14,7 +14,7 @@ import {
 } from '../../../../../finance/frontend/src/public-api';
 import { SessionService } from '../../platform/session.service';
 import { healthDeletePhrase } from './health-entry';
-import { displayWeight, lbToKg } from './health-units';
+import { displayWeight, lbToKg, milesToMetres } from './health-units';
 import { HEALTH_VAULT_EXISTS, HealthRoomComponent } from './health-room.component';
 import {
   HEALTH_CONFLICT_MESSAGE,
@@ -253,6 +253,22 @@ function seed(): void {
 
 function button(el: HTMLElement, name: string): HTMLButtonElement {
   const found = [...el.querySelectorAll('button')].find(item => item.textContent?.includes(name));
+  if (!(found instanceof HTMLButtonElement)) throw new Error(`missing ${name}`);
+  return found;
+}
+
+function controlButton(root: ParentNode, selector: string): HTMLButtonElement {
+  const found = root.querySelector<HTMLButtonElement>(selector);
+  if (!found) throw new Error(`missing ${selector}`);
+  return found;
+}
+
+function enteredRows(el: HTMLElement): HTMLElement[] {
+  return [...el.querySelectorAll<HTMLElement>('[data-entered-set]')];
+}
+
+function rowAction(row: Element, name: string): HTMLButtonElement {
+  const found = [...row.querySelectorAll('button')].find(item => item.textContent?.includes(name));
   if (!(found instanceof HTMLButtonElement)) throw new Error(`missing ${name}`);
   return found;
 }
@@ -1622,6 +1638,294 @@ describe('Health room shell', () => {
     await settle(fixture);
     expect(el.querySelector('#health-workout-note')).toBeNull();
     expect(visible(el)).not.toContain('Synthetic late');
+  });
+
+  it('logs a lift, a bodyweight set, and a run, then edits and deletes that session', async () => {
+    unlock();
+    seed();
+    route.routeData.next({ healthRoom: 'gym' });
+    route.query.next(convertToParamMap({}));
+    const { fixture, el } = await show();
+    const pr = fake.rows.find(item => item.client_id === LIFT_ID);
+    if (!pr) throw new Error('missing personal record');
+    const prCipher = pr.ciphertext_b64;
+    const today = localTodayIso();
+    const liftKg = lbToKg(100);
+    const workKg = lbToKg(80);
+    const metres = Number(milesToMetres(1).toFixed(2));
+
+    button(el, 'Add session').click();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#health-workout-measured-on')?.value).toBe(today);
+    typeInto(el, '#health-workout-name', 'Synthetic press');
+    choose(el, '#health-workout-set-type', 'warmup');
+    typeInto(el, '#health-workout-load', '100');
+    typeInto(el, '#health-workout-reps', '5');
+    fixture.detectChanges();
+    expect(el.querySelector('[data-open-preview]')?.textContent).toContain(`Stored as ${liftKg.toFixed(2)} kg · 5 reps`);
+    expect(button(el, 'Add set').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    button(el, 'Add set').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-workout-load', '80');
+    typeInto(el, '#health-workout-reps', '3');
+    fixture.detectChanges();
+    button(el, 'Add set').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-workout-load', '60');
+    typeInto(el, '#health-workout-reps', '1');
+    fixture.detectChanges();
+    button(el, 'Add set').click();
+    fixture.detectChanges();
+    let rows = enteredRows(el);
+    expect(rows).toHaveSize(3);
+    expect(rows[2].textContent).toContain('1 reps');
+    expect(rowAction(rows[0], 'Earlier').disabled).toBeTrue();
+    expect(rowAction(rows[2], 'Later').disabled).toBeTrue();
+    expect(rowAction(rows[2], 'Earlier').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    rowAction(rows[2], 'Earlier').click();
+    fixture.detectChanges();
+    rows = enteredRows(el);
+    expect(rows.map(row => row.textContent)).toEqual([
+      jasmine.stringContaining('5 reps'),
+      jasmine.stringContaining('1 reps'),
+      jasmine.stringContaining('3 reps'),
+    ]);
+    expect(rowAction(rows[1], 'Remove').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    rowAction(rows[1], 'Remove').click();
+    fixture.detectChanges();
+    rows = enteredRows(el);
+    expect(rows).toHaveSize(2);
+    expect(rows.map(row => row.getAttribute('data-set-role'))).toEqual(['warmup', 'work']);
+    expect(el.textContent).not.toContain('1 reps');
+    expect(rows[0].textContent).toContain(`Stored as ${liftKg.toFixed(2)} kg · 5 reps`);
+    expect(rows[1].textContent).toContain(`Stored as ${workKg.toFixed(2)} kg · 3 reps`);
+    const role = rows[1].querySelector('select');
+    if (!(role instanceof HTMLSelectElement)) throw new Error('missing role');
+    role.value = 'drop';
+    role.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.detectChanges();
+    expect(enteredRows(el)[1].getAttribute('data-set-role')).toBe('drop');
+    expect(enteredRows(el)[1].textContent).toContain(`Stored as ${workKg.toFixed(2)} kg`);
+    role.value = 'work';
+    role.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.detectChanges();
+
+    controlButton(el, '#health-workout-add-exercise button').click();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#health-workout-name')?.value).toBe('');
+    typeInto(el, '#health-workout-name', 'Synthetic pull');
+    choose(el, '#health-workout-type', 'bodyweight-reps');
+    fixture.detectChanges();
+    typeInto(el, '#health-workout-reps', '8');
+    fixture.detectChanges();
+    expect(el.querySelector('[data-open-preview]')?.textContent).toContain('Stored as 8 reps');
+    expect(el.querySelector('[data-open-preview]')?.textContent).not.toContain('kg');
+    button(el, 'Add set').click();
+    fixture.detectChanges();
+    const pull = el.querySelector('[data-exercise-type="bodyweight-reps"]');
+    expect(pull?.textContent).toContain('Stored as 8 reps');
+    expect(pull?.textContent).not.toContain('kg');
+
+    controlButton(el, '#health-workout-add-exercise button').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-workout-name', 'Synthetic run');
+    choose(el, '#health-workout-type', 'time-distance');
+    fixture.detectChanges();
+    choose(el, '#health-workout-set-type', 'drop');
+    typeInto(el, '#health-workout-seconds', '1200');
+    typeInto(el, '#health-workout-distance', '1');
+    fixture.detectChanges();
+    expect(el.querySelector('[data-open-preview]')?.textContent).toContain(`Stored as 1200 s · ${metres.toFixed(2)} m`);
+    button(el, 'Add set').click();
+    fixture.detectChanges();
+    expect(enteredRows(el)).toHaveSize(4);
+    const lines = [...el.querySelectorAll('[data-floor-line]')];
+    expect(lines).toHaveSize(3);
+    const pressId = lines[0].getAttribute('data-floor-line') ?? '';
+    button(el, 'Switch to exercise 1').click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-active-line]')?.getAttribute('data-floor-line')).toBe(pressId);
+    expect(el.querySelector<HTMLInputElement>('#health-workout-name')?.value).toBe('Synthetic press');
+    expect(enteredRows(el)).toHaveSize(4);
+    typeInto(el, '#health-workout-note', 'Synthetic floor');
+    fixture.detectChanges();
+
+    fake.failUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Could not save this workout. Try again.');
+    expect(el.querySelector<HTMLTextAreaElement>('#health-workout-note')?.value).toBe('Synthetic floor');
+    expect(enteredRows(el)).toHaveSize(4);
+    expect(fake.rows.filter(item => item.collection === 'health_workouts')).toEqual([]);
+    expect(pr.ciphertext_b64).toBe(prCipher);
+    fake.failUpsert = false;
+    expect(button(el, 'Save').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await new Promise(resolve => setTimeout(resolve));
+    expect(el.querySelector('#health-workout-name')).toBeNull();
+    expect(document.activeElement).toBe(el.querySelector('#health-add-session button'));
+    const sessionRow = el.querySelector('[data-workout-kind="session"]');
+    expect(sessionRow?.getAttribute('data-set-count')).toBe('4');
+    expect(sessionRow?.getAttribute('data-workout-state')).toBe('completed');
+    expect(el.textContent).toContain(`Session · 3 exercises · ${today} · 4 sets`);
+    const stored = fake.rows.find(item => item.collection === 'health_workouts');
+    if (!stored) throw new Error('missing session');
+    const decoded = decode(stored.ciphertext_b64) as {
+      logged_on: string;
+      measured_on: string;
+      note?: string;
+      exercises: Array<{ exercise_type: string; sets: Array<{ set_type: string; kg?: number; reps?: number; seconds?: number; metres?: number; completed: boolean }> }>;
+    };
+    expect(decoded.logged_on).toBe(today);
+    expect(decoded.measured_on).toBe(today);
+    expect(decoded.note).toBe('Synthetic floor');
+    expect(decoded.exercises.map(line => line.exercise_type)).toEqual(['load-reps', 'bodyweight-reps', 'time-distance']);
+    expect(decoded.exercises[0].sets.map(set => set.set_type)).toEqual(['warmup', 'work']);
+    expect(decoded.exercises[0].sets.map(set => set.kg)).toEqual([liftKg, workKg]);
+    expect(decoded.exercises[0].sets.map(set => set.reps)).toEqual([5, 3]);
+    expect(decoded.exercises[1].sets[0].reps).toBe(8);
+    expect(decoded.exercises[1].sets[0].kg).toBeUndefined();
+    expect(decoded.exercises[2].sets[0].seconds).toBe(1200);
+    expect(decoded.exercises[2].sets[0].metres).toBe(metres);
+    expect(decoded.exercises[2].sets[0].set_type).toBe('drop');
+    expect(decoded.exercises.every(line => line.sets.every(set => set.completed))).toBeTrue();
+    expect(JSON.stringify(decoded)).not.toContain('"reps":1');
+    expect(pr.ciphertext_b64).toBe(prCipher);
+    const cipher = stored.ciphertext_b64;
+    const revision = stored.revision;
+
+    const edit = el.querySelector<HTMLButtonElement>(`#health-edit-${stored.client_id} button`);
+    if (!edit) throw new Error('missing edit');
+    expect(edit.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    edit.click();
+    fixture.detectChanges();
+    expect(el.querySelector('#health-workout-title')?.textContent).toContain('Edit session');
+    expect(el.querySelector('.logged-on time')?.getAttribute('datetime')).toBe(today);
+    expect(enteredRows(el)).toHaveSize(4);
+    expect(el.textContent).toContain(`Stored as ${liftKg.toFixed(2)} kg · 5 reps`);
+    expect(el.textContent).toContain(`Stored as 1200 s · ${metres.toFixed(2)} m`);
+    expect(el.textContent).not.toContain('1 reps');
+    typeInto(el, '#health-workout-note', 'Synthetic floor edited');
+    fixture.detectChanges();
+    fake.failUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Could not save this workout. Try again.');
+    expect(el.querySelector<HTMLTextAreaElement>('#health-workout-note')?.value).toBe('Synthetic floor edited');
+    expect(stored.ciphertext_b64).toBe(cipher);
+    expect(stored.revision).toBe(revision);
+    fake.failUpsert = false;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await new Promise(resolve => setTimeout(resolve));
+    const editedRow = fake.rows.find(item => item.client_id === stored.client_id);
+    if (!editedRow) throw new Error('missing edited session');
+    const edited = decode(editedRow.ciphertext_b64) as typeof decoded;
+    expect(edited.note).toBe('Synthetic floor edited');
+    expect(edited.logged_on).toBe(today);
+    expect(edited.exercises).toEqual(decoded.exercises);
+    expect(editedRow.revision).toBe(revision + 1);
+    expect(document.activeElement).toBe(el.querySelector(`#health-edit-${stored.client_id} button`));
+    expect(pr.ciphertext_b64).toBe(prCipher);
+
+    const remove = el.querySelector<HTMLButtonElement>(`#health-delete-${stored.client_id} button`);
+    if (!remove) throw new Error('missing delete');
+    expect(remove.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    remove.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('DELETE SESSION');
+    expect(fixture.nativeElement.textContent).toContain(`measured on ${today}`);
+    clickConfirm(fixture, 'DELETE', 'Delete session');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain(`Session · 3 exercises · ${today} · 4 sets`);
+    expect(fake.deleted).toEqual([]);
+    fake.failDelete = true;
+    clickConfirm(fixture, 'DELETE SESSION', 'Delete session');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(fixture.nativeElement.textContent).toContain('Could not delete this session. It is still saved. Try again.');
+    expect(stored.ciphertext_b64).not.toBe('');
+    expect(fake.rows.some(item => item.client_id === stored.client_id)).toBeTrue();
+    expect(pr.ciphertext_b64).toBe(prCipher);
+    fake.failDelete = false;
+    clickConfirm(fixture, 'DELETE SESSION', 'Delete session');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await new Promise(resolve => setTimeout(resolve));
+    expect(el.textContent).not.toContain('Synthetic floor');
+    expect(el.textContent).not.toContain('Synthetic press');
+    expect(el.textContent).toContain('Squat');
+    expect(fake.rows.some(item => item.client_id === stored.client_id)).toBeFalse();
+    expect(pr.ciphertext_b64).toBe(prCipher);
+    expect(document.activeElement).toBe(el.querySelector('#health-add-session button'));
+  });
+
+  it('keeps a session when a delete loses to an owner change', async () => {
+    unlock();
+    seed();
+    const sessionId = 'hlt_sessionfloorlate000001';
+    const sessionRecord = {
+      v: 1,
+      kind: 'session',
+      measured_on: DAY,
+      logged_on: DAY,
+      state: 'completed',
+      note: 'Synthetic floor late',
+      exercises: [{
+        id: 'wex_latefloor01',
+        exercise_id: 'static:synthetic-press',
+        exercise_type: 'load-reps',
+        name: 'Synthetic press',
+        sets: [{ id: 'wst_latefloor01', set_type: 'work', completed: true, kg: 40, reps: 5 }],
+      }],
+    };
+    fake.rows.push(row('health_workouts', sessionId, sessionRecord));
+    route.routeData.next({ healthRoom: 'gym' });
+    route.query.next(convertToParamMap({}));
+    const { fixture, el } = await show();
+    const stored = fake.rows.find(item => item.client_id === sessionId);
+    if (!stored) throw new Error('missing session');
+    const cipher = stored.ciphertext_b64;
+    const remove = el.querySelector<HTMLButtonElement>(`#health-delete-${sessionId} button`);
+    if (!remove) throw new Error('missing delete');
+    remove.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    fake.holdDelete = true;
+    clickConfirm(fixture, 'DELETE SESSION', 'Delete session');
+    await until(() => fake.deleteRelease.length === 1);
+    fake.holdList = true;
+    session.users.next({ id: 8 });
+    fixture.detectChanges();
+    await until(() => el.getAttribute('data-health-state') === 'loading');
+    expect(visible(el)).not.toContain('Synthetic floor late');
+    expect(visible(el)).not.toContain('Synthetic press');
+    fake.deleteRelease.shift()?.();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(fake.deleteCancelled).toBeGreaterThan(0);
+    expect(stored.ciphertext_b64).toBe(cipher);
+    expect(fake.rows.some(item => item.client_id === sessionId)).toBeTrue();
+    fake.listRelease.splice(0).forEach(release => release());
+    await settle(fixture);
+    expect(el.getAttribute('data-health-state')).toBe('ready');
+    expect(el.textContent).toContain('Synthetic press');
+    expect(stored.ciphertext_b64).toBe(cipher);
+    expect(fake.deleted).toEqual([]);
   });
 });
 
