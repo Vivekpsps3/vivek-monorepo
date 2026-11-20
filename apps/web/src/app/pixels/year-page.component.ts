@@ -3,6 +3,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationStart, Router, Scroll } from '@angular/router';
 import { todayIsoDate } from '@vivek/browser';
 import { ReturnContext, UiStateComponent, returnPath, type HubCardState } from '@vivek/ui';
+import { atlasCoverageLines } from './atlas';
+import { AtlasNoteComponent } from './atlas-note.component';
 import { DayDetailComponent } from './day-detail.component';
 import { PixelsLegendComponent } from './pixels-legend.component';
 import { PixelsDataService } from './pixels-data.service';
@@ -23,6 +25,7 @@ function yearKey(year: number): string {
   selector: 'app-pixels-year',
   standalone: true,
   imports: [
+    AtlasNoteComponent,
     DayDetailComponent,
     PixelsLegendComponent,
     UiStateComponent,
@@ -85,6 +88,10 @@ export class YearPageComponent {
     const snapshot = this.readySnapshot();
     return snapshot ? yearStats(snapshot.days, snapshot.financeStatus) : null;
   });
+  readonly coverage = computed(() => atlasCoverageLines({
+    surface: 'year',
+    firstActivityOn: this.readySnapshot()?.firstActivityOn ?? null,
+  }));
   readonly selectedDay = computed(() => {
     const snapshot = this.snapshot();
     const date = this.day();

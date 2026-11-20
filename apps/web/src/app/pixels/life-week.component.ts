@@ -1,21 +1,23 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { formatDateRange, plural } from '@vivek/browser';
 import { ReturnContext } from '@vivek/ui';
+import { calendarSpans, civilSpanLabel, civilWeekday, type CompactMemoryPreview } from './atlas';
 import { weekFinanceText } from './day-memory';
 import { formatDayHeading } from './day-detail.component';
+import { MemoryPreviewComponent } from './memory-preview.component';
 import { inclusiveIsoDates } from './pixels-dates';
 import type { FinanceJoinStatus } from './pixels.types';
-import { lifeWeekOrdinal, type LifeWeekCell } from './life-model';
+import type { LifeWeekCell } from './life-model';
 
 export type LifeStep = 'week-prev' | 'week-next' | 'year-prev' | 'year-next';
 
 @Component({
   selector: 'app-life-week',
   standalone: true,
-  imports: [RouterLink],
+  imports: [MemoryPreviewComponent, RouterLink],
   templateUrl: './life-week.component.html',
-  styleUrl: './life-week.component.css',
+  styleUrls: ['./life-week.component.css', './atlas.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LifeWeekComponent {
@@ -29,8 +31,12 @@ export class LifeWeekComponent {
   showTown = input(true);
   showMedia = input(true);
   showTravel = input(true);
+  focusDate = input<string | null>(null);
+  preview = input<CompactMemoryPreview | null>(null);
 
   step = output<LifeStep>();
+
+  protected readonly spans = computed(() => calendarSpans(this.focusDate() ?? this.week().start));
 
   protected range(): string {
     return formatDateRange(this.week().start, this.week().end);
@@ -43,9 +49,16 @@ export class LifeWeekComponent {
 
   protected place(): string {
     if (!this.showAge()) return '';
-    const index = lifeWeekOrdinal(this.week().row, this.week().week).toLocaleString('en-US');
-    const total = (this.rowCount() * 52).toLocaleString('en-US');
-    return `Week ${index} of ${total}. Age ${this.week().row}.`;
+    return `Age ${this.week().row}. This row is one year of the poster, not an end date.`;
+  }
+
+  protected lifeLabel(): string {
+    return civilSpanLabel(this.week().start, this.week().end);
+  }
+
+  protected spanNote(): string {
+    const start = civilWeekday(this.week().start);
+    return `Life week starts on ${start}. Sunday week starts on Sunday. ISO week starts on Monday.`;
   }
 
   protected town(): string {

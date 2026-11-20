@@ -7,10 +7,11 @@ import { Subject } from 'rxjs';
 import { LifePageComponent } from './life-page.component';
 import { PixelsDataService } from './pixels-data.service';
 import { PixelsPreferences } from './pixels-preferences';
-import type { PixelDayView,PixelsLoadRequest,PixelsSnapshot } from './pixels.types';
+import type { DayFactsResult, PixelDayFacts, PixelDayView, PixelsLoadRequest, PixelsSnapshot } from './pixels.types';
 
 describe('Life page', () => {
   const financeCleared$ = new Subject<void>();
+  const userChanged$ = new Subject<void>();
   let requests: PixelsLoadRequest[];
   let mode: 'life' | 'missing' | 'future' | 'invalid' | 'expired' | 'unavailable' | 'town-down' | 'town-absent' | 'elder';
   let showAge: boolean;
@@ -66,6 +67,8 @@ describe('Life page', () => {
           provide: PixelsDataService,
           useValue: {
             financeCleared$,
+            userChanged$,
+            loadDay: () => Promise.resolve({ status: 'unavailable' as const }),
             load: (request: PixelsLoadRequest) => {
               requests.push(request);
               if (mode === 'expired') return Promise.resolve({ status: 'expired' as const });
@@ -150,7 +153,12 @@ describe('Life page', () => {
 });
 
 describe('Life span query', () => {
+  let loadDay: jasmine.Spy<(date: string) => Promise<DayFactsResult>>;
+  let userChanged$: Subject<void>;
+
   beforeEach(() => {
+    userChanged$ = new Subject<void>();
+    loadDay = jasmine.createSpy('loadDay').and.resolveTo({ status: 'unavailable' });
     TestBed.configureTestingModule({
       providers: [
         provideRouter([{
@@ -161,6 +169,8 @@ describe('Life span query', () => {
           provide: PixelsDataService,
           useValue: {
             financeCleared$: new Subject<void>(),
+            userChanged$,
+            loadDay,
             load: (request: PixelsLoadRequest) => Promise.resolve({
               status: 'ready' as const,
               snapshot: {
@@ -168,7 +178,7 @@ describe('Life span query', () => {
                 to: request.to,
                 days: [],
                 sources: { town: 'ok', media: 'ok', travel: 'ok' },
-                firstActivityOn: null,
+                firstActivityOn: '2024-02-28',
                 profile: request.profile ? { birthday: '1990-05-04', showAge: false } : null,
                 financeStatus: 'locked',
                 trips: [],
@@ -195,5 +205,63 @@ describe('Life span query', () => {
     expect(href).toContain('from=life');
     expect(href).toContain('span=2024-02-29');
     expect(TestBed.inject(Router).url).toContain('span=2024-02-29');
+    expect(el.querySelector('[data-life-span]')?.getAttribute('data-life-span')).toBe('2024-02-29/2024-03-06');
+    expect(el.querySelector('[data-sunday-span]')?.getAttribute('data-sunday-span')).not.toBe('2024-02-29/2024-03-06');
+    expect(el.textContent).toContain('not a lifespan');
+    expect(el.textContent?.toLowerCase()).not.toContain('death');
+  });
+
+  it('drops a losing day response and keeps the span when that read fails', async () => {
+    const pending: Array<(result: DayFactsResult) => void> = [];
+    loadDay.and.callFake(() => new Promise(resolve => { pending.push(resolve); }));
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/pixels/life?span=2024-02-29&focus=2024-02-29');
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    const el = harness.routeNativeElement as HTMLElement;
+    expect(pending.length).toBeGreaterThan(0);
+    expect(el.textContent).toContain('Open Thu, Feb 29, 2024');
+    userChanged$.next();
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(pending.length).toBeGreaterThan(1);
+    pending[0]!({ status: 'ready', facts: foreignDay('2024-02-29') });
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(el.textContent ?? '').not.toContain('Foreign concept');
+    expect(TestBed.inject(Router).url).toContain('span=2024-02-29');
+    pending[pending.length - 1]!({ status: 'unavailable' });
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(el.textContent).toContain('Open Thu, Feb 29, 2024');
+    expect(el.textContent).toContain('unavailable');
+    expect(el.textContent).not.toContain('Foreign concept');
+    expect(TestBed.inject(Router).url).toContain('span=2024-02-29');
+    expect(TestBed.inject(Router).url).toContain('focus=2024-02-29');
+    expect(el.querySelector('[data-life-span]')?.getAttribute('data-life-span')).toBe('2024-02-29/2024-03-06');
   });
 });
+
+function foreignDay(date: string): PixelDayFacts {
+  const row = { status: 'ok' as const, included: 1, total: 1, truncated: false };
+  return {
+    date,
+    facts: [{
+      id: 'habit_checkin:99',
+      namespace: 'habit_checkin',
+      occurrenceId: 99,
+      kind: 'checkin',
+      date,
+      spanStart: null,
+      spanEnd: null,
+      coverage: 'complete',
+      provenance: 'Another owner.',
+      title: 'Foreign concept',
+      route: '/town',
+    }],
+    annotations: [],
+    coverage: { town: row, media: row, travel: row, concepts: row },
+    differences: [],
+    counts: { town: 1 },
+  };
+}

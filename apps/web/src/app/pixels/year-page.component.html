@@ -13,7 +13,7 @@
   [state]="screen()"
   thing="this year"
   emptyTitle="No activity this year"
-  emptyMessage="Squares fill in when Town, Media, or Travel records a day."
+  emptyMessage="Nothing is recorded for this year. That does not describe those days."
   [updatedAt]="snapshot()?.fetchedAt ?? null"
   [next]="unlockSource()"
   (retry)="reload()"
@@ -45,6 +45,7 @@
           [financeStatus]="snapshot.financeStatus"
           [today]="today"
           [phone]="phone()"
+          [compact]="true"
           [originView]="'year'"
           [originYear]="'' + year()"
           [unlockSource]="unlockSource()"
@@ -60,6 +61,7 @@
         />
       }
       <app-pixels-legend [colorBy]="preferences.colorBy()" />
+      <app-atlas-note [lines]="coverage()" />
     </div>
   }
 </ui-state>

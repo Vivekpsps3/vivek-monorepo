@@ -35,6 +35,16 @@
     @if (!pageMode()) {
       <a class="open-day" routerLink="/pixels/day" [queryParams]="dayParams()" [state]="openState()">Open this day</a>
     }
+    @if (spans(); as spans) {
+      <ul class="atlas-spans" aria-label="Week spans">
+        <li [attr.data-sunday-span]="spans.sunday.start + '/' + spans.sunday.end">Sunday week · {{ spans.sunday.label }}</li>
+        <li [attr.data-iso-span]="spans.iso.start + '/' + spans.iso.end">ISO week · {{ spans.iso.label }}</li>
+      </ul>
+      <p class="atlas-spans__note">Sunday week and ISO week both include this date. Life uses its own birthday week.</p>
+    }
+    @if (preview(); as preview) {
+      <app-memory-preview [preview]="preview" />
+    }
     @if (memory(); as memory) {
       <div class="rows">
         @for (slot of memory.slots; track slot.id) {

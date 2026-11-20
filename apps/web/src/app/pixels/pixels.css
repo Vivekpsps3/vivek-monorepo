@@ -64,7 +64,26 @@
 }
 .pixel.today { box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--pixel-ring); }
 .pixel.selected { box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--accent); }
+.pixel.selected::before {
+  content: "";
+  position: absolute;
+  inset: 15%;
+  background:
+    linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat,
+    linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat;
+  pointer-events: none;
+}
+.year-grid button.pixel:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
 .pixel.none { background: transparent; box-shadow: none; outline: none; }
+
+@media (forced-colors: active) {
+  .pixel.selected {
+    outline: 2px solid CanvasText;
+  }
+}
 .pixel.trip::after {
   content: "";
   position: absolute;

@@ -15,7 +15,9 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { ReturnContext, dayActivities, vaultReturnQuery } from '@vivek/ui';
 import { pixelsDayActivityPath } from '../../../../finance/frontend/src/public-api';
+import { calendarSpans, compactMemoryPreview, type CalendarSpans, type CompactMemoryPreview } from './atlas';
 import { buildDayMemory, type DayMemory } from './day-memory';
+import { MemoryPreviewComponent } from './memory-preview.component';
 import { dayOriginPath, daySearch, type DayQuery } from './day-route';
 import { isIsoDate } from './pixels-dates';
 import { dayScoreVector } from './pixels-model';
@@ -42,9 +44,9 @@ export function formatDayHeading(iso: string): string {
 @Component({
   selector: 'app-day-detail',
   standalone: true,
-  imports: [RouterLink],
+  imports: [MemoryPreviewComponent, RouterLink],
   templateUrl: './day-detail.component.html',
-  styleUrls: ['./pixels.css', './day-detail.component.css'],
+  styleUrls: ['./pixels.css', './atlas.css', './day-detail.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DayDetailComponent implements AfterViewInit, OnDestroy {
@@ -73,6 +75,8 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
   today = input('');
   phone = input(false);
   pageMode = input(false);
+  /** Year atlas shows a text preview. The day page keeps the full slots. */
+  compact = input(false);
   originView = input<'year' | 'life'>('year');
   originYear = input('');
   originSpan = input<string | null>(null);
@@ -123,6 +127,10 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
       factsStatus: this.factsStatus(),
     });
   });
+  protected readonly spans = computed((): CalendarSpans | null => {
+    const day = this.day();
+    return day ? calendarSpans(day.date) : null;
+  });
 
   readonly detail = computed(() => {
     const day = this.day();
@@ -137,6 +145,20 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
       isToday: this.today() !== '' && day.date === this.today(),
       activityLink: this.router.parseUrl(pixelsDayActivityPath(day.date)),
     };
+  });
+  protected readonly preview = computed((): CompactMemoryPreview | null => {
+    if (!this.compact()) return null;
+    const day = this.day();
+    const memory = this.memory();
+    const detail = this.detail();
+    if (!day || !memory || !detail) return null;
+    return compactMemoryPreview({
+      memory,
+      activityLabel: detail.activityLabel,
+      annotations: this.factsStatus() === 'ready' ? (this.facts()?.annotations.length ?? 0) : 0,
+      future: day.future,
+      includeConnectors: false,
+    });
   });
 
   ngAfterViewInit(): void {
