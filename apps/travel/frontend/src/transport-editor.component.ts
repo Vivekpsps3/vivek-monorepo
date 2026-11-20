@@ -159,6 +159,15 @@ import {
         </ui-button>
       </div>
     }
+    @if (values["mode"] && values["mode"] !== "flight") {
+      <ui-field label="Departure date"
+        ><input
+          uiFieldControl
+          type="date"
+          name="flightDate"
+          [(ngModel)]="flightDate"
+      /></ui-field>
+    }
     <div class="form-row">
       <ui-field label="From"
         ><input
@@ -485,6 +494,13 @@ export class TransportEditorComponent implements OnInit {
         .map(([key, value]) => [key, value === "" ? null : value]),
     );
     if (this.selected()) values["fa_fetched_at"] = new Date().toISOString();
+    if (
+      !this.initial &&
+      (values["depart_at"] == null || values["depart_at"] === "") &&
+      /^\d{4}-\d{2}-\d{2}$/.test(this.flightDate)
+    ) {
+      values["depart_at"] = this.flightDate + "T00:00";
+    }
     this.submitted.emit(values);
   }
 }

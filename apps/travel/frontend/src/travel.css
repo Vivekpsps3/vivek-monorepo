@@ -243,6 +243,50 @@
   margin: 0.75rem 0 0;
   font-size: 0.95rem;
 }
+.travel-page .itinerary-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+.travel-page .itinerary-title h3 {
+  margin: 0;
+}
+.travel-page .itinerary-kicker {
+  color: var(--text-secondary);
+}
+.travel-page .itinerary-check {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.travel-page .reminder-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.travel-page .reminder-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.travel-page .reminder-due {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  margin: 0.25rem 0 0;
+}
+.travel-page .itinerary-entry.is-done {
+  color: var(--text-secondary);
+}
+.travel-page .itinerary-entry.is-done label {
+  text-decoration: line-through;
+}
 .travel-page .itinerary-actions--menu,
 .travel-page .row-actions--menu {
   display: none;
@@ -284,8 +328,6 @@
   .travel-page .trip-row .button-row {
     width: 100%;
   }
-  .travel-page .trip-detail-transport,
-  .travel-page .trip-detail-parking,
   .travel-page .itinerary-actions--inline,
   .travel-page .row-actions--inline {
     display: none;

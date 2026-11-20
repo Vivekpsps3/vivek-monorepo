@@ -1,11 +1,22 @@
-/** One chronological projection for the trip day strip and itinerary rows. */
+/** One chronological projection for the trip day strip and itinerary rows.
+ * Local dates come from the stored wall times. Nothing here invents a day.
+ */
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const RANK = { parking: 0, departure: 1, activity: 2, arrival: 3, transport: 4 };
+const RANK = {
+  parking: 0,
+  departure: 1,
+  activity: 2,
+  arrival: 3,
+  transport: 4,
+  reminder: 5,
+  note: 6,
+  lodging: 7,
+};
 
 function parseIso(iso) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
@@ -104,11 +115,19 @@ function byLoose(left, right) {
   );
 }
 
+function stayPart(date, arrive, leave) {
+  if (arrive === leave) return "stay";
+  if (date === arrive) return "check-in";
+  if (date === leave) return "check-out";
+  return "stay";
+}
+
 /**
  * @param {object} trip
- * Trip days come from start/end. Plans, transports, and parking are placed once.
+ * Trip days come from start/end. Each record is placed once on its local day.
  * Missing times stay in an unscheduled group. Dates outside the trip stay out of range.
- * A later arrival date, including a red-eye, is its own row on that date.
+ * A later arrival, including a red-eye, is its own row. An earlier arrival is the date line.
+ * Midnight with no arrival clock is a chosen day, not a 12:00 AM departure.
  */
 export function projectItinerary(trip) {
   const start = String(trip.start_date || "");
@@ -116,6 +135,7 @@ export function projectItinerary(trip) {
   const dates = eachDate(start, end);
   const timed = new Map(dates.map((date) => [date, []]));
   const unscheduledByDay = new Map(dates.map((date) => [date, []]));
+  const lodgingByDay = new Map(dates.map((date) => [date, []]));
   const unscheduled = [];
   const outOfRange = [];
   const seen = new Set();
@@ -129,6 +149,10 @@ export function projectItinerary(trip) {
     }
     if (!dates.length || entry.date < start || entry.date > end) {
       outOfRange.push(entry);
+      return;
+    }
+    if (entry.source === "stay") {
+      lodgingByDay.get(entry.date).push(entry);
       return;
     }
     if (!entry.time) unscheduledByDay.get(entry.date).push(entry);
@@ -172,15 +196,20 @@ export function projectItinerary(trip) {
       });
       continue;
     }
+    const dateLine = Boolean(depart && arrive && arrive.date < depart.date);
+    const overnight = Boolean(depart && arrive && arrive.date > depart.date);
+    const departSentinel = Boolean(depart && depart.time === "00:00" && !arrive);
     if (depart) {
       place({
         ...base,
         key: `transport:${transport.id}:depart`,
         part: "departure",
         date: depart.date,
-        time: depart.time,
+        time: departSentinel ? null : depart.time,
         rank: RANK.departure,
         primary: true,
+        dateLine,
+        overnight,
       });
     }
     if (arrive && (!depart || arrive.date !== depart.date || arrive.time !== depart.time)) {
@@ -192,6 +221,8 @@ export function projectItinerary(trip) {
         time: arrive.time,
         rank: RANK.arrival,
         primary: !depart,
+        dateLine,
+        overnight,
       });
     }
   }
@@ -213,7 +244,7 @@ export function projectItinerary(trip) {
       primary: true,
     };
     if (own) {
-      place({ ...base, date: own.date, time: own.time });
+      place({ ...base, date: own.date, time: own.time === "00:00" ? null : own.time });
       continue;
     }
     const anchor = linked ? parseInstant(linked.depart_at) || parseInstant(linked.arrive_at) : null;
@@ -224,8 +255,74 @@ export function projectItinerary(trip) {
     place({ ...base, date: null, time: null });
   }
 
+  for (const stay of trip.stays || []) {
+    const arrive = String(stay.arrive_on || "");
+    const leave = parseIso(stay.leave_on) ? String(stay.leave_on) : arrive;
+    const stayBase = {
+      source: "stay",
+      id: Number(stay.id),
+      sortOrder: Number(stay.sort_order) || 0,
+      title: stay.lodging_name || stay.city || "Lodging",
+      rank: RANK.lodging,
+      time: null,
+    };
+    if (!parseIso(arrive)) {
+      place({ ...stayBase, key: `stay:${stay.id}`, part: "stay", date: null, primary: true });
+      continue;
+    }
+    const forward = arrive <= leave;
+    const covered = forward ? dates.filter((date) => date >= arrive && date <= leave) : [];
+    const outsideDates = [];
+    if (!covered.includes(arrive)) outsideDates.push(arrive);
+    if (leave !== arrive && !covered.includes(leave)) outsideDates.push(leave);
+    let primary = true;
+    for (const date of [...covered, ...outsideDates]) {
+      place({
+        ...stayBase,
+        key: `stay:${stay.id}:${date}`,
+        part: stayPart(date, arrive, leave),
+        date,
+        primary,
+      });
+      primary = false;
+    }
+  }
+
+  for (const note of trip.note_entries || []) {
+    const date = parseIso(note.on_date) ? String(note.on_date) : null;
+    place({
+      key: `note:${note.id}`,
+      source: "note",
+      part: "note",
+      id: Number(note.id),
+      date,
+      time: null,
+      rank: RANK.note,
+      sortOrder: 0,
+      title: note.body || "Note",
+      primary: true,
+    });
+  }
+
+  for (const reminder of trip.reminders || []) {
+    const due = parseInstant(reminder.due_at);
+    place({
+      key: `reminder:${reminder.id}`,
+      source: "reminder",
+      part: "reminder",
+      id: Number(reminder.id),
+      date: due ? due.date : null,
+      time: due && due.time !== "00:00" ? due.time : null,
+      rank: RANK.reminder,
+      sortOrder: 0,
+      title: reminder.title || "Reminder",
+      primary: true,
+    });
+  }
+
   for (const list of timed.values()) list.sort(byTime);
   for (const list of unscheduledByDay.values()) list.sort(byLoose);
+  for (const list of lodgingByDay.values()) list.sort(byLoose);
   unscheduled.sort(byLoose);
   outOfRange.sort(byLoose);
 
@@ -233,7 +330,8 @@ export function projectItinerary(trip) {
     days: dates.map((onDate) => {
       const entries = timed.get(onDate);
       const dayUnscheduled = unscheduledByDay.get(onDate);
-      const busy = entries.length + dayUnscheduled.length > 0;
+      const lodging = lodgingByDay.get(onDate);
+      const busy = entries.length + dayUnscheduled.length + lodging.length > 0;
       return {
         onDate,
         label: dayLabel(onDate),
@@ -241,10 +339,46 @@ export function projectItinerary(trip) {
         busy,
         accessibleName: dayName(onDate, start, end, busy),
         entries,
+        lodging,
         unscheduled: dayUnscheduled,
       };
     }),
     unscheduled,
     outOfRange,
   };
+}
+
+/** A response may change the open trip only when it is still the current save. */
+export function settleItineraryWrite({ epoch, currentEpoch, sessionActive, tripId, currentTripId }) {
+  return Boolean(sessionActive)
+    && epoch === currentEpoch
+    && Number(tripId) === Number(currentTripId);
+}
+
+/** Private editor text cleared when the session or owner is no longer current. */
+export function clearItineraryDraft() {
+  return {
+    editor: "",
+    noteBody: "",
+    noteDate: "",
+    reminderTitle: "",
+    reminderDue: "",
+    reminderNotes: "",
+    activityTitle: "",
+    activityNotes: "",
+    lodgingNotes: "",
+    parkingNotes: "",
+    placeQuery: "",
+  };
+}
+
+/** Local day a restored row belongs on. Empty when the record has no date. */
+export function restoredLocalDate(kind, body) {
+  const value = body || {};
+  if (kind === "plan" || kind === "note") return String(value.on_date || "").slice(0, 10);
+  if (kind === "stay") return String(value.arrive_on || "").slice(0, 10);
+  if (kind === "transport") return String(value.depart_at || value.arrive_at || "").slice(0, 10);
+  if (kind === "reminder") return String(value.due_at || "").slice(0, 10);
+  if (kind === "parking") return String(value.start_at || "").slice(0, 10);
+  return "";
 }

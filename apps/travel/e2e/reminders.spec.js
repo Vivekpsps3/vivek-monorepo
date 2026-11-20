@@ -62,8 +62,10 @@ async function openReminders(page, trip) {
   return section;
 }
 
-function groupList(section, heading) {
-  return section.locator(`h3:text-is("${heading}") + ul`);
+function itineraryCard(page) {
+  return page.locator('ui-card').filter({
+    has: page.getByRole('heading', { level: 2, name: 'Itinerary', exact: true }),
+  });
 }
 
 for (const combo of COMBOS) {
@@ -81,37 +83,34 @@ for (const combo of COMBOS) {
       }, combo.theme);
     });
 
-    test(`[${combo.width} ${combo.theme}] due soon group shows overdue badge and sorts by due`, async ({ page, request }) => {
+    test(`[${combo.width} ${combo.theme}] outside dates show the overdue badge and sort by due`, async ({ page, request }) => {
       const violations = watchConsole(page);
       const trip = await seedTrip(request, [
         { title: 'Later one', due_at: daysFromNow(20) },
         { title: 'Soon one', due_at: daysFromNow(2) },
         { title: 'Overdue one', due_at: daysFromNow(-1) },
       ]);
-      const section = await openReminders(page, trip);
-      const soon = groupList(section, 'Due soon');
-      await expect(soon.locator('label')).toHaveText(['Overdue one', 'Soon one']);
-      const overdueRow = soon.locator('article.trip-row').filter({ hasText: 'Overdue one' });
+      await openReminders(page, trip);
+      const outside = page.locator('#itinerary-outside');
+      await expect(outside.locator('label')).toHaveText(['Overdue one', 'Soon one', 'Later one']);
+      const overdueRow = outside.locator('article').filter({ hasText: 'Overdue one' });
       await expect(overdueRow.getByText('Overdue', { exact: true })).toHaveCount(1);
-      const soonRow = soon.locator('article.trip-row').filter({ hasText: 'Soon one' });
-      await expect(soonRow.getByText('Overdue', { exact: true })).toHaveCount(0);
-      const later = groupList(section, 'Later');
-      await expect(later.locator('label')).toHaveText(['Later one']);
+      await expect(outside.locator('article').filter({ hasText: 'Soon one' }).getByText('Overdue', { exact: true })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Due soon', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Later', exact: true })).toHaveCount(0);
       await expectClean(page, violations);
     });
 
-    test(`[${combo.width} ${combo.theme}] checkbox marks done in one tap and moves to Done`, async ({ page, request }) => {
+    test(`[${combo.width} ${combo.theme}] checkbox marks done on its local day`, async ({ page, request }) => {
       const violations = watchConsole(page);
       const trip = await seedTrip(request, [{ title: 'Tap done', due_at: daysFromNow(20) }]);
-      const section = await openReminders(page, trip);
-      await section.getByRole('checkbox', { name: 'Tap done', exact: true }).check();
-      const done = groupList(section, 'Done');
-      await expect(done.locator('label')).toHaveText(['Tap done']);
-      await expect(done.getByRole('checkbox', { name: 'Tap done', exact: true })).toBeChecked();
+      await openReminders(page, trip);
+      const box = page.getByRole('checkbox', { name: 'Tap done', exact: true });
+      await box.check();
+      await expect(box).toBeChecked();
+      await expect(page.getByRole('heading', { name: 'Done', exact: true })).toHaveCount(0);
       await page.reload();
-      const reloaded = page.locator('travel-trip-reminders');
-      await expect(groupList(reloaded, 'Done').locator('label')).toHaveText(['Tap done']);
-      await expect(groupList(reloaded, 'Done').getByRole('checkbox', { name: 'Tap done', exact: true })).toBeChecked();
+      await expect(page.getByRole('checkbox', { name: 'Tap done', exact: true })).toBeChecked();
       const saved = await (await request.get('/travel/api/trips/' + trip.id)).json();
       expect(saved.reminders.find((row) => row.title === 'Tap done').done).toBe(true);
       await expectClean(page, violations);
@@ -128,14 +127,14 @@ for (const combo of COMBOS) {
           body: JSON.stringify({ message: 'Toggle unavailable' }),
         });
       });
-      const section = await openReminders(page, trip);
-      await section.getByRole('checkbox', { name: 'Fragile', exact: true }).check();
+      await openReminders(page, trip);
+      await page.getByRole('checkbox', { name: 'Fragile', exact: true }).check();
       const tripAlert = page.locator('main').getByRole('alert').filter({ hasText: 'Toggle unavailable' });
       await expect(tripAlert).toHaveCount(1);
       await expect(tripAlert).toContainText('Toggle unavailable');
       await expect(page.locator('.toast-region[role="alert"]')).not.toContainText('Toggle unavailable');
-      await expect(section.getByRole('checkbox', { name: 'Fragile', exact: true })).not.toBeChecked();
-      await expect(section.getByRole('heading', { name: 'Done', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('checkbox', { name: 'Fragile', exact: true })).not.toBeChecked();
+      await expect(page.getByRole('heading', { name: 'Done', exact: true })).toHaveCount(0);
       await expectClean(page, violations);
     });
 
@@ -150,12 +149,11 @@ for (const combo of COMBOS) {
       const section = await openReminders(page, trip);
       await section.getByLabel('New reminder').fill('Book the airport shuttle');
       await section.getByRole('button', { name: 'Add to list', exact: true }).click();
-      // No Due soon group, so the new row lands in the unheaded Later list.
-      await expect(section.locator('ul.reminder-list label')).toHaveText(['Book the airport shuttle']);
+      const row = page.locator('#itinerary-unscheduled article').filter({ hasText: 'Book the airport shuttle' });
+      await expect(row).toHaveCount(1);
       await expect(section.getByLabel('New reminder')).toHaveValue('');
       expect(posted).toEqual({ title: 'Book the airport shuttle' });
-      const row = section.locator('article.trip-row').filter({ hasText: 'Book the airport shuttle' });
-      await expect(row.locator('.reminder-due')).toBeEmpty();
+      await expect(row.locator('.reminder-due')).toHaveText('');
       await expectClean(page, violations);
     });
 
@@ -180,9 +178,9 @@ for (const combo of COMBOS) {
         { title: 'Dated', due_at: daysFromNow(2) },
         { title: 'Undated' },
       ]);
-      const section = await openReminders(page, trip);
-      await expect(section.locator('ul.reminder-list label')).toHaveCount(2);
-      const text = await section.innerText();
+      await openReminders(page, trip);
+      await expect(itineraryCard(page).locator('label')).toHaveCount(2);
+      const text = await itineraryCard(page).innerText();
       expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
       await expectClean(page, violations);
     });
@@ -194,7 +192,7 @@ for (const combo of COMBOS) {
       await expect(section.getByText("No reminders yet. Add the things you don't want to forget.", { exact: true })).toBeVisible();
       await section.getByLabel('New reminder').fill('First one');
       await section.getByRole('button', { name: 'Add to list', exact: true }).click();
-      await expect(section.locator('ul.reminder-list label')).toHaveText(['First one']);
+      await expect(page.locator('#itinerary-unscheduled label')).toHaveText(['First one']);
       await expect(section.getByText("No reminders yet. Add the things you don't want to forget.", { exact: true })).toHaveCount(0);
       await expectClean(page, violations);
     });
@@ -202,15 +200,15 @@ for (const combo of COMBOS) {
     test(`[${combo.width} ${combo.theme}] failed restore keeps the reminder gone until retry`, async ({ page, request }) => {
       const violations = watchConsole(page);
       const trip = await seedTrip(request, [{ title: 'Restore reminder', done: false }]);
-      const section = await openReminders(page, trip);
-      const row = section.locator('article').filter({ hasText: 'Restore reminder' });
+      await openReminders(page, trip);
+      const row = page.locator('#itinerary-unscheduled article').filter({ hasText: 'Restore reminder' });
       await expect(row).toHaveCount(1);
       if (combo.width <= 640) {
-        await expect(row.locator('.row-actions--menu')).toBeVisible();
-        await expect(row.locator('.row-actions--inline')).toBeHidden();
+        await expect(row.locator('.itinerary-actions--menu')).toBeVisible();
+        await expect(row.locator('.itinerary-actions--inline')).toBeHidden();
       } else {
-        await expect(row.locator('.row-actions--inline')).toBeVisible();
-        await expect(row.locator('.row-actions--menu')).toBeHidden();
+        await expect(row.locator('.itinerary-actions--inline')).toBeVisible();
+        await expect(row.locator('.itinerary-actions--menu')).toBeHidden();
       }
       let posted = null;
       let failed = false;
@@ -232,7 +230,7 @@ for (const combo of COMBOS) {
       await expect(page.locator('main').getByRole('alert').filter({ hasText: 'Restore unavailable' })).toHaveCount(0);
       await expect(row).toHaveCount(0);
       await restoreAlert.getByRole('button', { name: 'Retry', exact: true }).click();
-      await expect(section.getByRole('checkbox', { name: 'Restore reminder', exact: true })).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'Restore reminder', exact: true })).toBeVisible();
       expect(posted).toMatchObject({ title: 'Restore reminder', done: false });
       await expectClean(page, violations);
     });

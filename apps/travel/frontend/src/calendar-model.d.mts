@@ -1,7 +1,7 @@
 export interface ItineraryEntry {
   key: string;
-  source: "plan" | "transport" | "parking";
-  part: "activity" | "departure" | "arrival" | "transport" | "parking";
+  source: "plan" | "transport" | "parking" | "stay" | "note" | "reminder";
+  part: "activity" | "departure" | "arrival" | "transport" | "parking" | "stay" | "check-in" | "check-out" | "note" | "reminder";
   id: number;
   date: string | null;
   time: string | null;
@@ -9,6 +9,8 @@ export interface ItineraryEntry {
   sortOrder: number;
   title: string;
   primary: boolean;
+  dateLine?: boolean;
+  overnight?: boolean;
 }
 
 export interface ItineraryDay {
@@ -18,6 +20,7 @@ export interface ItineraryDay {
   busy: boolean;
   accessibleName: string;
   entries: ItineraryEntry[];
+  lodging: ItineraryEntry[];
   unscheduled: ItineraryEntry[];
 }
 
@@ -51,6 +54,27 @@ export interface ItineraryParking {
   start_at?: string | null;
 }
 
+export interface ItineraryStay {
+  id: number;
+  city?: string | null;
+  arrive_on?: string | null;
+  leave_on?: string | null;
+  lodging_name?: string | null;
+  sort_order?: number | null;
+}
+
+export interface ItineraryNote {
+  id: number;
+  body?: string | null;
+  on_date?: string | null;
+}
+
+export interface ItineraryReminder {
+  id: number;
+  title?: string | null;
+  due_at?: string | null;
+}
+
 export interface ItinerarySource {
   start_date: string;
   end_date: string;
@@ -59,6 +83,33 @@ export interface ItinerarySource {
   plans?: ItineraryPlan[];
   transports?: ItineraryTransport[];
   parking?: ItineraryParking[];
+  stays?: ItineraryStay[];
+  note_entries?: ItineraryNote[];
+  reminders?: ItineraryReminder[];
 }
 
 export function projectItinerary(trip: ItinerarySource): ItineraryProjection;
+
+export function settleItineraryWrite(input: {
+  epoch: number;
+  currentEpoch: number;
+  sessionActive: boolean;
+  tripId: number;
+  currentTripId: number;
+}): boolean;
+
+export function clearItineraryDraft(): {
+  editor: string;
+  noteBody: string;
+  noteDate: string;
+  reminderTitle: string;
+  reminderDue: string;
+  reminderNotes: string;
+  activityTitle: string;
+  activityNotes: string;
+  lodgingNotes: string;
+  parkingNotes: string;
+  placeQuery: string;
+};
+
+export function restoredLocalDate(kind: string, body: Record<string, unknown> | null): string;
