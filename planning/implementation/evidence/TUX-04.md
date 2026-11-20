@@ -52,8 +52,8 @@ Commands ran in `/tmp/vivek-tux-04`. `make test-fast` used `PATH="/tmp/vivek-tux
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opening next. The body will use `Closes #409` only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/537 (`Closes #409` only).
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: none inside this leaf. #304, #134, and #277 stay open.
-- Next actor: push `agent/tux-04`, open the pull request, wait for green required checks, then merge with a merge commit.
+- Next actor: wait for green required checks, then merge with a merge commit.
