@@ -2,8 +2,10 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signa
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { formatDate, todayIsoDate } from '@vivek/browser';
-import { UiButtonComponent, UiStateComponent, type HubCardState, type UiIconName } from '@vivek/ui';
-import { financeReading } from './day-memory';
+import { UiButtonComponent, UiStateComponent, dayActivities, type HubCardState, type UiIconName } from '@vivek/ui';
+import { atlasCoverageLines, compactMemoryPreview, type AtlasLine, type CompactMemoryPreview } from './atlas';
+import { AtlasNoteComponent } from './atlas-note.component';
+import { buildDayMemory, financeReading } from './day-memory';
 import { isIsoDate } from './pixels-dates';
 import { LifePosterComponent } from './life-poster.component';
 import { LifeTableComponent } from './life-table.component';
@@ -18,17 +20,17 @@ import {
   lifeWeekAnnouncement,
   type LifeGrid,
 } from './life-model';
-import { sourceNotices, withoutFinance } from './pixels-model';
+import { buildDay, sourceNotices, withoutFinance } from './pixels-model';
 import { PixelsDataService } from './pixels-data.service';
 import { PixelsPreferences } from './pixels-preferences';
-import type { PixelsSnapshot } from './pixels.types';
+import type { DayFactsStatus, PixelDayFacts, PixelDayView, PixelsSnapshot } from './pixels.types';
 
 type LifePhase = 'loading' | 'ready' | 'stale' | 'unavailable' | 'expired' | 'missing' | 'future';
 
 @Component({
   selector: 'app-pixels-life',
   standalone: true,
-  imports: [RouterLink, UiButtonComponent, UiStateComponent, LifePosterComponent, LifeTableComponent, LifeWeekComponent],
+  imports: [AtlasNoteComponent, RouterLink, UiButtonComponent, UiStateComponent, LifePosterComponent, LifeTableComponent, LifeWeekComponent],
   templateUrl: './life-page.component.html',
   styleUrl: './life-page.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -45,6 +47,11 @@ export class LifePageComponent {
   protected readonly selected = signal<{ row: number; week: number } | null>(null);
   protected readonly announcement = signal('');
   protected readonly viewport = signal(readWidth());
+  protected readonly focus = signal<string | null>(null);
+  protected readonly loadedPreviewDate = signal<string | null>(null);
+  protected readonly previewFacts = signal<PixelDayFacts | null>(null);
+  protected readonly previewStatus = signal<DayFactsStatus>('idle');
+  private loadedPreview: string | null = null;
 
   protected readonly showAge = computed(() => this.snapshot()?.profile?.showAge === true);
   protected readonly metrics = computed(() => lifePosterMetrics(lifePosterTier(this.viewport()), this.showAge()));
@@ -80,6 +87,35 @@ export class LifePageComponent {
   protected readonly showTown = computed(() => this.snapshot()?.sources.town !== 'absent');
   protected readonly showMedia = computed(() => this.snapshot()?.sources.media !== 'absent');
   protected readonly showTravel = computed(() => this.snapshot()?.sources.travel !== 'absent');
+  protected readonly coverage = computed((): AtlasLine[] => atlasCoverageLines({
+    surface: 'life',
+    firstActivityOn: this.snapshot()?.firstActivityOn ?? null,
+  }));
+  protected readonly previewDay = computed((): PixelDayView | null => {
+    const date = this.loadedPreviewDate();
+    const snapshot = this.snapshot();
+    if (!date || !snapshot) return null;
+    return snapshot.days.find(day => day.date === date)
+      ?? buildDay(date, { town: 0, media: 0, trip: 0, fin: null }, this.today || date, snapshot.trips);
+  });
+  protected readonly memoryPreview = computed((): CompactMemoryPreview | null => {
+    const day = this.previewDay();
+    const snapshot = this.snapshot();
+    if (!day || !snapshot) return null;
+    const activities = dayActivities(day.channels);
+    return compactMemoryPreview({
+      memory: buildDayMemory({
+        day,
+        financeStatus: snapshot.financeStatus,
+        facts: this.previewFacts(),
+        factsStatus: this.previewStatus(),
+      }),
+      activityLabel: activities === 1 ? '1 activity' : `${activities} activities`,
+      annotations: this.previewStatus() === 'ready' ? (this.previewFacts()?.annotations.length ?? 0) : 0,
+      future: day.future,
+      includeConnectors: true,
+    });
+  });
   protected readonly groupLabel = computed(() => {
     const rows = this.grid()?.rowCount ?? 0;
     if (this.preferences.view() === 'table') {
@@ -89,6 +125,7 @@ export class LifePageComponent {
   });
 
   private generation = 0;
+  private previewRequest = 0;
   private today = '';
   private announceTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingAnnouncement = '';
@@ -99,15 +136,20 @@ export class LifePageComponent {
     window.addEventListener('resize', onResize);
     destroy.onDestroy(() => {
       this.generation += 1;
+      this.previewRequest += 1;
       window.removeEventListener('resize', onResize);
       if (this.announceTimer != null) clearTimeout(this.announceTimer);
     });
     this.data.financeCleared$.pipe(takeUntilDestroyed()).subscribe(() => this.clearFinance());
-    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => this.restoreSpan(params.get('span')));
+    this.data.userChanged$.pipe(takeUntilDestroyed()).subscribe(() => this.onUserChanged());
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => {
+      this.restoreQuery(params.get('span'), params.get('focus'));
+    });
     this.load();
   }
 
   protected load(): void {
+    this.loadedPreview = null;
     const generation = ++this.generation;
     void this.fetch(generation);
   }
@@ -256,11 +298,18 @@ export class LifePageComponent {
       return;
     }
     this.phase.set('ready');
+    const focus = this.route.snapshot.queryParamMap.get('focus');
     const span = this.route.snapshot.queryParamMap.get('span');
-    const fromSpan = span && isIsoDate(span) ? grid.cells.find(cell => cell.start === span) : null;
+    const focusCell = focus && isIsoDate(focus)
+      ? grid.cells.find(cell => cell.start <= focus && focus <= cell.end)
+      : null;
+    const spanCell = !focusCell && span && isIsoDate(span)
+      ? grid.cells.find(cell => cell.start === span)
+      : null;
+    const fromQuery = focusCell ?? spanCell;
     const selected = this.selected();
-    const next = fromSpan
-      ? { row: fromSpan.row, week: fromSpan.week }
+    const next = fromQuery
+      ? { row: fromQuery.row, week: fromQuery.week }
       : selected && selected.row < grid.rowCount
         ? selected
         : grid.now ?? { row: 0, week: 1 };
@@ -277,29 +326,80 @@ export class LifePageComponent {
       this.selected.set({ row: cell.row, week: cell.week });
       this.queueAnnouncement(lifeWeekAnnouncement(cell, grid.showAge, formatDate(cell.start, 'range')));
     }
+    const queryFocus = this.route.snapshot.queryParamMap.get('focus');
+    const kept = queryFocus && isIsoDate(queryFocus) && queryFocus >= cell.start && queryFocus <= cell.end
+      ? queryFocus
+      : null;
+    if (this.focus() !== kept) this.focus.set(kept);
+    const date = kept ?? (this.today >= cell.start && this.today <= cell.end ? this.today : cell.start);
+    if (this.loadedPreview !== date) this.loadPreview(date);
     if (publish) this.publishSpan(cell.start);
   }
 
-  private restoreSpan(span: string | null): void {
-    if (!span || !isIsoDate(span)) return;
+  private restoreQuery(span: string | null, focus: string | null): void {
     const grid = this.grid();
     if (!grid) return;
-    const cell = grid.cells.find(item => item.start === span);
+    const focusCell = focus && isIsoDate(focus)
+      ? grid.cells.find(cell => cell.start <= focus && focus <= cell.end)
+      : null;
+    const spanCell = span && isIsoDate(span) ? grid.cells.find(cell => cell.start === span) : null;
+    const cell = focusCell ?? spanCell;
     if (!cell) return;
     const selected = this.selected();
-    if (selected?.row === cell.row && selected.week === cell.week) return;
+    if (selected?.row === cell.row && selected.week === cell.week) {
+      const kept = focusCell ? focus : null;
+      if (this.focus() !== kept) this.focus.set(kept);
+      return;
+    }
     this.applySelection({ row: cell.row, week: cell.week }, false);
   }
 
   private publishSpan(start: string): void {
     if (this.route.snapshot.routeConfig?.path !== 'life') return;
-    if (this.route.snapshot.queryParamMap.get('span') === start) return;
+    const currentSpan = this.route.snapshot.queryParamMap.get('span');
+    const currentFocus = this.route.snapshot.queryParamMap.get('focus');
+    const kept = this.focus();
+    if (currentSpan === start && (currentFocus ?? null) === kept) return;
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { span: start },
+      queryParams: { span: start, focus: kept },
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
+  }
+
+  private loadPreview(date: string): void {
+    const requestId = ++this.previewRequest;
+    this.loadedPreview = date;
+    this.loadedPreviewDate.set(date);
+    this.previewFacts.set(null);
+    this.previewStatus.set('loading');
+    void this.data.loadDay(date).then(result => {
+      if (requestId !== this.previewRequest) return;
+      if (result.status === 'dropped') return;
+      if (result.status === 'ready' && result.facts.date === date) {
+        this.previewFacts.set(result.facts);
+        this.previewStatus.set('ready');
+        return;
+      }
+      this.previewFacts.set(null);
+      this.previewStatus.set(result.status === 'expired' ? 'expired' : 'unavailable');
+    });
+  }
+
+  private onUserChanged(): void {
+    this.generation += 1;
+    this.previewRequest += 1;
+    this.loadedPreview = null;
+    this.loadedPreviewDate.set(null);
+    this.previewFacts.set(null);
+    this.previewStatus.set('idle');
+    this.focus.set(null);
+    this.snapshot.set(null);
+    this.grid.set(null);
+    this.selected.set(null);
+    this.phase.set('loading');
+    this.load();
   }
 
   private fail(status: 'expired' | 'unavailable'): void {

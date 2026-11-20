@@ -1,0 +1,10 @@
+<section class="atlas-note" aria-label="Coverage">
+  @for (line of lines(); track line.id) {
+    <p [attr.data-coverage-line]="line.id">{{ line.text }}</p>
+  }
+  <details>
+    <summary>How activity colors work</summary>
+    <p>Colors use the existing activity level. More color means more recorded activity, not a better day.</p>
+    <p>App colors show the recorded app with the most points. Learning annotations are separate and do not change the score.</p>
+  </details>
+</section>

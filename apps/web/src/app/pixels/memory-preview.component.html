@@ -1,0 +1,27 @@
+<section
+  class="memory-preview"
+  data-memory-preview
+  [attr.data-thumbnails]="preview().requestsThumbnails ? 'yes' : 'no'"
+  aria-label="Memory preview"
+>
+  <p class="memory-preview__composition">{{ preview().composition }}</p>
+  @if (preview().lines.length > 0) {
+    <ul>
+      @for (line of preview().lines; track line.id) {
+        <li>
+          @if (line.href) {
+            <a [routerLink]="line.href">{{ line.text }}</a>
+          } @else {
+            <span>{{ line.text }}</span>
+          }
+        </li>
+      }
+    </ul>
+  }
+  @if (preview().more) {
+    <p>{{ preview().more }}</p>
+  }
+  @for (line of preview().uncertainty; track line) {
+    <p>{{ line }}</p>
+  }
+</section>

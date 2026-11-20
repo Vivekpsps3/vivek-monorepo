@@ -1,6 +1,6 @@
 <div class="life-page">
   <div class="life-toolbar">
-    <p>One square per week since your birthday. Each row is one year.</p>
+    <p>One square per week since the saved birthday. Each row is one year of the poster.</p>
     @if (grid()) {
       <ui-button variant="secondary" (clicked)="toggleView()">
         {{ preferences.view() === 'table' ? 'View as poster' : 'View as table' }}
@@ -27,6 +27,7 @@
     next="/pixels/life"
     (retry)="load()">
     @if (grid(); as life) {
+      <app-atlas-note [lines]="coverage()" />
       <div class="life-layout">
         <div
           class="life-keys"
@@ -69,6 +70,8 @@
               [showTown]="showTown()"
               [showMedia]="showMedia()"
               [showTravel]="showTravel()"
+              [focusDate]="loadedPreviewDate()"
+              [preview]="memoryPreview()"
               (step)="onStep($event)" />
           }
           <section class="life-card" aria-labelledby="life-legend-heading">
@@ -80,7 +83,7 @@
               <li><span class="life-swatch life-swatch-3" aria-hidden="true"></span><span class="visually-hidden">level 3</span></li>
               <li><span class="life-swatch life-swatch-4" aria-hidden="true"></span> More</li>
               <li><span class="life-swatch life-swatch-lived" aria-hidden="true"></span> Lived, no suite data</li>
-              <li><span class="life-swatch life-swatch-future" aria-hidden="true"></span> Future</li>
+              <li><span class="life-swatch life-swatch-future" aria-hidden="true"></span> Ahead of today</li>
               <li><span class="life-swatch life-swatch-now" aria-hidden="true"></span> This week</li>
               @if (metrics().showDots) {
                 <li><span class="life-swatch life-swatch-trip" aria-hidden="true"></span> Trip week</li>

@@ -318,10 +318,6 @@ export function lifeWeekAnnouncement(
   return text;
 }
 
-export function lifeWeekOrdinal(row: number, week: number): number {
-  return row * 52 + week;
-}
-
 export function lifeCellOrigin(metrics: LifePosterMetrics, row: number, weekIndex: number): { x: number; y: number } {
   const step = metrics.cell + metrics.gap;
   return {

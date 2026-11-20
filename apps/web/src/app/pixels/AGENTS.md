@@ -12,9 +12,12 @@ Channel counts stay on `GET /api/pixels`.
 The score engine still reads only those counts.
 
 `/pixels/day` names one civil day. Year and Life stay numerical and link here
-with the originating year or life-week span. Slots list saved records and keep
-empty, absent, expired, unavailable, and locked apart. A failed Finance join
-stays unavailable. Photos, notes, and the weekly review stay unconnected.
+with the originating year or life-week span. [Atlas labels](atlas.ts) name that
+day's Sunday week, ISO week, and life span, plus a text-only preview of the one
+selected day. They do not score and they do not load thumbnails. Slots list
+saved records and keep empty, absent, expired, unavailable, and locked apart.
+A failed Finance join stays unavailable. Photos, notes, and the weekly review
+stay unconnected.
 
 Keep calendar-day, Sunday-week and life-span meanings distinct. Preserve leap days,
 partial spans and the existing birthday/privacy contract. Do not expose private

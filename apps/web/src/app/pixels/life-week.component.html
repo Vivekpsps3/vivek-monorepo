@@ -1,7 +1,18 @@
-<section class="life-week" aria-labelledby="life-week-heading">
+<section class="life-week" aria-labelledby="life-week-heading" [attr.data-poster-rows]="rowCount()" [attr.data-preview-date]="focusDate()">
   <p class="life-kicker">{{ week().now ? 'Selected week · this week' : 'Selected week' }}</p>
   <h2 id="life-week-heading">{{ range() }}</h2>
   <p class="life-summary">{{ summary() }}</p>
+  <ul class="atlas-spans" aria-label="Week spans">
+    <li [attr.data-life-span]="week().start + '/' + week().end">Life week · {{ lifeLabel() }}</li>
+    @if (spans(); as spans) {
+      <li [attr.data-sunday-span]="spans.sunday.start + '/' + spans.sunday.end">Sunday week · {{ spans.sunday.label }}</li>
+      <li [attr.data-iso-span]="spans.iso.start + '/' + spans.iso.end">ISO week · {{ spans.iso.label }}</li>
+    }
+  </ul>
+  <p class="life-note">{{ spanNote() }}</p>
+  @if (preview(); as preview) {
+    <app-memory-preview [preview]="preview" />
+  }
   @if (place()) {
     <p class="life-place">{{ place() }}</p>
   }

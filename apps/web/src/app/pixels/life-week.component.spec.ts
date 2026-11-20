@@ -69,4 +69,25 @@ describe('Life week panel', () => {
     expect(dayLink?.getAttribute('href')).toContain('span=2026-10-25');
   });
 
+  it('names the poster row without a lifespan total', () => {
+    const fixture = TestBed.createComponent(LifeWeekComponent);
+    fixture.componentRef.setInput('week', week());
+    fixture.componentRef.setInput('rowCount', 90);
+    fixture.componentRef.setInput('showAge', true);
+    fixture.componentRef.setInput('financeStatus', 'locked');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Age 36');
+    expect(el.textContent).toContain('not an end date');
+    expect(el.textContent).not.toContain('4,680');
+    expect(el.textContent).not.toContain('4680');
+    expect(el.textContent?.toLowerCase()).not.toContain('death');
+    expect(el.textContent?.toLowerCase()).not.toContain('unlived');
+    expect(el.querySelector('[data-poster-rows]')?.getAttribute('data-poster-rows')).toBe('90');
+    expect(el.querySelector('[data-life-span]')?.getAttribute('data-life-span')).toBe('2026-10-25/2026-10-31');
+    expect(el.querySelector('[data-sunday-span]')?.getAttribute('data-sunday-span')).toBe('2026-10-25/2026-10-31');
+    expect(el.querySelector('[data-iso-span]')?.getAttribute('data-iso-span')).toBe('2026-10-19/2026-10-25');
+    expect(el.textContent).toContain('Life week starts on Sunday');
+  });
+
 });

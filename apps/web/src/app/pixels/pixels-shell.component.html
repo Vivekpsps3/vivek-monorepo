@@ -1,10 +1,10 @@
 <main class="pixels">
   <p class="eyebrow">Hub</p>
   <h1>Pixels</h1>
-  <p class="sub">Your suite activity, one square at a time.</p>
+  <p class="sub">Recorded activity, without judgement.</p>
   <nav class="pixels-tabs" aria-label="Pixels views">
-    <a routerLink="/pixels" routerLinkActive="is-current" [routerLinkActiveOptions]="{ exact: true }">Year</a>
-    <a routerLink="/pixels/life" routerLinkActive="is-current">Life</a>
+    <a routerLink="/pixels" [queryParams]="yearQuery()" routerLinkActive="is-current" [routerLinkActiveOptions]="{ exact: true }">Year</a>
+    <a routerLink="/pixels/life" [queryParams]="lifeQuery()" routerLinkActive="is-current">Life</a>
     <a routerLink="/settings/profile" fragment="birthday">Birthday</a>
   </nav>
   <router-outlet />
