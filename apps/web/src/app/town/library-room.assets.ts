@@ -1,3 +1,5 @@
+import { roomRect, sceneFrame } from './library-room.scene';
+
 const palette = { light: 'light', dark: 'dark' } as const;
 const source = { attribution: 'Original artwork for Terraria-on-Sea', license: 'No separate license published' };
 const art = '/town/library';
@@ -49,7 +51,8 @@ export const readingRoomObjects = [
     action: 'Browse saved books', link: '/media/library', query: { kind: 'book' },
   },
   {
-    asset: assets.desk, x: 320, y: 315, label: 'Reading desk',
+    // The desk overlaps the lower shelves. Its higher layer is the front object.
+    asset: assets.desk, x: 234, y: 319, label: 'Reading desk',
     detail: 'Pick up the titles you have in progress in Media.',
     action: 'Open Media Now', link: '/media', query: undefined,
   },
@@ -60,11 +63,7 @@ export const readingRoomObjects = [
   },
 ].map(object => ({
   ...object,
-  // Place the painted image and its link in the same rectangle.
-  left: 100 * (object.x - object.asset.anchor.x) / readingRoom.bounds.width,
-  top: 100 * (object.y - object.asset.anchor.y) / readingRoom.bounds.height,
-  width: 100 * object.asset.bounds.width / readingRoom.bounds.width,
-  height: 100 * object.asset.bounds.height / readingRoom.bounds.height,
+  ...sceneFrame(roomRect(object), readingRoom.bounds),
 }));
 
 export type ReadingRoomAsset = typeof readingRoom | typeof assets[keyof typeof assets];

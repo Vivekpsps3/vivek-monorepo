@@ -41,7 +41,7 @@ Commands ran in `/tmp/vivek-fit-01` against the working tree that became `1f4a1f
 
 | Command | Tested SHA | Result |
 | --- | --- | --- |
-| `PATH="/tmp/vivek-fit-01/.venv/bin:$PATH" make test-fast` | `1f4a1f2bec40da3aba260f20e8d353568559b9f2` | PASS. Doc paths OK. Town AGENTS.md is 294 words. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. Town e2e discovery listed 14 files. Suite discovery listed 12. Finance 49, travel 32, and media 27 were listed and not executed. Shared boundaries OK. |
+| `PATH="/tmp/vivek-fit-01/.venv/bin:$PATH" make test-fast` | `1f4a1f2bec40da3aba260f20e8d353568559b9f2` | PASS. Doc paths OK. Town AGENTS.md was 294 words on that commit. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. Town e2e discovery listed 14 files. Suite discovery listed 12. Finance 49, travel 32, and media 27 were listed and not executed. Shared boundaries OK. |
 | `make lint-web` | `1f4a1f2bec40da3aba260f20e8d353568559b9f2` | PASS. eslint-finance 344, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. No baseline was raised. |
 | `make typecheck-web` | `1f4a1f2bec40da3aba260f20e8d353568559b9f2` | PASS. `tsc --noEmit` for web app, web spec, finance app, finance spec, packages, site app, and site spec. |
 | `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | `1f4a1f2bec40da3aba260f20e8d353568559b9f2` | PASS. 508 SUCCESS. Statements 75.34% (7562/10036). Branches 61.86% (3180/5140). Functions 76.18% (1513/1986). Lines 80.13% (6567/8195). |
@@ -57,6 +57,8 @@ Commands ran in `/tmp/vivek-fit-01` against the working tree that became `1f4a1f
 | `python3 scripts/check_collection_policy.py` | `1f4a1f2bec40da3aba260f20e8d353568559b9f2` | PASS. Collection policy parity passed. |
 
 Travel Playwright, Media Playwright, site Karma, Travel coverage, and Media coverage were not run. The diff does not change those screens. `python3 planning/implementation/plan.py launch FIT-01` was run from this worktree before the product edit. Its docs, web_front, finance_front, finance_back, and server_back profiles are the commands in the table.
+
+`origin/main` moved to `58b055a920e34ee0533fff4205585d9be9fb66f4` (SCENE-01, pull request #551) before push. That merge kept the Reading Hall paragraph and added the gym sentences. `./scripts/check-doc-paths.sh` then passed with Town AGENTS.md at 300 words. No Town scene file was edited by this leaf.
 
 ## Handoff
 
