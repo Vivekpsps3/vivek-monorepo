@@ -91,7 +91,13 @@ export function validateHealthStat(
       lab.name = text('lab.name', lab.name, 1, L.labNameMax);
       lab.unit = text('lab.unit', lab.unit, 0, L.unitMax);
       number('lab.value', lab.value);
-      if (lab.ref_low !== undefined && lab.ref_high !== undefined && !(lab.ref_low < lab.ref_high)) {
+      if (lab.ref_low !== undefined) number('lab.ref_low', lab.ref_low);
+      if (lab.ref_high !== undefined) number('lab.ref_high', lab.ref_high);
+      if (
+        typeof lab.ref_low === 'number' && Number.isFinite(lab.ref_low)
+        && typeof lab.ref_high === 'number' && Number.isFinite(lab.ref_high)
+        && !(lab.ref_low < lab.ref_high)
+      ) {
         fieldErrors['lab.ref_high'] = 'greater_than_ref_low';
       }
       value.lab = lab;

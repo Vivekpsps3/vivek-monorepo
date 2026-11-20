@@ -77,6 +77,7 @@ describe('Health entry shell helpers', () => {
     expect(EMPTY_HEALTH_DRAFT).toEqual({
       kind: 'weight', clientId: null, measuredOn: '', loggedOn: '', weight: '',
       bpm: '', sys: '', dia: '', hours: '', sourceKg: null, exercise: '', reps: '',
+      labName: '', labValue: '', labUnit: '', refLow: '', refHigh: '', note: '',
     });
   });
 
@@ -91,6 +92,7 @@ describe('Health entry shell helpers', () => {
     expect(healthFieldMessage(CONTROL_TEXT_MESSAGE)).toBe(CONTROL_TEXT_MESSAGE);
     expect(healthFieldMessage('step')).toBe('Use a quarter-hour step.');
     expect(healthFieldMessage('greater_than_dia')).toBe('Systolic must be higher than diastolic.');
+    expect(healthFieldMessage('greater_than_ref_low')).toBe('The high end of the range must be above the low end.');
     expect(healthFieldMessage('mystery')).toBe('Check this field and try again.');
     expect(healthFieldMessage('range')).not.toContain('1');
     expect(firstHealthField({ measured_on: 'date_range', kg: 'range' }, 'clinic')).toBe('measured_on');
@@ -108,6 +110,9 @@ describe('Health entry shell helpers', () => {
     expect(healthFieldId('hours')).toBe('health-sleep');
     expect(healthFieldId('exercise')).toBe('health-exercise');
     expect(healthFieldId('reps')).toBe('health-reps');
+    expect(healthFieldId('lab.name')).toBe('health-lab-name');
+    expect(healthFieldId('lab.ref_high')).toBe('health-lab-ref-high');
+    expect(healthFieldId('note')).toBe('health-checkup-note');
     expect(parseHealthNumber(' 80 ')).toBe(80);
     expect(parseHealthNumber('1.5')).toBe(1.5);
     expect(parseHealthNumber('')).toBeUndefined();
@@ -168,12 +173,76 @@ describe('Health entry shell helpers', () => {
     expect(step.fieldErrors['hours']).toBe('step');
     expect(firstHealthField(step.fieldErrors, 'clinic', 'sleep')).toBe('hours');
 
-    const lab = { v: 1 as const, kind: 'lab' as const, measured_on: DAY, logged_on: DAY, lab: { name: 'Iron', value: 12, unit: 'ng/mL' } };
-    expect(draftFromStat({ clientId: 'hlt_SyntheticLabEntryABCD', value: lab }, units)).toBeNull();
     expect(healthDeletePhrase('weight')).toBe('DELETE WEIGHT');
     expect(healthDeletePhrase('rhr')).toBe('DELETE HEART RATE');
     expect(healthDeletePhrase('bp')).toBe('DELETE BLOOD PRESSURE');
     expect(healthDeletePhrase('sleep')).toBe('DELETE SLEEP');
+    expect(healthDeletePhrase('lab')).toBe('DELETE LAB');
+    expect(healthDeletePhrase('checkup')).toBe('DELETE CHECKUP');
     expect(weight.kg).toBe(80);
+  });
+
+  it('renders below, in, above, and no-range labs and roundtrips a checkup', () => {
+    const units = { weight: 'lb' as const, distance: 'mi' as const };
+    const lab = (
+      value: number,
+      extra: { ref_low?: number; ref_high?: number; unit?: string; name?: string } = {},
+    ): HealthStat => ({
+      v: 1,
+      kind: 'lab',
+      measured_on: DAY,
+      logged_on: DAY,
+      lab: { name: extra.name ?? 'Ω-marker', value, unit: extra.unit ?? 'u', ref_low: extra.ref_low, ref_high: extra.ref_high },
+    });
+    expect(formatHealthStat(lab(9, { ref_low: 10, ref_high: 20 }), units))
+      .toBe(`Lab · Ω-marker · 9 u · below range · 10 to 20 u · ${DAY}`);
+    expect(formatHealthStat(lab(10, { ref_low: 10, ref_high: 20 }), units))
+      .toBe(`Lab · Ω-marker · 10 u · in range · 10 to 20 u · ${DAY}`);
+    expect(formatHealthStat(lab(20, { ref_low: 10, ref_high: 20 }), units))
+      .toBe(`Lab · Ω-marker · 20 u · in range · 10 to 20 u · ${DAY}`);
+    expect(formatHealthStat(lab(21, { ref_low: 10, ref_high: 20 }), units))
+      .toBe(`Lab · Ω-marker · 21 u · above range · 10 to 20 u · ${DAY}`);
+    expect(formatHealthStat(lab(12), units)).toBe(`Lab · Ω-marker · 12 u · no range · ${DAY}`);
+    expect(formatHealthStat(lab(9, { ref_low: 10 }), units))
+      .toBe(`Lab · Ω-marker · 9 u · below range · from 10 u · ${DAY}`);
+    expect(formatHealthStat(lab(21, { ref_high: 20 }), units))
+      .toBe(`Lab · Ω-marker · 21 u · above range · through 20 u · ${DAY}`);
+    expect(formatHealthStat(lab(12, { unit: '' }), units)).toBe(`Lab · Ω-marker · 12 · no range · ${DAY}`);
+    expect(formatHealthStat(lab(12, { ref_low: 20, ref_high: 10 }), units))
+      .toBe(`Lab · Ω-marker · 12 u · no range · ${DAY}`);
+
+    const stored = lab(9, { ref_low: 10, ref_high: 20 });
+    const draft = draftFromStat({ clientId: 'hlt_SyntheticLabEntryABCD', value: stored }, units);
+    expect(draft?.labName).toBe('Ω-marker');
+    expect(draft?.labValue).toBe('9');
+    expect(draft?.labUnit).toBe('u');
+    expect(draft?.refLow).toBe('10');
+    expect(draft?.refHigh).toBe('20');
+    expect(draft?.loggedOn).toBe(DAY);
+    const kept = vitalStatFromDraft(draft!, '2026-11-20', 'lb');
+    expect(kept.fieldErrors).toEqual({});
+    expect(kept.value.lab).toEqual({ name: 'Ω-marker', value: 9, unit: 'u', ref_low: 10, ref_high: 20 });
+    expect(kept.value.logged_on).toBe(DAY);
+    expect(sameStoredStat(stored, kept.value)).toBeTrue();
+
+    const reversed = vitalStatFromDraft({ ...draft!, refLow: '20', refHigh: '10' }, '2026-11-20', 'lb');
+    expect(reversed.fieldErrors['lab.ref_high']).toBe('greater_than_ref_low');
+    expect(firstHealthField(reversed.fieldErrors, 'clinic', 'lab')).toBe('lab.ref_high');
+    const blank = vitalStatFromDraft({ ...draft!, refLow: '', refHigh: '' }, '2026-11-20', 'lb');
+    expect(blank.fieldErrors).toEqual({});
+    expect(blank.value.lab).toEqual({ name: 'Ω-marker', value: 9, unit: 'u' });
+    expect(sameStoredStat(stored, blank.value)).toBeFalse();
+
+    const checkup = vitalStatFromDraft({
+      ...EMPTY_HEALTH_DRAFT, kind: 'checkup', measuredOn: DAY, note: 'Synthetic visit note',
+    }, '2026-11-20', 'lb');
+    expect(checkup.fieldErrors).toEqual({});
+    expect(checkup.value).toEqual(jasmine.objectContaining({
+      kind: 'checkup', note: 'Synthetic visit note', measured_on: DAY, logged_on: '2026-11-20',
+    }));
+    expect(formatHealthStat(checkup.value, units)).toBe('Checkup · Synthetic visit note · 2026-10-28');
+    const edited = draftFromStat({ clientId: 'hlt_SyntheticCheckupEntryAB', value: checkup.value }, units);
+    expect(edited?.note).toBe('Synthetic visit note');
+    expect(sameStoredStat(checkup.value, vitalStatFromDraft(edited!, '2026-11-20', 'lb').value)).toBeTrue();
   });
 });

@@ -22,15 +22,16 @@ import {
   formatHealthPr,
   formatHealthStat,
   healthDeletePhrase,
+  isClinicKind,
   isVitalKind,
   readHealthUnits,
   reformatWeightDraft,
   sameStoredStat,
   writeHealthUnits,
+  type HealthClinicKind,
   type HealthDraft,
   type HealthEditorKind,
   type HealthUnits,
-  type HealthVitalKind,
 } from './health-entry';
 import {
   HEALTH_CONFLICT_MESSAGE,
@@ -70,13 +71,72 @@ export class HealthLinkedFocusDirective implements AfterViewChecked {
   }
 }
 
-function vitalName(kind: HealthVitalKind): string {
+function vitalName(kind: 'weight' | 'rhr' | 'bp' | 'sleep'): string {
   switch (kind) {
     case 'weight': return 'weight';
     case 'rhr': return 'resting heart rate';
     case 'bp': return 'blood pressure';
     case 'sleep': return 'sleep';
   }
+}
+
+function deleteCopy(kind: HealthClinicKind): {
+  title: string;
+  noun: string;
+  confirm: string;
+  cancel: string;
+  busy: string;
+} {
+  switch (kind) {
+    case 'lab':
+      return {
+        title: 'Delete this lab result?',
+        noun: 'lab result',
+        confirm: 'Delete lab result',
+        cancel: 'Keep lab result',
+        busy: 'Deleting lab result',
+      };
+    case 'checkup':
+      return {
+        title: 'Delete this checkup?',
+        noun: 'checkup',
+        confirm: 'Delete checkup',
+        cancel: 'Keep checkup',
+        busy: 'Deleting checkup',
+      };
+    case 'weight':
+    case 'rhr':
+    case 'bp':
+    case 'sleep':
+      return {
+        title: 'Delete this measurement?',
+        noun: vitalName(kind),
+        confirm: 'Delete measurement',
+        cancel: 'Keep measurement',
+        busy: 'Deleting measurement',
+      };
+  }
+}
+
+interface HealthListRow {
+  clientId: string;
+  label: string;
+  kind: string;
+  editable: boolean;
+  groupName: string;
+}
+
+interface HealthFolder {
+  key: string;
+  id: string;
+  title: string;
+  rows: HealthListRow[];
+}
+
+interface HealthGroup {
+  id: string;
+  title: string;
+  folders: HealthFolder[];
 }
 
 function isStat(value: HealthStat | HealthPr): value is HealthStat {
@@ -125,13 +185,15 @@ export class HealthRoomComponent implements OnInit {
   protected readonly dialogOpen = signal(false);
   protected readonly formError = signal('');
   protected readonly busy = signal(false);
-  private readonly returnFocusKind = signal<HealthVitalKind | null>(null);
+  private readonly returnFocusKind = signal<HealthClinicKind | null>(null);
   protected readonly emptyDraft = EMPTY_HEALTH_DRAFT;
-  protected readonly vitalAdds: readonly { kind: HealthVitalKind; label: string; id: string }[] = [
+  protected readonly clinicAdds: readonly { kind: HealthClinicKind; label: string; id: string }[] = [
     { kind: 'weight', label: 'Add weight', id: 'health-add-weight' },
     { kind: 'rhr', label: 'Add resting heart rate', id: 'health-add-rhr' },
     { kind: 'bp', label: 'Add blood pressure', id: 'health-add-bp' },
     { kind: 'sleep', label: 'Add sleep', id: 'health-add-sleep' },
+    { kind: 'lab', label: 'Add lab result', id: 'health-add-lab' },
+    { kind: 'checkup', label: 'Add checkup', id: 'health-add-checkup' },
   ];
   protected readonly weightOptions = [
     { value: 'lb', label: 'Pounds' },
@@ -152,7 +214,7 @@ export class HealthRoomComponent implements OnInit {
     if (draft) return draft.kind;
     return this.room() === 'gym' ? 'lift' : 'weight';
   });
-  protected readonly rows = computed(() => {
+  protected readonly rows = computed((): HealthListRow[] => {
     const units = this.units();
     if (this.room() === 'clinic') {
       return this.entries().flatMap(entry => isStat(entry.value)
@@ -160,7 +222,8 @@ export class HealthRoomComponent implements OnInit {
           clientId: entry.clientId,
           label: formatHealthStat(entry.value, units),
           kind: entry.value.kind,
-          vital: isVitalKind(entry.value.kind),
+          editable: isClinicKind(entry.value.kind),
+          groupName: entry.value.kind === 'lab' ? entry.value.lab?.name ?? '' : '',
         }]
         : []);
     }
@@ -170,8 +233,42 @@ export class HealthRoomComponent implements OnInit {
         clientId: entry.clientId,
         label: formatHealthPr(entry.value, units),
         kind: entry.value.kind,
-        vital: false,
+        editable: false,
+        groupName: '',
       }]);
+  });
+  protected readonly clinicGroups = computed((): HealthGroup[] => {
+    const rows = this.rows();
+    const groups: HealthGroup[] = [];
+    const measurements = rows.filter(row => isVitalKind(row.kind));
+    if (measurements.length > 0) {
+      groups.push({
+        id: 'health-group-measurements',
+        title: 'Measurements',
+        folders: [{ key: 'measurements', id: 'health-group-measurements', title: '', rows: measurements }],
+      });
+    }
+    const folders: HealthFolder[] = [];
+    for (const row of rows) {
+      if (row.kind !== 'lab') continue;
+      const title = row.groupName || 'Lab';
+      const existing = folders.find(folder => folder.title === title);
+      if (existing) existing.rows.push(row);
+      else {
+        const index = folders.length;
+        folders.push({ key: `lab-${index}`, id: `health-lab-folder-${index}`, title, rows: [row] });
+      }
+    }
+    if (folders.length > 0) groups.push({ id: 'health-group-labs', title: 'Lab results', folders });
+    const checkups = rows.filter(row => row.kind === 'checkup');
+    if (checkups.length > 0) {
+      groups.push({
+        id: 'health-group-checkups',
+        title: 'Checkups',
+        folders: [{ key: 'checkups', id: 'health-group-checkups', title: '', rows: checkups }],
+      });
+    }
+    return groups;
   });
   protected readonly missingEntry = computed(() => {
     const id = this.entryId();
@@ -237,7 +334,7 @@ export class HealthRoomComponent implements OnInit {
     void this.resolveGate();
   }
 
-  protected openCreate(kind: HealthVitalKind): void {
+  protected openCreate(kind: HealthClinicKind): void {
     this.formError.set('');
     const draft = this.draft();
     if (!draft || draft.kind !== kind || draft.clientId) {
@@ -294,15 +391,16 @@ export class HealthRoomComponent implements OnInit {
   protected removeEntry(clientId: string): void {
     const generation = this.generation;
     const entry = this.entries().find(item => item.clientId === clientId);
-    if (!entry || !isStat(entry.value) || !isVitalKind(entry.value.kind)) return;
+    if (!entry || !isStat(entry.value) || !isClinicKind(entry.value.kind)) return;
     const kind = entry.value.kind;
     const measured = entry.value.measured_on;
+    const copy = deleteCopy(kind);
     void this.confirm.confirmAction({
-      title: 'Delete this measurement?',
-      message: `This permanently deletes the ${vitalName(kind)} measured on ${measured}. This cannot be undone.`,
-      confirmLabel: 'Delete measurement',
-      cancelLabel: 'Keep measurement',
-      busyLabel: 'Deleting measurement',
+      title: copy.title,
+      message: `This permanently deletes the ${copy.noun} measured on ${measured}. This cannot be undone.`,
+      confirmLabel: copy.confirm,
+      cancelLabel: copy.cancel,
+      busyLabel: copy.busy,
       phrase: healthDeletePhrase(kind),
       errorMessage: 'Could not delete this entry. It is still saved. Try again.',
       run: async () => {
