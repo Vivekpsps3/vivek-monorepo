@@ -67,14 +67,19 @@
 .travel-page .travel-form label {
   margin-bottom: 1rem;
 }
-.travel-page travel-flight-start {
+.travel-page travel-flight-start,
+.travel-page travel-calendar-import {
   display: block;
   margin-bottom: 1rem;
 }
-.travel-page .flight-start .ui-btn {
+.travel-page .flight-start .ui-btn,
+.travel-page .calendar-import .ui-btn {
   max-width: 100%;
   white-space: normal;
   text-align: start;
+}
+.travel-page .calendar-import input[type="file"] {
+  min-height: 44px;
 }
 .travel-page .button-row {
   display: flex;

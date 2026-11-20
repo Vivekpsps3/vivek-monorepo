@@ -22,9 +22,9 @@ consumers before deleting repeated editor logic. Preserve keyboard access, save-
 drafts and chart-only recovery; a failed summary must not hide usable forms.
 FlightAware settings use the same editor from suite Settings, the transport
 dialog, and flight-first planning. Keep that draft mounted and cancel obsolete
-lookups. Plan a trip starts with a flight number and date. The route and local
-times stay proposed until the user chooses a candidate, a new trip, or an
-existing trip. An incomplete draft stores the accepted outbound leg, leaves an
+lookups. Plan a trip starts with a flight number and date or one calendar file.
+Preview its time zone and leg, then choose a candidate, a new draft, or the
+existing leg. An incomplete draft stores the accepted outbound leg, leaves an
 unknown return empty, and creates no PTO charge. Inferred proposals stay off
 confirmed dates. A complete trip still requires a return and still allocates PTO.
 

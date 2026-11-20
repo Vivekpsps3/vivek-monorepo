@@ -39,6 +39,7 @@ import {
   draftRequest,
   settleDraftResponse,
 } from "./draft-model.mjs";
+import { CalendarImportComponent } from "./calendar-import.component";
 import { FlightStartComponent } from "./flight-start.component";
 import {
   destinationProposal,
@@ -66,6 +67,7 @@ import { dateOrderError, requiredText } from "./validate.mjs";
     UiPageHeaderComponent,
     PtoDaysComponent,
     FlightStartComponent,
+    CalendarImportComponent,
   ],
   template: `<main class="page travel-page">
     <ui-page-header
@@ -77,6 +79,10 @@ import { dateOrderError, requiredText } from "./validate.mjs";
       [busy]="pending() !== ''"
       (staged)="stageFlight($event)"
       (attach)="attachFlight($event)"
+    />
+    <travel-calendar-import
+      [busy]="pending() !== ''"
+      (leaving)="calendarLeaving()"
     />
     <ui-card
       ><form
@@ -329,6 +335,7 @@ export class NewTripComponent {
   private readonly confirm = inject(ConfirmService);
   private readonly host = inject(ElementRef<HTMLElement>);
   @ViewChild(FlightStartComponent) private flightStart?: FlightStartComponent;
+  @ViewChild(CalendarImportComponent) private calendarImport?: CalendarImportComponent;
   constructor() {
     merge(
       this.session.cleared$,
@@ -427,6 +434,7 @@ export class NewTripComponent {
   private unfinished(): boolean {
     if (this.saved) return false;
     if (this.flightStart?.unfinished()) return true;
+    if (this.calendarImport?.unfinished()) return true;
     if (!(this.start || this.end || this.transports.length || this.confirmedDestination)) return false;
     const built = draftRequest(this.draftSnapshot());
     return !(built.ok && this.savedDraftBody === JSON.stringify(built.body));
@@ -475,6 +483,10 @@ export class NewTripComponent {
     this.confirmedDestination = "";
     this.stagedStart = "";
     this.flightStart?.clear();
+    this.calendarImport?.clear();
+  }
+  calendarLeaving(): void {
+    this.saved = true;
   }
   private draftSnapshot() {
     const parts = this.parts();

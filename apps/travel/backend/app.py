@@ -9,7 +9,15 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from apps.server.database import get_db
-from apps.travel.backend.routers import board, drafts, integrations, leave, pto, trips
+from apps.travel.backend.routers import (
+    board,
+    calendar_bookings,
+    drafts,
+    integrations,
+    leave,
+    pto,
+    trips,
+)
 from apps.travel.backend.services.leave_math import (
     ACCRUAL_COPY,
     CADENCE_COPY,
@@ -74,3 +82,4 @@ def register_travel(application: FastAPI) -> None:
     application.include_router(pto.router, prefix="/travel/api")
     application.include_router(leave.router, prefix="/travel/api")
     application.include_router(integrations.router, prefix="/travel/api")
+    application.include_router(calendar_bookings.router, prefix="/travel/api")
