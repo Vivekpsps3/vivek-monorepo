@@ -8,7 +8,7 @@
           min="1900-01-01" [attr.max]="today()" data-dialog-initial-focus
           [value]="local().measuredOn" (input)="onMeasured($event)" />
       </ui-field>
-      <p class="logged-on">Logged on <time [attr.datetime]="today()">{{ today() }}</time></p>
+      <p class="logged-on">Logged on <time [attr.datetime]="loggedOn()">{{ loggedOn() }}</time></p>
     }
     <ui-field [label]="local().kind === 'session' ? 'Exercise' : 'Name'" [required]="true" [error]="message(errors()['name'])">
       <input uiFieldControl id="health-workout-name" name="name" type="text" required autocomplete="off"
@@ -23,37 +23,51 @@
       </select>
     </ui-field>
     @if (local().kind !== 'exercise') {
-      <ui-field label="Set" [required]="true" [error]="message(errors()['set_type'])">
-        <select uiFieldControl id="health-workout-set-type" name="set_type" [value]="local().setType" (change)="onSetType($event)">
-          @for (type of setTypes; track type) {
-            <option [value]="type">{{ setLabel(type) }}</option>
-          }
-        </select>
-      </ui-field>
-      @if (usesLoad()) {
-        <ui-field [label]="loadLabel()" [required]="true" [error]="message(errors()['kg'])">
-          <input uiFieldControl id="health-workout-load" name="load" type="text" inputmode="decimal" required autocomplete="off"
-            [value]="local().load" (input)="onLoad($event)" />
+      <!-- A new set id recreates these fields. Angular skips a repeated empty binding, so the typed value would otherwise stay. -->
+      @for (openSet of [{ id: local().setId }]; track openSet.id) {
+        <ui-field label="Set" [required]="true" [error]="message(errors()['set_type'])">
+          <select uiFieldControl id="health-workout-set-type" name="set_type" [value]="local().setType" (change)="onSetType($event)">
+            @for (type of setTypes; track type) {
+              <option [value]="type">{{ setLabel(type) }}</option>
+            }
+          </select>
         </ui-field>
+        @if (usesLoad()) {
+          <ui-field [label]="loadLabel()" [required]="true" [error]="message(errors()['kg'])">
+            <input uiFieldControl id="health-workout-load" name="load" type="text" inputmode="decimal" required autocomplete="off"
+              [value]="local().load" (input)="onLoad($event)" />
+          </ui-field>
+        }
+        @if (usesReps()) {
+          <ui-field label="Reps" [required]="true" [error]="message(errors()['reps'])">
+            <input uiFieldControl id="health-workout-reps" name="reps" type="text" inputmode="numeric" required autocomplete="off"
+              [value]="local().reps" (input)="onReps($event)" />
+          </ui-field>
+        }
+        @if (usesTime()) {
+          <ui-field label="Time (seconds)" [required]="true" [error]="message(errors()['seconds'])">
+            <input uiFieldControl id="health-workout-seconds" name="seconds" type="text" inputmode="numeric" required autocomplete="off"
+              [value]="local().seconds" (input)="onSeconds($event)" />
+          </ui-field>
+        }
+        @if (usesDistance()) {
+          <ui-field [label]="'Distance (' + units().distance + ')'" [required]="true" [error]="message(errors()['metres'])">
+            <input uiFieldControl id="health-workout-distance" name="distance" type="text" inputmode="decimal" required autocomplete="off"
+              [value]="local().distance" (input)="onDistance($event)" />
+          </ui-field>
+        }
       }
-      @if (usesReps()) {
-        <ui-field label="Reps" [required]="true" [error]="message(errors()['reps'])">
-          <input uiFieldControl id="health-workout-reps" name="reps" type="text" inputmode="numeric" required autocomplete="off"
-            [value]="local().reps" (input)="onReps($event)" />
-        </ui-field>
-      }
-      @if (usesTime()) {
-        <ui-field label="Time (seconds)" [required]="true" [error]="message(errors()['seconds'])">
-          <input uiFieldControl id="health-workout-seconds" name="seconds" type="text" inputmode="numeric" required autocomplete="off"
-            [value]="local().seconds" (input)="onSeconds($event)" />
-        </ui-field>
-      }
-      @if (usesDistance()) {
-        <ui-field [label]="'Distance (' + units().distance + ')'" [required]="true" [error]="message(errors()['metres'])">
-          <input uiFieldControl id="health-workout-distance" name="distance" type="text" inputmode="decimal" required autocomplete="off"
-            [value]="local().distance" (input)="onDistance($event)" />
-        </ui-field>
-      }
+    }
+    @if (local().kind === 'session' && local().sets.length > 0) {
+      <h3 id="health-workout-entered">Entered sets</h3>
+      <ul class="entered-sets" aria-labelledby="health-workout-entered">
+        @for (set of local().sets; track set.id; let index = $index) {
+          <li [attr.data-entered-set]="set.id">{{ enteredLabel(set, index, units()) }}</li>
+        }
+      </ul>
+    }
+    @if (local().kind === 'session') {
+      <ui-button variant="secondary" (clicked)="onAddSet()">Add set</ui-button>
     }
     @if (local().kind === 'session') {
       <ui-field label="Note" [optional]="true" [error]="message(errors()['note'] || errors()['record'])">
