@@ -61,4 +61,5 @@ Finance coverage, Media coverage, Finance Karma, site Karma, Finance Playwright,
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: none inside this leaf. #304, #315, #134, and #277 stay open.
-- Next actor: wait for green required checks, then merge with a merge commit.
+- Next actor: wait for green required checks on the head that includes the reminder-toggle assertion, then merge with a merge commit.
+- CI note: `origin/main` moved to `d3f526ba` (HEAL-04, pull request #549). That commit was merged into this branch before the next push. Required checks on `564ae155` passed for Backend, Frontend, and Unified Site Release. Playwright failed one existing Travel test, `[1280 light] failed toggle reverts`, because `locator.check` requires the box to stay checked while the 502 revert can finish in the same turn. The test now clicks the box and still requires the inline alert and an unchecked box. A local rerun of that test at 390 and 1280 passed. Health files were not edited.
