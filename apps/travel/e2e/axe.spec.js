@@ -9,11 +9,11 @@ test('axe on all native Travel screens in light and dark at phone and desktop wi
     title: 'Kyoto', start_date: '2026-10-24', end_date: '2026-10-30',
     stays: [{ city: 'Kyoto', arrive_on: '2026-10-24', leave_on: '2026-10-30' }],
   } })).json();
-  const routes = ['/travel', '/travel/calendar?month=2026-10', '/travel/trips/new', '/travel/trips/' + created.id, '/travel/pto', '/travel/settings'];
+  const routes = ['/travel', '/travel/calendar?month=2026-10', '/travel/trips/new', '/travel/trips/' + created.id, '/travel/pto', '/travel/settings', '/travel/memories'];
   for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width, height: 900 });
     for (const route of routes) {
-      const endpoint=route.includes('/trips/new')?null:route.includes('/trips/')?'/travel/api/trips/':route.includes('/calendar')?'/travel/api/calendar':route.includes('/pto')?'/travel/api/pto':route.includes('/settings')?'/travel/api/settings':'/travel/api/home';
+      const endpoint=route.includes('/trips/new')?null:route.includes('/memories')?'/travel/api/memories':route.includes('/trips/')?'/travel/api/trips/':route.includes('/calendar')?'/travel/api/calendar':route.includes('/pto')?'/travel/api/pto':route.includes('/settings')?'/travel/api/settings':'/travel/api/home';
       const ready=endpoint?page.waitForResponse(response=>response.url().includes(endpoint)&&response.ok()):Promise.resolve();
       const leave=route==='/travel'?page.waitForResponse(response=>response.url().endsWith('/travel/api/pto')&&response.ok()):Promise.resolve();
       await page.goto(route);await ready;await leave;

@@ -4,9 +4,12 @@ import type { HealthUnits } from './health-entry';
 import {
   EXERCISE_TYPES,
   SET_TYPES,
+  commitEnteredSet,
   emptyWorkoutDraft,
   exerciseTypeLabel,
   firstWorkoutField,
+  formatEnteredSet,
+  setTypeLabel,
   workoutFieldId,
   workoutFieldMessage,
   workoutFromDraft,
@@ -41,11 +44,8 @@ export class HealthWorkoutDialogComponent {
   protected readonly types = EXERCISE_TYPES;
   protected readonly setTypes = SET_TYPES;
   protected readonly typeLabel = exerciseTypeLabel;
-  protected setLabel(type: SetType): string {
-    if (type === 'warmup') return 'Warm-up';
-    if (type === 'drop') return 'Drop';
-    return 'Work';
-  }
+  protected readonly setLabel = setTypeLabel;
+  protected readonly enteredLabel = formatEnteredSet;
   protected readonly message = workoutFieldMessage;
   private formErrorSeen = '';
 
@@ -75,11 +75,17 @@ export class HealthWorkoutDialogComponent {
   }
 
   protected heading(): string {
-    switch (this.local().kind) {
+    const draft = this.local();
+    if (draft.kind === 'session' && draft.clientId) return 'Resume session';
+    switch (draft.kind) {
       case 'exercise': return 'Add exercise';
       case 'routine': return 'Add routine';
       case 'session': return 'Add session';
     }
+  }
+
+  protected loggedOn(): string {
+    return this.local().loggedOn || this.today();
   }
 
   protected usesLoad(): boolean {
@@ -147,6 +153,15 @@ export class HealthWorkoutDialogComponent {
 
   protected onNote(event: Event): void {
     this.patch({ note: this.text(event) });
+  }
+
+  protected onAddSet(): void {
+    if (this.busy()) return;
+    const result = commitEnteredSet(this.local(), this.units(), this.today());
+    this.errors.set(result.fieldErrors);
+    if (Object.keys(result.fieldErrors).length > 0) return;
+    this.local.set(result.draft);
+    this.draftChange.emit(result.draft);
   }
 
   protected onSubmit(event: Event): void {

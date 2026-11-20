@@ -15,6 +15,7 @@ import {
   workoutFieldMessage,
   workoutParsable,
   type WorkoutRecord,
+  type WorkoutSession,
 } from './workout';
 
 /**
@@ -580,18 +581,51 @@ export class HealthStoreService {
   async createWorkout(value: WorkoutRecord, today: string): Promise<HealthEntry<WorkoutRecord>> {
     const ticket = this.publication(false);
     this.guard(ticket);
-    const customExerciseCount = this.workouts.filter(item => item.value.kind === 'exercise' && !item.value.archived).length;
-    const checked = validateWorkoutRecord(value, customExerciseCount, today);
-    const firstError = Object.values(checked.fieldErrors)[0];
-    if (firstError) throw new HealthWorkoutError(workoutFieldMessage(firstError));
+    const checked = this.checkedWorkout(value, today);
     const entry = await this.upsert<WorkoutRecord>(
       ticket,
       HEALTH_WORKOUTS_COLLECTION,
       { clientId: newHealthClientId(), revision: null, keyVersion: 1 },
-      checked.value,
+      checked,
     );
     this.guard(ticket);
     this.workouts = [...this.workouts, entry];
     return entry;
+  }
+
+  /**
+   * Update one saved session. logged_on stays on the first save. The expected
+   * revision is the caller's; a stale revision refetches once and does not write.
+   */
+  async updateWorkoutSession(
+    entry: HealthEntry<WorkoutRecord>,
+    value: WorkoutRecord,
+    today: string,
+  ): Promise<HealthEntry<WorkoutRecord>> {
+    if (entry.value.kind !== 'session' || value.kind !== 'session') {
+      throw new HealthWorkoutError('Save the session draft and try again.');
+    }
+    const ticket = this.publication(false);
+    this.guard(ticket);
+    const pinned: WorkoutSession = {
+      ...value,
+      logged_on: entry.value.logged_on,
+      measured_on: value.measured_on || entry.value.measured_on,
+    };
+    const checked = this.checkedWorkout(pinned, today);
+    if (checked.kind !== 'session') throw new HealthWorkoutError('Save the session draft and try again.');
+    checked.logged_on = entry.value.logged_on;
+    const saved = await this.upsert<WorkoutRecord>(ticket, HEALTH_WORKOUTS_COLLECTION, entry, checked);
+    this.guard(ticket);
+    this.workouts = this.workouts.map(item => (item.clientId === entry.clientId ? saved : item));
+    return saved;
+  }
+
+  private checkedWorkout(value: WorkoutRecord, today: string): WorkoutRecord {
+    const customExerciseCount = this.workouts.filter(item => item.value.kind === 'exercise' && !item.value.archived).length;
+    const checked = validateWorkoutRecord(value, customExerciseCount, today);
+    const firstError = Object.values(checked.fieldErrors)[0];
+    if (firstError) throw new HealthWorkoutError(workoutFieldMessage(firstError));
+    return checked.value;
   }
 }

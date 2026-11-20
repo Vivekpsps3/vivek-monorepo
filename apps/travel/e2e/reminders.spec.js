@@ -128,7 +128,7 @@ for (const combo of COMBOS) {
         });
       });
       await openReminders(page, trip);
-      await page.getByRole('checkbox', { name: 'Fragile', exact: true }).check();
+      await page.getByRole('checkbox', { name: 'Fragile', exact: true }).click();
       const tripAlert = page.locator('main').getByRole('alert').filter({ hasText: 'Toggle unavailable' });
       await expect(tripAlert).toHaveCount(1);
       await expect(tripAlert).toContainText('Toggle unavailable');
