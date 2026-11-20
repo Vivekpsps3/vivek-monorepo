@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { AfterViewChecked, ChangeDetectionStrategy, Component, DestroyRef, Directive, ElementRef, InjectionToken, Injector, OnInit, afterRenderEffect, computed, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
@@ -14,13 +15,14 @@ import {
 import { bindLockSnapshots, financeVaultExists, financeVaultPresent } from '../../../../../finance/frontend/src/public-api';
 import { SessionService } from '../../platform/session.service';
 import { HealthEntryDialogComponent, type HealthEntryValue } from './health-entry-dialog.component';
+import { HEALTH_HISTORY_PAGE, buildClinicSeries, pageClinicSeries } from './health-history';
+import { HealthSparklineComponent } from './health-sparkline.component';
 import {
   DEFAULT_HEALTH_UNITS,
   EMPTY_HEALTH_DRAFT,
   corruptNotice,
   draftFromStat,
   formatHealthPr,
-  formatHealthStat,
   healthDeletePhrase,
   isClinicKind,
   isVitalKind,
@@ -122,21 +124,6 @@ interface HealthListRow {
   clientId: string;
   label: string;
   kind: string;
-  editable: boolean;
-  groupName: string;
-}
-
-interface HealthFolder {
-  key: string;
-  id: string;
-  title: string;
-  rows: HealthListRow[];
-}
-
-interface HealthGroup {
-  id: string;
-  title: string;
-  folders: HealthFolder[];
 }
 
 function isStat(value: HealthStat | HealthPr): value is HealthStat {
@@ -149,6 +136,8 @@ function isStat(value: HealthStat | HealthPr): value is HealthStat {
   imports: [
     HealthEntryDialogComponent,
     HealthLinkedFocusDirective,
+    HealthSparklineComponent,
+    NgTemplateOutlet,
     UiButtonComponent,
     UiPageHeaderComponent,
     UiSegmentedComponent,
@@ -181,6 +170,8 @@ export class HealthRoomComponent implements OnInit {
   protected readonly units = signal<HealthUnits>({ ...DEFAULT_HEALTH_UNITS });
   protected readonly entries = signal<readonly RoomRecord[]>([]);
   protected readonly unreadable = signal(0);
+  private readonly shownByKind = signal<Partial<Record<HealthStat['kind'], number>>>({});
+  protected readonly revealFocusId = signal<string | null>(null);
   protected readonly draft = signal<HealthDraft | null>(null);
   protected readonly dialogOpen = signal(false);
   protected readonly formError = signal('');
@@ -214,18 +205,29 @@ export class HealthRoomComponent implements OnInit {
     if (draft) return draft.kind;
     return this.room() === 'gym' ? 'lift' : 'weight';
   });
+  private readonly clinicSeries = computed(() => {
+    if (this.room() !== 'clinic') return [];
+    const stats = this.entries().flatMap(entry => isStat(entry.value)
+      ? [{ clientId: entry.clientId, value: entry.value }]
+      : []);
+    return buildClinicSeries(stats, this.units());
+  });
+  protected readonly clinicPages = computed(() => pageClinicSeries(
+    this.clinicSeries(),
+    this.shownByKind(),
+    this.entryId(),
+  ));
+  protected readonly measurementPages = computed(() => this.clinicPages().filter(page => isVitalKind(page.kind)));
+  protected readonly labPage = computed(() => this.clinicPages().find(page => page.kind === 'lab') ?? null);
+  protected readonly checkupPage = computed(() => this.clinicPages().find(page => page.kind === 'checkup') ?? null);
   protected readonly rows = computed((): HealthListRow[] => {
     const units = this.units();
     if (this.room() === 'clinic') {
-      return this.entries().flatMap(entry => isStat(entry.value)
-        ? [{
-          clientId: entry.clientId,
-          label: formatHealthStat(entry.value, units),
-          kind: entry.value.kind,
-          editable: isClinicKind(entry.value.kind),
-          groupName: entry.value.kind === 'lab' ? entry.value.lab?.name ?? '' : '',
-        }]
-        : []);
+      return this.clinicSeries().flatMap(series => series.rows.map(row => ({
+        clientId: row.clientId,
+        label: row.label,
+        kind: row.kind,
+      })));
     }
     return this.entries().flatMap(entry => isStat(entry.value)
       ? []
@@ -233,42 +235,7 @@ export class HealthRoomComponent implements OnInit {
         clientId: entry.clientId,
         label: formatHealthPr(entry.value, units),
         kind: entry.value.kind,
-        editable: false,
-        groupName: '',
       }]);
-  });
-  protected readonly clinicGroups = computed((): HealthGroup[] => {
-    const rows = this.rows();
-    const groups: HealthGroup[] = [];
-    const measurements = rows.filter(row => isVitalKind(row.kind));
-    if (measurements.length > 0) {
-      groups.push({
-        id: 'health-group-measurements',
-        title: 'Measurements',
-        folders: [{ key: 'measurements', id: 'health-group-measurements', title: '', rows: measurements }],
-      });
-    }
-    const folders: HealthFolder[] = [];
-    for (const row of rows) {
-      if (row.kind !== 'lab') continue;
-      const title = row.groupName || 'Lab';
-      const existing = folders.find(folder => folder.title === title);
-      if (existing) existing.rows.push(row);
-      else {
-        const index = folders.length;
-        folders.push({ key: `lab-${index}`, id: `health-lab-folder-${index}`, title, rows: [row] });
-      }
-    }
-    if (folders.length > 0) groups.push({ id: 'health-group-labs', title: 'Lab results', folders });
-    const checkups = rows.filter(row => row.kind === 'checkup');
-    if (checkups.length > 0) {
-      groups.push({
-        id: 'health-group-checkups',
-        title: 'Checkups',
-        folders: [{ key: 'checkups', id: 'health-group-checkups', title: '', rows: checkups }],
-      });
-    }
-    return groups;
   });
   protected readonly missingEntry = computed(() => {
     const id = this.entryId();
@@ -295,6 +262,7 @@ export class HealthRoomComponent implements OnInit {
       this.draft.set(null);
       this.dialogOpen.set(false);
       this.formError.set('');
+      this.revealFocusId.set(null);
       if (this.phase() === 'ready') this.publish();
     });
     afterRenderEffect(() => {
@@ -381,6 +349,18 @@ export class HealthRoomComponent implements OnInit {
     const draft = this.draft();
     if (!draft || (draft.kind !== 'weight' && draft.kind !== 'lift') || draft.weight === '') return;
     this.draft.set(reformatWeightDraft(draft, previous, value));
+  }
+
+  protected showMore(kind: HealthStat['kind']): void {
+    const series = this.clinicSeries().find(item => item.kind === kind);
+    const page = this.clinicPages().find(item => item.kind === kind);
+    if (!series || !page?.more) return;
+    const revealed = series.rows[page.shown];
+    this.shownByKind.update(current => ({
+      ...current,
+      [kind]: page.shown + HEALTH_HISTORY_PAGE,
+    }));
+    if (revealed) this.revealFocusId.set(revealed.clientId);
   }
 
   protected setDistance(value: string | number | null): void {
@@ -513,6 +493,8 @@ export class HealthRoomComponent implements OnInit {
     this.dialogOpen.set(false);
     this.busy.set(false);
     this.returnFocusKind.set(null);
+    this.shownByKind.set({});
+    this.revealFocusId.set(null);
     this.confirm.close(false);
   }
 

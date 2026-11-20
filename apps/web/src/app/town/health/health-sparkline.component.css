@@ -1,0 +1,56 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.sparkline {
+  margin: 0;
+}
+
+.sparkline svg {
+  display: block;
+  width: 100%;
+  max-width: 16rem;
+  height: 44px;
+  transition: none;
+  animation: none;
+}
+
+.sparkline ol,
+.sparkline p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.sparkline ol {
+  padding-inline-start: 1.25rem;
+}
+
+.sparkline polyline {
+  fill: none;
+  stroke: var(--chart-1);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sparkline circle {
+  fill: var(--chart-1);
+  stroke: none;
+}
+
+.sparkline polyline.series-2 {
+  stroke: var(--chart-2);
+  fill: none;
+}
+
+.sparkline circle.series-2 {
+  fill: var(--chart-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sparkline svg {
+    transition: none;
+    animation: none;
+  }
+}
