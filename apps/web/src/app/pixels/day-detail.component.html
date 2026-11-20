@@ -4,6 +4,7 @@
   }
   <section
     class="day-detail"
+    [attr.data-score-vector]="scoreVector()"
     [class.sheet]="phone()"
     [attr.role]="phone() ? 'dialog' : null"
     [attr.aria-modal]="phone() ? 'true' : null"
@@ -48,5 +49,80 @@
         <a [routerLink]="detail.activityLink" [state]="context.link(unlockSource())">Open Finance Activity</a>
       </div>
     </div>
+    @if (factsStatus() !== 'idle') {
+      <section class="day-facts" aria-labelledby="day-facts-heading">
+        <h3 id="day-facts-heading">Dated facts</h3>
+        @switch (factsStatus()) {
+          @case ('loading') {
+            <p role="status">Loading dated facts.</p>
+          }
+          @case ('expired') {
+            <p role="status">Sign in again to load dated facts. The score is unchanged.</p>
+          }
+          @case ('unavailable') {
+            <p role="status">Dated facts are unavailable. The score is unchanged.</p>
+          }
+          @case ('ready') {
+            @if (facts(); as loaded) {
+              @for (line of coverageLines(); track line.key) {
+                <p [attr.data-coverage]="line.key">{{ line.text }}</p>
+              }
+              @if (loaded.facts.length === 0) {
+                <p>No dated facts on this day.</p>
+              }
+              @for (fact of loaded.facts; track fact.id) {
+                <article class="fact" [attr.data-fact-id]="fact.id" [attr.data-fact-date]="fact.date">
+                  <h4>{{ factLabel(fact) }}</h4>
+                  <p>Occurrence {{ fact.id }} · {{ fact.date }}</p>
+                  @if (fact.spanStart && fact.spanEnd) {
+                    <p>Span {{ fact.spanStart }} to {{ fact.spanEnd }}</p>
+                  }
+                  <p>{{ fact.provenance }}</p>
+                  <a [routerLink]="fact.route">Open {{ factLabel(fact) }}</a>
+                </article>
+              }
+              <h3 id="day-learning-heading" tabindex="-1">Learning annotations</h3>
+              @if (loaded.annotations.length === 0) {
+                <p>No learning annotation on this day.</p>
+              }
+              @for (note of loaded.annotations; track note.id) {
+                <article class="annotation" [attr.data-annotation-id]="note.id">
+                  <h4 [id]="'annotation-' + note.conceptId">{{ note.name }}</h4>
+                  <p>Understood {{ note.understoodOn }}. Occurrence {{ note.id }}.</p>
+                  <p>{{ note.provenance }}</p>
+                  <div class="annotation-actions">
+                    <button type="button" [disabled]="mutating()" (click)="archive.emit(note.conceptId)">
+                      Archive {{ note.name }}
+                    </button>
+                    <button type="button" [disabled]="mutating()" (click)="remove.emit(note.conceptId)">
+                      Delete {{ note.name }}
+                    </button>
+                  </div>
+                  <form class="redate" (submit)="submitRedate($event, note)">
+                    <label [attr.for]="redateId(note.conceptId)">New understood date</label>
+                    <input
+                      [id]="redateId(note.conceptId)"
+                      type="text"
+                      autocomplete="off"
+                      spellcheck="false"
+                      [value]="draftValue(note.id)"
+                      (input)="onDraft(note.id, $event)"
+                    />
+                    <button type="submit" [disabled]="mutating()">Redate {{ note.name }}</button>
+                  </form>
+                </article>
+              }
+              @if (annotationError(); as message) {
+                <p role="alert">{{ message }}</p>
+              }
+              <h3 id="day-differences-heading">Why these counts differ</h3>
+              @for (item of loaded.differences; track item.id) {
+                <p [attr.data-difference]="item.id">{{ item.text }}</p>
+              }
+            }
+          }
+        }
+      </section>
+    }
   </section>
 }

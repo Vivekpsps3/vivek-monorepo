@@ -15,6 +15,7 @@ import {
 } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
 import { PIXELS_ACTION_DEADLINE_MS, PIXELS_FINANCE_DAYS, PIXELS_VAULT_PRESENT, PixelsDataService } from './pixels-data.service';
+import { composeSnapshot, dayScoreVector } from './pixels-model';
 
 describe('PixelsDataService', () => {
   let service: PixelsDataService;
@@ -377,5 +378,122 @@ describe('PixelsDataService', () => {
     }));
     const result = await service.load({ from: '2026-08-01', to: '2026-08-02', profile: false, includeTrips: false, today: '2026-10-29' });
     expect(result).toEqual({ status: 'dropped' });
+  });
+
+  function dayBody(date = '2026-08-15') {
+    const coverage = { status: 'ok', included: 1, total: 1, truncated: false };
+    const empty = { status: 'ok', included: 0, total: 0, truncated: false };
+    return {
+      date,
+      facts: [{
+        id: 'habit_checkin:1',
+        namespace: 'habit_checkin',
+        occurrence_id: 1,
+        kind: 'checkin',
+        date,
+        coverage: 'complete',
+        provenance: 'Pixels counts this habit check-in on its civil day.',
+        title: 'Read synthetic',
+        route: '/town/',
+      }],
+      annotations: [{
+        id: 'world_concept:7',
+        concept_id: 7,
+        name: 'Synthetic concept',
+        understood_on: date,
+        provenance: 'It does not change the Pixels score.',
+      }],
+      coverage: { town: coverage, media: empty, travel: empty, concepts: coverage },
+      differences: [{ id: 'concept-not-score', text: 'It does not change the Pixels score.' }],
+      counts: { town: 1 },
+    };
+  }
+
+  it('loads one day of dated facts', async () => {
+    const pending = service.loadDay('2026-08-15');
+    const req = http.expectOne(request => request.url === '/api/pixels/day' && request.params.get('date') === '2026-08-15');
+    expect(req.request.method).toBe('GET');
+    req.flush(dayBody());
+    const result = await pending;
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(result.facts.facts[0]?.id).toBe('habit_checkin:1');
+    expect(result.facts.annotations[0]?.name).toBe('Synthetic concept');
+    http.expectNone(() => true);
+  });
+
+  it('drops the previous day when a later day is selected', async () => {
+    const first = service.loadDay('2026-08-15');
+    const held = http.expectOne(request => request.params.get('date') === '2026-08-15');
+    const second = service.loadDay('2026-08-14');
+    expect(held.cancelled).toBeTrue();
+    const current = http.expectOne(request => request.params.get('date') === '2026-08-14');
+    current.flush(dayBody('2026-08-14'));
+    await expectAsync(first).toBeResolvedTo({ status: 'dropped' });
+    const result = await second;
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(result.facts.date).toBe('2026-08-14');
+  });
+
+  it('drops a day read and an annotation write when the owner changes', async () => {
+    service.noteUser(7);
+    const reading = service.loadDay('2026-08-15');
+    const dayReq = http.expectOne(request => request.url === '/api/pixels/day');
+    service.noteUser(8);
+    expect(dayReq.cancelled).toBeTrue();
+    await expectAsync(reading).toBeResolvedTo({ status: 'dropped' });
+
+    service.noteUser(9);
+    const writing = service.changeAnnotation({ kind: 'archive', conceptId: 7 });
+    const patch = http.expectOne(request => request.method === 'PATCH' && request.url === '/api/world/concepts/7');
+    service.noteUser(10);
+    expect(patch.cancelled).toBeTrue();
+    await expectAsync(writing).toBeResolvedTo({ status: 'dropped' });
+  });
+
+  it('keeps a typed redate failure off the score vector', async () => {
+    const loaded = pixelsBody();
+    const snapshot = composeSnapshot({
+      body: { ...loaded, sources: { town: 'ok', media: 'ok', travel: 'ok' } },
+      today: '2026-10-29',
+      trips: [],
+      financeStatus: 'locked',
+      financeKept: new Map(),
+      fetchedAt: 1,
+      profile: null,
+    });
+    const before = dayScoreVector(snapshot.days[0]!);
+    const pending = service.changeAnnotation({ kind: 'redate', conceptId: 7, understoodOn: '2026-02-31' });
+    const req = http.expectOne(request => request.method === 'PATCH' && request.url === '/api/world/concepts/7');
+    const body = req.request.body as { understood_on: string };
+    expect(body.understood_on).toBe('2026-02-31');
+    req.flush({ code: 'concept_date_invalid', message: 'Enter a real date.' }, { status: 422, statusText: 'Unprocessable' });
+    await expectAsync(pending).toBeResolvedTo({ status: 'failed', message: 'Enter a real date.' });
+    expect(dayScoreVector(snapshot.days[0]!)).toBe(before);
+
+    const cleared = service.changeAnnotation({ kind: 'redate', conceptId: 7, understoodOn: '  ' });
+    const clearReq = http.expectOne(request => request.method === 'PATCH' && request.url === '/api/world/concepts/7');
+    expect((clearReq.request.body as { understood_on: string | null }).understood_on).toBeNull();
+    clearReq.flush({ id: 7 });
+    await expectAsync(cleared).toBeResolvedTo({ status: 'ready' });
+    expect(dayScoreVector(snapshot.days[0]!)).toBe(before);
+  });
+
+  it('reports an annotation deadline without a new score', fakeAsync(() => {
+    const pending = service.changeAnnotation({ kind: 'delete', conceptId: 7 });
+    const req = http.expectOne(request => request.method === 'DELETE' && request.url === '/api/world/concepts/7');
+    let status = '';
+    void pending.then(result => { status = result.status === 'failed' ? result.message : result.status; });
+    tick(PIXELS_ACTION_DEADLINE_MS);
+    expect(req.cancelled).toBeTrue();
+    flushMicrotasks();
+    expect(status).toBe('That annotation could not be changed. The score is unchanged.');
+  }));
+
+  it('treats a day body that is not the contract as unavailable', async () => {
+    const pending = service.loadDay('2026-08-15');
+    http.expectOne(request => request.url === '/api/pixels/day').flush({ date: '2026-08-15' });
+    await expectAsync(pending).toBeResolvedTo({ status: 'unavailable' });
   });
 });

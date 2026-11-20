@@ -6,16 +6,26 @@ import {
   HostListener,
   OnDestroy,
   computed,
+  effect,
   inject,
   input,
   output,
+  signal,
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { ReturnContext, dayActivities, vaultReturnQuery } from '@vivek/ui';
 import { pixelsDayActivityPath } from '../../../../finance/frontend/src/public-api';
 import { isIsoDate } from './pixels-dates';
-import { tripDayLabel } from './pixels-model';
-import type { FinanceJoinStatus, PixelDayView } from './pixels.types';
+import { dayScoreVector, tripDayLabel } from './pixels-model';
+import type {
+  DayFactsStatus,
+  FinanceJoinStatus,
+  PixelAnnotation,
+  PixelDayFacts,
+  PixelDayView,
+  PixelFact,
+  SourceCoverage,
+} from './pixels.types';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
@@ -71,12 +81,49 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
   private focusTimers: ReturnType<typeof setTimeout>[] = [];
 
+  constructor() {
+    effect(() => {
+      const ids = (this.facts()?.annotations ?? []).map(item => item.id).join(',');
+      const previous = this.shownAnnotations;
+      this.shownAnnotations = ids;
+      if (!previous || previous === ids) return;
+      const removed = previous.split(',').some(id => id !== '' && !ids.split(',').includes(id));
+      if (!removed) return;
+      queueMicrotask(() => {
+        this.host.nativeElement.querySelector<HTMLElement>('#day-learning-heading')?.focus();
+      });
+    });
+  }
+
   day = input<PixelDayView | null>(null);
   financeStatus = input<FinanceJoinStatus>('locked');
   today = input('');
   phone = input(false);
   unlockSource = input('/pixels');
+  facts = input<PixelDayFacts | null>(null);
+  factsStatus = input<DayFactsStatus>('idle');
+  annotationError = input<string | null>(null);
+  draftEpoch = input(0);
+  mutating = input(false);
   closed = output<void>();
+  archive = output<number>();
+  remove = output<number>();
+  redate = output<{ conceptId: number; understoodOn: string }>();
+
+  protected readonly scoreVector = computed(() => {
+    const day = this.day();
+    return day ? dayScoreVector(day) : '';
+  });
+  protected readonly drafts = signal<ReadonlyMap<string, string>>(new Map());
+  protected readonly coverageLines = computed(() => {
+    const facts = this.facts();
+    if (!facts || this.factsStatus() !== 'ready') return [];
+    return (['town', 'media', 'travel', 'concepts'] as const).map(key => ({
+      key,
+      text: coverageText(key, facts.coverage[key]),
+    }));
+  });
+  private shownAnnotations = '';
 
   readonly detail = computed(() => {
     const day = this.day();
@@ -116,6 +163,48 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
     this.closed.emit();
   }
 
+  protected factLabel(fact: PixelFact): string {
+    const kind = fact.kind === 'checkin'
+      ? 'Town check-in'
+      : fact.kind === 'episode'
+        ? 'Watched episode'
+        : 'Trip span';
+    return fact.title ? `${kind} · ${fact.title}` : kind;
+  }
+
+  protected draftValue(id: string): string {
+    return this.drafts().get(this.draftKey(id)) ?? '';
+  }
+
+  protected onDraft(id: string, event: Event): void {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    const value = target.value;
+    const key = this.draftKey(id);
+    this.drafts.update(current => {
+      const next = new Map(current);
+      next.set(key, value);
+      return next;
+    });
+  }
+
+  protected submitRedate(event: Event, annotation: PixelAnnotation): void {
+    event.preventDefault();
+    this.redate.emit({
+      conceptId: annotation.conceptId,
+      understoodOn: this.draftValue(annotation.id),
+    });
+  }
+
+  /** A lock, owner change, or selected day starts a new draft. The previous text stays out of the field. */
+  private draftKey(id: string): string {
+    return `${this.draftEpoch()}|${this.day()?.date ?? ''}|${id}`;
+  }
+
+  protected redateId(conceptId: number): string {
+    return `redate-${conceptId}`;
+  }
+
   private cancelFocus(): void {
     for (const timer of this.focusTimers) clearTimeout(timer);
     this.focusTimers = [];
@@ -132,4 +221,19 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
     // The shell moves focus to the page heading while this sheet is still mounting.
     this.focusTimers.push(setTimeout(focus, 0), setTimeout(focus, 50));
   }
+}
+
+const COVERAGE_LABEL = {
+  town: 'Town check-ins',
+  media: 'Watched episodes',
+  travel: 'Trip spans',
+  concepts: 'Learning annotations',
+} as const;
+
+function coverageText(key: keyof typeof COVERAGE_LABEL, coverage: SourceCoverage): string {
+  const label = COVERAGE_LABEL[key];
+  if (coverage.status === 'absent') return `${label} are not set up.`;
+  if (coverage.status !== 'ok') return `${label} are unavailable. The score is unchanged.`;
+  const suffix = coverage.truncated ? ', truncated' : '';
+  return `${label}: ${coverage.included} of ${coverage.total}${suffix}.`;
 }

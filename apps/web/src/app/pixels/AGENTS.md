@@ -5,6 +5,12 @@
 [Year model](pixels-model.ts) and [life model](life-model.ts) own their projections.
 Reuse them instead of copying date, dominance, cap or threshold calculations.
 
+`GET /api/pixels/day` projects occurrence ids, civil dates, and coverage for the
+selected day, plus active concept annotations. Archive, delete, or a new
+understood date calls the existing concept routes and retracts that annotation.
+Channel counts stay on `GET /api/pixels`.
+The score engine still reads only those counts.
+
 Keep calendar-day, Sunday-week and life-span meanings distinct. Preserve leap days,
 partial spans and the existing birthday/privacy contract. Do not expose private
 Finance amounts/names through server activity counts.

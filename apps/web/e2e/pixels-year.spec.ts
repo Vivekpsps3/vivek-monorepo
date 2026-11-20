@@ -6,7 +6,7 @@ test.describe('Pixels year', () => {
   test.use({ timezoneId: 'America/Los_Angeles' });
 
   test.beforeEach(async ({ page, request }) => {
-    expect((await request.post('/e2e/reset?seed=pixels')).ok()).toBeTruthy();
+    expect((await request.post('/e2e/reset?seed=pixels-facts')).ok()).toBeTruthy();
     await page.clock.setFixedTime(new Date('2026-10-29T19:00:00Z'));
   });
 
@@ -239,6 +239,7 @@ test.describe('Pixels year', () => {
         await expect(portland).toBeFocused();
         await page.keyboard.press('Enter');
         await expect(page).toHaveURL(/day=2026-08-15/);
+        await expect(page.getByRole('heading', { name: 'Synthetic concept' })).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
         const scan = await new AxeBuilder({ page }).analyze();
         expect(scan.violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);

@@ -95,7 +95,7 @@ def fixture_app(directory: Path, suite: str):
 
     clock_box = {"now": TOWN_CLOCK}
 
-    def seed_pixels(empty: bool) -> None:
+    def seed_pixels(empty: bool, facts: bool = False) -> None:
         from apps.travel.backend.models import Trip
 
         now = datetime.now(UTC)
@@ -159,6 +159,35 @@ def fixture_app(directory: Path, suite: str):
                     ),
                 ]
             )
+            if facts:
+                from apps.server.world.models import WorldConcept, make_concept_name_key
+
+                db.add_all(
+                    [
+                        WorldConcept(
+                            user_id=1,
+                            name="Synthetic concept",
+                            name_key=make_concept_name_key("Synthetic concept"),
+                            note="synthetic private note",
+                            source=None,
+                            understood_on=date(2026, 8, 15),
+                            archived_at=None,
+                            created_at=now,
+                            updated_at=now,
+                        ),
+                        WorldConcept(
+                            user_id=2,
+                            name="Foreign concept",
+                            name_key=make_concept_name_key("Foreign concept"),
+                            note="foreign private note",
+                            source=None,
+                            understood_on=date(2026, 8, 15),
+                            archived_at=None,
+                            created_at=now,
+                            updated_at=now,
+                        ),
+                    ]
+                )
 
     def seed_town(empty: bool) -> None:
         """Owner habits plus a second person whose name must stay out of the signed-in DOM."""
@@ -245,8 +274,8 @@ def fixture_app(directory: Path, suite: str):
             clock_box["now"] = TOWN_CLOCK
             _align_media_today(TOWN_CLOCK)
         seed = request.query_params.get("seed") or ""
-        if seed in {"pixels", "pixels-empty"}:
-            seed_pixels(empty=seed == "pixels-empty")
+        if seed in {"pixels", "pixels-empty", "pixels-facts"}:
+            seed_pixels(empty=seed == "pixels-empty", facts=seed == "pixels-facts")
         elif seed in {"town", "town-empty"}:
             seed_town(empty=seed == "town-empty")
         elif suite == "media":

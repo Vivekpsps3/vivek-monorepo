@@ -9,7 +9,7 @@ import { PixelsDataService } from './pixels-data.service';
 import { clampYearDay, yearOf } from './pixels-dates';
 import { sourceNotices, withoutFinance, yearScreenState, yearStats } from './pixels-model';
 import { PixelsPreferences } from './pixels-preferences';
-import type { PixelsSnapshot } from './pixels.types';
+import type { AnnotationChange, DayFactsStatus, PixelDayFacts, PixelsSnapshot } from './pixels.types';
 import { YearGridComponent } from './year-grid.component';
 import { YearStatsComponent } from './year-stats.component';
 import { YearTableComponent } from './year-table.component';
@@ -52,8 +52,14 @@ export class YearPageComponent {
   readonly phone = signal(false);
   private readonly phase = signal<HubCardState>('loading');
   readonly snapshot = signal<PixelsSnapshot | null>(null);
+  readonly facts = signal<PixelDayFacts | null>(null);
+  readonly factsStatus = signal<DayFactsStatus>('idle');
+  readonly annotationError = signal<string | null>(null);
+  readonly draftEpoch = signal(0);
+  readonly mutating = signal(false);
 
   private requestId = 0;
+  private dayRequest = 0;
   private loadedYear: number | null = null;
   private correcting = false;
   private returnFrame = 0;
@@ -103,21 +109,26 @@ export class YearPageComponent {
     });
     this.destroyRef.onDestroy(() => {
       this.requestId += 1;
+      this.dayRequest += 1;
       cancelAnimationFrame(this.returnFrame);
     });
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => {
       this.onQuery(params.get('year'), params.get('day'));
     });
     this.data.financeCleared$.pipe(takeUntilDestroyed()).subscribe(() => {
+      this.draftEpoch.update(value => value + 1);
       this.snapshot.update(current => current ? withoutFinance(current, this.today) : current);
       this.loadedYear = null;
       this.load(true);
+      this.loadDayFacts(this.day());
     });
     this.data.userChanged$.pipe(takeUntilDestroyed()).subscribe(() => {
+      this.draftEpoch.update(value => value + 1);
       this.snapshot.set(null);
       this.phase.set('loading');
       this.loadedYear = null;
       this.load(true);
+      this.loadDayFacts(this.day());
     });
     this.bindPhone();
   }
@@ -156,6 +167,19 @@ export class YearPageComponent {
 
   reload(): void {
     this.load(true);
+    this.loadDayFacts(this.day());
+  }
+
+  protected onArchive(conceptId: number): void {
+    void this.mutate({ kind: 'archive', conceptId });
+  }
+
+  protected onRemove(conceptId: number): void {
+    void this.mutate({ kind: 'delete', conceptId });
+  }
+
+  protected onRedate(change: { conceptId: number; understoodOn: string }): void {
+    void this.mutate({ kind: 'redate', conceptId: change.conceptId, understoodOn: change.understoodOn });
   }
 
   private onQuery(yearRaw: string | null, dayRaw: string | null): void {
@@ -187,7 +211,54 @@ export class YearPageComponent {
     this.year.set(year);
     this.day.set(day);
     this.load();
+    this.loadDayFacts(day);
     this.restoreView();
+  }
+
+  private async mutate(action: AnnotationChange): Promise<void> {
+    const date = this.day();
+    if (!date) return;
+    this.annotationError.set(null);
+    this.mutating.set(true);
+    try {
+      const result = await this.data.changeAnnotation(action);
+      if (this.day() !== date) return;
+      if (result.status === 'dropped') return;
+      if (result.status === 'failed') {
+        this.annotationError.set(result.message);
+        return;
+      }
+      this.loadDayFacts(date, true);
+    } finally {
+      this.mutating.set(false);
+    }
+  }
+
+  private loadDayFacts(date: string | null, preserve = false): void {
+    const requestId = ++this.dayRequest;
+    this.annotationError.set(null);
+    if (!date) {
+      this.facts.set(null);
+      this.factsStatus.set('idle');
+      return;
+    }
+    const current = this.facts();
+    const keep = preserve && current?.date === date && this.factsStatus() === 'ready';
+    if (!keep) {
+      this.facts.set(null);
+      this.factsStatus.set('loading');
+    }
+    void this.data.loadDay(date).then(result => {
+      if (requestId !== this.dayRequest || this.day() !== date) return;
+      if (result.status === 'ready') {
+        this.facts.set(result.facts);
+        this.factsStatus.set('ready');
+        return;
+      }
+      if (result.status === 'dropped') return;
+      this.facts.set(null);
+      this.factsStatus.set(result.status);
+    });
   }
 
   private load(force = false): void {
