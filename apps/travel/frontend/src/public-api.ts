@@ -15,6 +15,13 @@ export const routes: Routes = [
           import("./travel.component").then((m) => m.TravelComponent),
       },
       {
+        path: "terminal",
+        title: "Travel · Terminal",
+        canDeactivate: [leave],
+        loadComponent: () =>
+          import("./terminal-hall.component").then((m) => m.TerminalHallComponent),
+      },
+      {
         path: "trips/new",
         title: "Travel · New trip",
         canDeactivate: [leave],

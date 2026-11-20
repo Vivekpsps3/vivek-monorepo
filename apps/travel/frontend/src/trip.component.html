@@ -1,6 +1,6 @@
 <main class="page travel-page">
   @if (!data()) {
-    <a class="ui-page-header__back" routerLink="/travel">← Trips</a>
+    <a class="ui-page-header__back" [href]="hallBack()">{{ hallBackLabel() }}</a>
   }
   @if (error() && !editor) {
     <div class="local-error" role="alert">
@@ -13,9 +13,9 @@
   }
   @if (data(); as trip) {
     <ui-page-header
-      backLabel="← Trips"
-      backLink="/travel"
-      backSource="/travel"
+      [backLabel]="hallBackLabel()"
+      [backLink]="hallBack()"
+      [backSource]="hallBack()"
       [title]="trip.title"
     >
       <p>{{ trip.status }} · {{ trip.phase }}</p>

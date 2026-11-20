@@ -344,6 +344,14 @@ export class NewTripComponent {
     )
       .pipe(take(1), takeUntilDestroyed(this.destroy))
       .subscribe(() => this.clearOwned());
+    const incoming = this.router.getCurrentNavigation()?.extras?.state?.["terminalFlight"] as
+      | AcceptedFlight
+      | undefined;
+    if (incoming?.ok === true && incoming.end === "") {
+      queueMicrotask(() => {
+        if (this.sessionActive) this.stageFlight(incoming);
+      });
+    }
   }
   readonly model = signal(blankRange());
   readonly fields = signal<Record<string, string>>({});
