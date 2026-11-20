@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#426](https://github.com/Vivekpsps3/vivek-monorepo/issues/426) PIX-03. Parents [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304) and [#311](https://github.com/Vivekpsps3/vivek-monorepo/issues/311) stay open. Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. #277 stays open and was not edited. #306 and #317 stay open.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/pix-03`; `/tmp/vivek-pix-03`. The shared checkout was not edited.
-- Base main SHA, current tested SHA: base `2aa988de06a73a5c7c3600df41137e7bb986b66a` (PIX-02 merge, pull request #544). `git fetch origin main` on 2026-11-20 still returned that SHA. Commands ran on that base plus this working tree. The implementation commit is named in the follow-up that only edits this file.
+- Base main SHA, current tested SHA: base `2aa988de06a73a5c7c3600df41137e7bb986b66a` (PIX-02 merge, pull request #544). `git fetch origin main` on 2026-11-20 still returned that SHA. The implementation and these command results are `15eabb09d2e0c3a90d4939f2b302534eef9c68e4`. This sentence names that commit; the follow-up only edits this evidence file.
 - Fresh-main/prerequisite/active-PR checks: `gh pr list --state open` returned no pull requests, including none on private-routes or town-ui. #423 is merged as #544 and `origin/main` still has `/pixels/day`, `day-memory.ts`, and the year draft epoch. #384 is merged: dense tables, 44px controls, and the town axe journey remain. #426, #304, #311, #134, and #277 were open when this evidence was written.
 
 ## Acceptance
@@ -44,13 +44,13 @@ An earlier town Playwright run, before `make build-frontends`, received the work
 
 | Command | Tested SHA | Result |
 | --- | --- | --- |
-| `PATH="/tmp/vivek-pix-03/.venv/bin:$PATH" make test-fast` | working tree on `2aa988de`; implementation commit named in the follow-up | PASS. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. Town e2e discovery listed 13 files. Suite discovery listed 12. Finance 49, travel 32, and media 27 were listed and not executed. Shared boundaries OK. |
-| `make lint-web` | same tree | PASS. eslint-finance 344, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. No baseline was raised. |
-| `make typecheck-web` | same tree | PASS. `tsc --noEmit` for web app, web spec, finance app, finance spec, packages, site app, and site spec. |
-| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | same tree | PASS. 462 SUCCESS. Statements 74.1% (6578/8876). Branches 59.69% (2610/4372). Functions 73.75% (1298/1760). Lines 78.91% (5709/7234). |
-| `make build-frontends` | same tree | PASS. Output `/tmp/vivek-pix-03/dist/web`. Release `e5bb64ee92bf3cb14f184195d13b8fe555f83e8088b199030d4c4286c5a9389d`. Initial total 678.12 kB. Exit 0. The 650 kB warning was not treated as a failure and the budget was not raised. |
-| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --config apps/web/e2e/playwright.config.ts` | same tree, bundle above | PASS. 131 passed. Includes both `pixels-atlas.spec.ts` viewports: leap-day grid and table, life span, partial and future coverage, and no thumbnail request. |
-| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --project=suite` | same tree, bundle above | PASS. 61 passed. |
+| `PATH="/tmp/vivek-pix-03/.venv/bin:$PATH" make test-fast` | `15eabb09d2e0c3a90d4939f2b302534eef9c68e4` | PASS. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. Town e2e discovery listed 13 files. Suite discovery listed 12. Finance 49, travel 32, and media 27 were listed and not executed. Shared boundaries OK. |
+| `make lint-web` | `15eabb09d2e0c3a90d4939f2b302534eef9c68e4` | PASS. eslint-finance 344, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. No baseline was raised. |
+| `make typecheck-web` | `15eabb09d2e0c3a90d4939f2b302534eef9c68e4` | PASS. `tsc --noEmit` for web app, web spec, finance app, finance spec, packages, site app, and site spec. |
+| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | `15eabb09d2e0c3a90d4939f2b302534eef9c68e4` | PASS. 462 SUCCESS. Statements 74.1% (6578/8876). Branches 59.69% (2610/4372). Functions 73.75% (1298/1760). Lines 78.91% (5709/7234). |
+| `make build-frontends` | `15eabb09d2e0c3a90d4939f2b302534eef9c68e4` | PASS. Output `/tmp/vivek-pix-03/dist/web`. Release `e5bb64ee92bf3cb14f184195d13b8fe555f83e8088b199030d4c4286c5a9389d`. Initial total 678.12 kB. Exit 0. The 650 kB warning was not treated as a failure and the budget was not raised. |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --config apps/web/e2e/playwright.config.ts` | `15eabb09d2e0c3a90d4939f2b302534eef9c68e4` | PASS. 131 passed. Includes both `pixels-atlas.spec.ts` viewports: leap-day grid and table, life span, partial and future coverage, and no thumbnail request. |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --project=suite` | `15eabb09d2e0c3a90d4939f2b302534eef9c68e4` | PASS. 61 passed. |
 | `make lint-python` | — | NOT RUN. The diff has no Python product file. |
 | `make typecheck-python` | — | NOT RUN. The diff has no Python product file. |
 | `./scripts/coverage-gate.sh server` | — | NOT RUN. The diff has no Python product file. |
@@ -63,4 +63,4 @@ Finance Karma, site Karma, Travel and Media coverage, Finance Playwright, Travel
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #311, #134, and #277 stay open. #306 and #317 stay open. This leaf does not deploy.
-- Next actor: commit, push, open the pull request, wait for green required checks, then merge with a merge commit.
+- Next actor: push, open the pull request, wait for green required checks, then merge with a merge commit.
