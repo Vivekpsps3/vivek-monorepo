@@ -59,7 +59,7 @@ Finance Karma, site Karma, Travel and Media coverage, Finance Playwright, Travel
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): after the pull request is opened. The body uses `Closes #421` only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/543 (`Closes #421` only).
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #306, #134, and #277 stay open. This leaf does not deploy.
