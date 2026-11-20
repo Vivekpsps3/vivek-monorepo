@@ -10,6 +10,7 @@ from apps.server.auth import Principal, require_principal
 from apps.travel.backend.database import get_db
 from apps.travel.backend.schemas import HomeResponse
 from apps.travel.backend.services.assemble import build_calendar, build_home, build_summary
+from apps.travel.backend.services.memories import project_memories
 from packages.time.today import today_in_zone
 
 router = APIRouter()
@@ -43,6 +44,22 @@ def summary(
     if start is not None and end is not None and not 0 <= (end - start).days <= 41:
         raise HTTPException(status_code=422, detail="Ask for 1 to 42 days in order.")
     return build_summary(db, today=today, user_id=principal.id, start=start, end=end)
+
+
+@router.get("/memories")
+def memories(
+    tz: str = Query(min_length=1),
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    name = tz.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Use a valid IANA timezone.")
+    try:
+        zone = ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError, OSError) as exc:
+        raise HTTPException(status_code=422, detail="Use a valid IANA timezone.") from exc
+    return project_memories(db, principal.id, zone, name)
 
 
 @router.get("/calendar")

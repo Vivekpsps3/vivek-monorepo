@@ -1,0 +1,51 @@
+.memory-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.memory-card {
+  min-width: 0;
+  padding: 1rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  animation: memory-in 0.2s ease;
+}
+
+.memory-card:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.memory-card h2,
+.memory-card h3,
+.memory-card p {
+  overflow-wrap: anywhere;
+}
+
+.memory-card h3 {
+  margin: 0.75rem 0 0.2rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.memory-card .button-row {
+  margin-top: 0.5rem;
+}
+
+@keyframes memory-in {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memory-card {
+    animation: none;
+    transition: none;
+  }
+}
