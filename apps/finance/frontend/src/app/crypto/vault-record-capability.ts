@@ -194,8 +194,10 @@ export function createVaultRecordCapability(
   };
 }
 
-export function openVaultRecords(injector: Injector): VaultRecordCapability {
+/** Records stay closed until a saved key is restored or confirmed missing. */
+export async function openVaultRecords(injector: Injector): Promise<VaultRecordCapability> {
   const vault = injector.get(VaultService);
+  await vault.whenReady();
   const session = injector.get(SESSION_CONTEXT, null, { optional: true });
   return createVaultRecordCapability(vault, () => ({
     ownerId: ownerId(session?.currentUser?.id),

@@ -1,5 +1,5 @@
 <ui-dialog [open]="open()" labelledBy="health-entry-title" (closed)="onClosed()">
-  <h2 id="health-entry-title">{{ room() === 'clinic' ? 'Add weight' : 'Add lift' }}</h2>
+  <h2 id="health-entry-title">{{ heading() }}</h2>
   <p id="health-entry-help">Saved values stay in canonical units. This choice only changes how they are shown.</p>
   <form (submit)="onSubmit($event)" novalidate>
     <ui-field label="Measured on" [required]="true" [error]="message(errors()['measured_on'])">
@@ -7,24 +7,49 @@
         min="1900-01-01" [attr.max]="today()" data-dialog-initial-focus
         [value]="local().measuredOn" (input)="onMeasured($event)" />
     </ui-field>
-    @if (room() === 'gym') {
+    <p class="logged-on" id="health-logged-on">Logged on <time [attr.datetime]="loggedOn()">{{ loggedOn() }}</time></p>
+    @if (kind() === 'lift') {
       <ui-field label="Exercise" [required]="true" [error]="message(errors()['exercise'])">
         <input uiFieldControl id="health-exercise" name="exercise" type="text" required autocomplete="off"
           [value]="local().exercise" (input)="onExercise($event)" />
       </ui-field>
     }
-    <ui-field [label]="weightLabel()" [required]="true" [error]="message(errors()['kg'])">
-      <input uiFieldControl id="health-weight" name="weight" type="text" inputmode="decimal" required autocomplete="off"
-        [value]="local().weight" (input)="onWeight($event)" />
-    </ui-field>
-    @if (room() === 'gym') {
+    @if (kind() === 'weight' || kind() === 'lift') {
+      <ui-field [label]="weightLabel()" [required]="true" [error]="message(errors()['kg'])">
+        <input uiFieldControl id="health-weight" name="weight" type="text" inputmode="decimal" required autocomplete="off"
+          [value]="local().weight" (input)="onWeight($event)" />
+      </ui-field>
+    }
+    @if (kind() === 'lift') {
       <ui-field label="Reps" [required]="true" [error]="message(errors()['reps'])">
         <input uiFieldControl id="health-reps" name="reps" type="text" inputmode="numeric" required autocomplete="off"
           [value]="local().reps" (input)="onReps($event)" />
       </ui-field>
     }
+    @if (kind() === 'rhr') {
+      <ui-field label="Resting heart rate (bpm)" [required]="true" hint="Whole number from 25 to 220." [error]="message(errors()['bpm'])">
+        <input uiFieldControl id="health-bpm" name="bpm" type="text" inputmode="numeric" required autocomplete="off"
+          [value]="local().bpm" (input)="onBpm($event)" />
+      </ui-field>
+    }
+    @if (kind() === 'bp') {
+      <ui-field label="Systolic (mmHg)" [required]="true" hint="Whole number from 60 to 260." [error]="message(errors()['sys'])">
+        <input uiFieldControl id="health-systolic" name="sys" type="text" inputmode="numeric" required autocomplete="off"
+          [value]="local().sys" (input)="onSys($event)" />
+      </ui-field>
+      <ui-field label="Diastolic (mmHg)" [required]="true" hint="Whole number from 30 to 160." [error]="message(errors()['dia'])">
+        <input uiFieldControl id="health-diastolic" name="dia" type="text" inputmode="numeric" required autocomplete="off"
+          [value]="local().dia" (input)="onDia($event)" />
+      </ui-field>
+    }
+    @if (kind() === 'sleep') {
+      <ui-field label="Sleep (hours)" [required]="true" hint="Quarter hours from 0 to 24." [error]="message(errors()['hours'])">
+        <input uiFieldControl id="health-sleep" name="hours" type="text" inputmode="decimal" required autocomplete="off"
+          [value]="local().hours" (input)="onHours($event)" />
+      </ui-field>
+    }
     @if (formError()) {
-      <p class="form-error" role="alert">{{ formError() }}</p>
+      <p class="form-error" id="health-form-error" role="alert" tabindex="-1">{{ formError() }}</p>
     }
     <div class="dialog-actions">
       <ui-button type="submit" [busy]="busy()" [disabled]="busy()">Save</ui-button>

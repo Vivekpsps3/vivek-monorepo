@@ -1,8 +1,9 @@
-import { AfterViewChecked, ChangeDetectionStrategy, Component, DestroyRef, Directive, ElementRef, InjectionToken, Injector, OnInit, computed, effect, inject, input, signal } from '@angular/core';
+import { AfterViewChecked, ChangeDetectionStrategy, Component, DestroyRef, Directive, ElementRef, InjectionToken, Injector, OnInit, afterRenderEffect, computed, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { localTodayIso } from '@vivek/browser';
 import {
+  ConfirmService,
   UiButtonComponent,
   UiPageHeaderComponent,
   UiSegmentedComponent,
@@ -17,12 +18,19 @@ import {
   DEFAULT_HEALTH_UNITS,
   EMPTY_HEALTH_DRAFT,
   corruptNotice,
+  draftFromStat,
   formatHealthPr,
   formatHealthStat,
+  healthDeletePhrase,
+  isVitalKind,
   readHealthUnits,
+  reformatWeightDraft,
+  sameStoredStat,
   writeHealthUnits,
   type HealthDraft,
+  type HealthEditorKind,
   type HealthUnits,
+  type HealthVitalKind,
 } from './health-entry';
 import {
   HEALTH_CONFLICT_MESSAGE,
@@ -62,6 +70,15 @@ export class HealthLinkedFocusDirective implements AfterViewChecked {
   }
 }
 
+function vitalName(kind: HealthVitalKind): string {
+  switch (kind) {
+    case 'weight': return 'weight';
+    case 'rhr': return 'resting heart rate';
+    case 'bp': return 'blood pressure';
+    case 'sleep': return 'sleep';
+  }
+}
+
 function isStat(value: HealthStat | HealthPr): value is HealthStat {
   return value.kind === 'weight' || value.kind === 'rhr' || value.kind === 'bp'
     || value.kind === 'sleep' || value.kind === 'lab' || value.kind === 'checkup';
@@ -90,6 +107,7 @@ export class HealthRoomComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly session = inject(SessionService);
   private readonly store = inject(HealthStoreService);
+  private readonly confirm = inject(ConfirmService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly vaultExists = inject(HEALTH_VAULT_EXISTS);
   private readonly params = toSignal(this.route.queryParamMap, { requireSync: true });
@@ -107,7 +125,14 @@ export class HealthRoomComponent implements OnInit {
   protected readonly dialogOpen = signal(false);
   protected readonly formError = signal('');
   protected readonly busy = signal(false);
+  private readonly returnFocusKind = signal<HealthVitalKind | null>(null);
   protected readonly emptyDraft = EMPTY_HEALTH_DRAFT;
+  protected readonly vitalAdds: readonly { kind: HealthVitalKind; label: string; id: string }[] = [
+    { kind: 'weight', label: 'Add weight', id: 'health-add-weight' },
+    { kind: 'rhr', label: 'Add resting heart rate', id: 'health-add-rhr' },
+    { kind: 'bp', label: 'Add blood pressure', id: 'health-add-bp' },
+    { kind: 'sleep', label: 'Add sleep', id: 'health-add-sleep' },
+  ];
   protected readonly weightOptions = [
     { value: 'lb', label: 'Pounds' },
     { value: 'kg', label: 'Kilograms' },
@@ -122,16 +147,31 @@ export class HealthRoomComponent implements OnInit {
     return isHealthEntryId(value) ? value : null;
   });
   protected readonly title = computed(() => this.room() === 'clinic' ? 'Clinic' : 'Gym');
+  protected readonly editorKind = computed<HealthEditorKind>(() => {
+    const draft = this.draft();
+    if (draft) return draft.kind;
+    return this.room() === 'gym' ? 'lift' : 'weight';
+  });
   protected readonly rows = computed(() => {
     const units = this.units();
     if (this.room() === 'clinic') {
       return this.entries().flatMap(entry => isStat(entry.value)
-        ? [{ clientId: entry.clientId, label: formatHealthStat(entry.value, units) }]
+        ? [{
+          clientId: entry.clientId,
+          label: formatHealthStat(entry.value, units),
+          kind: entry.value.kind,
+          vital: isVitalKind(entry.value.kind),
+        }]
         : []);
     }
     return this.entries().flatMap(entry => isStat(entry.value)
       ? []
-      : [{ clientId: entry.clientId, label: formatHealthPr(entry.value, units) }]);
+      : [{
+        clientId: entry.clientId,
+        label: formatHealthPr(entry.value, units),
+        kind: entry.value.kind,
+        vital: false,
+      }]);
   });
   protected readonly missingEntry = computed(() => {
     const id = this.entryId();
@@ -160,6 +200,22 @@ export class HealthRoomComponent implements OnInit {
       this.formError.set('');
       if (this.phase() === 'ready') this.publish();
     });
+    afterRenderEffect(() => {
+      const kind = this.returnFocusKind();
+      if (!kind || this.phase() !== 'ready' || this.dialogOpen()) return;
+      setTimeout(() => {
+        if (this.returnFocusKind() !== kind || this.phase() !== 'ready' || this.dialogOpen()) return;
+        const button = document.querySelector<HTMLElement>(`#health-add-${kind} button`);
+        if (!button) return;
+        let node: HTMLElement | null = button;
+        while (node) {
+          if (node.inert) return;
+          node = node.parentElement;
+        }
+        this.returnFocusKind.set(null);
+        button.focus();
+      });
+    });
   }
 
   ngOnInit(): void {
@@ -181,14 +237,38 @@ export class HealthRoomComponent implements OnInit {
     void this.resolveGate();
   }
 
-  protected openDialog(): void {
+  protected openCreate(kind: HealthVitalKind): void {
     this.formError.set('');
+    const draft = this.draft();
+    if (!draft || draft.kind !== kind || draft.clientId) {
+      this.draft.set({ ...EMPTY_HEALTH_DRAFT, kind });
+    }
+    this.dialogOpen.set(true);
+  }
+
+  protected openLift(): void {
+    this.formError.set('');
+    const draft = this.draft();
+    if (!draft || draft.kind !== 'lift' || draft.clientId) {
+      this.draft.set({ ...EMPTY_HEALTH_DRAFT, kind: 'lift' });
+    }
+    this.dialogOpen.set(true);
+  }
+
+  protected openEdit(clientId: string): void {
+    const entry = this.entries().find(item => item.clientId === clientId);
+    if (!entry || !isStat(entry.value)) return;
+    const draft = draftFromStat({ clientId: entry.clientId, value: entry.value }, this.units());
+    if (!draft) return;
+    this.formError.set('');
+    this.draft.set(draft);
     this.dialogOpen.set(true);
   }
 
   protected onDraft(draft: HealthDraft): void {
     if (this.dead) return;
     this.draft.set(draft);
+    if (this.formError()) this.formError.set('');
   }
 
   protected onDialogClosed(): void {
@@ -198,7 +278,12 @@ export class HealthRoomComponent implements OnInit {
 
   protected setWeight(value: string | number | null): void {
     if (value !== 'kg' && value !== 'lb') return;
+    const previous = this.units().weight;
+    if (previous === value) return;
     this.updateUnits({ ...this.units(), weight: value });
+    const draft = this.draft();
+    if (!draft || (draft.kind !== 'weight' && draft.kind !== 'lift') || draft.weight === '') return;
+    this.draft.set(reformatWeightDraft(draft, previous, value));
   }
 
   protected setDistance(value: string | number | null): void {
@@ -206,23 +291,80 @@ export class HealthRoomComponent implements OnInit {
     this.updateUnits({ ...this.units(), distance: value });
   }
 
+  protected removeEntry(clientId: string): void {
+    const generation = this.generation;
+    const entry = this.entries().find(item => item.clientId === clientId);
+    if (!entry || !isStat(entry.value) || !isVitalKind(entry.value.kind)) return;
+    const kind = entry.value.kind;
+    const measured = entry.value.measured_on;
+    void this.confirm.confirmAction({
+      title: 'Delete this measurement?',
+      message: `This permanently deletes the ${vitalName(kind)} measured on ${measured}. This cannot be undone.`,
+      confirmLabel: 'Delete measurement',
+      cancelLabel: 'Keep measurement',
+      busyLabel: 'Deleting measurement',
+      phrase: healthDeletePhrase(kind),
+      errorMessage: 'Could not delete this entry. It is still saved. Try again.',
+      run: async () => {
+        if (!this.current(generation)) return;
+        const latest = this.store.statsSnapshot.find(item => item.clientId === clientId);
+        if (!latest) throw new Error('missing');
+        try {
+          await this.store.deleteStat(latest);
+        } catch (error) {
+          if (!this.current(generation)) return;
+          if (error instanceof HealthConflictError) this.publish();
+          throw error;
+        }
+        if (!this.current(generation)) return;
+        if (this.draft()?.clientId === clientId) {
+          this.draft.set(null);
+          this.dialogOpen.set(false);
+          this.formError.set('');
+        }
+        this.publish();
+      },
+    }).then(confirmed => {
+      if (confirmed && this.current(generation)) this.returnFocusKind.set(kind);
+    });
+  }
+
   protected async save(value: HealthEntryValue): Promise<void> {
     const generation = this.generation;
+    const submitted = this.draft();
+    const clientId = submitted?.clientId ?? null;
     this.formError.set('');
     this.busy.set(true);
     try {
-      if (isStat(value)) await this.store.createStat(value);
-      else await this.store.createPr(value);
+      if (isStat(value)) {
+        if (clientId) {
+          const current = this.store.statsSnapshot.find(item => item.clientId === clientId);
+          if (!this.current(generation)) return;
+          if (!current) {
+            this.formError.set('That entry is no longer saved. Your draft is still here.');
+            return;
+          }
+          if (sameStoredStat(current.value, value)) {
+            this.finishSaved(generation, submitted);
+            return;
+          }
+          await this.store.updateStat(current, value);
+        } else {
+          await this.store.createStat(value);
+        }
+      } else {
+        await this.store.createPr(value);
+      }
       if (!this.current(generation)) return;
-      this.draft.set(null);
-      this.dialogOpen.set(false);
       this.publish();
+      this.finishSaved(generation, submitted);
     } catch (error) {
       if (!this.current(generation)) return;
       if (error instanceof HealthLockedError) {
         this.invalidate();
         return;
       }
+      if (error instanceof HealthConflictError) this.publish();
       this.formError.set(error instanceof HealthConflictError
         ? HEALTH_CONFLICT_MESSAGE
         : 'Could not save this entry. Try again.');
@@ -256,6 +398,15 @@ export class HealthRoomComponent implements OnInit {
     void this.resolveGate();
   }
 
+  private finishSaved(generation: number, submitted: HealthDraft | null): void {
+    if (!this.current(generation)) return;
+    const draft = this.draft();
+    if (submitted && draft && JSON.stringify(draft) !== JSON.stringify(submitted)) return;
+    this.draft.set(null);
+    this.dialogOpen.set(false);
+    this.formError.set('');
+  }
+
   private dropPrivate(): void {
     this.entries.set([]);
     this.unreadable.set(0);
@@ -263,6 +414,8 @@ export class HealthRoomComponent implements OnInit {
     this.formError.set('');
     this.dialogOpen.set(false);
     this.busy.set(false);
+    this.returnFocusKind.set(null);
+    this.confirm.close(false);
   }
 
   private current(generation: number): boolean {

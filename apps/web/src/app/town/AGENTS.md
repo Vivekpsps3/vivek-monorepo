@@ -14,6 +14,8 @@ publishing/returning plaintext. Preserve corrupt/unsupported rows, revision conf
 and drafts; never send private Health values through Town server payloads.
 Cross-domain Town presentation receives approved stages/counts only.
 
+Weight, resting heart rate, blood pressure, and sleep are created, corrected, and deleted in this room through that store. A save sends the entry's expected revision. Display units do not rewrite stored kilograms. Logged dates stay on the original day. Deleting a vital requires its exact confirmation phrase.
+
 Use [health constants](health/health.constants.ts) and existing pure logic for units,
 thresholds and badges. Do not duplicate conversion or XP math to simplify a template.
 

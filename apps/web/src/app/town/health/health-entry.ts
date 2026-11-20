@@ -1,6 +1,6 @@
-import { displayDistance, displayWeight, pace } from './health-units';
+import { displayDistance, displayWeight, lbToKg, pace } from './health-units';
 import type { HealthPr, HealthStat } from './health.types';
-import { CONTROL_TEXT_MESSAGE, type FieldErrors } from './health-validate';
+import { CONTROL_TEXT_MESSAGE, validateHealthStat, type FieldErrors } from './health-validate';
 
 export interface HealthUnits {
   weight: 'kg' | 'lb';
@@ -10,19 +10,133 @@ export interface HealthUnits {
 /** Display preference only. Stored records stay in canonical kg and metres. */
 export const DEFAULT_HEALTH_UNITS: HealthUnits = { weight: 'lb', distance: 'mi' };
 
+export type HealthVitalKind = 'weight' | 'rhr' | 'bp' | 'sleep';
+export type HealthEditorKind = HealthVitalKind | 'lift';
+
 export interface HealthDraft {
+  kind: HealthEditorKind;
+  clientId: string | null;
   measuredOn: string;
+  loggedOn: string;
   weight: string;
+  bpm: string;
+  sys: string;
+  dia: string;
+  hours: string;
+  /** Canonical kilograms when the weight field still shows that stored value. */
+  sourceKg: number | null;
   exercise: string;
   reps: string;
 }
 
 export const EMPTY_HEALTH_DRAFT: HealthDraft = {
+  kind: 'weight',
+  clientId: null,
   measuredOn: '',
+  loggedOn: '',
   weight: '',
+  bpm: '',
+  sys: '',
+  dia: '',
+  hours: '',
+  sourceKg: null,
   exercise: '',
   reps: '',
 };
+
+const DELETE_PHRASE: Record<HealthVitalKind, string> = {
+  weight: 'DELETE WEIGHT',
+  rhr: 'DELETE HEART RATE',
+  bp: 'DELETE BLOOD PRESSURE',
+  sleep: 'DELETE SLEEP',
+};
+
+export function isVitalKind(kind: string): kind is HealthVitalKind {
+  return kind === 'weight' || kind === 'rhr' || kind === 'bp' || kind === 'sleep';
+}
+
+export function healthDeletePhrase(kind: HealthVitalKind): string {
+  return DELETE_PHRASE[kind];
+}
+
+export function draftFromStat(
+  entry: { clientId: string; value: HealthStat },
+  units: HealthUnits,
+): HealthDraft | null {
+  const value = entry.value;
+  if (!isVitalKind(value.kind)) return null;
+  return {
+    ...EMPTY_HEALTH_DRAFT,
+    kind: value.kind,
+    clientId: entry.clientId,
+    measuredOn: value.measured_on,
+    loggedOn: value.logged_on,
+    weight: value.kind === 'weight' && value.kg != null ? displayWeight(value.kg, units.weight) : '',
+    bpm: value.bpm != null ? String(value.bpm) : '',
+    sys: value.sys != null ? String(value.sys) : '',
+    dia: value.dia != null ? String(value.dia) : '',
+    hours: value.hours != null ? String(value.hours) : '',
+    sourceKg: value.kind === 'weight' && typeof value.kg === 'number' ? value.kg : null,
+  };
+}
+
+/** Keep the stored kilograms when the field still shows that value's display text. */
+export function weightDraftKg(
+  typed: string,
+  unit: 'kg' | 'lb',
+  sourceKg: number | null,
+): { kg: number | undefined; unit: 'kg' | 'lb' } {
+  if (sourceKg != null && typed === displayWeight(sourceKg, unit)) return { kg: sourceKg, unit: 'kg' };
+  return { kg: parseHealthNumber(typed), unit };
+}
+
+export function reformatWeightDraft(draft: HealthDraft, from: 'kg' | 'lb', to: 'kg' | 'lb'): HealthDraft {
+  if (from === to) return draft;
+  if (draft.sourceKg != null && draft.weight === displayWeight(draft.sourceKg, from)) {
+    return { ...draft, weight: displayWeight(draft.sourceKg, to) };
+  }
+  const parsed = parseHealthNumber(draft.weight);
+  if (parsed == null) return { ...draft, sourceKg: null };
+  const kg = from === 'lb' ? lbToKg(parsed) : parsed;
+  return { ...draft, sourceKg: kg, weight: displayWeight(kg, to) };
+}
+
+export function vitalStatFromDraft(
+  draft: HealthDraft,
+  today: string,
+  weightUnit: 'kg' | 'lb',
+): { value: HealthStat; fieldErrors: FieldErrors } {
+  const logged = draft.loggedOn || today;
+  const base = { v: 1 as const, measured_on: draft.measuredOn, logged_on: logged };
+  switch (draft.kind) {
+    case 'weight': {
+      const weight = weightDraftKg(draft.weight, weightUnit, draft.sourceKg);
+      return validateHealthStat({ ...base, kind: 'weight', kg: weight.kg }, today, weight.unit);
+    }
+    case 'rhr':
+      return validateHealthStat({ ...base, kind: 'rhr', bpm: parseHealthNumber(draft.bpm) }, today);
+    case 'bp':
+      return validateHealthStat({
+        ...base, kind: 'bp', sys: parseHealthNumber(draft.sys), dia: parseHealthNumber(draft.dia),
+      }, today);
+    case 'sleep':
+      return validateHealthStat({ ...base, kind: 'sleep', hours: parseHealthNumber(draft.hours) }, today);
+    default:
+      return validateHealthStat({ ...base, kind: 'weight' }, today, weightUnit);
+  }
+}
+
+/** True when an edit would persist the same vital the store already holds. */
+export function sameStoredStat(current: HealthStat, next: HealthStat): boolean {
+  if (current.kind !== next.kind || current.measured_on !== next.measured_on) return false;
+  switch (current.kind) {
+    case 'weight': return current.kg === next.kg;
+    case 'rhr': return current.bpm === next.bpm;
+    case 'bp': return current.sys === next.sys && current.dia === next.dia;
+    case 'sleep': return current.hours === next.hours;
+    default: return false;
+  }
+}
 
 const UNITS_PREFIX = 'town.health.units.v1.';
 
@@ -70,15 +184,26 @@ export function healthFieldMessage(code: string | undefined): string {
     case 'integer': return 'Use a whole number.';
     case 'required': return 'Enter a value.';
     case 'length': return 'Use a shorter or longer value within the limit.';
+    case 'step': return 'Use a quarter-hour step.';
+    case 'greater_than_dia': return 'Systolic must be higher than diastolic.';
     default: return 'Check this field and try again.';
   }
 }
 
-const CLINIC_FIELDS = ['measured_on', 'kg'] as const;
+const VITAL_FIELDS: Record<HealthVitalKind, readonly string[]> = {
+  weight: ['measured_on', 'kg'],
+  rhr: ['measured_on', 'bpm'],
+  bp: ['measured_on', 'sys', 'dia'],
+  sleep: ['measured_on', 'hours'],
+};
 const GYM_FIELDS = ['measured_on', 'exercise', 'kg', 'reps'] as const;
 
-export function firstHealthField(errors: FieldErrors, room: 'clinic' | 'gym'): string | null {
-  const order = room === 'clinic' ? CLINIC_FIELDS : GYM_FIELDS;
+export function firstHealthField(
+  errors: FieldErrors,
+  room: 'clinic' | 'gym',
+  kind?: HealthEditorKind,
+): string | null {
+  const order = kind && kind !== 'lift' ? VITAL_FIELDS[kind] : room === 'clinic' ? VITAL_FIELDS.weight : GYM_FIELDS;
   return order.find(field => errors[field]) ?? null;
 }
 
@@ -86,6 +211,10 @@ export function healthFieldId(field: string): string {
   switch (field) {
     case 'measured_on': return 'health-measured-on';
     case 'kg': return 'health-weight';
+    case 'bpm': return 'health-bpm';
+    case 'sys': return 'health-systolic';
+    case 'dia': return 'health-diastolic';
+    case 'hours': return 'health-sleep';
     case 'exercise': return 'health-exercise';
     case 'reps': return 'health-reps';
     default: return 'health-measured-on';
