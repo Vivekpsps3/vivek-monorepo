@@ -54,6 +54,7 @@ describe('Finance trip-spend producer', () => {
         reads += 1;
         return ledger;
       },
+      readTripSpendLedgerStatus: () => Promise.resolve({ rows: [] as Transaction[] }),
       clearSessionState: () => undefined,
     };
     TestBed.configureTestingModule({
@@ -109,7 +110,15 @@ describe('Finance trip-spend producer', () => {
     expect(reads).toBe(1);
     expect(subscriptions).toBe(1);
     expect(register).toHaveBeenCalledTimes(1);
-    expect(registry.lookup()?.(7)).toEqual([{ currency: 'USD', cents: 675, count: 2 }]);
+    expect(registry.lookup()?.(7)).toEqual([{
+      currency: 'USD',
+      cents: 675,
+      count: 2,
+      postings: [
+        { id: 1, cents: 1000, label: '2026-06-01 · Travel' },
+        { id: 2, cents: -325, label: '2026-06-01 · Travel' },
+      ],
+    }]);
     expect(TestBed.inject(HttpTestingController).match(() => true)).toEqual([]);
     expect(channelMessages).toEqual([]);
     expect(storageEvents).toEqual([]);
@@ -122,10 +131,32 @@ describe('Finance trip-spend producer', () => {
     expect(reads).toBe(2);
     expect(subscriptions).toBe(1);
     expect(register).toHaveBeenCalledTimes(2);
-    expect(registry.lookup()?.(7)).toEqual([{ currency: 'USD', cents: 2000, count: 1 }]);
+    expect(registry.lookup()?.(7)).toEqual([{
+      currency: 'USD',
+      cents: 2000,
+      count: 1,
+      postings: [{ id: 1, cents: 2000, label: '2026-06-01 · Travel' }],
+    }]);
     setItem.and.callThrough();
     channel.close();
     window.removeEventListener('storage', onStorage);
+  });
+
+  it('confirms one posted transaction through the registry and clears that confirmer on stop', async () => {
+    const finance = TestBed.inject(FinanceService) as unknown as { readTripSpendLedgerStatus: () => Promise<{ rows: Transaction[] }> };
+    finance.readTripSpendLedgerStatus = () => Promise.resolve({ rows: [row(4, 420, 7)] });
+    const registry = TestBed.inject(FinanceTripSpendRegistry);
+    stop = attachFinanceTripSpend(TestBed.inject(Injector), () => true);
+    releaseReady();
+    await settle();
+    await expectAsync(registry.confirm(7, 4)).toBeResolvedTo({
+      status: 'posted',
+      posting: { id: 4, cents: 42000, label: '2026-06-01 · Travel' },
+    });
+    expect(TestBed.inject(HttpTestingController).match(() => true)).toEqual([]);
+    stop();
+    stop = null;
+    await expectAsync(registry.confirm(7, 4)).toBeResolvedTo({ status: 'failed' });
   });
 
   it('clears a held ledger on lock and never republishes it', async () => {

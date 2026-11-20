@@ -6,6 +6,10 @@
   [trip PTO service](backend/services/pto.py) owns trip day allocation/backfill.
 - [Public API](frontend/src/public-api.ts) is the supported shell integration.
   Finance data crosses through its public API and the existing spending registry.
+  A booked cost links, for this session, to one posted transaction from that
+  registry. The link does not write Finance. Planned, booked, and posted stay
+  separate by currency, and a linked payment is counted once. Lock or a deleted
+  source clears the private spend and leaves the Travel cost usable.
 
 Hub summary date windows require both start/end, in order, at most 42 days.
 Omitted dates retain the 14-day/overdue projection and the current next-trip card.
@@ -23,11 +27,7 @@ consumers before deleting repeated editor logic. Preserve keyboard access, save-
 drafts and chart-only recovery; a failed summary must not hide usable forms.
 FlightAware settings use the same editor from suite Settings, the transport
 dialog, and flight-first planning. Keep that draft mounted and cancel obsolete
-lookups. Plan a trip starts with a flight number and date or one calendar file.
-Preview its time zone and leg, then choose a candidate, a new draft, or the
-existing leg. An incomplete draft stores the accepted outbound leg, leaves an
-unknown return empty, and creates no PTO charge. Inferred proposals stay off
-confirmed dates. A complete trip still requires a return and still allocates PTO.
+lookups. Plan-a-trip draft and PTO rules stay in TRAVEL.md.
 
 Read [TRAVEL](../../docs/TRAVEL.md) for the affected journey and root instructions
 for applicable gates. Pure chart/date behavior has Node tests under

@@ -6,7 +6,7 @@ import { bindLockSnapshots } from '../crypto/lock-finance';
 import { VaultService } from '../crypto/vault.service';
 import type { Transaction } from '../models/transaction.model';
 import { FinanceService } from './finance.service';
-import { financeTripSpendLookup } from './trip-spend';
+import { confirmPostedSpend, financeTripSpendLookup } from './trip-spend';
 
 let activeStop: (() => void) | null = null;
 
@@ -19,6 +19,9 @@ export function attachFinanceTripSpend(injector: Injector, alive: () => boolean)
   const finance = injector.get(FinanceService);
   const registry = injector.get(FinanceTripSpendRegistry);
   const vault = injector.get(VaultService);
+  const releaseConfirm = registry.registerConfirmer((tripId, transactionId) =>
+    confirmPostedSpend(finance, tripId, transactionId),
+  );
   let unregister: (() => void) | null = null;
   let ledgerSub: Subscription | null = null;
   let unlockSub: Subscription | null = null;
@@ -87,6 +90,7 @@ export function attachFinanceTripSpend(injector: Injector, alive: () => boolean)
     activeStop = null;
     closed = true;
     clearPublished();
+    releaseConfirm();
     ledgerSub?.unsubscribe();
     ledgerSub = null;
     unlockSub?.unsubscribe();

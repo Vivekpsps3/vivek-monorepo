@@ -196,11 +196,15 @@ export interface Trip {
       buckets: CostBucket[];
     }[];
     lines: {
-      amount_cents: number;
-      bucket: CostBucket["bucket"];
+      source: string;
+      source_id: number;
+      category: string;
+      label: string;
+      amount: string;
       currency: string;
       paid: boolean;
-      [key: string]: unknown;
+      amount_cents: number;
+      bucket: CostBucket["bucket"];
     }[];
     manual: {
       id: number;

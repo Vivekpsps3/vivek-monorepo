@@ -70,6 +70,22 @@ export const tripSpendLoad = {
 };
 
 /**
+ * Re-read one posted trip transaction before Travel keeps a cost link.
+ * The result is id, cents, and a date/category label. It does not write a record.
+ */
+export async function confirmTripSpendPosting(
+  injector: Injector,
+  tripId: number,
+  transactionId: number,
+): Promise<import('./app/services/trip-spend').TripSpendConfirm> {
+  const [{ confirmPostedSpend }, { FinanceService }] = await Promise.all([
+    import('./app/services/trip-spend'),
+    import('./app/services/finance.service'),
+  ]);
+  return confirmPostedSpend(injector.get(FinanceService), tripId, transactionId);
+}
+
+/**
  * One lazy producer for the private shell. A locked vault does not import the
  * finance ledger. Lock, sign-out, and a missing vault unregister immediately.
  */

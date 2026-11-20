@@ -20,6 +20,8 @@ Start with the existing owner:
   receive narrow projections; they must not instantiate private stores or copy math.
   The private shell starts one trip-spend producer from that API when a vault is
   present. It republishes through the existing spend registry and clears on lock.
+  That lookup also exposes id, cents, date, and category for one explicit Travel
+  link. Travel does not receive descriptions, merchants, accounts, or a second ledger.
 
 Decrypted financial data stays in the browser. Preserve owner/session/collection
 eligibility at publication, immediate lock clearing, expected revisions and encrypted
