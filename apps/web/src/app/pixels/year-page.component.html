@@ -46,7 +46,15 @@
           [today]="today"
           [phone]="phone()"
           [unlockSource]="unlockSource()"
+          [facts]="facts()"
+          [factsStatus]="factsStatus()"
+          [annotationError]="annotationError()"
+          [draftEpoch]="draftEpoch()"
+          [mutating]="mutating()"
           (closed)="clearDay()"
+          (archive)="onArchive($event)"
+          (remove)="onRemove($event)"
+          (redate)="onRedate($event)"
         />
       }
       <app-pixels-legend [colorBy]="preferences.colorBy()" />

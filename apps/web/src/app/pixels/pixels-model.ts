@@ -2,11 +2,19 @@ import { dayLevel, dayScore, dominantApp, scoreParts, type DayChannels } from '@
 import type { HubCardState } from '@vivek/ui';
 import { eachDate } from './pixels-dates';
 import type {
+  FactKind,
+  FactNamespace,
   FinanceJoinStatus,
+  PixelAnnotation,
+  PixelDayFacts,
   PixelDayView,
+  PixelDifference,
+  PixelFact,
+  PixelFactCoverage,
   PixelSources,
   PixelsProfile,
   PixelsSnapshot,
+  SourceCoverage,
   TripSpan,
 } from './pixels.types';
 
@@ -46,6 +54,20 @@ export function tripDayLabel(trip: TripSpan, date: string): string {
   const index = eachDate(trip.start, date).length;
   const total = eachDate(trip.start, trip.end).length;
   return `${trip.title}, day ${index} of ${total}`;
+}
+
+/** Channel counts and the score only. Facts and annotations are not part of this vector. */
+export function dayScoreVector(day: PixelDayView): string {
+  return JSON.stringify({
+    date: day.date,
+    town: day.channels.town,
+    media: day.channels.media,
+    trip: day.channels.trip,
+    fin: day.channels.fin,
+    score: day.score,
+    level: day.level,
+    dominant: day.dominant,
+  });
 }
 
 export function buildDay(date: string, channels: DayChannels, today: string, trips: readonly TripSpan[]): PixelDayView {
@@ -305,4 +327,171 @@ function isoDate(value: unknown): string | undefined {
   const utc = new Date(Date.UTC(year, month - 1, day));
   if (utc.getUTCFullYear() !== year || utc.getUTCMonth() !== month - 1 || utc.getUTCDate() !== day) return undefined;
   return value;
+}
+
+const FACT_KIND: Record<FactNamespace, FactKind> = {
+  habit_checkin: 'checkin',
+  episode_progress: 'episode',
+  trip: 'trip_span',
+};
+
+const FACT_ROUTE = /^\/(?:town\/|media\/|travel\/trips\/\d+)$/;
+
+/** GET /api/pixels/day. Null means the body is not a supported shape. */
+export function decodePixelDayFacts(value: unknown): PixelDayFacts | null {
+  const body = record(value);
+  if (!body) return null;
+  const date = isoDate(body['date']);
+  const facts = factList(body['facts']);
+  const annotations = annotationList(body['annotations']);
+  const coverage = factCoverage(body['coverage']);
+  const differences = differenceList(body['differences']);
+  const counts = factCounts(body['counts']);
+  if (!date || !facts || !annotations || !coverage || !differences || !counts) return null;
+  return { date, facts, annotations, coverage, differences, counts };
+}
+
+function factList(value: unknown): PixelFact[] | null {
+  if (!Array.isArray(value)) return null;
+  const facts: PixelFact[] = [];
+  for (const entry of value) {
+    const fact = oneFact(entry);
+    if (!fact) return null;
+    facts.push(fact);
+  }
+  return facts;
+}
+
+function oneFact(value: unknown): PixelFact | null {
+  const row = record(value);
+  if (!row) return null;
+  const namespace = factNamespace(row['namespace']);
+  const kind = row['kind'];
+  const id = requiredText(row['id']);
+  const occurrenceId = positiveId(row['occurrence_id']);
+  const date = isoDate(row['date']);
+  const spanStart = optionalIso(row, 'span_start');
+  const spanEnd = optionalIso(row, 'span_end');
+  const coverage = row['coverage'];
+  const provenance = requiredText(row['provenance']);
+  const title = optionalTitle(row);
+  const route = requiredText(row['route']);
+  if (!namespace || !id || occurrenceId == null || !date || !provenance || !route) return null;
+  const expectedKind = FACT_KIND[namespace];
+  if (kind !== expectedKind) return null;
+  if (spanStart === invalid || spanEnd === invalid || title === invalid) return null;
+  if ((spanStart == null) !== (spanEnd == null)) return null;
+  if (coverage !== 'complete' && coverage !== 'truncated') return null;
+  if (!FACT_ROUTE.test(route)) return null;
+  return {
+    id,
+    namespace,
+    occurrenceId,
+    kind: expectedKind,
+    date,
+    spanStart,
+    spanEnd,
+    coverage,
+    provenance,
+    title,
+    route,
+  };
+}
+
+function annotationList(value: unknown): PixelAnnotation[] | null {
+  if (!Array.isArray(value)) return null;
+  const annotations: PixelAnnotation[] = [];
+  for (const entry of value) {
+    const annotation = oneAnnotation(entry);
+    if (!annotation) return null;
+    annotations.push(annotation);
+  }
+  return annotations;
+}
+
+function oneAnnotation(value: unknown): PixelAnnotation | null {
+  const row = record(value);
+  if (!row) return null;
+  const id = requiredText(row['id']);
+  const conceptId = positiveId(row['concept_id']);
+  const name = requiredText(row['name']);
+  const understoodOn = isoDate(row['understood_on']);
+  const provenance = requiredText(row['provenance']);
+  if (!id || conceptId == null || !name || !understoodOn || !provenance) return null;
+  return { id, conceptId, name, understoodOn, provenance };
+}
+
+function factCoverage(value: unknown): PixelFactCoverage | null {
+  const row = record(value);
+  if (!row) return null;
+  const town = oneCoverage(row['town']);
+  const media = oneCoverage(row['media']);
+  const travel = oneCoverage(row['travel']);
+  const concepts = oneCoverage(row['concepts']);
+  if (!town || !media || !travel || !concepts) return null;
+  return { town, media, travel, concepts };
+}
+
+function oneCoverage(value: unknown): SourceCoverage | null {
+  const row = record(value);
+  if (!row) return null;
+  const status = sourceStatus(row['status']);
+  const included = whole(row['included']);
+  const total = whole(row['total']);
+  if (!status || included == null || total == null || typeof row['truncated'] !== 'boolean') return null;
+  return { status, included, total, truncated: row['truncated'] };
+}
+
+function differenceList(value: unknown): PixelDifference[] | null {
+  if (!Array.isArray(value)) return null;
+  const items: PixelDifference[] = [];
+  for (const entry of value) {
+    const row = record(entry);
+    if (!row) return null;
+    const id = requiredText(row['id']);
+    const text = requiredText(row['text']);
+    if (!id || !text) return null;
+    items.push({ id, text });
+  }
+  return items;
+}
+
+function factCounts(value: unknown): PixelDayFacts['counts'] | null {
+  const row = record(value);
+  if (!row) return null;
+  const counts: PixelDayFacts['counts'] = {};
+  for (const key of ['town', 'media', 'trip'] as const) {
+    if (!Object.hasOwn(row, key)) continue;
+    const count = whole(row[key]);
+    if (count == null) return null;
+    counts[key] = count;
+  }
+  return counts;
+}
+
+function factNamespace(value: unknown): FactNamespace | null {
+  if (value === 'habit_checkin' || value === 'episode_progress' || value === 'trip') return value;
+  return null;
+}
+
+function requiredText(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function positiveId(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function whole(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function optionalIso(row: Record<string, unknown>, key: string): string | null | typeof invalid {
+  if (!Object.hasOwn(row, key) || row[key] === null) return null;
+  return isoDate(row[key]) ?? invalid;
+}
+
+function optionalTitle(row: Record<string, unknown>): string | null | typeof invalid {
+  if (!Object.hasOwn(row, 'title') || row['title'] === null || row['title'] === '') return null;
+  return typeof row['title'] === 'string' ? row['title'] : invalid;
 }

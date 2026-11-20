@@ -11,8 +11,17 @@ import {
   type BudgetKeptDaysResult,
 } from '../../../../finance/frontend/src/public-api';
 import { inclusiveWindows } from './pixels-dates';
-import { composeSnapshot, decodeHomeTrips, decodePixelApiBody, withoutFinance, type PixelApiBody } from './pixels-model';
-import type { FinanceJoinStatus, PixelsLoadRequest, PixelsLoadResult, PixelsSnapshot, TripSpan } from './pixels.types';
+import { composeSnapshot, decodeHomeTrips, decodePixelApiBody, decodePixelDayFacts, withoutFinance, type PixelApiBody } from './pixels-model';
+import type {
+  AnnotationChange,
+  AnnotationChangeResult,
+  DayFactsResult,
+  FinanceJoinStatus,
+  PixelsLoadRequest,
+  PixelsLoadResult,
+  PixelsSnapshot,
+  TripSpan,
+} from './pixels.types';
 
 /** Inclusive days allowed by GET /api/pixels when profile=1. (end - start).days <= 36525. */
 export const PIXELS_PROFILE_MAX_INCLUSIVE = 36526;
@@ -44,6 +53,8 @@ export class PixelsDataService {
   private readonly financeDays = inject(PIXELS_FINANCE_DAYS);
   private readonly vaultPresent = inject(PIXELS_VAULT_PRESENT);
   private generation = 0;
+  /** Aborts the previous selected-day read without aborting the year load. */
+  private dayCaller: AbortController | null = null;
   private userId: number | null = null;
   /** Aborted on lock, owner change, route leave, and disposal. Replaced after each cancel. */
   private lifecycle = new AbortController();
@@ -81,6 +92,79 @@ export class PixelsDataService {
   /** Leave /pixels. Finance from this visit is gone. */
   release(): void {
     this.dropFinance();
+  }
+
+  /** One bounded read of the selected day's facts. A later day or owner wins. */
+  async loadDay(date: string): Promise<DayFactsResult> {
+    this.dayCaller?.abort();
+    const caller = new AbortController();
+    this.dayCaller = caller;
+    const generation = this.generation;
+    const work = openBoundedWork({
+      parents: [this.lifecycle.signal, caller.signal],
+      deadlineMs: PIXELS_ACTION_DEADLINE_MS,
+    });
+    try {
+      if (this.left(work, generation)) return { status: 'dropped' };
+      const outcome = await work.run(() => this.getJson(
+        work.signal,
+        '/api/pixels/day',
+        decodePixelDayFacts,
+        { date },
+      ));
+      if (this.left(work, generation)) return { status: 'dropped' };
+      if (outcome.status !== 'ok') return { status: 'unavailable' };
+      if (outcome.value.status !== 'ready') return outcome.value;
+      return { status: 'ready', facts: outcome.value.body };
+    } finally {
+      work.dispose();
+      if (this.dayCaller === caller) this.dayCaller = null;
+    }
+  }
+
+  /**
+   * Archive, delete, or redate on the existing concept routes.
+   * A late result after owner change or lock is dropped and does not publish.
+   */
+  async changeAnnotation(action: AnnotationChange): Promise<AnnotationChangeResult> {
+    const generation = this.generation;
+    const work = openBoundedWork({
+      parents: [this.lifecycle.signal],
+      deadlineMs: PIXELS_ACTION_DEADLINE_MS,
+    });
+    try {
+      if (this.left(work, generation)) return { status: 'dropped' };
+      const outcome = await work.run(() => this.writeAnnotation(action, work.signal));
+      if (this.left(work, generation)) return { status: 'dropped' };
+      if (outcome.status === 'deadline') {
+        return { status: 'failed', message: ANNOTATION_UNCHANGED };
+      }
+      if (outcome.status === 'failed') return this.annotationFailure(outcome.error);
+      if (outcome.status !== 'ok') return { status: 'dropped' };
+      return { status: 'ready' };
+    } finally {
+      work.dispose();
+    }
+  }
+
+  private async writeAnnotation(action: AnnotationChange, signal: AbortSignal): Promise<void> {
+    const url = `/api/world/concepts/${action.conceptId}`;
+    const context = silentErrorToast();
+    if (action.kind === 'delete') {
+      await firstValueFrom(
+        this.http.delete(url, { context, responseType: 'text' }).pipe(takeUntil(abort$(signal))),
+      );
+      return;
+    }
+    const understood = action.kind === 'redate' ? action.understoodOn.trim() : null;
+    const body = action.kind === 'archive'
+      ? { archived: true, tz: browserZone() }
+      : { understood_on: understood === '' ? null : understood, tz: browserZone() };
+    await firstValueFrom(this.http.patch(url, body, { context }).pipe(takeUntil(abort$(signal))));
+  }
+
+  private annotationFailure(error: unknown): AnnotationChangeResult {
+    return { status: 'failed', message: conceptErrorMessage(error) };
   }
 
   async load(request: PixelsLoadRequest): Promise<PixelsLoadResult> {
@@ -219,6 +303,25 @@ export class PixelsDataService {
     }
   }
 
+}
+
+const ANNOTATION_UNCHANGED = 'That annotation could not be changed. The score is unchanged.';
+
+function conceptErrorMessage(error: unknown): string {
+  if (!(error instanceof HttpErrorResponse)) return ANNOTATION_UNCHANGED;
+  const body: unknown = error.error;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return ANNOTATION_UNCHANGED;
+  const record = body as Record<string, unknown>;
+  const message = record['message'];
+  if (typeof message === 'string' && message) return message;
+  const detail = record['detail'];
+  if (typeof detail === 'string' && detail) return detail;
+  return ANNOTATION_UNCHANGED;
+}
+
+function browserZone(): string {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return typeof zone === 'string' && zone ? zone : 'UTC';
 }
 
 function abort$(signal: AbortSignal): Observable<void> {

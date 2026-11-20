@@ -8,6 +8,9 @@ counts episodes by `episode_progress.watched_on`. Travel counts every day
 of every trip overlapping the range (G4: TripStatus on main is
 planning|booked|done — there is no cancelled status, so all trips count).
 No Finance data exists server-side, so no Finance keys ever appear.
+
+GET /api/pixels/day projects those same rows as occurrence ids, dates, and
+coverage, plus active concept annotations. Annotations are not score channels.
 """
 
 import re
@@ -22,6 +25,7 @@ from sqlalchemy.orm import Session
 from apps.server.database import get_db
 from apps.server.identity.models import User
 from apps.server.identity.session import get_current_user
+from apps.server.pixels.facts import project_day
 from apps.server.pixels.schemas import PixelDay, PixelProfile, PixelSources, PixelsResponse
 
 router = APIRouter(tags=["pixels"])
@@ -188,4 +192,36 @@ def read_pixels(
     ]
     if not with_profile:
         body.pop("profile", None)
+    return JSONResponse(content=body, headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/pixels/day")
+def read_pixel_day(
+    request: Request,
+    db: Annotated[Session, Depends(get_db, scope="function")],
+    current_user: Annotated[User, Depends(get_current_user)],
+    day_raw: Annotated[str, Query(alias="date")],
+) -> JSONResponse:
+    """Occurrence ids for one civil day. Counts match /api/pixels. Scores do not."""
+    day = _parse_day(day_raw, "date")
+    user_id = current_user.id
+    town_status, town_counts, _town_first = _counted_source(
+        db, _TOWN_TABLE, "day", user_id, day, day
+    )
+    media_status, media_counts, _media_first = _counted_source(
+        db, _MEDIA_TABLE, "watched_on", user_id, day, day
+    )
+    travel_status, travel_counts, _travel_first = _travel_source(db, user_id, day, day)
+    payload = project_day(
+        db,
+        user_id,
+        day,
+        town_status=town_status,
+        media_status=media_status,
+        travel_status=travel_status,
+        town_count=int(town_counts.get(day, 0)),
+        media_count=int(media_counts.get(day, 0)),
+        trip_count=int(travel_counts.get(day, 0)),
+    )
+    body = payload.model_dump(mode="json", exclude_none=True)
     return JSONResponse(content=body, headers={"Cache-Control": "private, no-store"})
