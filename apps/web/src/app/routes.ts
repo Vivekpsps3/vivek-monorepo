@@ -20,6 +20,8 @@ export const routes: Routes = [
     { path: 'town', title: 'Town', children: [
       { path: '', loadComponent: () => import('./town/town.component').then(m => m.TownComponent) },
       { path: 'library', title: 'Town · Reading Hall', loadComponent: () => import('./town/library-room.component').then(m => m.LibraryRoomComponent) },
+      { path: 'clinic', title: 'Town · Clinic', data: { healthRoom: 'clinic' }, loadComponent: () => import('./town/health/health-room.component').then(m => m.HealthRoomComponent) },
+      { path: 'gym', title: 'Town · Gym', data: { healthRoom: 'gym' }, loadComponent: () => import('./town/health/health-room.component').then(m => m.HealthRoomComponent) },
       { path: 'world', title: 'World', loadComponent: () => import('./world/ui/world.component').then(m => m.WorldComponent) },
     ] },
     { path: 'pixels', loadChildren: () => import('./pixels/pixels.routes').then(m => m.PIXELS_ROUTES) },

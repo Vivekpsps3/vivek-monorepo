@@ -53,6 +53,8 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/finance/planning/research': {},
   '/town': {},
   '/town/library': {},
+  '/town/clinic': { entry: isHealthEntryId },
+  '/town/gym': { entry: isHealthEntryId },
   '/town/world': { day: isReturnDate, week: isReturnDate },
   '/pixels': { year: value => /^(?!0+$)\d{1,4}$/.test(value), day: isReturnDate },
   '/pixels/day': {
@@ -124,9 +126,19 @@ export function vaultReturnQuery(next: string): { next?: string } {
   return valid ? { next: valid } : {};
 }
 
+/** Health client ids are navigation coordinates, not measurement values. */
+export function isHealthEntryId(value: string): boolean {
+  return /^hlt_[A-Za-z0-9_-]{22}$/.test(value);
+}
+
 export function vaultUnlockHref(next: string): string {
   const valid = returnPath(next);
   return '/finance/vault/unlock' + (valid ? '?next=' + encodeURIComponent(valid) : '');
+}
+
+export function vaultSetupHref(next: string): string {
+  const valid = returnPath(next);
+  return '/finance/vault/setup' + (valid ? '?next=' + encodeURIComponent(valid) : '');
 }
 
 export function currentVaultReturn(): string | null {

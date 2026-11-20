@@ -1,0 +1,64 @@
+<main class="health-room">
+  <ui-page-header [title]="title()" eyebrow="Health" backLabel="Hub" backLink="/hub" titleId="health-room-title" />
+  <nav class="room-nav" aria-label="Health rooms">
+    <ui-button href="/town/clinic" label="Clinic" [variant]="room() === 'clinic' ? 'primary' : 'secondary'" [pressed]="room() === 'clinic'" />
+    <ui-button href="/town/gym" label="Gym" [variant]="room() === 'gym' ? 'primary' : 'secondary'" [pressed]="room() === 'gym'" />
+  </nav>
+
+  @if (phase() === 'loading') {
+    <div role="status" aria-label="Loading {{ title() }}">
+      <ui-skeleton variant="lines" [lines]="3" />
+    </div>
+  } @else if (phase() === 'locked') {
+    <div class="gate" role="status">
+      <p>Finance is locked. Unlock to see measurements.</p>
+      <ui-button href="/finance/vault/unlock" [queryParams]="returnQuery()" label="Unlock" />
+    </div>
+  } @else if (phase() === 'setup') {
+    <div class="gate" role="status">
+      <p>Set up Finance before {{ title() }} can open.</p>
+      <ui-button href="/finance/vault/setup" [queryParams]="returnQuery()" label="Set up Finance" />
+    </div>
+  } @else if (phase() === 'unavailable') {
+    <div class="gate" role="status">
+      <p>{{ title() }} is unavailable right now.</p>
+      <ui-button variant="secondary" (clicked)="retry()">Retry</ui-button>
+    </div>
+  } @else {
+    <div class="ready">
+      <div class="units">
+        <ui-segmented label="Weight unit" [options]="weightOptions" [value]="units().weight" (valueChange)="setWeight($event)" />
+        @if (room() === 'gym') {
+          <ui-segmented label="Distance unit" [options]="distanceOptions" [value]="units().distance" (valueChange)="setDistance($event)" />
+        }
+      </div>
+      @if (notice()) {
+        <p class="notice" role="status" data-health-corrupt>{{ notice() }}</p>
+      }
+      @if (missingEntry()) {
+        <p role="status">That entry is not in this room.</p>
+      }
+      @if (rows().length === 0) {
+        <p>No entries yet.</p>
+      } @else {
+        <ul class="entries" [attr.aria-label]="room() === 'clinic' ? 'Measurements' : 'Personal records'">
+          @for (row of rows(); track row.clientId) {
+            <li [id]="'health-entry-' + row.clientId" tabindex="-1" [appHealthLinkedFocus]="row.clientId === entryId() && !dialogOpen()" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.label }}</li>
+          }
+        </ul>
+      }
+      <ui-button (clicked)="openDialog()">{{ room() === 'clinic' ? 'Add weight' : 'Add lift' }}</ui-button>
+    </div>
+  }
+</main>
+<app-health-entry-dialog
+  [open]="dialogOpen()"
+  [room]="room()"
+  [today]="today()"
+  [weightUnit]="units().weight"
+  [draft]="draft() ?? emptyDraft"
+  [formError]="formError()"
+  [busy]="busy()"
+  (draftChange)="onDraft($event)"
+  (save)="save($event)"
+  (closed)="onDialogClosed()" />

@@ -6,7 +6,9 @@ those results rather than maintaining a competing ledger. Habit streak weeks and
 Finance budget-kept weeks have different meanings; treasury integration must preserve that.
 
 [Health store](health/health-store.service.ts) owns browser-local Health records
-through Finance's public vault API. Keep one store and immediate lock/session
+through Finance's public vault API. Clinic and Gym mount
+[the health room](health/health-room.component.ts) for locked, setup, and unlock
+routing. The room is not a second store. Keep one store and immediate lock/session
 invalidation. Check owner and generation after every asynchronous stage before
 publishing/returning plaintext. Preserve corrupt/unsupported rows, revision conflicts
 and drafts; never send private Health values through Town server payloads.

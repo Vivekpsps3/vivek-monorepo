@@ -3,6 +3,9 @@ import { HistoryDialogComponent } from '../history-dialog.component';
 import { TownLotComponent } from '../town-lot.component';
 import { TownTodayComponent } from '../town-today.component';
 import { TownComponent } from '../town.component';
+import { HealthEntryDialogComponent } from './health-entry-dialog.component';
+import { HealthRoomComponent } from './health-room.component';
+import * as healthEntry from './health-entry';
 import * as healthMath from './health-math';
 import * as healthStore from './health-store.service';
 import * as healthUnits from './health-units';
@@ -58,6 +61,8 @@ describe('AC-H10: no passphrase input anywhere under town/', () => {
     ['HistoryDialogComponent', HistoryDialogComponent],
     ['TownLotComponent', TownLotComponent],
     ['TownTodayComponent', TownTodayComponent],
+    ['HealthRoomComponent', HealthRoomComponent],
+    ['HealthEntryDialogComponent', HealthEntryDialogComponent],
   ] as const;
   for (const [label, component] of components) {
     it(`scans the compiled ${label} definition`, () => {
@@ -67,6 +72,7 @@ describe('AC-H10: no passphrase input anywhere under town/', () => {
   }
 
   const modules = [
+    ['health-entry', healthEntry],
     ['health-math', healthMath],
     ['health-store.service', healthStore],
     ['health-units', healthUnits],

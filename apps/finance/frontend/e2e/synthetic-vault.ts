@@ -192,9 +192,15 @@ export async function syntheticVault(
       // schema_version 1 is the wire envelope only; it is not part of the record.
       const data = { ...input, id: input.id ?? nextId++ };
       const schemaVersion = data.schema_version === 1 ? 1 : 2;
+      const requestedId = typeof data.client_id === 'string' ? data.client_id : '';
+      const clientId = /^hlt_[A-Za-z0-9_-]{22}$/.test(requestedId)
+        ? requestedId
+        : `synthetic_${collection}_${data.id}`;
       delete data.schema_version;
+      delete data.client_id;
+      if (collection === 'health_stats' || collection === 'health_prs') delete data.id;
       const row: RecordRow = {
-        collection, client_id: `synthetic_${collection}_${data.id}`, ciphertext_b64: '',
+        collection, client_id: clientId, ciphertext_b64: '',
         schema_version: schemaVersion, key_version: 1, revision: 1, updated_at: new Date().toISOString(),
       };
       row.ciphertext_b64 = encrypt(data, row);

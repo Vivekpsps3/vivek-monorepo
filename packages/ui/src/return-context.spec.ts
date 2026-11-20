@@ -1,4 +1,4 @@
-import { returnPath, vaultUnlockHref } from './return-context';
+import { isHealthEntryId, returnPath, vaultSetupHref, vaultUnlockHref } from './return-context';
 
 describe('return context', () => {
   it('carries known date, collection and pagination coordinates', () => {
@@ -12,6 +12,8 @@ describe('return context', () => {
       '/media/calendar?month=2026-11',
       '/travel/calendar?month=2026-11',
       '/settings/calendars',
+      '/town/clinic?entry=hlt_SyntheticWeightEntryAB',
+      '/town/gym?entry=hlt_SyntheticLiftEntryABCD',
       '/finance/spending?month=all',
       '/finance/pay?month=2026-10&history=1&year=custom&start=2024-02-29&end=2024-12-31',
       '/finance/bills?kind=subscription&status=active&order=latest',
@@ -42,6 +44,9 @@ describe('return context', () => {
       .toBe('/media/library?kind=book&status=in_progress&sort=title&face=text');
     expect(returnPath('/media/library?kind=book&face=poster')).toBe('/media/library?kind=book');
     expect(returnPath('/media/library?kind=book&face=text&face=spine')).toBe('/media/library?kind=book');
+    expect(returnPath('/town/clinic?entry=hlt_short&kg=80')).toBe('/town/clinic');
+    expect(returnPath('/town/clinic?entry=hlt_SyntheticWeightEntryAB&entry=hlt_SyntheticLiftEntryABCD')).toBe('/town/clinic');
+    expect(returnPath('/town/gym?entry=80&weight=176.4')).toBe('/town/gym');
   });
 
   it('rejects external, unknown, and recursive authentication destinations', () => {
@@ -52,5 +57,20 @@ describe('return context', () => {
     ]) {
       expect(vaultUnlockHref(path)).withContext(path).toBe('/finance/vault/unlock');
     }
+    const clinic = '/town/clinic?entry=hlt_SyntheticWeightEntryAB';
+    expect(vaultUnlockHref(clinic)).toBe('/finance/vault/unlock?next=' + encodeURIComponent(clinic));
+    expect(vaultSetupHref(clinic)).toBe('/finance/vault/setup?next=' + encodeURIComponent(clinic));
+    expect(vaultSetupHref('/town/clinic?kg=80')).toBe('/finance/vault/setup?next=' + encodeURIComponent('/town/clinic'));
+  });
+
+  it('accepts only digit-free 22-character health entry ids', () => {
+    for (const id of ['hlt_SyntheticWeightEntryAB', 'hlt_SyntheticLiftEntryABCD', 'hlt_CorruptRowNoticeABCDEF']) {
+      expect(id.slice(4)).withContext(id).toHaveSize(22);
+      expect(id).withContext(id).not.toMatch(/\d/);
+      expect(isHealthEntryId(id)).withContext(id).toBeTrue();
+    }
+    expect(isHealthEntryId('hlt_short')).toBeFalse();
+    expect(isHealthEntryId('80')).toBeFalse();
+    expect(isHealthEntryId('hlt_SyntheticWeightEntryAB1')).toBeFalse();
   });
 });

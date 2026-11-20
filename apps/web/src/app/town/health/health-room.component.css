@@ -1,0 +1,68 @@
+:host {
+  display: block;
+}
+
+.health-room {
+  max-width: 720px;
+  margin: auto;
+  padding: clamp(12px, 3vw, 32px);
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+
+.room-nav,
+.units,
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.room-nav,
+.units,
+.gate,
+.notice,
+.entries {
+  margin-block: var(--space-3);
+}
+
+.entries {
+  list-style: none;
+  padding: 0;
+}
+
+.entries li {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: var(--space-2);
+  border-block-end: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.entries li:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.entries li[aria-current='true'] {
+  background: var(--surface-soft);
+}
+
+.notice {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+
+.gate p,
+.ready p {
+  margin-block: var(--space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .health-room {
+    transition: none;
+  }
+}
