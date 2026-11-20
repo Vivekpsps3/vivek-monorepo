@@ -28,11 +28,67 @@ textarea {
   gap: var(--space-2);
 }
 
+.floor-line,
+.entered-sets,
+.entered-sets li,
+.set-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.floor-line {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.floor-line h3,
+.floor-line p,
+.set-label,
+.canonical-preview {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .entered-sets li {
   min-height: 44px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
   overflow-wrap: anywhere;
+}
+
+.set-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.set-role {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.set-role select,
+.role-name {
+  min-height: 44px;
+}
+
+.set-role select {
+  min-width: 44px;
+  max-width: 100%;
+}
+
+.role-name {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .form-error {

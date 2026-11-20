@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { displayWeight, lbToKg } from '../src/app/town/health/health-units';
+import { displayWeight, lbToKg, milesToMetres } from '../src/app/town/health/health-units';
 import { SYNTHETIC_VAULT_PASSPHRASE, syntheticVault } from '../../../tests/e2e/synthetic-vault-harness';
 import { expect, test, type Locator, type Page } from '../../../tests/e2e/fixtures';
 
@@ -44,8 +44,7 @@ const SEED = {
 };
 
 async function target(locator: Locator): Promise<void> {
-  const box = await locator.boundingBox();
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expect.poll(async () => (await locator.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 }
 
 async function activate(page: Page, locator: Locator, touch: boolean): Promise<void> {
@@ -1056,7 +1055,239 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
       expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
     });
+
+    test('logs a lift, a bodyweight set, and a run, then edits and deletes the session', async ({ page }) => {
+      test.setTimeout(240_000);
+      const touch = width === 390;
+      const measured = '2026-10-29';
+      const later = '2026-11-20';
+      const liftKg = lbToKg(100).toFixed(2);
+      const workKg = lbToKg(80).toFixed(2);
+      const metres = milesToMetres(1).toFixed(2);
+      let failWorkoutUpsert = false;
+      let failWorkoutDelete = false;
+      await page.route('**/api/vault/records/upsert', async route => {
+        const body = route.request().postDataJSON() as { records?: Array<{ collection?: string }> };
+        const workouts = (body.records ?? []).filter(record => record.collection === 'health_workouts');
+        if (failWorkoutUpsert && workouts.length > 0) {
+          failWorkoutUpsert = false;
+          await route.fulfill({ status: 503, contentType: 'application/json', body: '{"detail":"Synthetic save failed"}' });
+          return;
+        }
+        await route.fallback();
+      });
+      await page.route('**/api/vault/records/delete', async route => {
+        const body = route.request().postDataJSON() as { records?: Array<{ collection?: string }> };
+        const workouts = (body.records ?? []).filter(record => record.collection === 'health_workouts');
+        if (failWorkoutDelete && workouts.length > 0) {
+          failWorkoutDelete = false;
+          await route.fulfill({ status: 503, contentType: 'application/json', body: '{"detail":"Synthetic delete failed"}' });
+          return;
+        }
+        await route.fallback();
+      });
+      await syntheticVault(page, SEED);
+      await page.goto('/town/gym');
+      const room = page.locator('app-health-room');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(room).toHaveAttribute('data-health-state', 'locked');
+      const locked = await room.evaluate(node => ({
+        text: (node as HTMLElement).innerText,
+        inputs: [...node.querySelectorAll('input, textarea')].map(item => (item as HTMLInputElement).value),
+      }));
+      expect(locked.text).not.toContain('Synthetic press');
+      expect(locked.text).not.toContain('Synthetic pull');
+      expect(locked.text).not.toContain('Synthetic run');
+      expect(locked.inputs.join('')).not.toMatch(/\d/);
+      const motion = await room.locator('.health-room').evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(motion).toBe('0s');
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await expect(room).toContainText('Squat');
+      const before = await collectionCipher(page);
+
+      await activate(page, room.getByRole('button', { name: 'Add session' }), touch);
+      const dialog = page.getByRole('dialog', { name: 'Add session' });
+      await expect(dialog.locator('#health-workout-measured-on')).toBeFocused();
+      await fillControl(page, dialog, '#health-workout-name', 'Synthetic press', touch);
+      await dialog.locator('#health-workout-set-type').selectOption('warmup');
+      await fillControl(page, dialog, '#health-workout-load', '100', touch);
+      await fillControl(page, dialog, '#health-workout-reps', '5', touch);
+      await expect(dialog.locator('[data-open-preview]')).toContainText(`Stored as ${liftKg} kg · 5 reps`);
+      const addSet = dialog.getByRole('button', { name: 'Add set' });
+      await target(addSet);
+      await activate(page, addSet, touch);
+      await expect(dialog.locator('#health-workout-load')).toHaveValue('');
+      await fillControl(page, dialog, '#health-workout-load', '80', touch);
+      await fillControl(page, dialog, '#health-workout-reps', '3', touch);
+      await activate(page, dialog.getByRole('button', { name: 'Add set' }), touch);
+      await expect(dialog.locator('#health-workout-load')).toHaveValue('');
+      await fillControl(page, dialog, '#health-workout-load', '60', touch);
+      await fillControl(page, dialog, '#health-workout-reps', '1', touch);
+      await activate(page, dialog.getByRole('button', { name: 'Add set' }), touch);
+      await expect(dialog.locator('[data-entered-set]')).toHaveCount(3);
+      const earlier = dialog.getByRole('button', { name: 'Move set 3 on exercise 1 earlier' });
+      await target(earlier);
+      await target(dialog.getByRole('button', { name: 'Remove set 2 on exercise 1' }));
+      await activate(page, earlier, touch);
+      await expect(dialog.locator('[data-entered-set]').nth(1)).toContainText('1 reps');
+      await activate(page, dialog.getByRole('button', { name: 'Remove set 2 on exercise 1' }), touch);
+      await expect(dialog.locator('[data-entered-set]')).toHaveCount(2);
+      await expect(dialog).not.toContainText('1 reps');
+      await expect(dialog.locator('[data-canonical-preview]').nth(0)).toContainText(`Stored as ${liftKg} kg · 5 reps`);
+      await expect(dialog.locator('[data-canonical-preview]').nth(1)).toContainText(`Stored as ${workKg} kg · 3 reps`);
+      await dialog.locator('[data-entered-set]').nth(1).getByRole('combobox', { name: 'Set 2 role on exercise 1' }).selectOption('drop');
+      await expect(dialog.locator('[data-entered-set]').nth(1)).toHaveAttribute('data-set-role', 'drop');
+      await dialog.locator('[data-entered-set]').nth(1).getByRole('combobox', { name: 'Set 2 role on exercise 1' }).selectOption('work');
+      await expect(dialog.locator('[data-entered-set]').nth(1)).toHaveAttribute('data-set-role', 'work');
+
+      await activate(page, dialog.getByRole('button', { name: 'Add exercise' }), touch);
+      await expect(dialog.locator('#health-workout-name')).toHaveValue('');
+      await fillControl(page, dialog, '#health-workout-name', 'Synthetic pull', touch);
+      await dialog.locator('#health-workout-type').selectOption('bodyweight-reps');
+      await fillControl(page, dialog, '#health-workout-reps', '8', touch);
+      const pullPreview = dialog.locator('[data-open-preview]');
+      await expect(pullPreview).toContainText('Stored as 8 reps');
+      await expect(pullPreview).not.toContainText('kg');
+      await activate(page, dialog.getByRole('button', { name: 'Add set' }), touch);
+      const pull = dialog.locator('[data-exercise-type="bodyweight-reps"]');
+      await expect(pull).toContainText('Stored as 8 reps');
+      await expect(pull).not.toContainText('kg');
+
+      await activate(page, dialog.getByRole('button', { name: 'Add exercise' }), touch);
+      await expect(dialog.locator('#health-workout-name')).toHaveValue('');
+      await fillControl(page, dialog, '#health-workout-name', 'Synthetic run', touch);
+      await dialog.locator('#health-workout-type').selectOption('time-distance');
+      await dialog.locator('#health-workout-set-type').selectOption('drop');
+      await fillControl(page, dialog, '#health-workout-seconds', '1200', touch);
+      await fillControl(page, dialog, '#health-workout-distance', '1', touch);
+      await expect(dialog.locator('[data-open-preview]')).toContainText(`Stored as 1200 s · ${metres} m`);
+      await activate(page, dialog.getByRole('button', { name: 'Add set' }), touch);
+      await expect(dialog.locator('[data-entered-set]')).toHaveCount(4);
+      await expect(dialog.locator('[data-floor-line]')).toHaveCount(3);
+      await activate(page, dialog.getByRole('button', { name: 'Switch to exercise 1' }), touch);
+      await expect(dialog.locator('#health-workout-name')).toHaveValue('Synthetic press');
+      await expect(dialog.locator('[data-entered-set]')).toHaveCount(4);
+      await fillControl(page, dialog, '#health-workout-note', 'Synthetic floor', touch);
+      const fits = await dialog.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
+      expect(fits).toBe(true);
+      const openScan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(openScan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+
+      failWorkoutUpsert = true;
+      await activate(page, dialog.getByRole('button', { name: 'Save' }), touch);
+      await expect(dialog).toContainText('Could not save this workout. Try again.');
+      await expect(dialog.locator('#health-workout-note')).toHaveValue('Synthetic floor');
+      await expect(dialog.locator('[data-entered-set]')).toHaveCount(4);
+      expect(await collectionCipher(page)).toEqual(before);
+      await target(dialog.getByRole('button', { name: 'Save' }));
+      await activate(page, dialog.getByRole('button', { name: 'Save' }), touch);
+      await expect(dialog).toHaveCount(0);
+      await expect(page.locator('#health-add-session button')).toBeFocused();
+      const sessionRow = room.locator('[data-workout-kind="session"]');
+      await expect(sessionRow).toHaveAttribute('data-set-count', '4');
+      await expect(sessionRow).toHaveAttribute('data-workout-state', 'completed');
+      await expect(sessionRow).toContainText(`Session · 3 exercises · ${measured} · 4 sets`);
+      const saved = await collectionCipher(page);
+      expect(saved.health_prs).toEqual(before.health_prs);
+      expect(saved.health_stats).toEqual(before.health_stats);
+      expect(saved.health_workouts).toHaveLength(1);
+      expect(saved.health_workouts[0].revision).toBe(1);
+      const sessionId = saved.health_workouts[0].client_id;
+
+      await page.clock.setFixedTime(new Date('2026-11-20T19:00:00Z'));
+      const edit = room.locator(`#health-edit-${sessionId} button`);
+      await target(edit);
+      await activate(page, edit, touch);
+      const editor = page.getByRole('dialog', { name: 'Edit session' });
+      await expect(editor.locator('.logged-on time')).toHaveAttribute('datetime', measured);
+      await expect(editor.locator('#health-workout-measured-on')).toHaveAttribute('max', later);
+      await expect(editor.locator('[data-entered-set]')).toHaveCount(4);
+      await expect(editor.locator('[data-canonical-preview]').nth(0)).toContainText(`Stored as ${liftKg} kg · 5 reps`);
+      await expect(editor.locator('[data-exercise-type="bodyweight-reps"]')).toContainText('Stored as 8 reps');
+      await expect(editor.locator('[data-exercise-type="time-distance"]')).toContainText(`Stored as 1200 s · ${metres} m`);
+      await expect(editor).not.toContainText('1 reps');
+      await fillControl(page, editor, '#health-workout-note', 'Synthetic floor edited', touch);
+      failWorkoutUpsert = true;
+      await activate(page, editor.getByRole('button', { name: 'Save' }), touch);
+      await expect(editor).toContainText('Could not save this workout. Try again.');
+      await expect(editor.locator('#health-workout-note')).toHaveValue('Synthetic floor edited');
+      expect(await collectionCipher(page)).toEqual(saved);
+      await activate(page, editor.getByRole('button', { name: 'Save' }), touch);
+      await expect(editor).toHaveCount(0);
+      await expect(page.locator(`#health-edit-${sessionId} button`)).toBeFocused();
+      const revised = await collectionCipher(page);
+      expect(revised.health_workouts).toHaveLength(1);
+      expect(revised.health_workouts[0].client_id).toBe(sessionId);
+      expect(revised.health_workouts[0].revision).toBe(2);
+      expect(revised.health_workouts[0].ciphertext_b64).not.toBe(saved.health_workouts[0].ciphertext_b64);
+      expect(revised.health_prs).toEqual(before.health_prs);
+
+      await page.reload();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await activate(page, room.locator(`#health-edit-${sessionId} button`), touch);
+      const reopened = page.getByRole('dialog', { name: 'Edit session' });
+      await expect(reopened.locator('#health-workout-note')).toHaveValue('Synthetic floor edited');
+      await expect(reopened.locator('.logged-on time')).toHaveAttribute('datetime', measured);
+      await expect(reopened.locator('[data-entered-set]')).toHaveCount(4);
+      await expect(reopened.locator('[data-canonical-preview]').first()).toContainText(`Stored as ${liftKg} kg`);
+      if (touch) await reopened.getByRole('button', { name: 'Cancel' }).tap();
+      else {
+        await reopened.getByRole('button', { name: 'Cancel' }).focus();
+        await page.keyboard.press('Enter');
+      }
+      await expect(reopened).toHaveCount(0);
+
+      const remove = room.locator(`#health-delete-${sessionId} button`);
+      await target(remove);
+      await activate(page, remove, touch);
+      const confirm = page.getByRole('dialog', { name: 'Delete this session?' });
+      await expect(confirm).toContainText('DELETE SESSION');
+      await expect(confirm).toContainText(`measured on ${measured}`);
+      await confirm.locator('#confirm-phrase-field').fill('DELETE');
+      await expect(confirm.getByRole('button', { name: 'Delete session' })).toHaveAttribute('aria-disabled', 'true');
+      await expect(room.locator('[data-workout-kind="session"]')).toHaveCount(1);
+      failWorkoutDelete = true;
+      await confirm.locator('#confirm-phrase-field').fill('DELETE SESSION');
+      if (touch) await confirm.getByRole('button', { name: 'Delete session' }).tap();
+      else await confirm.getByRole('button', { name: 'Delete session' }).click();
+      await expect(confirm).toContainText('Could not delete this session. It is still saved. Try again.');
+      await expect(confirm.locator('#confirm-phrase-field')).toBeFocused();
+      expect(await collectionCipher(page)).toEqual(revised);
+      if (touch) await confirm.getByRole('button', { name: 'Delete session' }).tap();
+      else await page.keyboard.press('Enter');
+      await expect(confirm).toHaveCount(0);
+      await expect(room.locator('[data-workout-kind="session"]')).toHaveCount(0);
+      await expect(room).toContainText('Squat');
+      await expect(room).not.toContainText('Synthetic floor');
+      await expect(page.locator('#health-add-session button')).toBeFocused();
+      const removed = await collectionCipher(page);
+      expect(removed.health_workouts).toEqual([]);
+      expect(removed.health_prs).toEqual(before.health_prs);
+      expect(removed.health_stats).toEqual(before.health_stats);
+      const readyMotion = await room.locator('.health-room').evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(readyMotion).toBe('0s');
+      const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+    });
   });
+}
+
+async function fillControl(page: Page, dialog: Locator, selector: string, value: string, touch: boolean): Promise<void> {
+  const locator = dialog.locator(selector);
+  await expect(locator).toBeVisible();
+  await target(locator);
+  if (touch) {
+    await locator.tap();
+    await locator.fill(value);
+    return;
+  }
+  await locator.focus();
+  await expect(locator).toBeFocused();
+  await locator.fill('');
+  await page.keyboard.type(value);
 }
 
 async function focusControl(page: Page, selector: string): Promise<void> {

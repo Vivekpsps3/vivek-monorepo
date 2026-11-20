@@ -938,6 +938,51 @@ describe('Health workout collection', () => {
     expect(fake.rows.find(item => item.client_id === saved.clientId)?.ciphertext_b64).toBe(cipher);
     expect(textOf(fake.rows)).not.toContain('Synthetic late');
   });
+
+  it('deletes one session and a late or stale delete does not remove it', async () => {
+    fake.rows = [row('health_prs', 'hlt_b', PR)];
+    await store.load();
+    const prCipher = fake.rows.find(item => item.client_id === 'hlt_b')?.ciphertext_b64;
+    const kept = await store.createWorkout(workoutRecord('Synthetic kept'), WORKOUT_TODAY);
+    const removed = await store.createWorkout(workoutRecord('Synthetic removed'), WORKOUT_TODAY);
+    await store.deleteWorkout(removed);
+    expect(store.workoutsSnapshot.map(item => item.clientId)).toEqual([kept.clientId]);
+    expect(fake.rows.filter(item => item.collection === 'health_workouts').map(item => item.client_id)).toEqual([kept.clientId]);
+    expect(fake.rows.find(item => item.client_id === 'hlt_b')?.ciphertext_b64).toBe(prCipher);
+    expect(textOf(store.workoutsSnapshot)).not.toContain('Synthetic removed');
+    expect(textOf(store.workoutsSnapshot)).toContain('Synthetic kept');
+
+    const exercise = workoutFromDraft({
+      ...emptyWorkoutDraft('exercise', WORKOUT_TODAY),
+      name: 'Synthetic press',
+    }, WORKOUT_TODAY, { weight: 'kg', distance: 'km' });
+    const defined = await store.createWorkout(exercise, WORKOUT_TODAY);
+    await expectAsync(store.deleteWorkout(defined)).toBeRejectedWithError(HealthWorkoutError);
+    expect(store.workoutsSnapshot.map(item => item.clientId)).toContain(defined.clientId);
+
+    const stale = store.workoutsSnapshot.find(item => item.clientId === kept.clientId);
+    const rowKept = fake.rows.find(item => item.client_id === kept.clientId);
+    if (!stale || !rowKept) throw new Error('missing session');
+    rowKept.revision = 3;
+    await expectAsync(store.deleteWorkout(stale)).toBeRejectedWithError(HealthConflictError);
+    expect(fake.rows.some(item => item.client_id === kept.clientId)).toBeTrue();
+    expect(store.workoutsSnapshot.find(item => item.clientId === kept.clientId)?.revision).toBe(3);
+
+    const current = store.workoutsSnapshot.find(item => item.clientId === kept.clientId);
+    if (!current) throw new Error('missing reloaded session');
+    const cipher = fake.rows.find(item => item.client_id === kept.clientId)?.ciphertext_b64;
+    fake.holdDelete = true;
+    const pending = store.deleteWorkout(current);
+    await until(() => fake.deleteRelease.length === 1);
+    localStorage.removeItem('finance-dek');
+    session.become(null);
+    expect(fake.deleteCancelled).toBe(1);
+    fake.deleteRelease.shift()?.();
+    await expectAsync(pending).toBeRejected();
+    expect(store.workoutsSnapshot).toEqual([]);
+    expect(fake.rows.find(item => item.client_id === kept.clientId)?.ciphertext_b64).toBe(cipher);
+    expect(textOf(fake.rows)).not.toContain('Synthetic kept');
+  });
 });
 
 describe('loadTownHealthStages (barrel)', () => {

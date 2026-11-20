@@ -507,8 +507,10 @@ export class HealthStoreService {
       this.guard(ticket, signal);
       if (collection === HEALTH_STATS_COLLECTION) {
         this.stats = this.stats.filter(item => item.clientId !== entry.clientId);
-      } else {
+      } else if (collection === HEALTH_PRS_COLLECTION) {
         this.prs = this.prs.filter(item => item.clientId !== entry.clientId);
+      } else if (collection === HEALTH_WORKOUTS_COLLECTION) {
+        this.workouts = this.workouts.filter(item => item.clientId !== entry.clientId);
       }
     } finally {
       work.dispose();
@@ -619,6 +621,14 @@ export class HealthStoreService {
     this.guard(ticket);
     this.workouts = this.workouts.map(item => (item.clientId === entry.clientId ? saved : item));
     return saved;
+  }
+
+  /** Delete one saved session. A stale revision refetches once and does not write. */
+  async deleteWorkout(entry: HealthEntry<WorkoutRecord>): Promise<void> {
+    if (entry.value.kind !== 'session') {
+      throw new HealthWorkoutError('Save the session draft and try again.');
+    }
+    await this.remove(this.publication(false), HEALTH_WORKOUTS_COLLECTION, entry);
   }
 
   private checkedWorkout(value: WorkoutRecord, today: string): WorkoutRecord {
