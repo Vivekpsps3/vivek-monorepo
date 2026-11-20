@@ -72,9 +72,18 @@
 }
 
 .result-group h2,
-.lab-folder {
+.result-group h3,
+.lab-folder,
+.latest {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.series,
+.lab-block {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .result-group .entries {

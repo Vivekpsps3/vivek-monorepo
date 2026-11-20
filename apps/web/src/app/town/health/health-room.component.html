@@ -49,29 +49,74 @@
           }
         </ul>
       } @else {
-        @for (group of clinicGroups(); track group.id) {
-          <section class="result-group" [attr.aria-labelledby]="group.id" [attr.data-health-group]="group.id">
-            <h2 [id]="group.id">{{ group.title }}</h2>
-            @for (folder of group.folders; track folder.key) {
-              @if (folder.title) {
-                <h3 class="lab-folder" [id]="folder.id">{{ folder.title }}</h3>
-              }
-              <ul class="entries" [attr.aria-label]="folder.title ? folder.title + ' results' : group.title">
-                @for (row of folder.rows; track row.clientId) {
-                  <li [attr.data-health-kind]="row.kind">
-                    <span class="entry-label" [id]="'health-entry-' + row.clientId" tabindex="-1" [appHealthLinkedFocus]="row.clientId === entryId() && !dialogOpen()" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.label }}</span>
-                    @if (row.editable) {
-                      <span class="entry-actions">
-                        <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="openEdit(row.clientId)">Edit</ui-button>
-                        <ui-button variant="danger" [attr.id]="'health-delete-' + row.clientId" [ariaLabel]="'Delete ' + row.label" (clicked)="removeEntry(row.clientId)">Delete</ui-button>
-                      </span>
-                    }
-                  </li>
+        @if (measurementPages().length > 0) {
+          <section class="result-group" aria-labelledby="health-group-measurements" data-health-group="health-group-measurements">
+            <h2 id="health-group-measurements">Measurements</h2>
+            @for (page of measurementPages(); track page.kind) {
+              <article class="series" [attr.data-health-series]="page.kind" [attr.data-health-shown]="page.shown" [attr.data-health-total]="page.total">
+                <h3 [id]="'health-series-' + page.kind">{{ page.title }}</h3>
+                <p class="latest" [attr.data-health-latest]="page.kind">Latest · {{ page.latestLabel }}</p>
+                <app-health-sparkline [seriesId]="page.kind" [caption]="page.title + ' history'" [view]="page.sparkline" />
+                <ul class="entries" [attr.aria-label]="page.title">
+                  @for (row of page.visibleRows; track row.clientId) {
+                    <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: row }" />
+                  }
+                </ul>
+                @if (page.more) {
+                  <ui-button variant="secondary" [attr.id]="'health-more-' + page.kind" (clicked)="showMore(page.kind)">Show more {{ page.noun }}</ui-button>
                 }
-              </ul>
+              </article>
             }
           </section>
         }
+        @if (labPage(); as lab) {
+          <section class="result-group" aria-labelledby="health-group-labs" data-health-group="health-group-labs">
+            <h2 id="health-group-labs">Lab results</h2>
+            <article class="series" data-health-series="lab" [attr.data-health-shown]="lab.shown" [attr.data-health-total]="lab.total">
+              @for (folder of lab.visibleFolders; track folder.title) {
+                <div class="lab-block">
+                  <h3 class="lab-folder" [id]="folder.id">{{ folder.title }}</h3>
+                  <p class="latest" data-health-latest="lab">Latest · {{ folder.latestLabel }}</p>
+                  <app-health-sparkline seriesId="lab" [caption]="folder.title + ' history'" [view]="folder.sparkline" />
+                  <ul class="entries" [attr.aria-label]="folder.title + ' results'">
+                    @for (row of folder.rows; track row.clientId) {
+                      <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: row }" />
+                    }
+                  </ul>
+                </div>
+              }
+              @if (lab.more) {
+                <ui-button variant="secondary" id="health-more-lab" (clicked)="showMore('lab')">Show more {{ lab.noun }}</ui-button>
+              }
+            </article>
+          </section>
+        }
+        @if (checkupPage(); as checkup) {
+          <section class="result-group" aria-labelledby="health-group-checkups" data-health-group="health-group-checkups">
+            <h2 id="health-group-checkups">Checkups</h2>
+            <article class="series" data-health-series="checkup" [attr.data-health-shown]="checkup.shown" [attr.data-health-total]="checkup.total">
+              <p class="latest" data-health-latest="checkup">Latest · {{ checkup.latestLabel }}</p>
+              <app-health-sparkline seriesId="checkup" caption="Checkup history" [view]="checkup.sparkline" />
+              <ul class="entries" aria-label="Checkups">
+                @for (row of checkup.visibleRows; track row.clientId) {
+                  <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: row }" />
+                }
+              </ul>
+              @if (checkup.more) {
+                <ui-button variant="secondary" id="health-more-checkup" (clicked)="showMore('checkup')">Show more {{ checkup.noun }}</ui-button>
+              }
+            </article>
+          </section>
+        }
+        <ng-template #entryRow let-row>
+          <li [attr.data-health-kind]="row.kind">
+            <span class="entry-label" [id]="'health-entry-' + row.clientId" tabindex="-1" [appHealthLinkedFocus]="!dialogOpen() && (row.clientId === entryId() || row.clientId === revealFocusId())" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.label }}</span>
+            <span class="entry-actions">
+              <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="openEdit(row.clientId)">Edit</ui-button>
+              <ui-button variant="danger" [attr.id]="'health-delete-' + row.clientId" [ariaLabel]="'Delete ' + row.label" (clicked)="removeEntry(row.clientId)">Delete</ui-button>
+            </span>
+          </li>
+        </ng-template>
       }
       @if (room() === 'clinic') {
         <div class="add-actions">

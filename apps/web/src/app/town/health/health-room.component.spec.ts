@@ -984,12 +984,17 @@ describe('Health room shell', () => {
     expect(el.querySelector('#health-group-measurements')).not.toBeNull();
     expect(el.querySelector('#health-group-labs')).not.toBeNull();
     expect(el.querySelector('#health-group-checkups')).not.toBeNull();
-    const marker = el.querySelector('#health-lab-folder-0');
-    const other = el.querySelector('#health-lab-folder-1');
+    const folders = [...el.querySelectorAll('h3.lab-folder')];
+    const marker = folders.find(node => node.textContent === 'Ω-marker');
+    const other = folders.find(node => node.textContent === 'Ω-other');
     expect(marker?.textContent).toBe('Ω-marker');
     expect(other?.textContent).toBe('Ω-other');
-    expect(marker?.nextElementSibling?.querySelectorAll('[data-health-kind="lab"]').length).toBe(3);
-    expect(other?.nextElementSibling?.querySelectorAll('[data-health-kind="lab"]').length).toBe(1);
+    expect(marker?.closest('.lab-block')?.querySelectorAll('[data-health-kind="lab"]').length).toBe(3);
+    expect(other?.closest('.lab-block')?.querySelectorAll('[data-health-kind="lab"]').length).toBe(1);
+    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('below range');
+    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('in range');
+    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('above range');
+    expect(other?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('no range');
     expect(el.textContent).toContain(`Lab · Ω-marker · 9 u · below range · 10 to 20 u · ${DAY}`);
     expect(el.textContent).toContain(`Lab · Ω-marker · 15 u · in range · 10 to 20 u · ${DAY}`);
     expect(el.textContent).toContain(`Lab · Ω-marker · 21 u · above range · 10 to 20 u · ${DAY}`);
@@ -1119,4 +1124,177 @@ describe('Health room shell', () => {
     expect(visible(el)).not.toContain('Ω-held');
     expect(el.querySelector('#health-lab-name')).toBeNull();
   });
+
+  it('pages every Clinic kind, keeps sparkline text, and does not rewrite stored rows', async () => {
+    unlock();
+    route.query.next(convertToParamMap({}));
+    const count = 101;
+    const stats: VaultRecordEnvelope[] = [
+      row('health_stats', CORRUPT_ID, CORRUPT, { schema_version: 1, ciphertext_b64: 'garbage' }),
+    ];
+    for (let index = 0; index < count; index += 1) {
+      const measured = historyDay(index);
+      stats.push(
+        row('health_stats', historyId('W', index), { v: 1, kind: 'weight', measured_on: measured, logged_on: measured, kg: 40 + index }),
+        row('health_stats', historyId('R', index), { v: 1, kind: 'rhr', measured_on: measured, logged_on: measured, bpm: 30 + index }),
+        row('health_stats', historyId('B', index), { v: 1, kind: 'bp', measured_on: measured, logged_on: measured, sys: 80 + index, dia: 50 }),
+        row('health_stats', historyId('S', index), { v: 1, kind: 'sleep', measured_on: measured, logged_on: measured, hours: (index % 8) + 1 }),
+        row('health_stats', historyId('L', index), {
+          v: 1, kind: 'lab', measured_on: measured, logged_on: measured,
+          lab: { name: 'Ω-series', value: index + 1, unit: 'u', ref_low: 40, ref_high: 60 },
+        }),
+        row('health_stats', historyId('C', index), { v: 1, kind: 'checkup', measured_on: measured, logged_on: measured, note: `Note ${index}` }),
+      );
+    }
+    const marked = historyDay(400);
+    stats.push(
+      row('health_stats', 'hlt_SyntheticLabBelowRange', { v: 1, kind: 'lab', measured_on: marked, logged_on: marked, lab: { name: 'Ω-marker', value: 9, unit: 'u', ref_low: 10, ref_high: 20 } }),
+      row('health_stats', 'hlt_SyntheticLabInRangeABC', { v: 1, kind: 'lab', measured_on: marked, logged_on: marked, lab: { name: 'Ω-marker', value: 15, unit: 'u', ref_low: 10, ref_high: 20 } }),
+      row('health_stats', 'hlt_SyntheticLabAboveRange', { v: 1, kind: 'lab', measured_on: marked, logged_on: marked, lab: { name: 'Ω-marker', value: 21, unit: 'u', ref_low: 10, ref_high: 20 } }),
+      row('health_stats', 'hlt_SyntheticLabNoRangeABC', { v: 1, kind: 'lab', measured_on: marked, logged_on: marked, lab: { name: 'Ω-other', value: 4, unit: 'u' } }),
+    );
+    fake.rows = stats;
+    const { fixture, el } = await show();
+    const newest = historyDay(count - 1);
+    const weightSpark = el.querySelector('[data-health-sparkline="weight"]');
+    const weightLine = weightSpark?.querySelector('polyline')?.getAttribute('points');
+    expect(el.textContent).toContain('1 saved entry could not be read. It stays in the vault.');
+    expect(el.textContent).not.toContain('64.25');
+    expect(el.querySelector('[data-health-latest="weight"]')?.textContent).toBe(`Latest · Weight · ${displayWeight(140, 'lb')} lb · ${newest}`);
+    expect(weightSpark?.querySelectorAll('li').length).toBe(12);
+    expect(weightSpark?.textContent).toContain(`Weight · ${displayWeight(140, 'lb')} lb · ${newest}`);
+    expect(weightSpark?.textContent).toContain(historyDay(89));
+    expect(weightSpark?.textContent).not.toContain(historyDay(88));
+    expect(el.querySelector('[data-health-series="weight"]')?.getAttribute('data-health-shown')).toBe('100');
+    expect(el.querySelector('[data-health-series="weight"]')?.getAttribute('data-health-total')).toBe('101');
+    expect(el.querySelector(`#health-entry-${historyId('W', 0)}`)).toBeNull();
+    expect(el.querySelector('[data-health-sparkline="bp"]')?.querySelectorAll('polyline').length).toBe(2);
+    expect(el.querySelector('[data-health-sparkline="checkup"] polyline')).toBeNull();
+    expect(el.querySelector('[data-health-sparkline="checkup"]')?.textContent).toContain(`Checkup · Note ${count - 1} · ${newest}`);
+    const marker = [...el.querySelectorAll('h3.lab-folder')].find(node => node.textContent === 'Ω-marker');
+    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('below range');
+    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('in range');
+    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('above range');
+    expect(el.querySelector('[data-health-series="lab"]')?.getAttribute('data-health-total')).toBe('105');
+    expect(el.textContent).not.toContain('medical');
+
+    const listed = fake.listed.length;
+    const newestStored = storedRow(historyId('W', count - 1));
+    const oldestStored = storedRow(historyId('W', 0));
+    const more = el.querySelector<HTMLButtonElement>('#health-more-weight button');
+    if (!more) throw new Error('missing show more');
+    expect(more.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    more.click();
+    fixture.detectChanges();
+    expect(fake.listed.length).toBe(listed);
+    expect(el.querySelector(`#health-entry-${historyId('W', 0)}`)).not.toBeNull();
+    expect(el.querySelector(`#health-entry-${historyId('W', count - 1)}`)).not.toBeNull();
+    expect(document.activeElement).toBe(el.querySelector(`#health-entry-${historyId('W', 0)}`));
+    expect(el.querySelector('#health-more-weight')).toBeNull();
+    expect(storedRow(historyId('W', 0))).toEqual(oldestStored);
+    expect(storedRow(historyId('W', count - 1))).toEqual(newestStored);
+
+    button(el, 'Kilograms').click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-health-latest="weight"]')?.textContent).toContain('140.0 kg');
+    expect(el.querySelector('[data-health-sparkline="weight"] polyline')?.getAttribute('points')).toBe(weightLine);
+    expect(storedRow(historyId('W', count - 1))).toEqual(newestStored);
+    expect((decode(newestStored.ciphertext) as { kg?: number }).kg).toBe(140);
+    button(el, 'Pounds').click();
+    fixture.detectChanges();
+    const pounds = el.querySelector('[data-health-sparkline="weight"]')?.textContent;
+    document.documentElement.setAttribute('data-theme', 'dark');
+    fixture.detectChanges();
+    expect(el.querySelector('[data-health-sparkline="weight"]')?.textContent).toBe(pounds);
+    expect(storedRow(historyId('W', count - 1))).toEqual(newestStored);
+    document.documentElement.removeAttribute('data-theme');
+
+    const oldestLab = storedRow(historyId('L', 0));
+    for (const [kind, mark] of [['rhr', 'R'], ['bp', 'B'], ['sleep', 'S'], ['lab', 'L'], ['checkup', 'C']] as const) {
+      const control = el.querySelector<HTMLButtonElement>(`#health-more-${kind} button`);
+      if (!control) throw new Error(`missing show more ${kind}`);
+      control.click();
+      fixture.detectChanges();
+      expect(el.querySelector(`#health-entry-${historyId(mark, 0)}`)).not.toBeNull();
+      expect(el.querySelector(`#health-entry-${historyId(mark, count - 1)}`)).not.toBeNull();
+    }
+    expect(storedRow(historyId('L', 0))).toEqual(oldestLab);
+    expect(oldestLab.revision).toBe(1);
+  });
+
+  it('keeps expanded history and a draft when saving fails, then drops both if a late response loses', async () => {
+    unlock();
+    route.query.next(convertToParamMap({}));
+    const stats = [row('health_stats', CORRUPT_ID, CORRUPT, { schema_version: 1, ciphertext_b64: 'garbage' })];
+    for (let index = 0; index < 101; index += 1) {
+      const measured = historyDay(index);
+      stats.push(row('health_stats', historyId('W', index), {
+        v: 1, kind: 'weight', measured_on: measured, logged_on: measured, kg: 40 + index,
+      }));
+    }
+    fake.rows = stats;
+    const { fixture, el } = await show();
+    const store = TestBed.inject(HealthStoreService);
+    button(el, 'Show more weight').click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain(historyDay(0));
+    button(el, 'Add weight').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', DAY);
+    typeInto(el, '#health-weight', '155.5');
+    fixture.detectChanges();
+    fake.failUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('155.5');
+    expect(el.textContent).toContain('Could not save this entry. Try again.');
+    expect(el.textContent).toContain(historyDay(0));
+    expect(el.textContent).toContain(displayWeight(140, 'lb'));
+    expect(storedRow(historyId('W', 100)).revision).toBe(1);
+
+    fake.failUpsert = false;
+    fake.holdUpsert = true;
+    typeInto(el, '#health-weight', '160');
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await until(() => fake.upsertRelease.length === 1);
+    fake.holdList = true;
+    fake.rows = [row('health_stats', WEIGHT_ID, { ...WEIGHT, kg: 70 })];
+    session.users.next({ id: 8 });
+    fixture.detectChanges();
+    await until(() => el.getAttribute('data-health-state') === 'loading');
+    expect(visible(el)).not.toContain('155.5');
+    expect(visible(el)).not.toContain('160');
+    expect(visible(el)).not.toContain(historyDay(0));
+    fake.upsertRelease.shift()?.();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(store.statsSnapshot.some(item => item.value.kind === 'weight' && item.value.kg === 160)).toBeFalse();
+    fake.listRelease.splice(0).forEach(release => release());
+    await settle(fixture);
+    expect(el.getAttribute('data-health-state')).toBe('ready');
+    expect(el.textContent).toContain(`${displayWeight(70, 'lb')} lb`);
+    expect(visible(el)).not.toContain(historyDay(0));
+    expect(visible(el)).not.toContain('160');
+    expect(el.querySelector('#health-weight')).toBeNull();
+    expect(el.querySelector('#health-more-weight')).toBeNull();
+  });
 });
+
+function historyId(mark: string, index: number): string {
+  return `hlt_${mark}${String(index).padStart(21, '0')}`;
+}
+
+function historyDay(index: number): string {
+  return new Date(Date.UTC(2024, 0, 1 + index)).toISOString().slice(0, 10);
+}
+
+function storedRow(clientId: string): { ciphertext: string; revision: number } {
+  const item = fake.rows.find(row => row.client_id === clientId);
+  if (!item) throw new Error(`missing ${clientId}`);
+  return { ciphertext: item.ciphertext_b64, revision: item.revision };
+}
+
+
