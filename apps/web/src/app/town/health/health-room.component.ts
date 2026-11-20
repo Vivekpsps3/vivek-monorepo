@@ -381,19 +381,11 @@ export class HealthRoomComponent implements OnInit {
   }
 
   protected resumeWorkout(clientId: string): void {
-    this.workoutFormError.set('');
-    this.returnWorkoutFocus.set(`health-resume-${clientId}`);
-    const held = this.workoutDraft();
-    if (!held || held.clientId !== clientId) {
-      const entry = this.workouts().find(item => item.clientId === clientId);
-      if (!entry || entry.value.kind !== 'session' || entry.value.state !== 'draft') return;
-      this.workoutDraft.set(draftFromSession({
-        clientId: entry.clientId,
-        revision: entry.revision,
-        value: entry.value,
-      }));
-    }
-    this.workoutDialogOpen.set(true);
+    this.openSavedSession(clientId, `health-resume-${clientId}`, 'draft');
+  }
+
+  protected editWorkout(clientId: string): void {
+    this.openSavedSession(clientId, `health-edit-${clientId}`, 'completed');
   }
 
   protected onWorkoutDraft(draft: WorkoutDraft): void {
@@ -462,6 +454,43 @@ export class HealthRoomComponent implements OnInit {
     this.updateUnits(next);
     const workout = this.workoutDraft();
     if (workout) this.workoutDraft.set(reformatWorkoutDraft(workout, previous, next));
+  }
+
+  protected removeWorkout(clientId: string): void {
+    const generation = this.generation;
+    const entry = this.workouts().find(item => item.clientId === clientId);
+    if (!entry || entry.value.kind !== 'session') return;
+    const measured = entry.value.measured_on;
+    void this.confirm.confirmAction({
+      title: 'Delete this session?',
+      message: `This permanently deletes the session measured on ${measured}. This cannot be undone.`,
+      confirmLabel: 'Delete session',
+      cancelLabel: 'Keep session',
+      busyLabel: 'Deleting session',
+      phrase: 'DELETE SESSION',
+      errorMessage: 'Could not delete this session. It is still saved. Try again.',
+      run: async () => {
+        if (!this.current(generation)) return;
+        const latest = this.store.workoutsSnapshot.find(item => item.clientId === clientId);
+        if (!latest || latest.value.kind !== 'session') throw new Error('missing');
+        try {
+          await this.store.deleteWorkout(latest);
+        } catch (error) {
+          if (!this.current(generation)) return;
+          if (error instanceof HealthConflictError) this.publish();
+          throw error;
+        }
+        if (!this.current(generation)) return;
+        if (this.workoutDraft()?.clientId === clientId) {
+          this.workoutDraft.set(null);
+          this.workoutDialogOpen.set(false);
+          this.workoutFormError.set('');
+        }
+        this.publish();
+      },
+    }).then(confirmed => {
+      if (confirmed && this.current(generation)) this.returnWorkoutFocus.set('health-add-session');
+    });
   }
 
   protected removeEntry(clientId: string): void {
@@ -562,6 +591,11 @@ export class HealthRoomComponent implements OnInit {
         }
         const revision = submitted.revision ?? current.revision;
         await this.store.updateWorkoutSession({ ...current, revision }, value, this.today());
+        if (this.current(generation)) {
+          this.returnWorkoutFocus.set(value.state === 'draft'
+            ? `health-resume-${submitted.clientId}`
+            : `health-edit-${submitted.clientId}`);
+        }
       } else {
         await this.store.createWorkout(value, this.today());
       }
@@ -617,6 +651,22 @@ export class HealthRoomComponent implements OnInit {
     this.draft.set(null);
     this.dialogOpen.set(false);
     this.formError.set('');
+  }
+
+  private openSavedSession(clientId: string, focusId: string, state: 'draft' | 'completed'): void {
+    this.workoutFormError.set('');
+    const held = this.workoutDraft();
+    if (!held || held.clientId !== clientId) {
+      const entry = this.workouts().find(item => item.clientId === clientId);
+      if (!entry || entry.value.kind !== 'session' || entry.value.state !== state) return;
+      this.workoutDraft.set(draftFromSession({
+        clientId: entry.clientId,
+        revision: entry.revision,
+        value: entry.value,
+      }));
+    }
+    this.returnWorkoutFocus.set(focusId);
+    this.workoutDialogOpen.set(true);
   }
 
   private finishWorkout(generation: number, submitted: WorkoutDraft | null): void {

@@ -135,9 +135,14 @@
               @for (row of workoutRows(); track row.clientId) {
                 <li [attr.data-workout-kind]="row.kind" [attr.data-workout-state]="row.state" [attr.data-set-count]="row.setCount">
                   <span class="entry-label" [id]="'health-workout-' + row.clientId" tabindex="-1">{{ row.label }}</span>
-                  @if (row.state === 'draft') {
+                  @if (row.kind === 'session') {
                     <span class="entry-actions">
-                      <ui-button variant="secondary" [attr.id]="'health-resume-' + row.clientId" [ariaLabel]="'Resume ' + row.label" (clicked)="resumeWorkout(row.clientId)">Resume</ui-button>
+                      @if (row.state === 'draft') {
+                        <ui-button variant="secondary" [attr.id]="'health-resume-' + row.clientId" [ariaLabel]="'Resume ' + row.label" (clicked)="resumeWorkout(row.clientId)">Resume</ui-button>
+                      } @else {
+                        <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="editWorkout(row.clientId)">Edit</ui-button>
+                      }
+                      <ui-button variant="danger" [attr.id]="'health-delete-' + row.clientId" [ariaLabel]="'Delete ' + row.label" (clicked)="removeWorkout(row.clientId)">Delete</ui-button>
                     </span>
                   }
                 </li>

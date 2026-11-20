@@ -75,6 +75,15 @@ export interface WorkoutDraftSet {
   metres?: number;
 }
 
+/** One exercise already placed on the session floor. */
+export interface WorkoutFloorLine {
+  id: string;
+  exerciseId: string;
+  name: string;
+  exerciseType: ExerciseType;
+  sets: WorkoutDraftSet[];
+}
+
 export interface WorkoutDraft {
   kind: WorkoutKind;
   name: string;
@@ -97,8 +106,12 @@ export interface WorkoutDraft {
   loggedOn: string;
   /** Custom definition id when the line already has one. Empty derives a static id. */
   exerciseId: string;
-  /** Sets already entered. The open fields are not included until they are committed. */
+  /** Sets on the exercise the open fields edit. The open fields are not included until they are committed. */
   sets: WorkoutDraftSet[];
+  /** Exercises before the open line. Empty for a one-exercise session. */
+  floorBefore: WorkoutFloorLine[];
+  /** Exercises after the open line. Empty until the user switches to an earlier exercise. */
+  floorAfter: WorkoutFloorLine[];
 }
 
 const PART_ID = /^w(?:ex|st)_[A-Za-z0-9_-]{8,64}$/;
@@ -132,6 +145,8 @@ export function emptyWorkoutDraft(kind: WorkoutKind, today: string): WorkoutDraf
     loggedOn: '',
     exerciseId: '',
     sets: [],
+    floorBefore: [],
+    floorAfter: [],
   };
 }
 
@@ -188,6 +203,10 @@ export function formatWorkout(record: WorkoutRecord, units: HealthUnits): string
   const line = record.exercises[0];
   const count = record.exercises.reduce((sum, item) => sum + item.sets.length, 0);
   const prefix = record.state === 'draft' ? 'Draft session' : 'Session';
+  if (record.exercises.length > 1) {
+    const noun = count === 1 ? 'set' : 'sets';
+    return `${prefix} · ${record.exercises.length} exercises · ${record.measured_on} · ${count} ${noun}`;
+  }
   if (count !== 1) return `${prefix} · ${line?.name || 'Session'} · ${record.measured_on} · ${count} sets`;
   const set = line?.sets[0];
   const parts = [line?.name || 'Session', record.measured_on];
@@ -205,6 +224,22 @@ export function formatEnteredSet(set: WorkoutDraftSet, index: number, units: Hea
   if (typeof set.seconds === 'number') parts.push(`${set.seconds} s`);
   if (typeof set.metres === 'number') parts.push(`${displayDistance(set.metres, units.distance)} ${units.distance}`);
   return parts.join(' · ');
+}
+
+/** Stored kilograms, reps, seconds, and metres. Display units never rewrite these numbers. */
+export function canonicalPreview(set: Pick<WorkoutDraftSet, 'kg' | 'reps' | 'seconds' | 'metres'>): string {
+  const parts: string[] = [];
+  if (typeof set.kg === 'number') parts.push(`${set.kg.toFixed(2)} kg`);
+  if (typeof set.reps === 'number') parts.push(`${set.reps} reps`);
+  if (typeof set.seconds === 'number') parts.push(`${set.seconds} s`);
+  if (typeof set.metres === 'number') parts.push(`${set.metres.toFixed(2)} m`);
+  return parts.length > 0 ? `Stored as ${parts.join(' · ')}` : '';
+}
+
+/** Preview of the open fields. A blank or unparsable field adds nothing. */
+export function openCanonicalPreview(draft: WorkoutDraft, units: HealthUnits): string {
+  if (draft.kind === 'exercise' || progressBlank(draft)) return '';
+  return canonicalPreview(progressSet(draft, units, false));
 }
 
 export function workoutFieldMessage(code: string | undefined): string {
@@ -284,7 +319,7 @@ export function commitEnteredSet(
   if (progressBlank(draft)) {
     return { draft, fieldErrors: { [progressField(draft.exerciseType)]: 'required' } };
   }
-  const probe = workoutFromDraft({ ...draft, sets: [], note: '' }, today, units);
+  const probe = workoutFromDraft({ ...draft, sets: [], floorBefore: [], floorAfter: [], note: '' }, today, units);
   const checked = validateWorkoutRecord(probe, 0, today);
   if (Object.keys(checked.fieldErrors).length > 0 || checked.value.kind !== 'session') {
     return { draft, fieldErrors: checked.fieldErrors };
@@ -306,16 +341,142 @@ export function commitEnteredSet(
   };
 }
 
+/** Move one entered set within its exercise. The ends do not wrap, and no set is added. */
+export function moveDraftSet(draft: WorkoutDraft, setId: string, direction: -1 | 1): WorkoutDraft {
+  if (draft.kind !== 'session') return draft;
+  const sets = moveWithin(draft.sets, setId, direction);
+  if (sets !== draft.sets) return { ...draft, sets };
+  const floorBefore = draft.floorBefore.map(line => retarget(line, setId, next => moveWithin(next, setId, direction)));
+  if (floorBefore.some((line, index) => line !== draft.floorBefore[index])) return { ...draft, floorBefore };
+  const floorAfter = draft.floorAfter.map(line => retarget(line, setId, next => moveWithin(next, setId, direction)));
+  if (floorAfter.some((line, index) => line !== draft.floorAfter[index])) return { ...draft, floorAfter };
+  return draft;
+}
+
+/** Drop one entered set. An exercise with no sets left leaves the floor. Nothing is invented in its place. */
+export function removeDraftSet(draft: WorkoutDraft, setId: string): WorkoutDraft {
+  if (draft.kind !== 'session') return draft;
+  const sets = draft.sets.filter(set => set.id !== setId);
+  const floorBefore = draft.floorBefore
+    .map(line => ({ ...line, sets: line.sets.filter(set => set.id !== setId) }))
+    .filter(line => line.sets.length > 0);
+  const floorAfter = draft.floorAfter
+    .map(line => ({ ...line, sets: line.sets.filter(set => set.id !== setId) }))
+    .filter(line => line.sets.length > 0);
+  if (
+    sets.length === draft.sets.length
+    && floorBefore.length === draft.floorBefore.length
+    && floorAfter.length === draft.floorAfter.length
+    && floorBefore.every((line, index) => line.sets.length === draft.floorBefore[index].sets.length)
+    && floorAfter.every((line, index) => line.sets.length === draft.floorAfter[index].sets.length)
+  ) return draft;
+  return { ...draft, sets, floorBefore, floorAfter };
+}
+
+/** Change the role of one entered set. The measured numbers stay put. */
+export function retagDraftSet(draft: WorkoutDraft, setId: string, setType: SetType): WorkoutDraft {
+  if (draft.kind !== 'session') return draft;
+  const apply = (set: WorkoutDraftSet): WorkoutDraftSet => set.id === setId ? { ...set, setType } : set;
+  return {
+    ...draft,
+    sets: draft.sets.map(apply),
+    floorBefore: draft.floorBefore.map(line => ({ ...line, sets: line.sets.map(apply) })),
+    floorAfter: draft.floorAfter.map(line => ({ ...line, sets: line.sets.map(apply) })),
+  };
+}
+
+/**
+ * Place the open exercise on the floor and start a blank exercise after it.
+ * A blank open set is not stored. An exercise with no entered sets is refused.
+ */
+export function commitExerciseLine(
+  draft: WorkoutDraft,
+  units: HealthUnits,
+  today: string,
+): { draft: WorkoutDraft; fieldErrors: FieldErrors } {
+  if (draft.kind !== 'session') return { draft, fieldErrors: {} };
+  const prepared = commitOpenSet(draft, units, today);
+  if (prepared.fieldErrors) return { draft: prepared.draft, fieldErrors: prepared.fieldErrors };
+  const current = prepared.draft;
+  if (current.sets.length === 0) {
+    return { draft: current, fieldErrors: { [progressField(current.exerciseType)]: 'required' } };
+  }
+  const fresh = emptyWorkoutDraft('session', current.measuredOn);
+  return {
+    draft: {
+      ...current,
+      floorBefore: [...current.floorBefore, activeFloorLine(current), ...current.floorAfter],
+      floorAfter: [],
+      name: '',
+      exerciseType: 'load-reps',
+      exerciseLineId: fresh.exerciseLineId,
+      exerciseId: '',
+      sets: [],
+      load: '',
+      reps: '',
+      seconds: '',
+      distance: '',
+      setType: 'work',
+      setId: fresh.setId,
+    },
+    fieldErrors: {},
+  };
+}
+
+/**
+ * Move the open fields to an exercise already on the floor.
+ * Uncommitted numbers are stored first. A named exercise with no sets cannot be left behind.
+ */
+export function activateDraftLine(
+  draft: WorkoutDraft,
+  lineId: string,
+  units: HealthUnits,
+  today: string,
+): { draft: WorkoutDraft; fieldErrors: FieldErrors } {
+  if (draft.kind !== 'session' || draft.exerciseLineId === lineId) return { draft, fieldErrors: {} };
+  const prepared = commitOpenSet(draft, units, today);
+  if (prepared.fieldErrors) return { draft: prepared.draft, fieldErrors: prepared.fieldErrors };
+  const current = prepared.draft;
+  if (current.sets.length === 0 && current.name.trim() !== '') {
+    return { draft: current, fieldErrors: { [progressField(current.exerciseType)]: 'required' } };
+  }
+  const sequence = sessionSequence(current);
+  const index = sequence.findIndex(line => line.id === lineId);
+  if (index < 0) return { draft: current, fieldErrors: {} };
+  const target = sequence[index];
+  const fresh = emptyWorkoutDraft('session', current.measuredOn);
+  return {
+    draft: {
+      ...current,
+      floorBefore: sequence.slice(0, index),
+      floorAfter: sequence.slice(index + 1),
+      name: target.name,
+      exerciseType: target.exerciseType,
+      exerciseLineId: target.id,
+      exerciseId: target.exerciseId,
+      sets: target.sets,
+      load: '',
+      reps: '',
+      seconds: '',
+      distance: '',
+      setType: 'work',
+      setId: fresh.setId,
+    },
+    fieldErrors: {},
+  };
+}
+
 /** Resume a saved session. The open set is blank, so reload shows only stored sets. */
 export function draftFromSession(
   entry: { clientId: string; revision: number; value: WorkoutSession },
 ): WorkoutDraft {
-  const line = entry.value.exercises[0];
+  const lines = entry.value.exercises.map(floorLineFromStored);
+  const active = lines[lines.length - 1];
   const fresh = emptyWorkoutDraft('session', entry.value.measured_on);
   return {
     ...fresh,
-    name: line?.name ?? '',
-    exerciseType: line?.exercise_type ?? 'load-reps',
+    name: active?.name ?? '',
+    exerciseType: active?.exerciseType ?? 'load-reps',
     measuredOn: entry.value.measured_on,
     note: entry.value.note ?? '',
     load: '',
@@ -324,13 +485,15 @@ export function draftFromSession(
     distance: '',
     setType: 'work',
     state: entry.value.state,
-    exerciseLineId: line?.id && PART_ID.test(line.id) ? line.id : fresh.exerciseLineId,
+    exerciseLineId: active?.id ?? fresh.exerciseLineId,
     setId: fresh.setId,
     clientId: entry.clientId,
     revision: entry.revision,
     loggedOn: entry.value.logged_on,
-    exerciseId: line?.exercise_id ?? '',
-    sets: (line?.sets ?? []).map(draftSetFromStored),
+    exerciseId: active?.exerciseId ?? '',
+    sets: active?.sets ?? [],
+    floorBefore: lines.slice(0, -1),
+    floorAfter: [],
   };
 }
 
@@ -359,7 +522,7 @@ export function workoutFromDraft(draft: WorkoutDraft, today: string, units: Heal
     measured_on: draft.measuredOn,
     logged_on: draft.loggedOn !== '' ? draft.loggedOn : today,
     state: draft.state,
-    exercises: [sessionLineFromDraft(draft, units)],
+    exercises: sessionExercises(draft, units),
   };
   if (draft.note !== '') session.note = draft.note;
   return session;
@@ -398,6 +561,89 @@ function sessionLineFromDraft(draft: WorkoutDraft, units: HealthUnits): WorkoutE
     name: draft.name,
     sets,
   };
+}
+
+function sessionExercises(draft: WorkoutDraft, units: HealthUnits): WorkoutExerciseLine[] {
+  const completed = draft.state === 'completed';
+  const stored = (line: WorkoutFloorLine): WorkoutExerciseLine => ({
+    id: line.id,
+    exercise_id: lineExerciseId(line.name, line.exerciseId),
+    exercise_type: line.exerciseType,
+    name: line.name,
+    sets: line.sets.map(set => storedSet(set, completed)),
+  });
+  const active = sessionLineFromDraft(draft, units);
+  const lines = [
+    ...draft.floorBefore.map(stored).filter(line => line.sets.length > 0),
+    ...(active.sets.length > 0 ? [active] : []),
+    ...draft.floorAfter.map(stored).filter(line => line.sets.length > 0),
+  ];
+  return lines.length > 0 ? lines : [active];
+}
+
+function commitOpenSet(
+  draft: WorkoutDraft,
+  units: HealthUnits,
+  today: string,
+): { draft: WorkoutDraft; fieldErrors: FieldErrors | null } {
+  if (progressBlank(draft)) return { draft, fieldErrors: null };
+  const committed = commitEnteredSet(draft, units, today);
+  if (Object.keys(committed.fieldErrors).length > 0) return { draft: committed.draft, fieldErrors: committed.fieldErrors };
+  return { draft: committed.draft, fieldErrors: null };
+}
+
+function activeFloorLine(draft: WorkoutDraft): WorkoutFloorLine {
+  return {
+    id: draft.exerciseLineId,
+    exerciseId: exerciseIdFromDraft(draft),
+    name: draft.name,
+    exerciseType: draft.exerciseType,
+    sets: draft.sets,
+  };
+}
+
+function sessionSequence(draft: WorkoutDraft): WorkoutFloorLine[] {
+  return [
+    ...draft.floorBefore,
+    ...(draft.sets.length > 0 ? [activeFloorLine(draft)] : []),
+    ...draft.floorAfter,
+  ];
+}
+
+function floorLineFromStored(line: WorkoutExerciseLine): WorkoutFloorLine {
+  return {
+    id: line.id && PART_ID.test(line.id) ? line.id : newWorkoutPartId('wex'),
+    exerciseId: line.exercise_id,
+    name: line.name,
+    exerciseType: isExerciseType(line.exercise_type) ? line.exercise_type : 'load-reps',
+    sets: line.sets.map(draftSetFromStored),
+  };
+}
+
+function lineExerciseId(name: string, exerciseId: string): string {
+  if (CUSTOM_ID.test(exerciseId)) return exerciseId;
+  return staticExerciseId(name);
+}
+
+function moveWithin(sets: readonly WorkoutDraftSet[], setId: string, direction: -1 | 1): WorkoutDraftSet[] {
+  const index = sets.findIndex(set => set.id === setId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= sets.length) return sets as WorkoutDraftSet[];
+  const next = sets.slice();
+  const [item] = next.splice(index, 1);
+  if (!item) return sets as WorkoutDraftSet[];
+  next.splice(target, 0, item);
+  return next;
+}
+
+function retarget(
+  line: WorkoutFloorLine,
+  setId: string,
+  move: (sets: readonly WorkoutDraftSet[]) => WorkoutDraftSet[],
+): WorkoutFloorLine {
+  if (!line.sets.some(set => set.id === setId)) return line;
+  const sets = move(line.sets);
+  return sets === line.sets ? line : { ...line, sets };
 }
 
 function storedSet(set: WorkoutDraftSet, completed: boolean): WorkoutSet {
