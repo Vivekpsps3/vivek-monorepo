@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#412](https://github.com/Vivekpsps3/vivek-monorepo/issues/412) TUX-07; parent [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. #277 stays open and was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/tux-07`; `/tmp/vivek-tux-07`. The shared checkout was not edited.
-- Base main SHA, current tested SHA: base `bcaad64db2134c5209101573d6850c4c33ec7f0f` (TUX-06 merge, pull request #539). Commands below ran on that base plus this working tree. The follow-up records the implementation commit SHA. This sentence names that commit; the follow-up only edits this evidence file.
+- Base main SHA, current tested SHA: base `bcaad64db2134c5209101573d6850c4c33ec7f0f` (TUX-06 merge, pull request #539). The implementation and these command results are `2fe26672983351e8f414a8d21147e073d34eb323`. This sentence names that commit; the follow-up only edits this evidence file.
 - Fresh-main/prerequisite/active-PR checks: `git fetch origin main` on 2026-11-20 still returned `bcaad64db2134c5209101573d6850c4c33ec7f0f`. STYLE-03 dense holdings and media cards are ancestors of that tree (`fe04d6d84a6a99f525e053e483ba19405ea96e06`, pull request #496). NAV-02 return context is an ancestor (`8126d6efef2e6e0564d7dccc67e17d785204d4f9`, pull request #499; `packages/ui/src/return-context.ts`). `gh pr list --state open` returned no pull requests. No open `travel-forms` or `travel-ui` pull request. #412, #304, #134, and #277 were open.
 
 ## Acceptance
@@ -42,13 +42,13 @@ The first full Playwright command was FAIL: 186 passed and 1 failed. `reminders.
 
 | Command | Tested SHA | Result |
 | --- | --- | --- |
-| `PATH="/tmp/vivek-tux-07/.venv/bin:$PATH" make test-fast` | implementation commit named above | PASS. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. Travel e2e discovery listed 30 files, including `postcards.spec.js`. |
-| `make lint-web` | implementation commit named above | PASS. eslint-finance 344, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. No baseline was raised. |
-| `make typecheck-web` | implementation commit named above | PASS. `tsc` noEmit for web, finance, packages, and site. |
-| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | implementation commit named above | PASS. 421 SUCCESS. Statements 72.6% (5824/8022). |
-| `node --test apps/travel/backend/static/tests/*.test.mjs` | implementation commit named above | PASS. 69 pass / 0 fail. |
-| `make build-frontends` | implementation commit named above | PASS. Output `/tmp/vivek-tux-07/dist/web`. Initial-bundle warning 677.04 kB. Exit 0. The Playwright run used that bundle. |
-| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --config apps/travel/e2e/playwright.config.js` | implementation commit named above | First run FAIL: 186 passed, 1 failed (`reminders.spec.js` 390 failed toggle). Isolated rerun of that test PASS: 4 passed. Second full run PASS: 187 passed. |
+| `PATH="/tmp/vivek-tux-07/.venv/bin:$PATH" make test-fast` | `2fe26672983351e8f414a8d21147e073d34eb323` | PASS. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. Travel e2e discovery listed 30 files, including `postcards.spec.js`. |
+| `make lint-web` | `2fe26672983351e8f414a8d21147e073d34eb323` | PASS. eslint-finance 344, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. No baseline was raised. |
+| `make typecheck-web` | `2fe26672983351e8f414a8d21147e073d34eb323` | PASS. `tsc` noEmit for web, finance, packages, and site. |
+| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | `2fe26672983351e8f414a8d21147e073d34eb323` | PASS. 421 SUCCESS. Statements 72.6% (5824/8022). |
+| `node --test apps/travel/backend/static/tests/*.test.mjs` | `2fe26672983351e8f414a8d21147e073d34eb323` | PASS. 69 pass / 0 fail. |
+| `make build-frontends` | `2fe26672983351e8f414a8d21147e073d34eb323` | PASS. Output `/tmp/vivek-tux-07/dist/web`. Initial-bundle warning 677.04 kB. Exit 0. The Playwright run used that bundle. |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --config apps/travel/e2e/playwright.config.js` | `2fe26672983351e8f414a8d21147e073d34eb323` | First run FAIL: 186 passed, 1 failed (`reminders.spec.js` 390 failed toggle). Isolated rerun of that test PASS: 4 passed. Second full run PASS: 187 passed. |
 
 Python lint, Python typecheck, and the travel and server coverage gates were not run. The diff does not change Python. Finance coverage, Media coverage, Finance Karma, site Karma, Finance Playwright, Media Playwright, and Town Playwright were not run. The diff does not change those screens.
 
