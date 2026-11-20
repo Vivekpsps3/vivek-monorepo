@@ -55,7 +55,7 @@ A Finance Karma run started while Town Playwright and the suite project were sti
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending. The pull request body uses `Closes #429` only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/548 (`Closes #429` only).
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #256, #90, #134, and #277 stay open. This leaf does not deploy.
