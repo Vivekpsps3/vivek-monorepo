@@ -528,7 +528,175 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(room).toContainText(`Checkup · Synthetic visit note · ${DAY}`);
       await expect(room).not.toContainText(held);
     });
+
+    test('pages weight history and keeps stored values when units or theme change', async ({ page }) => {
+      test.setTimeout(240_000);
+      const touch = width === 390;
+      const count = 101;
+      const newestIndex = count - 1;
+      const newestDay = historyDay(newestIndex);
+      const oldestDay = historyDay(0);
+      const newestLb = `Weight · ${displayWeight(140, 'lb')} lb · ${newestDay}`;
+      const oldestLb = `Weight · ${displayWeight(40, 'lb')} lb · ${oldestDay}`;
+      const sparkStart = historyDay(89);
+      await syntheticVault(page, {
+        health_stats: [
+          ...Array.from({ length: count }, (_, index) => ({
+            client_id: historyId('W', index),
+            v: 1,
+            kind: 'weight',
+            measured_on: historyDay(index),
+            logged_on: historyDay(index),
+            kg: 40 + index,
+          })),
+          { client_id: historyId('R', 1), v: 1, kind: 'rhr', measured_on: newestDay, logged_on: newestDay, bpm: 62 },
+          { client_id: historyId('B', 1), v: 1, kind: 'bp', measured_on: newestDay, logged_on: newestDay, sys: 118, dia: 76 },
+          { client_id: historyId('S', 1), v: 1, kind: 'sleep', measured_on: newestDay, logged_on: newestDay, hours: 7.25 },
+          {
+            client_id: historyId('L', 1),
+            v: 1,
+            kind: 'lab',
+            measured_on: newestDay,
+            logged_on: newestDay,
+            lab: { name: 'Ω-marker', value: 9, unit: 'u', ref_low: 10, ref_high: 20 },
+          },
+          {
+            client_id: historyId('C', 1),
+            v: 1,
+            kind: 'checkup',
+            measured_on: newestDay,
+            logged_on: newestDay,
+            note: 'Synthetic visit note',
+          },
+          {
+            client_id: CORRUPT_ID,
+            schema_version: 1,
+            v: 1,
+            kind: 'weight',
+            measured_on: newestDay,
+            logged_on: newestDay,
+            kg: 64.25,
+          },
+        ],
+        health_prs: SEED.health_prs,
+      });
+      await page.goto('/town/clinic');
+      const room = page.locator('app-health-room');
+      await expect(room).toHaveAttribute('data-health-state', 'locked');
+      noMeasurementDigits(await room.evaluate(node => (node as HTMLElement).innerText));
+      await expect(room).not.toContainText('Ω-marker');
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await expect(room.locator('[data-health-latest="weight"]')).toHaveText(`Latest · ${newestLb}`);
+      await expect(room.locator('[data-health-series="weight"]')).toHaveAttribute('data-health-shown', '100');
+      await expect(room.locator('[data-health-series="weight"]')).toHaveAttribute('data-health-total', '101');
+      const spark = room.locator('[data-health-sparkline="weight"]');
+      await expect(spark.locator('li')).toHaveCount(12);
+      await expect(spark.locator('li').first()).toContainText(sparkStart);
+      await expect(spark.locator('li').last()).toHaveText(newestLb);
+      await expect(spark).not.toContainText(oldestDay);
+      await expect(room.locator(`#health-entry-${historyId('W', 0)}`)).toHaveCount(0);
+      await expect(room.locator('[data-health-latest="rhr"]')).toContainText('62 bpm');
+      await expect(room.locator('[data-health-sparkline="bp"]')).toContainText('118/76');
+      await expect(room.locator('[data-health-sparkline="sleep"]')).toContainText('7.25 h');
+      await expect(room.locator('[data-health-sparkline="lab"]')).toContainText('Ω-marker');
+      await expect(room.locator('[data-health-sparkline="lab"]')).toContainText('below range');
+      await expect(room.locator('[data-health-sparkline="checkup"]')).toContainText('Synthetic visit note');
+      await expect(room).toContainText('1 saved entry could not be read. It stays in the vault.');
+      await expect(room).not.toContainText('64.25');
+      const overflow = await room.evaluate(node => (node as HTMLElement).scrollWidth - node.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(1);
+      const motion = await spark.locator('svg').evaluate(node => {
+        const style = getComputedStyle(node);
+        return {
+          animationName: style.animationName,
+          animationDuration: style.animationDuration,
+          transitionDuration: style.transitionDuration,
+        };
+      });
+      expect(motion.animationName).toBe('none');
+      expect(motion.transitionDuration).toBe('0s');
+      expect(Number.parseFloat(motion.animationDuration)).toBeLessThanOrEqual(0.001);
+
+      const snapshot = async (clientId: string) => page.evaluate(async id => {
+        const response = await fetch('/api/vault/records?collection=health_stats');
+        const rows = await response.json() as Array<{ client_id: string; ciphertext_b64: string; revision: number }>;
+        return rows.find(item => item.client_id === id) ?? null;
+      }, clientId);
+      const newestStored = await snapshot(historyId('W', newestIndex));
+      const oldestStored = await snapshot(historyId('W', 0));
+      const labStored = await snapshot(historyId('L', 1));
+      expect(newestStored?.revision).toBe(1);
+      expect(oldestStored?.revision).toBe(1);
+
+      const more = room.getByRole('button', { name: 'Show more weight' });
+      await target(more);
+      await activate(page, more, touch);
+      await expect(room.locator(`#health-entry-${historyId('W', 0)}`)).toContainText(oldestLb);
+      await expect(room.locator(`#health-entry-${historyId('W', newestIndex)}`)).toContainText(newestLb);
+      await expect(room.locator(`#health-entry-${historyId('W', 0)}`)).toBeFocused();
+      await expect(more).toHaveCount(0);
+      await target(room.locator(`#health-entry-${historyId('W', 0)}`));
+      expect(await snapshot(historyId('W', newestIndex))).toEqual(newestStored);
+      expect(await snapshot(historyId('W', 0))).toEqual(oldestStored);
+
+      await activate(page, room.getByRole('radio', { name: 'Kilograms' }), touch);
+      await expect(room.locator('[data-health-latest="weight"]')).toContainText('140.0 kg');
+      await expect(room.locator(`#health-entry-${historyId('W', 0)}`)).toContainText('40.0 kg');
+      await expect(spark.locator('li').last()).toContainText('140.0 kg');
+      expect(await snapshot(historyId('W', newestIndex))).toEqual(newestStored);
+      expect(await snapshot(historyId('W', 0))).toEqual(oldestStored);
+      expect(await snapshot(historyId('L', 1))).toEqual(labStored);
+      await activate(page, room.getByRole('radio', { name: 'Pounds' }), touch);
+      await expect(spark.locator('li').last()).toHaveText(newestLb);
+
+      const nextTheme = theme === 'dark' ? 'light' : 'dark';
+      const themeLabel = nextTheme === 'dark' ? 'Dark' : 'Light';
+      await activate(page, page.getByRole('button', { name: 'synthetic', exact: true }), touch);
+      await activate(page, page.getByRole('link', { name: 'Settings', exact: true }), touch);
+      const appearance = page.getByRole('navigation', { name: 'Settings', exact: true }).getByRole('link', { name: 'Appearance', exact: true });
+      await expect(appearance).toBeVisible();
+      if (touch) await appearance.tap();
+      else await appearance.press('Enter');
+      await expect(page).toHaveURL(/\/settings\/appearance$/);
+      const themeRadio = page.getByRole('radio', { name: themeLabel, exact: true });
+      await expect(themeRadio).toBeVisible();
+      if (touch) await themeRadio.tap();
+      else {
+        await themeRadio.focus();
+        await page.keyboard.press('Space');
+      }
+      await expect(themeRadio).toBeChecked();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', nextTheme);
+      await page.goBack();
+      await page.goBack();
+      await expect(page).toHaveURL(/\/town\/clinic$/);
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await expect(page.locator('html')).toHaveAttribute('data-theme', nextTheme);
+      await expect(spark.locator('li').last()).toHaveText(newestLb);
+      await expect(room.locator('[data-health-latest="rhr"]')).toContainText('62 bpm');
+      await expect(room.locator('[data-health-sparkline="lab"]')).toContainText('below range');
+      expect(await snapshot(historyId('W', newestIndex))).toEqual(newestStored);
+      expect(await snapshot(historyId('W', 0))).toEqual(oldestStored);
+      expect(await snapshot(historyId('L', 1))).toEqual(labStored);
+      const returned = room.getByRole('button', { name: 'Show more weight' });
+      await activate(page, returned, touch);
+      await expect(room.locator(`#health-entry-${historyId('W', 0)}`)).toContainText(oldestLb);
+      await expect(room.locator(`#health-entry-${historyId('W', newestIndex)}`)).toContainText(newestLb);
+      const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+    });
   });
+}
+
+function historyId(mark: string, index: number): string {
+  return `hlt_${mark}${String(index).padStart(21, '0')}`;
+}
+
+function historyDay(index: number): string {
+  return new Date(Date.UTC(2024, 0, 1 + index)).toISOString().slice(0, 10);
 }
 
 async function saveLab(
