@@ -1,0 +1,27 @@
+<figure class="sparkline" [attr.data-health-sparkline]="seriesId()">
+  @if (view().line || view().dot) {
+    <svg aria-hidden="true" viewBox="0 0 120 36" focusable="false">
+      @if (view().line) {
+        <polyline [attr.points]="view().line" />
+      }
+      @if (view().line2) {
+        <polyline class="series-2" [attr.points]="view().line2" />
+      }
+      @if (view().dot; as dot) {
+        <circle [attr.cx]="dot.x" [attr.cy]="dot.y" r="1.8" />
+      }
+      @if (view().dot2; as dot) {
+        <circle class="series-2" [attr.cx]="dot.x" [attr.cy]="dot.y" r="1.8" />
+      }
+    </svg>
+  }
+  @if (view().points.length > 0) {
+    <ol [attr.aria-label]="caption()">
+      @for (point of view().points; track point.clientId) {
+        <li [attr.data-health-point]="point.clientId">{{ point.text }}</li>
+      }
+    </ol>
+  } @else {
+    <p>No numeric points.</p>
+  }
+</figure>
