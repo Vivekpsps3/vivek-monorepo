@@ -46,10 +46,14 @@ import {
 } from './health-store.service';
 import type { HealthPr, HealthStat } from './health.types';
 import {
+  draftFromExercise,
+  draftFromPlan,
+  draftFromRoutine,
   draftFromSession,
   emptyWorkoutDraft,
   formatWorkout,
   reformatWorkoutDraft,
+  type WorkoutDefinitionChoice,
   type WorkoutDraft,
   type WorkoutKind,
   type WorkoutRecord,
@@ -261,12 +265,21 @@ export class HealthRoomComponent implements OnInit {
     return !!id && this.phase() === 'ready' && !this.rows().some(row => row.clientId === id);
   });
   protected readonly notice = computed(() => corruptNotice(this.unreadable()));
-  protected readonly customExerciseCount = computed(() => this.workouts()
-    .filter(entry => entry.value.kind === 'exercise' && !entry.value.archived).length);
+  protected readonly customExerciseCount = computed(() => {
+    const editing = this.workoutDraft();
+    const skip = editing?.kind === 'exercise' ? editing.clientId : '';
+    return this.workouts().filter(entry =>
+      entry.clientId !== skip && entry.value.kind === 'exercise' && !entry.value.archived).length;
+  });
+  protected readonly exerciseChoices = computed((): WorkoutDefinitionChoice[] => this.workouts().flatMap(entry => {
+    if (entry.value.kind !== 'exercise' || entry.value.archived) return [];
+    return [{ id: entry.clientId, name: entry.value.name, exerciseType: entry.value.exercise_type }];
+  }));
   protected readonly workoutRows = computed(() => this.workouts().map(entry => ({
     clientId: entry.clientId,
     label: formatWorkout(entry.value, this.units()),
     kind: entry.value.kind,
+    archived: entry.value.kind !== 'session' && entry.value.archived,
     state: entry.value.kind === 'session' ? entry.value.state : '',
     setCount: entry.value.kind === 'session'
       ? entry.value.exercises.reduce((sum, line) => sum + line.sets.length, 0)
@@ -386,6 +399,58 @@ export class HealthRoomComponent implements OnInit {
 
   protected editWorkout(clientId: string): void {
     this.openSavedSession(clientId, `health-edit-${clientId}`, 'completed');
+  }
+
+  protected editCatalog(clientId: string): void {
+    if (this.workoutBusy()) return;
+    this.workoutFormError.set('');
+    const held = this.workoutDraft();
+    if (!held || held.clientId !== clientId) {
+      const entry = this.workouts().find(item => item.clientId === clientId);
+      if (!entry || (entry.value.kind !== 'exercise' && entry.value.kind !== 'routine')) return;
+      this.workoutDraft.set(entry.value.kind === 'exercise'
+        ? draftFromExercise({ clientId: entry.clientId, revision: entry.revision, value: entry.value })
+        : draftFromRoutine({ clientId: entry.clientId, revision: entry.revision, value: entry.value }));
+    }
+    this.returnWorkoutFocus.set(`health-edit-${clientId}`);
+    this.workoutDialogOpen.set(true);
+  }
+
+  protected startFromRoutine(clientId: string): void {
+    this.startCopy(clientId, 'routine');
+  }
+
+  protected startFromSession(clientId: string): void {
+    this.startCopy(clientId, 'session');
+  }
+
+  protected archiveWorkout(clientId: string): void {
+    if (this.workoutBusy()) return;
+    const generation = this.generation;
+    const entry = this.workouts().find(item => item.clientId === clientId);
+    if (!entry || entry.value.kind === 'session' || entry.value.archived) return;
+    const noun = entry.value.kind === 'exercise' ? 'exercise' : 'routine';
+    void this.confirm.confirmAction({
+      title: `Archive this ${noun}?`,
+      message: `This keeps the ${noun} in the vault and leaves every saved session as it was.`,
+      confirmLabel: `Archive ${noun}`,
+      cancelLabel: 'Keep it',
+      busyLabel: `Archiving ${noun}`,
+      phrase: noun === 'exercise' ? 'ARCHIVE EXERCISE' : 'ARCHIVE ROUTINE',
+      errorMessage: `Could not archive this ${noun}. It is still saved. Try again.`,
+      run: async () => {
+        if (!this.current(generation)) return;
+        const latest = this.store.workoutsSnapshot.find(item => item.clientId === clientId);
+        if (!latest || latest.value.kind === 'session' || latest.value.archived) throw new Error('missing');
+        const saved = await this.store.updateWorkoutCatalog(latest, { ...latest.value, archived: true }, this.today());
+        if (!this.current(generation)) return;
+        const draft = this.workoutDraft();
+        if (draft?.clientId === clientId) this.workoutDraft.set({ ...draft, archived: true, revision: saved.revision });
+        this.publish();
+      },
+    }).then(confirmed => {
+      if (confirmed && this.current(generation)) this.returnWorkoutFocus.set(`health-edit-${clientId}`);
+    });
   }
 
   protected onWorkoutDraft(draft: WorkoutDraft): void {
@@ -582,22 +647,33 @@ export class HealthRoomComponent implements OnInit {
     this.workoutFormError.set('');
     this.workoutBusy.set(true);
     try {
-      if (value.kind === 'session' && submitted?.clientId) {
+      if (submitted?.clientId) {
         const current = this.store.workoutsSnapshot.find(item => item.clientId === submitted.clientId);
         if (!this.current(generation)) return;
-        if (!current || current.value.kind !== 'session') {
-          this.workoutFormError.set('That session is no longer saved. Your draft is still here.');
+        if (!current || current.value.kind !== value.kind) {
+          this.workoutFormError.set('That workout is no longer saved. Your draft is still here.');
           return;
         }
         const revision = submitted.revision ?? current.revision;
-        await this.store.updateWorkoutSession({ ...current, revision }, value, this.today());
-        if (this.current(generation)) {
-          this.returnWorkoutFocus.set(value.state === 'draft'
-            ? `health-resume-${submitted.clientId}`
-            : `health-edit-${submitted.clientId}`);
+        const pinned = { ...current, revision };
+        if (value.kind === 'session') {
+          await this.store.updateWorkoutSession(pinned, value, this.today());
+          if (this.current(generation)) {
+            this.returnWorkoutFocus.set(value.state === 'draft'
+              ? `health-resume-${submitted.clientId}`
+              : `health-edit-${submitted.clientId}`);
+          }
+        } else {
+          await this.store.updateWorkoutCatalog(pinned, value, this.today());
+          if (this.current(generation)) this.returnWorkoutFocus.set(`health-edit-${submitted.clientId}`);
         }
       } else {
-        await this.store.createWorkout(value, this.today());
+        const created = await this.store.createWorkout(value, this.today());
+        if (this.current(generation) && submitted?.startedFrom && created.value.kind === 'session') {
+          this.returnWorkoutFocus.set(created.value.state === 'draft'
+            ? `health-resume-${created.clientId}`
+            : `health-edit-${created.clientId}`);
+        }
       }
       if (!this.current(generation)) return;
       this.publish();
@@ -666,6 +742,20 @@ export class HealthRoomComponent implements OnInit {
       }));
     }
     this.returnWorkoutFocus.set(focusId);
+    this.workoutDialogOpen.set(true);
+  }
+
+  private startCopy(clientId: string, kind: 'routine' | 'session'): void {
+    if (this.workoutBusy()) return;
+    const entry = this.workouts().find(item => item.clientId === clientId);
+    if (!entry) return;
+    const source = entry.value;
+    if (kind === 'routine' && (source.kind !== 'routine' || source.archived)) return;
+    if (kind === 'session' && (source.kind !== 'session' || source.state !== 'completed')) return;
+    if (source.kind === 'exercise') return;
+    this.workoutFormError.set('');
+    this.workoutDraft.set(draftFromPlan(source, this.today(), kind));
+    this.returnWorkoutFocus.set(kind === 'routine' ? `health-start-${clientId}` : `health-again-${clientId}`);
     this.workoutDialogOpen.set(true);
   }
 

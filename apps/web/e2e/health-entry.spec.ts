@@ -1272,6 +1272,224 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
       expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
     });
+
+    test('starts from a routine or a previous session and keeps the saved session', async ({ page }) => {
+      test.setTimeout(240_000);
+      const touch = width === 390;
+      const measured = '2026-10-29';
+      const storedKg = lbToKg(40);
+      const shown = `${displayWeight(storedKg, 'lb')} lb`;
+      const canonical = `Stored as ${storedKg.toFixed(2)} kg · 8 reps`;
+      let failWorkoutUpsert = false;
+      await page.route('**/api/vault/records/upsert', async route => {
+        const body = route.request().postDataJSON() as { records?: Array<{ collection?: string }> };
+        const workouts = (body.records ?? []).filter(record => record.collection === 'health_workouts');
+        if (failWorkoutUpsert && workouts.length > 0) {
+          failWorkoutUpsert = false;
+          await route.fulfill({ status: 503, contentType: 'application/json', body: '{"detail":"Synthetic save failed"}' });
+          return;
+        }
+        await route.fallback();
+      });
+      await syntheticVault(page, SEED);
+      await page.goto('/town/gym');
+      const room = page.locator('app-health-room');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(room).toHaveAttribute('data-health-state', 'locked');
+      const locked = await room.evaluate(node => ({
+        text: (node as HTMLElement).innerText,
+        inputs: [...node.querySelectorAll('input, textarea')].map(item => (item as HTMLInputElement).value),
+      }));
+      expect(locked.text).not.toContain('Synthetic press');
+      expect(locked.text).not.toContain('Synthetic plan');
+      expect(locked.inputs.join('')).not.toMatch(/\d/);
+      const motion = await room.locator('.health-room').evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(motion).toBe('0s');
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      const before = await collectionCipher(page);
+
+      await activate(page, room.getByRole('button', { name: 'Add exercise' }), touch);
+      const exerciseDialog = page.getByRole('dialog', { name: 'Add exercise' });
+      await fillControl(page, exerciseDialog, '#health-workout-name', 'Synthetic press', touch);
+      await target(exerciseDialog.getByRole('button', { name: 'Save' }));
+      await activate(page, exerciseDialog.getByRole('button', { name: 'Save' }), touch);
+      await expect(exerciseDialog).toHaveCount(0);
+      const exercise = room.locator('[data-workout-kind="exercise"]');
+      await expect(exercise).toContainText('Exercise · Synthetic press · Load and reps');
+      const exerciseHost = await exercise.locator('[id^="health-edit-"]').getAttribute('id');
+      const exerciseId = exerciseHost?.slice('health-edit-'.length) ?? '';
+      expect(exerciseId).toMatch(/^hlt_/);
+
+      await activate(page, room.getByRole('button', { name: 'Add routine' }), touch);
+      const routineDialog = page.getByRole('dialog', { name: 'Add routine' });
+      await expect(routineDialog.locator('#health-workout-routine-name')).toBeFocused();
+      await fillControl(page, routineDialog, '#health-workout-routine-name', 'Synthetic plan', touch);
+      await routineDialog.locator('#health-workout-definition').selectOption(exerciseId);
+      await expect(routineDialog.locator('#health-workout-name')).toHaveValue('Synthetic press');
+      await expect(routineDialog.locator('#health-workout-type')).toHaveValue('load-reps');
+      await fillControl(page, routineDialog, '#health-workout-load', '40', touch);
+      await fillControl(page, routineDialog, '#health-workout-reps', '8', touch);
+      await expect(routineDialog.locator('[data-open-preview]')).toContainText(canonical);
+      await activate(page, routineDialog.getByRole('button', { name: 'Save' }), touch);
+      await expect(routineDialog).toHaveCount(0);
+      const routine = room.locator('[data-workout-kind="routine"]');
+      await expect(routine).toContainText('Routine · Synthetic plan · 1 exercise');
+      const start = routine.locator('[id^="health-start-"] button');
+      await target(start);
+      await target(routine.locator('[id^="health-archive-"] button'));
+      await target(exercise.locator('[id^="health-edit-"] button'));
+      await activate(page, start, touch);
+      const started = page.getByRole('dialog', { name: 'Start session' });
+      await expect(started.locator('#health-workout-measured-on')).toBeFocused();
+      await expect(started.locator('#health-workout-measured-on')).toHaveValue(measured);
+      await expect(started.locator('#health-workout-state')).toHaveValue('draft');
+      await expect(started.locator('[data-entered-set]')).toHaveCount(1);
+      await expect(started.locator('[data-entered-set]')).toContainText(shown);
+      await expect(started.locator('[data-canonical-preview]')).toContainText(canonical);
+      const plannedId = await started.locator('[data-entered-set]').getAttribute('data-entered-set');
+      await started.locator('#health-workout-state').selectOption('completed');
+      const openScan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(openScan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+      const fits = await started.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
+      expect(fits).toBe(true);
+      await activate(page, started.getByRole('button', { name: 'Save' }), touch);
+      await expect(started).toHaveCount(0);
+      const completed = room.locator('[data-workout-state="completed"]');
+      await expect(completed).toHaveCount(1);
+      const sessionHost = await completed.locator('[id^="health-edit-"]').getAttribute('id');
+      const sessionId = sessionHost?.slice('health-edit-'.length) ?? '';
+      await expect(page.locator(`#health-edit-${sessionId} button`)).toBeFocused();
+      const saved = await collectionCipher(page);
+      const sessionCipher = saved.health_workouts.find(row => row.client_id === sessionId);
+      expect(sessionCipher?.revision).toBe(1);
+      expect(saved.health_prs).toEqual(before.health_prs);
+      expect(saved.health_stats).toEqual(before.health_stats);
+
+      await activate(page, routine.locator('[id^="health-edit-"] button'), touch);
+      const routineEditor = page.getByRole('dialog', { name: 'Edit routine' });
+      await target(routineEditor.locator('#health-workout-routine-name'));
+      await fillControl(page, routineEditor, '#health-workout-routine-name', 'Synthetic plan edited', touch);
+      await activate(page, routineEditor.getByRole('button', { name: 'Remove set 1 on exercise 1' }), touch);
+      await expect(routineEditor.locator('[data-entered-set]')).toHaveCount(0);
+      await fillControl(page, routineEditor, '#health-workout-load', '20', touch);
+      await fillControl(page, routineEditor, '#health-workout-reps', '4', touch);
+      failWorkoutUpsert = true;
+      await activate(page, routineEditor.getByRole('button', { name: 'Save' }), touch);
+      await expect(routineEditor).toContainText('Could not save this workout. Try again.');
+      await expect(routineEditor.locator('#health-workout-routine-name')).toHaveValue('Synthetic plan edited');
+      await expect(routineEditor.locator('#health-workout-load')).toHaveValue('20');
+      expect((await collectionCipher(page)).health_workouts.find(row => row.client_id === sessionId)).toEqual(sessionCipher);
+      await activate(page, routineEditor.getByRole('button', { name: 'Save' }), touch);
+      await expect(routineEditor).toHaveCount(0);
+      await expect(routine).toContainText('Routine · Synthetic plan edited · 1 exercise');
+      expect((await collectionCipher(page)).health_workouts.find(row => row.client_id === sessionId)).toEqual(sessionCipher);
+
+      await activate(page, room.locator(`#health-edit-${sessionId} button`), touch);
+      const sessionEditor = page.getByRole('dialog', { name: 'Edit session' });
+      await expect(sessionEditor.locator('#health-workout-name')).toHaveValue('Synthetic press');
+      await expect(sessionEditor.locator('#health-workout-type')).toHaveValue('load-reps');
+      await expect(sessionEditor.locator('[data-canonical-preview]')).toContainText(canonical);
+      await expect(sessionEditor.locator('[data-entered-set]')).toHaveAttribute('data-entered-set', plannedId ?? '');
+      await expect(sessionEditor).not.toContainText('Synthetic plan edited');
+      expect(await selectedDefinition(sessionEditor)).toEqual({ value: exerciseId, label: 'Synthetic press' });
+      if (touch) await sessionEditor.getByRole('button', { name: 'Cancel' }).tap();
+      else {
+        await sessionEditor.getByRole('button', { name: 'Cancel' }).focus();
+        await page.keyboard.press('Enter');
+      }
+      await expect(sessionEditor).toHaveCount(0);
+
+      const repeat = room.locator(`#health-again-${sessionId} button`);
+      await target(repeat);
+      await activate(page, repeat, touch);
+      const copy = page.getByRole('dialog', { name: 'Start session' });
+      await expect(copy.locator('#health-workout-state')).toHaveValue('draft');
+      const copyId = await copy.locator('[data-entered-set]').getAttribute('data-entered-set');
+      expect(copyId).toBeTruthy();
+      expect(copyId).not.toBe(plannedId);
+      await activate(page, copy.getByRole('button', { name: 'Save' }), touch);
+      await expect(copy).toHaveCount(0);
+      await expect(room.locator('[data-workout-kind="session"]')).toHaveCount(2);
+      const draft = room.locator('[data-workout-state="draft"]');
+      await expect(draft).toHaveCount(1);
+      const draftHost = await draft.locator('[id^="health-resume-"]').getAttribute('id');
+      const draftId = draftHost?.slice('health-resume-'.length) ?? '';
+      expect(draftId).not.toBe(sessionId);
+      await expect(page.locator(`#health-resume-${draftId} button`)).toBeFocused();
+      expect((await collectionCipher(page)).health_workouts.find(row => row.client_id === sessionId)).toEqual(sessionCipher);
+
+      await activate(page, exercise.locator('[id^="health-edit-"] button'), touch);
+      const definition = page.getByRole('dialog', { name: 'Edit exercise' });
+      await fillControl(page, definition, '#health-workout-name', 'Synthetic push', touch);
+      await activate(page, definition.getByRole('button', { name: 'Save' }), touch);
+      await expect(definition).toHaveCount(0);
+      await expect(exercise).toContainText('Exercise · Synthetic push · Load and reps');
+      expect((await collectionCipher(page)).health_workouts.find(row => row.client_id === sessionId)).toEqual(sessionCipher);
+      await activate(page, room.locator(`#health-edit-${sessionId} button`), touch);
+      const renamed = page.getByRole('dialog', { name: 'Edit session' });
+      await expect(renamed.locator('#health-workout-name')).toHaveValue('Synthetic press');
+      await expect(renamed.locator('#health-workout-type')).toHaveValue('load-reps');
+      await expect(renamed.locator('[data-canonical-preview]')).toContainText(canonical);
+      expect(await selectedDefinition(renamed)).toEqual({ value: exerciseId, label: 'Synthetic press' });
+      await expect(renamed).not.toContainText('Synthetic push');
+      if (touch) await renamed.getByRole('button', { name: 'Cancel' }).tap();
+      else await page.keyboard.press('Escape');
+      await expect(renamed).toHaveCount(0);
+      await expect(room.locator(`#health-edit-${sessionId} button`)).toBeFocused();
+
+      const archive = exercise.locator('[id^="health-archive-"] button');
+      await target(archive);
+      await activate(page, archive, touch);
+      const confirm = page.getByRole('dialog', { name: 'Archive this exercise?' });
+      await expect(confirm).toContainText('ARCHIVE EXERCISE');
+      await confirm.locator('#confirm-phrase-field').fill('ARCHIVE');
+      await expect(confirm.getByRole('button', { name: 'Archive exercise' })).toHaveAttribute('aria-disabled', 'true');
+      failWorkoutUpsert = true;
+      await confirm.locator('#confirm-phrase-field').fill('ARCHIVE EXERCISE');
+      if (touch) await confirm.getByRole('button', { name: 'Archive exercise' }).tap();
+      else await confirm.getByRole('button', { name: 'Archive exercise' }).click();
+      await expect(confirm).toContainText('Could not archive this exercise. It is still saved. Try again.');
+      expect((await collectionCipher(page)).health_workouts.find(row => row.client_id === sessionId)).toEqual(sessionCipher);
+      if (touch) await confirm.getByRole('button', { name: 'Archive exercise' }).tap();
+      else await page.keyboard.press('Enter');
+      await expect(confirm).toHaveCount(0);
+      await expect(exercise).toContainText('Archived exercise · Synthetic push · Load and reps');
+      await expect(exercise).toHaveAttribute('data-workout-archived', 'true');
+      await expect(page.locator(`#health-edit-${exerciseId} button`)).toBeFocused();
+      expect((await collectionCipher(page)).health_workouts.find(row => row.client_id === sessionId)).toEqual(sessionCipher);
+
+      await activate(page, room.locator(`#health-edit-${sessionId} button`), touch);
+      const archivedView = page.getByRole('dialog', { name: 'Edit session' });
+      await expect(archivedView.locator('#health-workout-name')).toHaveValue('Synthetic press');
+      await expect(archivedView.locator('#health-workout-type')).toHaveValue('load-reps');
+      await expect(archivedView.locator('[data-canonical-preview]')).toContainText(canonical);
+      expect(await selectedDefinition(archivedView)).toEqual({ value: exerciseId, label: 'Synthetic press' });
+      await expect(archivedView).not.toContainText('Synthetic push');
+      if (touch) await archivedView.getByRole('button', { name: 'Cancel' }).tap();
+      else await page.keyboard.press('Escape');
+      await expect(archivedView).toHaveCount(0);
+
+      await activate(page, room.getByRole('button', { name: 'Add session' }), touch);
+      const fresh = page.getByRole('dialog', { name: 'Add session' });
+      await expect(fresh.locator('#health-workout-definition')).toHaveCount(0);
+      const roomFits = await room.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
+      expect(roomFits).toBe(true);
+      const readyMotion = await room.locator('.health-room').evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(readyMotion).toBe('0s');
+      const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+    });
+  });
+}
+
+async function selectedDefinition(dialog: Locator): Promise<{ value: string; label: string }> {
+  return dialog.locator('#health-workout-definition').evaluate(node => {
+    const select = node as HTMLSelectElement;
+    const option = select.selectedOptions[0];
+    return { value: option?.value ?? '', label: option?.textContent?.trim() ?? '' };
   });
 }
 
