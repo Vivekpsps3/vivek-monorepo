@@ -5,23 +5,36 @@
   </header>
   <div class="room-layout">
     <div class="composition">
-      <div class="scene" [style.aspect-ratio]="room.bounds.width + ' / ' + room.bounds.height">
-        @for (src of [artUrl(room)]; track src) {
-          <img class="room" [style.z-index]="room.layer" [src]="src" [width]="room.bounds.width" [height]="room.bounds.height"
-            [style.color-scheme]="room.palette[theme()]" [hidden]="!painted().includes(room.id)" (load)="artLoaded(room)" (error)="artFailed(room)" alt="">
-        }
-        @for (object of objects; track object.asset.id) {
-          <a class="piece" [routerLink]="[]" [queryParams]="{ object: object.asset.id }" [replaceUrl]="true" tabindex="-1"
-            [attr.aria-label]="object.label" [attr.aria-current]="selected() === object ? 'true' : null"
-            [hidden]="!painted().includes(object.asset.id)"
-            [style.left.%]="object.left" [style.top.%]="object.top" [style.width.%]="object.width" [style.height.%]="object.height"
-            [style.z-index]="object.asset.layer">
-            @for (src of [artUrl(object.asset)]; track src) {
-              <img [src]="src" [width]="object.asset.bounds.width" [height]="object.asset.bounds.height"
-                [style.color-scheme]="object.asset.palette[theme()]" (load)="artLoaded(object.asset)" (error)="artFailed(object.asset)" alt="">
+      <div #viewport class="viewport" role="group" aria-labelledby="scene-hint"
+        [style.aspect-ratio]="room.bounds.width + ' / ' + room.bounds.height"
+        (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
+        (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
+        <div class="stage" [style.transform]="cameraTransform()">
+          <div class="scene">
+            @for (src of [artUrl(room)]; track src) {
+              <img class="room" [style.z-index]="room.layer" [src]="src" [width]="room.bounds.width" [height]="room.bounds.height"
+                [style.color-scheme]="room.palette[theme()]" [hidden]="!painted().includes(room.id)" (load)="artLoaded(room)" (error)="artFailed(room)" alt="">
             }
-          </a>
-        }
+            @for (object of objects; track object.asset.id) {
+              <button type="button" class="piece" tabindex="-1" [attr.data-scene-object]="object.asset.id"
+                [attr.aria-label]="object.label" [attr.aria-current]="selected() === object ? 'true' : null"
+                [hidden]="!painted().includes(object.asset.id)"
+                [style.left.%]="object.left" [style.top.%]="object.top" [style.width.%]="object.width" [style.height.%]="object.height"
+                [style.z-index]="object.asset.layer">
+                @for (src of [artUrl(object.asset)]; track src) {
+                  <img [src]="src" [width]="object.asset.bounds.width" [height]="object.asset.bounds.height"
+                    [style.color-scheme]="object.asset.palette[theme()]" (load)="artLoaded(object.asset)" (error)="artFailed(object.asset)" alt="">
+                }
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+      <p id="scene-hint" class="scene-hint">Drag to look around. Tap the front object to inspect it. Dragging does not change the selection.</p>
+      <div class="camera-controls" role="group" aria-label="Scene view">
+        <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
+        <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
+        <button type="button" class="action" (click)="resetView()">Reset view</button>
       </div>
       @if (failed().length) {
         <p role="status">Some room artwork is unavailable. You can still select each object below.</p>
@@ -30,7 +43,7 @@
       <ul class="objects" aria-label="Room objects">
         @for (object of objects; track object.asset.id) {
           <li>
-            <a class="action" [routerLink]="[]" [queryParams]="{ object: object.asset.id }" [replaceUrl]="true"
+            <a class="action" [attr.data-object]="object.asset.id" [routerLink]="[]" [queryParams]="{ object: object.asset.id }" [replaceUrl]="true"
               [attr.aria-current]="selected() === object ? 'true' : null">{{ object.label }}</a>
           </li>
         }

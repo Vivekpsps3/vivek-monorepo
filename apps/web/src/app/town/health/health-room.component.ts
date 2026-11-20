@@ -15,6 +15,7 @@ import {
 import { bindLockSnapshots, financeVaultExists, financeVaultPresent } from '../../../../../finance/frontend/src/public-api';
 import { SessionService } from '../../platform/session.service';
 import { HealthEntryDialogComponent, type HealthEntryValue } from './health-entry-dialog.component';
+import { HealthWorkoutDialogComponent } from './health-workout-dialog.component';
 import { HEALTH_HISTORY_PAGE, buildClinicSeries, pageClinicSeries } from './health-history';
 import { HealthSparklineComponent } from './health-sparkline.component';
 import {
@@ -40,9 +41,18 @@ import {
   HealthConflictError,
   HealthLockedError,
   HealthStoreService,
+  HealthWorkoutError,
   type HealthEntry,
 } from './health-store.service';
 import type { HealthPr, HealthStat } from './health.types';
+import {
+  emptyWorkoutDraft,
+  formatWorkout,
+  reformatWorkoutDraft,
+  type WorkoutDraft,
+  type WorkoutKind,
+  type WorkoutRecord,
+} from './workout';
 
 export const HEALTH_VAULT_EXISTS = new InjectionToken<() => Promise<boolean | null>>('HEALTH_VAULT_EXISTS', {
   providedIn: 'root',
@@ -135,6 +145,7 @@ function isStat(value: HealthStat | HealthPr): value is HealthStat {
   selector: 'app-health-room',
   imports: [
     HealthEntryDialogComponent,
+    HealthWorkoutDialogComponent,
     HealthLinkedFocusDirective,
     HealthSparklineComponent,
     NgTemplateOutlet,
@@ -176,6 +187,13 @@ export class HealthRoomComponent implements OnInit {
   protected readonly dialogOpen = signal(false);
   protected readonly formError = signal('');
   protected readonly busy = signal(false);
+  protected readonly workouts = signal<readonly HealthEntry<WorkoutRecord>[]>([]);
+  protected readonly workoutDraft = signal<WorkoutDraft | null>(null);
+  protected readonly workoutDialogOpen = signal(false);
+  protected readonly workoutFormError = signal('');
+  protected readonly workoutBusy = signal(false);
+  protected readonly idleWorkoutDraft = emptyWorkoutDraft('exercise', '');
+  private readonly returnWorkoutFocus = signal<string | null>(null);
   private readonly returnFocusKind = signal<HealthClinicKind | null>(null);
   protected readonly emptyDraft = EMPTY_HEALTH_DRAFT;
   protected readonly clinicAdds: readonly { kind: HealthClinicKind; label: string; id: string }[] = [
@@ -242,6 +260,13 @@ export class HealthRoomComponent implements OnInit {
     return !!id && this.phase() === 'ready' && !this.rows().some(row => row.clientId === id);
   });
   protected readonly notice = computed(() => corruptNotice(this.unreadable()));
+  protected readonly customExerciseCount = computed(() => this.workouts()
+    .filter(entry => entry.value.kind === 'exercise' && !entry.value.archived).length);
+  protected readonly workoutRows = computed(() => this.workouts().map(entry => ({
+    clientId: entry.clientId,
+    label: formatWorkout(entry.value, this.units()),
+    kind: entry.value.kind,
+  })));
 
   constructor() {
     const releaseLock = bindLockSnapshots(() => this.invalidate());
@@ -262,6 +287,10 @@ export class HealthRoomComponent implements OnInit {
       this.draft.set(null);
       this.dialogOpen.set(false);
       this.formError.set('');
+      this.workoutDraft.set(null);
+      this.workoutDialogOpen.set(false);
+      this.workoutFormError.set('');
+      this.returnWorkoutFocus.set(null);
       this.revealFocusId.set(null);
       if (this.phase() === 'ready') this.publish();
     });
@@ -278,6 +307,22 @@ export class HealthRoomComponent implements OnInit {
           node = node.parentElement;
         }
         this.returnFocusKind.set(null);
+        button.focus();
+      });
+    });
+    afterRenderEffect(() => {
+      const id = this.returnWorkoutFocus();
+      if (!id || this.phase() !== 'ready' || this.dialogOpen() || this.workoutDialogOpen()) return;
+      setTimeout(() => {
+        if (this.returnWorkoutFocus() !== id || this.phase() !== 'ready' || this.dialogOpen() || this.workoutDialogOpen()) return;
+        const button = document.querySelector<HTMLElement>(`#${id} button`);
+        if (!button) return;
+        let node: HTMLElement | null = button;
+        while (node) {
+          if (node.inert) return;
+          node = node.parentElement;
+        }
+        this.returnWorkoutFocus.set(null);
         button.focus();
       });
     });
@@ -320,6 +365,25 @@ export class HealthRoomComponent implements OnInit {
     this.dialogOpen.set(true);
   }
 
+  protected openWorkout(kind: WorkoutKind): void {
+    this.workoutFormError.set('');
+    this.returnWorkoutFocus.set(`health-add-${kind}`);
+    const draft = this.workoutDraft();
+    if (!draft || draft.kind !== kind) this.workoutDraft.set(emptyWorkoutDraft(kind, this.today()));
+    this.workoutDialogOpen.set(true);
+  }
+
+  protected onWorkoutDraft(draft: WorkoutDraft): void {
+    if (this.dead) return;
+    this.workoutDraft.set(draft);
+    if (this.workoutFormError()) this.workoutFormError.set('');
+  }
+
+  protected onWorkoutClosed(): void {
+    this.workoutDialogOpen.set(false);
+    this.workoutFormError.set('');
+  }
+
   protected openEdit(clientId: string): void {
     const entry = this.entries().find(item => item.clientId === clientId);
     if (!entry || !isStat(entry.value)) return;
@@ -345,10 +409,14 @@ export class HealthRoomComponent implements OnInit {
     if (value !== 'kg' && value !== 'lb') return;
     const previous = this.units().weight;
     if (previous === value) return;
-    this.updateUnits({ ...this.units(), weight: value });
+    const next: HealthUnits = { ...this.units(), weight: value };
+    this.updateUnits(next);
     const draft = this.draft();
-    if (!draft || (draft.kind !== 'weight' && draft.kind !== 'lift') || draft.weight === '') return;
-    this.draft.set(reformatWeightDraft(draft, previous, value));
+    if (draft && (draft.kind === 'weight' || draft.kind === 'lift') && draft.weight !== '') {
+      this.draft.set(reformatWeightDraft(draft, previous, value));
+    }
+    const workout = this.workoutDraft();
+    if (workout) this.workoutDraft.set(reformatWorkoutDraft(workout, { ...next, weight: previous }, next));
   }
 
   protected showMore(kind: HealthStat['kind']): void {
@@ -365,7 +433,12 @@ export class HealthRoomComponent implements OnInit {
 
   protected setDistance(value: string | number | null): void {
     if (value !== 'km' && value !== 'mi') return;
-    this.updateUnits({ ...this.units(), distance: value });
+    const previous = this.units();
+    if (previous.distance === value) return;
+    const next: HealthUnits = { ...previous, distance: value };
+    this.updateUnits(next);
+    const workout = this.workoutDraft();
+    if (workout) this.workoutDraft.set(reformatWorkoutDraft(workout, previous, next));
   }
 
   protected removeEntry(clientId: string): void {
@@ -451,6 +524,33 @@ export class HealthRoomComponent implements OnInit {
     }
   }
 
+  protected async saveWorkout(value: WorkoutRecord): Promise<void> {
+    const generation = this.generation;
+    const submitted = this.workoutDraft();
+    this.workoutFormError.set('');
+    this.workoutBusy.set(true);
+    try {
+      await this.store.createWorkout(value, this.today());
+      if (!this.current(generation)) return;
+      this.publish();
+      this.finishWorkout(generation, submitted);
+    } catch (error) {
+      if (!this.current(generation)) return;
+      if (error instanceof HealthLockedError) {
+        this.invalidate();
+        return;
+      }
+      if (error instanceof HealthConflictError) this.publish();
+      this.workoutFormError.set(error instanceof HealthWorkoutError
+        ? error.message
+        : error instanceof HealthConflictError
+          ? HEALTH_CONFLICT_MESSAGE
+          : 'Could not save this workout. Try again.');
+    } finally {
+      if (this.current(generation)) this.workoutBusy.set(false);
+    }
+  }
+
   private noteOwner(id: unknown): void {
     const owner = typeof id === 'number' && Number.isInteger(id) && id > 0 ? id : null;
     if (this.seenOwner === undefined) {
@@ -485,6 +585,15 @@ export class HealthRoomComponent implements OnInit {
     this.formError.set('');
   }
 
+  private finishWorkout(generation: number, submitted: WorkoutDraft | null): void {
+    if (!this.current(generation)) return;
+    const draft = this.workoutDraft();
+    if (submitted && draft && JSON.stringify(draft) !== JSON.stringify(submitted)) return;
+    this.workoutDraft.set(null);
+    this.workoutDialogOpen.set(false);
+    this.workoutFormError.set('');
+  }
+
   private dropPrivate(): void {
     this.entries.set([]);
     this.unreadable.set(0);
@@ -492,6 +601,12 @@ export class HealthRoomComponent implements OnInit {
     this.formError.set('');
     this.dialogOpen.set(false);
     this.busy.set(false);
+    this.workoutDraft.set(null);
+    this.workoutDialogOpen.set(false);
+    this.workoutFormError.set('');
+    this.workoutBusy.set(false);
+    this.returnWorkoutFocus.set(null);
+    this.workouts.set([]);
     this.returnFocusKind.set(null);
     this.shownByKind.set({});
     this.revealFocusId.set(null);
@@ -556,5 +671,6 @@ export class HealthRoomComponent implements OnInit {
   private publish(): void {
     const rows = this.room() === 'clinic' ? this.store.statsSnapshot : this.store.prsSnapshot;
     this.entries.set([...rows]);
+    this.workouts.set(this.room() === 'gym' ? [...this.store.workoutsSnapshot] : []);
   }
 }

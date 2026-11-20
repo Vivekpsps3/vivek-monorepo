@@ -1,0 +1,80 @@
+<ui-dialog [open]="open()" labelledBy="health-workout-title" (closed)="onClosed()">
+  <h2 id="health-workout-title">{{ heading() }}</h2>
+  <p id="health-workout-help">Saved load is kilograms, distance is metres, and time is seconds. This choice only changes how they are shown.</p>
+  <form (submit)="onSubmit($event)" novalidate>
+    @if (local().kind === 'session') {
+      <ui-field label="Measured on" [required]="true" [error]="message(errors()['measured_on'])">
+        <input uiFieldControl id="health-workout-measured-on" name="measured_on" type="date" required
+          min="1900-01-01" [attr.max]="today()" data-dialog-initial-focus
+          [value]="local().measuredOn" (input)="onMeasured($event)" />
+      </ui-field>
+      <p class="logged-on">Logged on <time [attr.datetime]="today()">{{ today() }}</time></p>
+    }
+    <ui-field [label]="local().kind === 'session' ? 'Exercise' : 'Name'" [required]="true" [error]="message(errors()['name'])">
+      <input uiFieldControl id="health-workout-name" name="name" type="text" required autocomplete="off"
+        [attr.data-dialog-initial-focus]="local().kind === 'session' ? null : ''"
+        [value]="local().name" (input)="onName($event)" />
+    </ui-field>
+    <ui-field label="Exercise type" [required]="true" [error]="message(errors()['exercise_type'])">
+      <select uiFieldControl id="health-workout-type" name="exercise_type" [value]="local().exerciseType" (change)="onType($event)">
+        @for (type of types; track type) {
+          <option [value]="type">{{ typeLabel(type) }}</option>
+        }
+      </select>
+    </ui-field>
+    @if (local().kind !== 'exercise') {
+      <ui-field label="Set" [required]="true" [error]="message(errors()['set_type'])">
+        <select uiFieldControl id="health-workout-set-type" name="set_type" [value]="local().setType" (change)="onSetType($event)">
+          @for (type of setTypes; track type) {
+            <option [value]="type">{{ setLabel(type) }}</option>
+          }
+        </select>
+      </ui-field>
+      @if (usesLoad()) {
+        <ui-field [label]="loadLabel()" [required]="true" [error]="message(errors()['kg'])">
+          <input uiFieldControl id="health-workout-load" name="load" type="text" inputmode="decimal" required autocomplete="off"
+            [value]="local().load" (input)="onLoad($event)" />
+        </ui-field>
+      }
+      @if (usesReps()) {
+        <ui-field label="Reps" [required]="true" [error]="message(errors()['reps'])">
+          <input uiFieldControl id="health-workout-reps" name="reps" type="text" inputmode="numeric" required autocomplete="off"
+            [value]="local().reps" (input)="onReps($event)" />
+        </ui-field>
+      }
+      @if (usesTime()) {
+        <ui-field label="Time (seconds)" [required]="true" [error]="message(errors()['seconds'])">
+          <input uiFieldControl id="health-workout-seconds" name="seconds" type="text" inputmode="numeric" required autocomplete="off"
+            [value]="local().seconds" (input)="onSeconds($event)" />
+        </ui-field>
+      }
+      @if (usesDistance()) {
+        <ui-field [label]="'Distance (' + units().distance + ')'" [required]="true" [error]="message(errors()['metres'])">
+          <input uiFieldControl id="health-workout-distance" name="distance" type="text" inputmode="decimal" required autocomplete="off"
+            [value]="local().distance" (input)="onDistance($event)" />
+        </ui-field>
+      }
+    }
+    @if (local().kind === 'session') {
+      <ui-field label="Note" [optional]="true" [error]="message(errors()['note'] || errors()['record'])">
+        <textarea uiFieldControl id="health-workout-note" name="note" rows="3" autocomplete="off"
+          [value]="local().note" (input)="onNote($event)"></textarea>
+      </ui-field>
+      <ui-field label="Session state" [required]="true" [error]="message(errors()['state'])">
+        <select uiFieldControl id="health-workout-state" name="state" [value]="local().state" (change)="onState($event)">
+          <option value="completed">Completed</option>
+          <option value="draft">Draft</option>
+        </select>
+      </ui-field>
+    }
+    @if (formError() || errors()['definitions'] || errors()['exercises'] || errors()['sets']) {
+      <p class="form-error" id="health-workout-error" role="alert" tabindex="-1">
+        {{ formError() || message(errors()['definitions'] || errors()['exercises'] || errors()['sets']) }}
+      </p>
+    }
+    <div class="dialog-actions">
+      <ui-button type="submit" [busy]="busy()" [disabled]="busy()">Save</ui-button>
+      <ui-button variant="secondary" (clicked)="onClosed()">Cancel</ui-button>
+    </div>
+  </form>
+</ui-dialog>

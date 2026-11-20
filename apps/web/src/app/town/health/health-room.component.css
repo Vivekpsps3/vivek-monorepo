@@ -56,6 +56,14 @@
   gap: var(--space-2);
 }
 
+.workouts {
+  margin-block: var(--space-3);
+}
+
+.workouts h2 {
+  margin: 0;
+}
+
 .entry-label:focus {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
