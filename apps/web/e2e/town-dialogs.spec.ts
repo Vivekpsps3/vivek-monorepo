@@ -51,7 +51,7 @@ test.describe('Town dialogs', () => {
     const name = 'A'.repeat(40);
     await page.locator('#habit-name').fill(name);
     await page.getByRole('button', { name: 'Save' }).click();
-    const tile = page.locator('app-town-lot').filter({ hasText: name }).getByRole('button');
+    const tile = page.getByRole('list', { name: 'Town buildings' }).getByRole('button', { name: new RegExp(name) });
     await expect(tile).toBeVisible();
     expect(await tile.locator('.name').evaluate(node => getComputedStyle(node).textOverflow)).toBe('ellipsis');
     await tile.click();

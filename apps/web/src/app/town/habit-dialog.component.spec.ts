@@ -49,5 +49,18 @@ describe('Habit dialog', () => {
     expect(api.createHabit).not.toHaveBeenCalled();
   });
 
-
+  it('keeps the typed name when create fails', () => {
+    const { fixture, el } = render(snapshot(), { slot: 2 });
+    const input = el.querySelector<HTMLInputElement>('#habit-name')!;
+    input.value = 'Walk 30 minutes';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    fixture.detectChanges();
+    create.error({ error: { message: 'Town is unavailable right now.' } });
+    fixture.detectChanges();
+    expect(input.value).toBe('Walk 30 minutes');
+    expect(el.textContent).toContain('Town is unavailable right now.');
+    expect(el.querySelector('app-habit-dialog, [role="dialog"]')).not.toBeNull();
+  });
 });

@@ -22,8 +22,8 @@ Reuse shared controls. Town reset fixtures and worker clock ownership stay
 deterministic. Root test gates apply, including Town Playwright and server
 coverage for Town backend work.
 
-Reading Hall's [asset metadata](library-room.assets.ts) owns bounds, anchors,
-layers, palette, and source. One rectangle paints and picks; the higher layer wins.
-Pan and zoom use it. A tap opens the front object. A drag or pointer cancel does not.
-The keyboard list reaches those objects. Art loads only on the room route. No
-off-route room animation. Camera is not a second store.
+The Town exterior and the Reading Hall share the y-down [frame](library-room.scene.ts).
+One rectangle paints and picks; the higher layer wins. Pan, zoom, tap, drag, and
+cancel use it. The keyboard list reaches the same objects. Room art loads only on
+the Reading Hall route. Camera is not a second store. Clinic and Gym read
+[loadTownHealthStages](health/index.ts) and keep their routes.
