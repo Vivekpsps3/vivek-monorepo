@@ -15,15 +15,16 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { ReturnContext, dayActivities, vaultReturnQuery } from '@vivek/ui';
 import { pixelsDayActivityPath } from '../../../../finance/frontend/src/public-api';
+import { buildDayMemory, type DayMemory } from './day-memory';
+import { dayOriginPath, daySearch, type DayQuery } from './day-route';
 import { isIsoDate } from './pixels-dates';
-import { dayScoreVector, tripDayLabel } from './pixels-model';
+import { dayScoreVector } from './pixels-model';
 import type {
   DayFactsStatus,
   FinanceJoinStatus,
   PixelAnnotation,
   PixelDayFacts,
   PixelDayView,
-  PixelFact,
   SourceCoverage,
 } from './pixels.types';
 
@@ -36,34 +37,6 @@ export function formatDayHeading(iso: string): string {
   const [year, month, day] = iso.split('-').map(Number) as [number, number, number];
   const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
   return `${weekday}, ${MONTHS[month - 1]} ${day}, ${year}`;
-}
-
-function wholeCount(value: number): number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 0;
-  return Math.floor(value);
-}
-
-export function townLine(count: number): string {
-  const n = wholeCount(count);
-  if (n === 0) return 'Town · none';
-  return `Town · ${n} ${n === 1 ? 'check-in' : 'check-ins'}`;
-}
-
-export function mediaLine(count: number): string {
-  const n = wholeCount(count);
-  if (n === 0) return 'Media · none';
-  return `Media · ${n} ${n === 1 ? 'episode' : 'episodes'} watched`;
-}
-
-/** Ready maps 1 and 0 to kept or over pace. Null, including ready before the first transaction, is not a miss. */
-export function financeCopy(status: FinanceJoinStatus, fin: number | null): { locked: boolean; text: string } {
-  if (status === 'locked') {
-    return { locked: true, text: 'Finance is locked. Unlock to include budget kept.' };
-  }
-  if (status !== 'ready') return { locked: false, text: 'Finance · no data' };
-  if (fin === 1) return { locked: false, text: 'Finance · budget kept' };
-  if (fin === 0) return { locked: false, text: 'Finance · over budget pace' };
-  return { locked: false, text: 'Finance · the budget is not in this day' };
 }
 
 @Component({
@@ -99,6 +72,10 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
   financeStatus = input<FinanceJoinStatus>('locked');
   today = input('');
   phone = input(false);
+  pageMode = input(false);
+  originView = input<'year' | 'life'>('year');
+  originYear = input('');
+  originSpan = input<string | null>(null);
   unlockSource = input('/pixels');
   facts = input<PixelDayFacts | null>(null);
   factsStatus = input<DayFactsStatus>('idle');
@@ -125,6 +102,28 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
   });
   private shownAnnotations = '';
 
+  protected readonly coordinates = computed((): DayQuery | null => {
+    const day = this.day();
+    if (!day) return null;
+    const from = this.originView() === 'life' ? 'life' : 'year';
+    const yearText = this.originYear().trim();
+    const year = /^(?!0+$)\d{1,4}$/.test(yearText) ? yearText : day.date.slice(0, 4);
+    const spanText = this.originSpan();
+    const span = from === 'life' && spanText && isIsoDate(spanText) ? spanText : null;
+    return { date: day.date, from, year, span };
+  });
+
+  protected readonly memory = computed((): DayMemory | null => {
+    const day = this.day();
+    if (!day) return null;
+    return buildDayMemory({
+      day,
+      financeStatus: this.financeStatus(),
+      facts: this.facts(),
+      factsStatus: this.factsStatus(),
+    });
+  });
+
   readonly detail = computed(() => {
     const day = this.day();
     if (!day) return null;
@@ -136,12 +135,7 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
       levelClass: level >= 1 && level <= 4 ? `pixel swatch l${level}` : 'pixel swatch',
       activityLabel: activities === 1 ? '1 activity' : `${activities} activities`,
       isToday: this.today() !== '' && day.date === this.today(),
-      town: townLine(day.channels.town),
-      media: mediaLine(day.channels.media),
-      travel: day.trip ? `Travel · ${tripDayLabel(day.trip, day.date)}` : 'Travel · no trip',
-      tripId: day.trip ? day.trip.id : null,
       activityLink: this.router.parseUrl(pixelsDayActivityPath(day.date)),
-      finance: financeCopy(this.financeStatus(), day.channels.fin),
     };
   });
 
@@ -163,13 +157,38 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
     this.closed.emit();
   }
 
-  protected factLabel(fact: PixelFact): string {
-    const kind = fact.kind === 'checkin'
-      ? 'Town check-in'
-      : fact.kind === 'episode'
-        ? 'Watched episode'
-        : 'Trip span';
-    return fact.title ? `${kind} · ${fact.title}` : kind;
+  protected dayParams(): Record<string, string> | null {
+    const query = this.coordinates();
+    if (!query) return null;
+    const params: Record<string, string> = { date: query.date, from: query.from, year: query.year };
+    if (query.span) params['span'] = query.span;
+    return params;
+  }
+
+  protected openState(): Record<string, unknown> {
+    const query = this.coordinates();
+    return query ? this.context.link(`/pixels/day?${daySearch(query)}`) : {};
+  }
+
+  protected originCommands(): string[] {
+    const query = this.coordinates();
+    return query?.from === 'life' && query.span ? ['/pixels/life'] : ['/pixels'];
+  }
+
+  protected originParams(): Record<string, string> {
+    const query = this.coordinates();
+    if (!query) return {};
+    if (query.from === 'life' && query.span) return { span: query.span };
+    return dayOriginPath(query) === `/pixels?year=${query.year}`
+      ? { year: query.year }
+      : { year: query.year, day: query.date };
+  }
+
+  protected backLabel(): string {
+    const query = this.coordinates();
+    if (!query) return 'Back';
+    if (query.from === 'life' && query.span) return `Back to week of ${formatDayHeading(query.span)}`;
+    return `Back to ${query.year}`;
   }
 
   protected draftValue(id: string): string {
@@ -211,7 +230,7 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
   }
 
   private focusClose(): void {
-    if (!this.phone() || !this.day()) return;
+    if (this.pageMode() || !this.phone() || !this.day()) return;
     const focus = () => {
       if (!this.day()) return;
       const button = this.host.nativeElement.querySelector('[data-day-close]');

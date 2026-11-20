@@ -1,22 +1,29 @@
 @if (detail(); as detail) {
-  @if (phone()) {
+  @if (phone() && !pageMode()) {
     <div class="scrim" (click)="close()"></div>
   }
   <section
     class="day-detail"
     [attr.data-score-vector]="scoreVector()"
-    [class.sheet]="phone()"
-    [attr.role]="phone() ? 'dialog' : null"
-    [attr.aria-modal]="phone() ? 'true' : null"
-    [attr.aria-live]="phone() ? null : 'polite'"
+    [attr.data-origin]="coordinates()?.from ?? null"
+    [attr.data-origin-year]="coordinates()?.year ?? null"
+    [attr.data-origin-span]="coordinates()?.span ?? null"
+    [class.sheet]="phone() && !pageMode()"
+    [attr.role]="phone() && !pageMode() ? 'dialog' : null"
+    [attr.aria-modal]="phone() && !pageMode() ? 'true' : null"
+    [attr.aria-live]="phone() && !pageMode() ? null : 'polite'"
     aria-labelledby="day-detail-heading"
   >
-    @if (phone()) {
+    @if (phone() && !pageMode()) {
       <div class="grab" aria-hidden="true"></div>
     }
     <div class="header">
       <h2 id="day-detail-heading" [class.is-today]="detail.isToday">{{ detail.heading }}</h2>
-      <button type="button" class="close" data-day-close aria-label="Close" (click)="close()">Close</button>
+      @if (pageMode()) {
+        <a class="back" [routerLink]="originCommands()" [queryParams]="originParams()">{{ backLabel() }}</a>
+      } @else {
+        <button type="button" class="close" data-day-close aria-label="Close" (click)="close()">Close</button>
+      }
     </div>
     <p class="meta">
       <span class="chip">
@@ -25,30 +32,44 @@
       </span>
       <span>{{ detail.activityLabel }}</span>
     </p>
-    <div class="rows">
-      <div class="row">
-        <p>{{ detail.town }}</p>
-        <a routerLink="/town/">Open Town</a>
-      </div>
-      <div class="row">
-        <p>{{ detail.media }}</p>
-        <a routerLink="/media/">Open Media</a>
-      </div>
-      <div class="row">
-        <p>{{ detail.travel }}</p>
-        @if (detail.tripId !== null) {
-          <a [routerLink]="'/travel/trips/' + detail.tripId">Open trip</a>
+    @if (!pageMode()) {
+      <a class="open-day" routerLink="/pixels/day" [queryParams]="dayParams()" [state]="openState()">Open this day</a>
+    }
+    @if (memory(); as memory) {
+      <div class="rows">
+        @for (slot of memory.slots; track slot.id) {
+          <section class="slot" [attr.data-source]="slot.id" [attr.data-source-state]="slot.state">
+            <h3 class="slot-label" [id]="'slot-' + slot.id">{{ slot.label }}</h3>
+            @if (slot.id === 'finance' && slot.state === 'locked') {
+              <a class="slot-link" routerLink="/finance/vault/unlock" [queryParams]="returnQuery(unlockSource())" [state]="context.link(unlockSource())">{{ slot.text }}</a>
+            } @else {
+              <p>{{ slot.text }}</p>
+            }
+            @if (slot.preview) {
+              <p>{{ slot.preview }}</p>
+            }
+            @for (record of slot.records; track record.id) {
+              <article class="fact" [attr.data-fact-id]="record.id" [attr.data-fact-date]="record.date">
+                <h4>{{ record.label }}</h4>
+                @if (record.detail) {
+                  <p>{{ record.detail }}</p>
+                }
+                @if (record.provenance) {
+                  <p>{{ record.provenance }}</p>
+                }
+                @if (record.href) {
+                  <a [routerLink]="record.href">{{ record.action }}</a>
+                }
+              </article>
+            }
+            @if (slot.id === 'finance') {
+              <a class="slot-link" [routerLink]="detail.activityLink" [state]="context.link(unlockSource())">Open Finance Activity</a>
+            }
+          </section>
         }
       </div>
-      <div class="row" [class.row--locked]="detail.finance.locked">
-        @if (detail.finance.locked) {
-          <a routerLink="/finance/vault/unlock" [queryParams]="returnQuery(unlockSource())" [state]="context.link(unlockSource())">{{ detail.finance.text }}</a>
-        } @else {
-          <p>{{ detail.finance.text }}</p>
-        }
-        <a [routerLink]="detail.activityLink" [state]="context.link(unlockSource())">Open Finance Activity</a>
-      </div>
-    </div>
+      <p data-recap>{{ memory.recap }}</p>
+    }
     @if (factsStatus() !== 'idle') {
       <section class="day-facts" aria-labelledby="day-facts-heading">
         <h3 id="day-facts-heading">Dated facts</h3>
@@ -66,20 +87,6 @@
             @if (facts(); as loaded) {
               @for (line of coverageLines(); track line.key) {
                 <p [attr.data-coverage]="line.key">{{ line.text }}</p>
-              }
-              @if (loaded.facts.length === 0) {
-                <p>No dated facts on this day.</p>
-              }
-              @for (fact of loaded.facts; track fact.id) {
-                <article class="fact" [attr.data-fact-id]="fact.id" [attr.data-fact-date]="fact.date">
-                  <h4>{{ factLabel(fact) }}</h4>
-                  <p>Occurrence {{ fact.id }} · {{ fact.date }}</p>
-                  @if (fact.spanStart && fact.spanEnd) {
-                    <p>Span {{ fact.spanStart }} to {{ fact.spanEnd }}</p>
-                  }
-                  <p>{{ fact.provenance }}</p>
-                  <a [routerLink]="fact.route">Open {{ factLabel(fact) }}</a>
-                </article>
               }
               <h3 id="day-learning-heading" tabindex="-1">Learning annotations</h3>
               @if (loaded.annotations.length === 0) {

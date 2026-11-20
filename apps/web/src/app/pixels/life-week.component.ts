@@ -1,6 +1,10 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { formatDateRange, plural } from '@vivek/browser';
+import { ReturnContext } from '@vivek/ui';
+import { weekFinanceText } from './day-memory';
+import { formatDayHeading } from './day-detail.component';
+import { inclusiveIsoDates } from './pixels-dates';
 import type { FinanceJoinStatus } from './pixels.types';
 import { lifeWeekOrdinal, type LifeWeekCell } from './life-model';
 
@@ -15,10 +19,13 @@ export type LifeStep = 'week-prev' | 'week-next' | 'year-prev' | 'year-next';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LifeWeekComponent {
+  private readonly context = inject(ReturnContext);
+
   week = input.required<LifeWeekCell>();
   rowCount = input.required<number>();
   showAge = input(false);
   financeStatus = input<FinanceJoinStatus>('locked');
+  unlockNext = input('/pixels/life');
   showTown = input(true);
   showMedia = input(true);
   showTravel = input(true);
@@ -54,10 +61,26 @@ export class LifeWeekComponent {
     return title ? `Travel · ${title}` : 'Travel · no trip';
   }
 
-  protected finance(): string {
+  protected financeLine(): string {
     const week = this.week();
-    if (!week.financeKnown) return 'Finance · no data for this week';
-    const noun = week.financeKept === 1 ? 'day' : 'days';
-    return `Finance · ${week.financeKept} ${noun} kept`;
+    return weekFinanceText(this.financeStatus(), week.financeKnown, week.financeKept);
+  }
+
+  protected dates(): string[] {
+    const week = this.week();
+    return inclusiveIsoDates(week.start, week.end);
+  }
+
+  protected dayLabel(date: string): string {
+    return `Open ${formatDayHeading(date)}`;
+  }
+
+  protected dayParams(date: string): Record<string, string> {
+    return { date, from: 'life', year: date.slice(0, 4), span: this.week().start };
+  }
+
+  protected dayState(date: string): Record<string, unknown> {
+    const params = new URLSearchParams(this.dayParams(date));
+    return this.context.link(`/pixels/day?${params.toString()}`);
   }
 }

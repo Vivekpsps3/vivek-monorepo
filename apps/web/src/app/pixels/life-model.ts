@@ -165,6 +165,18 @@ export function lifeBirthdayState(birthday: string | null, today: string): LifeB
   }
 }
 
+/** Life-week start and end that contain `date`. Null before the birthday or on a bad date. */
+export function lifeSpanContaining(birthday: string, date: string): { start: string; end: string } | null {
+  try {
+    const row = lifeAge(birthday, date);
+    if (row == null) return null;
+    const span = lifeWeeks(birthday, row).find(item => item.start <= date && date <= item.end);
+    return span ? { start: span.start, end: span.end } : null;
+  } catch {
+    return null;
+  }
+}
+
 export function lifeYearSpanLabel(birthday: string, row: number): string {
   const start = lifeRowStart(birthday, row);
   const next = lifeRowStart(birthday, row + 1);

@@ -1,5 +1,6 @@
 import { fakeAsync,flush,TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { todayIsoDate } from '@vivek/browser';
 import { type DayChannels } from '@vivek/ui';
 import { Subject } from 'rxjs';
@@ -146,4 +147,53 @@ describe('Life page', () => {
     expect(absent.textContent).not.toContain('Town is not set up');
     expect(absent.textContent).not.toContain('Town ·');
   }));
+});
+
+describe('Life span query', () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{
+          path: 'pixels',
+          children: [{ path: 'life', component: LifePageComponent }],
+        }]),
+        {
+          provide: PixelsDataService,
+          useValue: {
+            financeCleared$: new Subject<void>(),
+            load: (request: PixelsLoadRequest) => Promise.resolve({
+              status: 'ready' as const,
+              snapshot: {
+                from: request.from,
+                to: request.to,
+                days: [],
+                sources: { town: 'ok', media: 'ok', travel: 'ok' },
+                firstActivityOn: null,
+                profile: request.profile ? { birthday: '1990-05-04', showAge: false } : null,
+                financeStatus: 'locked',
+                trips: [],
+                fetchedAt: 1,
+              },
+            }),
+          },
+        },
+      ],
+    });
+  });
+
+  it('restores the life week that contains the leap day', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/pixels/life?span=2024-02-29');
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    const el = harness.routeNativeElement as HTMLElement;
+    const link = [...el.querySelectorAll('a')].find(item => item.textContent?.includes('Open Thu, Feb 29, 2024'));
+    expect(link).toBeDefined();
+    const href = decodeURIComponent(link?.getAttribute('href') ?? '');
+    expect(href).toContain('/pixels/day');
+    expect(href).toContain('date=2024-02-29');
+    expect(href).toContain('from=life');
+    expect(href).toContain('span=2024-02-29');
+    expect(TestBed.inject(Router).url).toContain('span=2024-02-29');
+  });
 });

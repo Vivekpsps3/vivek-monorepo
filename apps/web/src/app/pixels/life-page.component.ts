@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { formatDate, todayIsoDate } from '@vivek/browser';
 import { UiButtonComponent, UiStateComponent, type HubCardState, type UiIconName } from '@vivek/ui';
+import { financeReading } from './day-memory';
+import { isIsoDate } from './pixels-dates';
 import { LifePosterComponent } from './life-poster.component';
 import { LifeTableComponent } from './life-table.component';
 import { LifeWeekComponent, type LifeStep } from './life-week.component';
@@ -34,6 +36,8 @@ type LifePhase = 'loading' | 'ready' | 'stale' | 'unavailable' | 'expired' | 'mi
 export class LifePageComponent {
   protected readonly preferences = inject(PixelsPreferences);
   private readonly data = inject(PixelsDataService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly phase = signal<LifePhase>('loading');
   protected readonly snapshot = signal<PixelsSnapshot | null>(null);
@@ -99,6 +103,7 @@ export class LifePageComponent {
       if (this.announceTimer != null) clearTimeout(this.announceTimer);
     });
     this.data.financeCleared$.pipe(takeUntilDestroyed()).subscribe(() => this.clearFinance());
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => this.restoreSpan(params.get('span')));
     this.load();
   }
 
@@ -112,12 +117,18 @@ export class LifePageComponent {
   }
 
   protected select(next: { row: number; week: number }): void {
-    const grid = this.grid();
-    if (!grid) return;
-    const cell = lifeCellAt(grid, next.row, next.week);
-    if (!cell) return;
-    this.selected.set({ row: cell.row, week: cell.week });
-    this.queueAnnouncement(lifeWeekAnnouncement(cell, grid.showAge, formatDate(cell.start, 'range')));
+    this.applySelection(next, true);
+  }
+
+  protected lifeReturn(): string {
+    const start = this.selectedCell()?.start;
+    return start ? `/pixels/life?span=${start}` : '/pixels/life';
+  }
+
+  protected financeLegendText(): string | null {
+    const status = this.snapshot()?.financeStatus;
+    if (!status || status === 'locked' || status === 'ready') return null;
+    return financeReading(status, null).text;
   }
 
   protected selectRow(row: number): void {
@@ -245,9 +256,50 @@ export class LifePageComponent {
       return;
     }
     this.phase.set('ready');
+    const span = this.route.snapshot.queryParamMap.get('span');
+    const fromSpan = span && isIsoDate(span) ? grid.cells.find(cell => cell.start === span) : null;
     const selected = this.selected();
-    const next = selected && selected.row < grid.rowCount ? selected : grid.now ?? { row: 0, week: 1 };
-    this.select(next);
+    const next = fromSpan
+      ? { row: fromSpan.row, week: fromSpan.week }
+      : selected && selected.row < grid.rowCount
+        ? selected
+        : grid.now ?? { row: 0, week: 1 };
+    this.applySelection(next, true);
+  }
+
+  private applySelection(next: { row: number; week: number }, publish: boolean): void {
+    const grid = this.grid();
+    if (!grid) return;
+    const cell = lifeCellAt(grid, next.row, next.week);
+    if (!cell) return;
+    const current = this.selected();
+    if (current?.row !== cell.row || current.week !== cell.week) {
+      this.selected.set({ row: cell.row, week: cell.week });
+      this.queueAnnouncement(lifeWeekAnnouncement(cell, grid.showAge, formatDate(cell.start, 'range')));
+    }
+    if (publish) this.publishSpan(cell.start);
+  }
+
+  private restoreSpan(span: string | null): void {
+    if (!span || !isIsoDate(span)) return;
+    const grid = this.grid();
+    if (!grid) return;
+    const cell = grid.cells.find(item => item.start === span);
+    if (!cell) return;
+    const selected = this.selected();
+    if (selected?.row === cell.row && selected.week === cell.week) return;
+    this.applySelection({ row: cell.row, week: cell.week }, false);
+  }
+
+  private publishSpan(start: string): void {
+    if (this.route.snapshot.routeConfig?.path !== 'life') return;
+    if (this.route.snapshot.queryParamMap.get('span') === start) return;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { span: start },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   private fail(status: 'expired' | 'unavailable'): void {

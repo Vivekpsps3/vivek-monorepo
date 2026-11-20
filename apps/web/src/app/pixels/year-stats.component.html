@@ -19,7 +19,7 @@
           <ui-icon name="lock" />
         </span>
       } @else if (financeStatus() !== 'ready') {
-        no data
+        {{ financeLabel() }}
       } @else {
         {{ stats().budgetKept }}
       }

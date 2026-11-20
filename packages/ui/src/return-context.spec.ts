@@ -5,6 +5,9 @@ describe('return context', () => {
     for (const path of [
       '/finance/spending?t=calendar&month=2026-11&date=2026-11-18',
       '/pixels?year=2024&day=2024-02-29',
+      '/pixels/day?date=2024-02-29&from=year&year=2024',
+      '/pixels/day?date=2024-02-29&from=life&year=2024&span=2024-02-29',
+      '/pixels/life?span=2024-02-29',
       '/media/library?kind=artist&sort=title&offset=24',
       '/media/calendar?month=2026-11',
       '/travel/calendar?month=2026-11',

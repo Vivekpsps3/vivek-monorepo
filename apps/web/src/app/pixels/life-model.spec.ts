@@ -3,6 +3,7 @@ import {
 buildLifeGrid,
 lifeNearestWeek,
 lifePosterMetrics,
+lifeSpanContaining,
 lifeSvgLabels,
 lifeYearSpanLabel
 } from './life-model';
@@ -82,5 +83,14 @@ describe('life poster model', () => {
     expect(lifeNearestWeek(metrics, origin.x, origin.y, grid.rowCount)).toEqual({ row: 0, week: 1 });
     expect(lifeNearestWeek(metrics, 0, origin.y, grid.rowCount).week).toBe(1);
     expect(lifeNearestWeek(metrics, 10_000, origin.y, grid.rowCount).week).toBe(52);
+  });
+
+  it('finds the life week that contains leap day', () => {
+    expect(lifeSpanContaining('1990-05-04', '2024-02-29')).toEqual({
+      start: '2024-02-29',
+      end: '2024-03-06',
+    });
+    expect(lifeSpanContaining('1990-05-04', '1990-05-03')).toBeNull();
+    expect(lifeSpanContaining('1990-05-04', '2024-02-31')).toBeNull();
   });
 });

@@ -18,12 +18,17 @@
     @if (financeStatus() === 'locked') {
       <li class="life-lock">
         <span>Finance is locked. Unlock to include budget kept.</span>
-        <a routerLink="/finance/vault/unlock" [queryParams]="{ next: '/pixels/life' }">Unlock</a>
+        <a routerLink="/finance/vault/unlock" [queryParams]="{ next: unlockNext() }">Unlock</a>
       </li>
-    } @else if (financeStatus() !== 'ready') {
-      <li>Finance · no data</li>
     } @else {
-      <li>{{ finance() }}</li>
+      <li>{{ financeLine() }}</li>
+    }
+  </ul>
+  <ul class="life-days">
+    @for (date of dates(); track date) {
+      <li>
+        <a routerLink="/pixels/day" [queryParams]="dayParams(date)" [state]="dayState(date)">{{ dayLabel(date) }}</a>
+      </li>
     }
   </ul>
   <div class="life-steppers">
