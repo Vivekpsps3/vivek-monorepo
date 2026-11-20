@@ -383,7 +383,171 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(room).not.toContainText('7.25 h');
       await expect(room).not.toContainText('62 bpm');
     });
+
+    test('saves each lab range and a checkup without putting the name on Town requests', async ({ page }) => {
+      test.setTimeout(240_000);
+      const touch = width === 390;
+      const marker = 'Ω-marker';
+      const other = 'Ω-other';
+      const held = 'Ω-held';
+      const town: string[] = [];
+      const vaultBodies: string[] = [];
+      page.on('request', request => {
+        const url = new URL(request.url());
+        const body = request.postData() ?? '';
+        if (url.pathname.startsWith('/api/town')) town.push(`${request.method()} ${url.pathname}${url.search}\n${body}`);
+        if (url.pathname.startsWith('/api/vault/records')) vaultBodies.push(body);
+      });
+      let failUpsert = false;
+      await page.route('**/api/vault/records/upsert', async route => {
+        if (failUpsert) {
+          failUpsert = false;
+          await route.fulfill({ status: 503, contentType: 'application/json', body: '{"detail":"Synthetic save failed"}' });
+          return;
+        }
+        await route.fallback();
+      });
+      const labId = 'hlt_SyntheticLabEntryABCD';
+      await syntheticVault(page, {
+        ...SEED,
+        health_stats: [
+          ...SEED.health_stats,
+          {
+            client_id: labId,
+            v: 1,
+            kind: 'lab',
+            measured_on: DAY,
+            logged_on: DAY,
+            lab: { name: marker, value: 9, unit: 'u', ref_low: 10, ref_high: 20 },
+          },
+        ],
+      });
+      await page.goto(CLINIC);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      const room = page.locator('app-health-room');
+      await expect(room).toHaveAttribute('data-health-state', 'locked');
+      const locked = await room.evaluate(node => ({
+        text: (node as HTMLElement).innerText,
+        fields: [...node.querySelectorAll('input, textarea')].map(item => (item as HTMLInputElement).value).join(''),
+      }));
+      expect(locked.text).not.toContain(marker);
+      expect(locked.text).not.toContain('below range');
+      expect(locked.fields).not.toContain('Ω');
+      noMeasurementDigits(locked.text);
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      const seeded = `Lab · ${marker} · 9 u · below range · 10 to 20 u · ${DAY}`;
+      await expect(room.getByRole('heading', { name: 'Lab results' })).toBeVisible();
+      await expect(room.getByRole('heading', { name: marker })).toBeVisible();
+      await expect(room).toContainText(seeded);
+
+      const addLab = room.getByRole('button', { name: 'Add lab result', exact: true });
+      await target(addLab);
+      await activate(page, addLab, touch);
+      const draft = page.getByRole('dialog', { name: 'Add lab result' });
+      await expect(draft.locator('#health-measured-on')).toBeFocused();
+      await target(draft.locator('#health-lab-name'));
+      await target(draft.locator('#health-lab-value'));
+      await target(draft.locator('#health-lab-unit'));
+      await target(draft.locator('#health-lab-ref-low'));
+      await target(draft.locator('#health-lab-ref-high'));
+      if (touch) await draft.locator('#health-measured-on').tap();
+      await draft.locator('#health-measured-on').fill(DAY);
+      await enter(page, draft.locator('#health-lab-name'), marker, touch);
+      await enter(page, draft.locator('#health-lab-value'), '8', touch);
+      await enter(page, draft.locator('#health-lab-unit'), 'u', touch);
+      await enter(page, draft.locator('#health-lab-ref-low'), '20', touch);
+      await enter(page, draft.locator('#health-lab-ref-high'), '10', touch);
+      if (touch) await draft.getByRole('button', { name: 'Save' }).tap();
+      else await draft.getByRole('button', { name: 'Save' }).click();
+      await expect(draft.locator('#health-lab-ref-high')).toBeFocused();
+      await expect(draft).toContainText('The high end of the range must be above the low end.');
+      await enter(page, draft.locator('#health-lab-ref-low'), '10', touch);
+      await enter(page, draft.locator('#health-lab-ref-high'), '20', touch);
+      if (touch) await draft.getByRole('button', { name: 'Save' }).tap();
+      else await draft.getByRole('button', { name: 'Save' }).click();
+      await expect(draft).toHaveCount(0);
+      await expect(room).toContainText(`Lab · ${marker} · 8 u · below range · 10 to 20 u · ${DAY}`);
+
+      await saveLab(page, room, touch, marker, '15', '10', '20', `Lab · ${marker} · 15 u · in range · 10 to 20 u · ${DAY}`);
+      await saveLab(page, room, touch, marker, '21', '10', '20', `Lab · ${marker} · 21 u · above range · 10 to 20 u · ${DAY}`);
+      await saveLab(page, room, touch, other, '4', '', '', `Lab · ${other} · 4 u · no range · ${DAY}`);
+      await expect(room.getByRole('heading', { name: marker })).toBeVisible();
+      await expect(room.getByRole('heading', { name: other })).toBeVisible();
+      await saveVital(page, room, touch, 'Add checkup', 'Add checkup', async dialog => {
+        await target(dialog.locator('#health-checkup-note'));
+        await enter(page, dialog.locator('#health-checkup-note'), 'Synthetic visit note', touch);
+      }, `Checkup · Synthetic visit note · ${DAY}`);
+      await expect(room.getByRole('heading', { name: 'Checkups' })).toBeVisible();
+
+      const edit = room.getByRole('button', { name: `Edit Lab · ${other} · 4 u · no range · ${DAY}` });
+      await target(edit);
+      await activate(page, edit, touch);
+      const editor = page.getByRole('dialog', { name: 'Edit lab result' });
+      await enter(page, editor.locator('#health-lab-name'), held, touch);
+      failUpsert = true;
+      if (touch) await editor.getByRole('button', { name: 'Save' }).tap();
+      else await editor.getByRole('button', { name: 'Save' }).click();
+      await expect(editor.locator('#health-form-error')).toBeFocused();
+      await expect(editor).toContainText('Could not save this entry. Try again.');
+      await expect(editor.locator('#health-lab-name')).toHaveValue(held);
+      await expect(room).toContainText(`Lab · ${other} · 4 u · no range · ${DAY}`);
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+      await expect(edit).toBeFocused();
+      await expect(room).not.toContainText(held);
+
+      const readyMotion = await room.locator('.health-room').evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(readyMotion).toBe('0s');
+      await target(room.getByRole('button', { name: 'Add checkup', exact: true }));
+      await target(room.getByRole('button', { name: `Delete Lab · ${other} · 4 u · no range · ${DAY}` }));
+      const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+
+      const privateText = [marker, other, held];
+      for (const entry of town) {
+        for (const secret of privateText) expect(entry).not.toContain(secret);
+      }
+      for (const body of vaultBodies) {
+        for (const secret of privateText) expect(body).not.toContain(secret);
+      }
+      const townUrls = await page.evaluate(() => performance.getEntriesByType('resource')
+        .map(entry => entry.name)
+        .filter(name => name.includes('/api/town')));
+      for (const name of townUrls) {
+        for (const secret of privateText) expect(name).not.toContain(secret);
+      }
+      await page.reload();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await expect(room).toContainText(seeded);
+      await expect(room).toContainText(`Lab · ${marker} · 15 u · in range · 10 to 20 u · ${DAY}`);
+      await expect(room).toContainText(`Lab · ${marker} · 21 u · above range · 10 to 20 u · ${DAY}`);
+      await expect(room).toContainText(`Lab · ${other} · 4 u · no range · ${DAY}`);
+      await expect(room).toContainText(`Checkup · Synthetic visit note · ${DAY}`);
+      await expect(room).not.toContainText(held);
+    });
   });
+}
+
+async function saveLab(
+  page: Page,
+  room: Locator,
+  touch: boolean,
+  name: string,
+  value: string,
+  low: string,
+  high: string,
+  saved: string,
+): Promise<void> {
+  await saveVital(page, room, touch, 'Add lab result', 'Add lab result', async dialog => {
+    await enter(page, dialog.locator('#health-lab-name'), name, touch);
+    await enter(page, dialog.locator('#health-lab-value'), value, touch);
+    await enter(page, dialog.locator('#health-lab-unit'), 'u', touch);
+    if (low) await enter(page, dialog.locator('#health-lab-ref-low'), low, touch);
+    if (high) await enter(page, dialog.locator('#health-lab-ref-high'), high, touch);
+  }, saved);
 }
 
 async function enter(page: Page, locator: Locator, value: string, touch: boolean): Promise<void> {

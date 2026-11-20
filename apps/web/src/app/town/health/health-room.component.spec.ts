@@ -29,7 +29,16 @@ const MISSING_ID = 'hlt_MissingEntryNoticeABCD';
 const DAY = '2026-10-28';
 
 function encode(value: unknown): string {
-  return `ct:${btoa(JSON.stringify(value))}`;
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `ct:${btoa(binary)}`;
+}
+
+function decode(ciphertext: string): unknown {
+  const binary = atob(ciphertext.slice(3));
+  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 function row(
@@ -96,7 +105,7 @@ class FakeVault implements VaultRecordCapability {
   async decryptPayload<T>(ciphertextB64: string, _collection: string, clientId: string): Promise<T> {
     this.decryptCalls.push(clientId);
     if (!ciphertextB64.startsWith('ct:')) throw new Error('undecryptable');
-    return JSON.parse(atob(ciphertextB64.slice(3))) as T;
+    return decode(ciphertextB64) as T;
   }
 
   upsertRecords(records: readonly unknown[]): Observable<VaultRecordEnvelope[]> {
@@ -289,14 +298,14 @@ async function show(): Promise<{ fixture: ComponentFixture<HealthRoomSpecHost>; 
   return { fixture, el };
 }
 
-function clickConfirm(fixture: ComponentFixture<HealthRoomSpecHost>, phrase: string): void {
+function clickConfirm(fixture: ComponentFixture<HealthRoomSpecHost>, phrase: string, label = 'Delete measurement'): void {
   const input = fixture.nativeElement.querySelector('#confirm-phrase-field');
   if (!(input instanceof HTMLInputElement)) throw new Error('missing confirmation phrase');
   input.value = phrase;
   input.dispatchEvent(new Event('input', { bubbles: true }));
   fixture.detectChanges();
-  const confirm = [...fixture.nativeElement.querySelectorAll('button')].find(item => item.textContent?.includes('Delete measurement'));
-  if (!(confirm instanceof HTMLButtonElement)) throw new Error('missing Delete measurement');
+  const confirm = [...fixture.nativeElement.querySelectorAll('button')].find(item => item.textContent?.includes(label));
+  if (!(confirm instanceof HTMLButtonElement)) throw new Error(`missing ${label}`);
   confirm.click();
   fixture.detectChanges();
 }
@@ -953,17 +962,161 @@ describe('Health room shell', () => {
     expect(fake.rows.some(item => item.client_id === WEIGHT_ID)).toBeTrue();
   });
 
-  it('shows a saved lab without an editor', async () => {
+  it('groups below, in, above, and no-range labs and edits a checkup on the same dialog', async () => {
     unlock();
     seed();
-    const labId = 'hlt_SyntheticLabEntryABCD';
-    fake.rows.push(row('health_stats', labId, {
-      v: 1, kind: 'lab', measured_on: DAY, logged_on: DAY, lab: { name: 'Iron', value: 12, unit: 'ng/mL' },
+    const belowId = 'hlt_SyntheticLabBelowRange';
+    const inId = 'hlt_SyntheticLabInRangeABC';
+    const aboveId = 'hlt_SyntheticLabAboveRange';
+    const noneId = 'hlt_SyntheticLabNoRangeABC';
+    const checkupId = 'hlt_SyntheticCheckupEntryAB';
+    const lab = (name: string, value: number, refs: { ref_low?: number; ref_high?: number } = {}) => ({
+      v: 1, kind: 'lab' as const, measured_on: DAY, logged_on: DAY, lab: { name, value, unit: 'u', ...refs },
+    });
+    fake.rows.push(
+      row('health_stats', belowId, lab('Ω-marker', 9, { ref_low: 10, ref_high: 20 })),
+      row('health_stats', inId, lab('Ω-marker', 15, { ref_low: 10, ref_high: 20 })),
+      row('health_stats', aboveId, lab('Ω-marker', 21, { ref_low: 10, ref_high: 20 })),
+      row('health_stats', noneId, lab('Ω-other', 4)),
+      row('health_stats', checkupId, { v: 1, kind: 'checkup', measured_on: DAY, logged_on: DAY, note: 'Synthetic visit note' }),
+    );
+    const { fixture, el } = await show();
+    expect(el.querySelector('#health-group-measurements')).not.toBeNull();
+    expect(el.querySelector('#health-group-labs')).not.toBeNull();
+    expect(el.querySelector('#health-group-checkups')).not.toBeNull();
+    const marker = el.querySelector('#health-lab-folder-0');
+    const other = el.querySelector('#health-lab-folder-1');
+    expect(marker?.textContent).toBe('Ω-marker');
+    expect(other?.textContent).toBe('Ω-other');
+    expect(marker?.nextElementSibling?.querySelectorAll('[data-health-kind="lab"]').length).toBe(3);
+    expect(other?.nextElementSibling?.querySelectorAll('[data-health-kind="lab"]').length).toBe(1);
+    expect(el.textContent).toContain(`Lab · Ω-marker · 9 u · below range · 10 to 20 u · ${DAY}`);
+    expect(el.textContent).toContain(`Lab · Ω-marker · 15 u · in range · 10 to 20 u · ${DAY}`);
+    expect(el.textContent).toContain(`Lab · Ω-marker · 21 u · above range · 10 to 20 u · ${DAY}`);
+    expect(el.textContent).toContain(`Lab · Ω-other · 4 u · no range · ${DAY}`);
+    expect(el.textContent).toContain(`Checkup · Synthetic visit note · ${DAY}`);
+    expect(el.querySelector(`#health-edit-${belowId}`)).not.toBeNull();
+    expect(el.querySelector(`#health-delete-${checkupId}`)).not.toBeNull();
+    expect(el.textContent).not.toContain('medical');
+
+    const edit = el.querySelector<HTMLButtonElement>(`#health-edit-${noneId} button`);
+    if (!edit) throw new Error('missing lab edit');
+    edit.click();
+    fixture.detectChanges();
+    expect(el.querySelector('#health-entry-title')?.textContent).toBe('Edit lab result');
+    expect(el.querySelector<HTMLInputElement>('#health-lab-name')?.value).toBe('Ω-other');
+    expect(el.querySelector<HTMLInputElement>('#health-lab-value')?.value).toBe('4');
+    expect(el.querySelector<HTMLInputElement>('#health-lab-unit')?.value).toBe('u');
+    expect(el.querySelector<HTMLInputElement>('#health-lab-ref-low')?.value).toBe('');
+    typeInto(el, '#health-lab-ref-low', '20');
+    typeInto(el, '#health-lab-ref-high', '10');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(el.querySelector('#health-lab-ref-high'));
+    expect(el.textContent).toContain('The high end of the range must be above the low end.');
+    expect(fake.encryptCalls.some(item => JSON.stringify(item).includes('Ω-other'))).toBeFalse();
+
+    typeInto(el, '#health-lab-ref-low', '');
+    typeInto(el, '#health-lab-ref-high', '');
+    fixture.detectChanges();
+    fake.failUpsert = true;
+    typeInto(el, '#health-lab-name', 'Ω-held');
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Could not save this entry. Try again.');
+    expect(el.querySelector<HTMLInputElement>('#health-lab-name')?.value).toBe('Ω-held');
+    expect(el.textContent).toContain(`Lab · Ω-other · 4 u · no range · ${DAY}`);
+    expect(fake.rows.find(item => item.client_id === noneId)?.revision).toBe(1);
+
+    fake.failUpsert = false;
+    typeInto(el, '#health-lab-name', 'Ω-other');
+    typeInto(el, '#health-lab-value', '5');
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector('#health-lab-name')).toBeNull();
+    expect(el.textContent).toContain(`Lab · Ω-other · 5 u · no range · ${DAY}`);
+    const savedLab = fake.encryptCalls.at(-1) as { lab?: { name?: string; value?: number; unit?: string; ref_low?: number } };
+    expect(savedLab.lab).toEqual({ name: 'Ω-other', value: 5, unit: 'u' });
+    const stored = decode(String(fake.rows.find(item => item.client_id === noneId)?.ciphertext_b64)) as { lab?: { name?: string } };
+    expect(stored.lab?.name).toBe('Ω-other');
+    expect(JSON.stringify(stored)).not.toContain('Ω-held');
+
+    button(el, 'Add checkup').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#health-entry-title')?.textContent).toBe('Add checkup');
+    typeInto(el, '#health-measured-on', DAY);
+    typeInto(el, '#health-checkup-note', 'Second synthetic note');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain(`Checkup · Second synthetic note · ${DAY}`);
+    expect(fake.encryptCalls.at(-1)).toEqual(jasmine.objectContaining({
+      kind: 'checkup', note: 'Second synthetic note', measured_on: DAY, logged_on: localTodayIso(),
     }));
-    const { el } = await show();
-    expect(el.textContent).toContain('Lab · Iron · 12 ng/mL');
-    expect(el.querySelector(`#health-edit-${labId}`)).toBeNull();
-    expect(el.querySelector(`#health-delete-${labId}`)).toBeNull();
-    expect(el.querySelector(`#health-edit-${WEIGHT_ID}`)).not.toBeNull();
+
+    const remove = el.querySelector<HTMLButtonElement>(`#health-delete-${checkupId} button`);
+    if (!remove) throw new Error('missing checkup delete');
+    remove.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('DELETE CHECKUP');
+    clickConfirm(fixture, 'DELETE CHECKUP', 'Delete checkup');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).not.toContain('Synthetic visit note');
+    expect(el.textContent).toContain('Second synthetic note');
+    await new Promise(resolve => setTimeout(resolve));
+    expect(document.activeElement).toBe(el.querySelector('#health-add-checkup button'));
+  });
+
+  it('clears a lab draft on owner change and ignores the losing save', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    const store = TestBed.inject(HealthStoreService);
+    button(el, 'Add lab result').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', DAY);
+    typeInto(el, '#health-lab-name', 'Ω-marker');
+    typeInto(el, '#health-lab-value', '9');
+    typeInto(el, '#health-lab-unit', 'u');
+    typeInto(el, '#health-lab-ref-low', '10');
+    typeInto(el, '#health-lab-ref-high', '20');
+    fixture.detectChanges();
+    fake.holdUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await until(() => fake.upsertRelease.length === 1);
+    typeInto(el, '#health-lab-name', 'Ω-held');
+    fixture.detectChanges();
+    expect(visible(el)).toContain('Ω-held');
+
+    fake.holdList = true;
+    fake.rows = [row('health_stats', WEIGHT_ID, { ...WEIGHT, kg: 70 })];
+    session.users.next({ id: 8 });
+    fixture.detectChanges();
+    await until(() => el.getAttribute('data-health-state') === 'loading');
+    expect(visible(el)).not.toContain('Ω-marker');
+    expect(visible(el)).not.toContain('Ω-held');
+    fake.upsertRelease.shift()?.();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(store.statsSnapshot.some(item => JSON.stringify(item.value).includes('Ω-'))).toBeFalse();
+    expect(fake.upsertCancelled).toBeGreaterThan(0);
+    fake.listRelease.splice(0).forEach(release => release());
+    await settle(fixture);
+    expect(el.getAttribute('data-health-state')).toBe('ready');
+    expect(el.textContent).toContain(`${displayWeight(70, 'lb')} lb`);
+    expect(visible(el)).not.toContain('Ω-marker');
+    expect(visible(el)).not.toContain('Ω-held');
+    expect(el.querySelector('#health-lab-name')).toBeNull();
   });
 });

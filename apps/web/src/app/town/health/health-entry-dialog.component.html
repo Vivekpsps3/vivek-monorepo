@@ -1,6 +1,6 @@
 <ui-dialog [open]="open()" labelledBy="health-entry-title" (closed)="onClosed()">
   <h2 id="health-entry-title">{{ heading() }}</h2>
-  <p id="health-entry-help">Saved values stay in canonical units. This choice only changes how they are shown.</p>
+  <p id="health-entry-help">{{ help() }}</p>
   <form (submit)="onSubmit($event)" novalidate>
     <ui-field label="Measured on" [required]="true" [error]="message(errors()['measured_on'])">
       <input uiFieldControl id="health-measured-on" name="measured_on" type="date" required
@@ -46,6 +46,34 @@
       <ui-field label="Sleep (hours)" [required]="true" hint="Quarter hours from 0 to 24." [error]="message(errors()['hours'])">
         <input uiFieldControl id="health-sleep" name="hours" type="text" inputmode="decimal" required autocomplete="off"
           [value]="local().hours" (input)="onHours($event)" />
+      </ui-field>
+    }
+    @if (kind() === 'lab') {
+      <ui-field label="Lab name" [required]="true" [error]="message(errors()['lab.name'])">
+        <input uiFieldControl id="health-lab-name" name="lab_name" type="text" required autocomplete="off"
+          [value]="local().labName" (input)="onLabName($event)" />
+      </ui-field>
+      <ui-field label="Value" [required]="true" [error]="message(errors()['lab.value'])">
+        <input uiFieldControl id="health-lab-value" name="lab_value" type="text" inputmode="decimal" required autocomplete="off"
+          [value]="local().labValue" (input)="onLabValue($event)" />
+      </ui-field>
+      <ui-field label="Unit" [optional]="true" [error]="message(errors()['lab.unit'])">
+        <input uiFieldControl id="health-lab-unit" name="lab_unit" type="text" autocomplete="off"
+          [value]="local().labUnit" (input)="onLabUnit($event)" />
+      </ui-field>
+      <ui-field label="Reference low" [optional]="true" hint="Leave blank when there is no low end." [error]="message(errors()['lab.ref_low'])">
+        <input uiFieldControl id="health-lab-ref-low" name="ref_low" type="text" inputmode="decimal" autocomplete="off"
+          [value]="local().refLow" (input)="onRefLow($event)" />
+      </ui-field>
+      <ui-field label="Reference high" [optional]="true" hint="Leave blank when there is no high end." [error]="message(errors()['lab.ref_high'])">
+        <input uiFieldControl id="health-lab-ref-high" name="ref_high" type="text" inputmode="decimal" autocomplete="off"
+          [value]="local().refHigh" (input)="onRefHigh($event)" />
+      </ui-field>
+    }
+    @if (kind() === 'checkup') {
+      <ui-field label="Checkup note" [optional]="true" [error]="message(errors()['note'])">
+        <textarea uiFieldControl id="health-checkup-note" name="note" rows="3" autocomplete="off"
+          [value]="local().note" (input)="onNote($event)"></textarea>
       </ui-field>
     }
     @if (formError()) {

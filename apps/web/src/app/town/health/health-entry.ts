@@ -11,7 +11,9 @@ export interface HealthUnits {
 export const DEFAULT_HEALTH_UNITS: HealthUnits = { weight: 'lb', distance: 'mi' };
 
 export type HealthVitalKind = 'weight' | 'rhr' | 'bp' | 'sleep';
-export type HealthEditorKind = HealthVitalKind | 'lift';
+export type HealthClinicKind = HealthVitalKind | 'lab' | 'checkup';
+export type HealthEditorKind = HealthClinicKind | 'lift';
+export type LabRange = 'below' | 'in' | 'above' | 'none';
 
 export interface HealthDraft {
   kind: HealthEditorKind;
@@ -27,6 +29,12 @@ export interface HealthDraft {
   sourceKg: number | null;
   exercise: string;
   reps: string;
+  labName: string;
+  labValue: string;
+  labUnit: string;
+  refLow: string;
+  refHigh: string;
+  note: string;
 }
 
 export const EMPTY_HEALTH_DRAFT: HealthDraft = {
@@ -42,20 +50,32 @@ export const EMPTY_HEALTH_DRAFT: HealthDraft = {
   sourceKg: null,
   exercise: '',
   reps: '',
+  labName: '',
+  labValue: '',
+  labUnit: '',
+  refLow: '',
+  refHigh: '',
+  note: '',
 };
 
-const DELETE_PHRASE: Record<HealthVitalKind, string> = {
+const DELETE_PHRASE: Record<HealthClinicKind, string> = {
   weight: 'DELETE WEIGHT',
   rhr: 'DELETE HEART RATE',
   bp: 'DELETE BLOOD PRESSURE',
   sleep: 'DELETE SLEEP',
+  lab: 'DELETE LAB',
+  checkup: 'DELETE CHECKUP',
 };
 
 export function isVitalKind(kind: string): kind is HealthVitalKind {
   return kind === 'weight' || kind === 'rhr' || kind === 'bp' || kind === 'sleep';
 }
 
-export function healthDeletePhrase(kind: HealthVitalKind): string {
+export function isClinicKind(kind: string): kind is HealthClinicKind {
+  return isVitalKind(kind) || kind === 'lab' || kind === 'checkup';
+}
+
+export function healthDeletePhrase(kind: HealthClinicKind): string {
   return DELETE_PHRASE[kind];
 }
 
@@ -64,7 +84,8 @@ export function draftFromStat(
   units: HealthUnits,
 ): HealthDraft | null {
   const value = entry.value;
-  if (!isVitalKind(value.kind)) return null;
+  if (!isClinicKind(value.kind)) return null;
+  const lab = value.lab;
   return {
     ...EMPTY_HEALTH_DRAFT,
     kind: value.kind,
@@ -77,6 +98,12 @@ export function draftFromStat(
     dia: value.dia != null ? String(value.dia) : '',
     hours: value.hours != null ? String(value.hours) : '',
     sourceKg: value.kind === 'weight' && typeof value.kg === 'number' ? value.kg : null,
+    labName: lab?.name ?? '',
+    labValue: lab && typeof lab.value === 'number' ? String(lab.value) : '',
+    labUnit: lab?.unit ?? '',
+    refLow: lab?.ref_low != null ? String(lab.ref_low) : '',
+    refHigh: lab?.ref_high != null ? String(lab.ref_high) : '',
+    note: value.note ?? '',
   };
 }
 
@@ -121,9 +148,35 @@ export function vitalStatFromDraft(
       }, today);
     case 'sleep':
       return validateHealthStat({ ...base, kind: 'sleep', hours: parseHealthNumber(draft.hours) }, today);
+    case 'lab':
+      return labStatFromDraft(draft, base, today);
+    case 'checkup':
+      return validateHealthStat({ ...base, kind: 'checkup', note: draft.note }, today);
     default:
       return validateHealthStat({ ...base, kind: 'weight' }, today, weightUnit);
   }
+}
+
+function optionalNumber(raw: string): number | undefined {
+  if (raw.trim() === '') return undefined;
+  return parseHealthNumber(raw) ?? Number.NaN;
+}
+
+function labStatFromDraft(
+  draft: HealthDraft,
+  base: { v: 1; measured_on: string; logged_on: string },
+  today: string,
+): { value: HealthStat; fieldErrors: FieldErrors } {
+  const lab: NonNullable<HealthStat['lab']> = {
+    name: draft.labName,
+    value: optionalNumber(draft.labValue) ?? Number.NaN,
+    unit: draft.labUnit,
+  };
+  const low = optionalNumber(draft.refLow);
+  const high = optionalNumber(draft.refHigh);
+  if (low !== undefined) lab.ref_low = low;
+  if (high !== undefined) lab.ref_high = high;
+  return validateHealthStat({ ...base, kind: 'lab', lab }, today);
 }
 
 /** True when an edit would persist the same vital the store already holds. */
@@ -134,8 +187,19 @@ export function sameStoredStat(current: HealthStat, next: HealthStat): boolean {
     case 'rhr': return current.bpm === next.bpm;
     case 'bp': return current.sys === next.sys && current.dia === next.dia;
     case 'sleep': return current.hours === next.hours;
+    case 'lab': return sameLab(current.lab, next.lab);
+    case 'checkup': return (current.note ?? '') === (next.note ?? '');
     default: return false;
   }
+}
+
+function sameLab(left: HealthStat['lab'], right: HealthStat['lab']): boolean {
+  if (!left || !right) return !left && !right;
+  return left.name === right.name
+    && left.value === right.value
+    && left.unit === right.unit
+    && (left.ref_low ?? null) === (right.ref_low ?? null)
+    && (left.ref_high ?? null) === (right.ref_high ?? null);
 }
 
 const UNITS_PREFIX = 'town.health.units.v1.';
@@ -186,15 +250,18 @@ export function healthFieldMessage(code: string | undefined): string {
     case 'length': return 'Use a shorter or longer value within the limit.';
     case 'step': return 'Use a quarter-hour step.';
     case 'greater_than_dia': return 'Systolic must be higher than diastolic.';
+    case 'greater_than_ref_low': return 'The high end of the range must be above the low end.';
     default: return 'Check this field and try again.';
   }
 }
 
-const VITAL_FIELDS: Record<HealthVitalKind, readonly string[]> = {
+const CLINIC_FIELDS: Record<HealthClinicKind, readonly string[]> = {
   weight: ['measured_on', 'kg'],
   rhr: ['measured_on', 'bpm'],
   bp: ['measured_on', 'sys', 'dia'],
   sleep: ['measured_on', 'hours'],
+  lab: ['measured_on', 'lab.name', 'lab.value', 'lab.unit', 'lab.ref_low', 'lab.ref_high'],
+  checkup: ['measured_on', 'note'],
 };
 const GYM_FIELDS = ['measured_on', 'exercise', 'kg', 'reps'] as const;
 
@@ -203,7 +270,7 @@ export function firstHealthField(
   room: 'clinic' | 'gym',
   kind?: HealthEditorKind,
 ): string | null {
-  const order = kind && kind !== 'lift' ? VITAL_FIELDS[kind] : room === 'clinic' ? VITAL_FIELDS.weight : GYM_FIELDS;
+  const order = kind && kind !== 'lift' ? CLINIC_FIELDS[kind] : room === 'clinic' ? CLINIC_FIELDS.weight : GYM_FIELDS;
   return order.find(field => errors[field]) ?? null;
 }
 
@@ -217,6 +284,12 @@ export function healthFieldId(field: string): string {
     case 'hours': return 'health-sleep';
     case 'exercise': return 'health-exercise';
     case 'reps': return 'health-reps';
+    case 'lab.name': return 'health-lab-name';
+    case 'lab.value': return 'health-lab-value';
+    case 'lab.unit': return 'health-lab-unit';
+    case 'lab.ref_low': return 'health-lab-ref-low';
+    case 'lab.ref_high': return 'health-lab-ref-high';
+    case 'note': return 'health-checkup-note';
     default: return 'health-measured-on';
   }
 }
@@ -233,6 +306,48 @@ export function corruptNotice(count: number): string {
   if (!Number.isInteger(count) || count <= 0) return '';
   if (count === 1) return '1 saved entry could not be read. It stays in the vault.';
   return `${count} saved entries could not be read. They stay in the vault.`;
+}
+
+const RANGE_WORD: Record<LabRange, string> = {
+  below: 'below range',
+  in: 'in range',
+  above: 'above range',
+  none: 'no range',
+};
+
+function finiteOrNull(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** Compare a lab number with the reference the person typed. This is not advice. */
+export function labRange(lab: { value: number; ref_low?: number; ref_high?: number } | undefined): LabRange {
+  if (!lab || !Number.isFinite(lab.value)) return 'none';
+  const low = finiteOrNull(lab.ref_low);
+  const high = finiteOrNull(lab.ref_high);
+  if (low == null && high == null) return 'none';
+  if (low != null && high != null && !(low < high)) return 'none';
+  if (low != null && lab.value < low) return 'below';
+  if (high != null && lab.value > high) return 'above';
+  return 'in';
+}
+
+function labMeasure(value: number, unit: string): string {
+  const trimmed = unit.trim();
+  return trimmed ? `${value} ${trimmed}` : String(value);
+}
+
+function labRangeDetail(lab: NonNullable<HealthStat['lab']>): string {
+  const status = labRange(lab);
+  const word = RANGE_WORD[status];
+  if (status === 'none') return word;
+  const low = finiteOrNull(lab.ref_low);
+  const high = finiteOrNull(lab.ref_high);
+  const unit = lab.unit.trim();
+  const suffix = unit ? ` ${unit}` : '';
+  if (low != null && high != null) return `${word} · ${low} to ${high}${suffix}`;
+  if (low != null) return `${word} · from ${low}${suffix}`;
+  if (high == null) return word;
+  return `${word} · through ${high}${suffix}`;
 }
 
 export function formatHealthStat(stat: HealthStat, units: HealthUnits): string {
@@ -252,7 +367,8 @@ export function formatHealthStat(stat: HealthStat, units: HealthUnits): string {
       return stat.hours == null ? `Sleep · ${date}` : `Sleep · ${stat.hours} h · ${date}`;
     case 'lab': {
       const lab = stat.lab;
-      return lab ? `Lab · ${lab.name} · ${lab.value} ${lab.unit} · ${date}` : `Lab · ${date}`;
+      if (!lab) return `Lab · ${date}`;
+      return `Lab · ${lab.name} · ${labMeasure(lab.value, lab.unit)} · ${labRangeDetail(lab)} · ${date}`;
     }
     case 'checkup':
       return stat.note ? `Checkup · ${stat.note} · ${date}` : `Checkup · ${date}`;

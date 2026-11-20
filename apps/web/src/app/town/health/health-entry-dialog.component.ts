@@ -71,8 +71,18 @@ export class HealthEntryDialogComponent {
       case 'rhr': return editing ? 'Edit resting heart rate' : 'Add resting heart rate';
       case 'bp': return editing ? 'Edit blood pressure' : 'Add blood pressure';
       case 'sleep': return editing ? 'Edit sleep' : 'Add sleep';
+      case 'lab': return editing ? 'Edit lab result' : 'Add lab result';
+      case 'checkup': return editing ? 'Edit checkup' : 'Add checkup';
       case 'lift': return 'Add lift';
     }
+  }
+
+  protected help(): string {
+    if (this.kind() === 'lab') {
+      return 'Below range, in range, above range, and no range compare this number with the reference you type.';
+    }
+    if (this.kind() === 'checkup') return 'A checkup is a note saved for this date.';
+    return 'Saved values stay in canonical units. This choice only changes how they are shown.';
   }
 
   protected loggedOn(): string {
@@ -115,6 +125,30 @@ export class HealthEntryDialogComponent {
     this.patch({ hours: this.text(event) });
   }
 
+  protected onLabName(event: Event): void {
+    this.patch({ labName: this.text(event) });
+  }
+
+  protected onLabValue(event: Event): void {
+    this.patch({ labValue: this.text(event) });
+  }
+
+  protected onLabUnit(event: Event): void {
+    this.patch({ labUnit: this.text(event) });
+  }
+
+  protected onRefLow(event: Event): void {
+    this.patch({ refLow: this.text(event) });
+  }
+
+  protected onRefHigh(event: Event): void {
+    this.patch({ refHigh: this.text(event) });
+  }
+
+  protected onNote(event: Event): void {
+    this.patch({ note: this.text(event) });
+  }
+
   protected onSubmit(event: Event): void {
     event.preventDefault();
     if (this.busy()) return;
@@ -151,6 +185,7 @@ export class HealthEntryDialogComponent {
   }
 
   private text(event: Event): string {
-    return event.target instanceof HTMLInputElement ? event.target.value : '';
+    const target = event.target;
+    return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ? target.value : '';
   }
 }

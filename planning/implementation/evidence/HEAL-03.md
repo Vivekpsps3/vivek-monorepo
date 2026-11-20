@@ -1,0 +1,62 @@
+# HEAL-03 — implementation evidence
+
+- Leaf issue and parent(s): [#429](https://github.com/Vivekpsps3/vivek-monorepo/issues/429) HEAL-03. Parents [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304), [#256](https://github.com/Vivekpsps3/vivek-monorepo/issues/256), and [#90](https://github.com/Vivekpsps3/vivek-monorepo/issues/90) stay open. Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. #277 stays open and was not edited.
+- Agent/context, branch/worktree: sole implementer, no subagents; `agent/heal-03`; `/tmp/vivek-heal-03`. The shared checkout was not edited.
+- Base main SHA, current tested SHA: base `7e5cd391e9a8b38f2e8baf000263121191e90ea2` (HEAL-02 merge, pull request #547). `git fetch origin main` on 2026-11-20 still returned that SHA. The implementation and these command results are `IMPLEMENTATION_SHA`. This sentence names that commit; the follow-up only edits this evidence file.
+- Fresh-main/prerequisite/active-PR checks: HEAL-01 is on this base. Clinic and Gym routes, `HealthStoreService`, `health-units.ts`, and the entry shell are in `7e5cd391e9a8b38f2e8baf000263121191e90ea2`. `gh pr list --state open --search 'health-store OR health-ui OR HEAL-03'` returned no pull requests. #429 was open when this evidence was written. #427 and #428 were already closed.
+
+## Acceptance
+
+| Row | Current proof/test | Result | Artifact or command |
+| --- | --- | --- | --- |
+| HEAL-03-A1 | Below, in, above, and no-range labs render the value, unit, and range words. Inclusive bounds 10 and 20 mark 9 and 8 below, 15 in, and 21 above. A lab with no bounds is no range. One-sided bounds read “from” and “through”. An empty unit omits the unit token. Unordered bounds are no range and do not print the bounds. A checkup note round-trips on the same dialog. | PASS | `health-entry.spec.ts` format and round-trip. `health-room.component.spec.ts` groups the four range labels. `apps/web/e2e/health-entry.spec.ts` saves each range and a checkup, then reloads the labels, at 1280×800 light and 390×844 night. |
+| HEAL-03-A2 | Unicode names `Ω-marker`, `Ω-other`, and a held edit `Ω-held` stay out of `/api/town` request URLs and bodies and out of vault record request bodies. An owner change drops the lab draft. The other owner's list and store snapshot do not contain those names. The locked clinic shows no lab text and no measurement digits. | PASS | `health-room.component.spec.ts` owner change and ciphertext check. `apps/web/e2e/health-entry.spec.ts` captures Town and vault request bodies on both viewports. |
+| HEAL-03-LIFE | A 503 keeps the typed lab name in the dialog and leaves the saved row unchanged. A late upsert after an owner change does not publish the previous owner's draft. Invalidation clears the private draft. A later successful edit stores the corrected value. | PASS | `health-room.component.spec.ts` failed save, owner change, and held upsert. Town Playwright focuses `#health-form-error`, keeps `Ω-held` in the field, and still shows the saved `Ω-other` row. |
+| HEAL-03-VIEW | 1280×800 light keyboard and 390×844 night touch, reduced motion. Lab name, value, unit, both reference fields, Add checkup, and Delete are at least 44 px. Dialog motion is 0s. An unordered range focuses `#health-lab-ref-high`. A failed save focuses `#health-form-error` and Escape returns focus to the Edit button. Axe serious and critical violations on the room are empty. Saved labels match the stored rows after reload. | PASS | `apps/web/e2e/health-entry.spec.ts` both viewports, including `data-theme`, axe, and reload. |
+
+Fixtures are synthetic records only. Client ids are `hlt_SyntheticWeightEntryAB`, `hlt_SyntheticLiftEntryABCD`, `hlt_CorruptRowNoticeABCDEF`, `hlt_SyntheticLabEntryABCD`, `hlt_SyntheticLabBelowRange`, `hlt_SyntheticLabInRangeABC`, `hlt_SyntheticLabAboveRange`, `hlt_SyntheticLabNoRangeABC`, and `hlt_SyntheticCheckupEntryAB`. Display strings use unit `u`, values 9, 8, 15, 21, 4, and 5, bounds 10 and 20, and notes “Synthetic visit note” and “Second synthetic note”. No personal measurement, name, or vault material was added to tests, logs, or the issue. Records stay in `HealthStoreService` through Finance `openVaultRecords`. `public-api.ts` is unchanged. Display units stay in `town.health.units.v1.${ownerId}` and do not rewrite stored kilograms or lab units. There is no second health store and no new crypto protocol. Range words compare the typed numbers. History and sparklines stay with HEAL-04.
+
+## Deletion and compatibility
+
+| Candidate | Previous consumers | Surviving owner | Removed / moved / retained | Proof |
+| --- | --- | --- | --- | --- |
+| HEAL-02 showed a saved lab as a flat read-only row. `draftFromStat` returned null for a lab, and the room hid edit and delete unless the kind was a vital. | `HealthRoomComponent` and `HealthEntryDialogComponent` on `/town/clinic`. | The same room, dialog, and `HealthStoreService`. | The read-only lab branch is replaced by grouped lab folders and checkup rows on that dialog. No second store, editor, or crypto path was introduced, so none was deleted. | `git diff origin/main` stays inside the existing health room, dialog, entry helpers, validator, Town AGENTS paragraph, and the health Playwright spec. |
+
+- Candidate class and protected counterexamples: feature. The encrypted store, canonical unit functions, expected revisions, logged-date immutability, corrupt-row retention, vital editors, and the exact confirmation dialog stay. Schema version stays 2.
+- Comparison base SHA and full replacement closure (including new files): `7e5cd391e9a8b38f2e8baf000263121191e90ea2`. No new production file. Changed production files are the health room, dialog, entry helpers, and `health-validate.ts`.
+- Production added/deleted/moved; comments/blank-only churn separately: production numstat is +350/−33, net +317. That is dialog template +29/−1, dialog component +36/−1, entry helpers +123/−7, room CSS +16, room template +27/−9, room component +112/−14, and validator +7/−1. Blank-only lines are not split out.
+- Independent equivalent implementations before/after: 1 / 1 health store. 1 / 1 unit conversion. 1 / 1 shared entry dialog. 1 / 1 clinic-and-gym room.
+- State/cache owners and public entry points before/after: `HealthStoreService` still owns `health_stats` and `health_prs` at schema version 2. Display preference stays local and display-only. One session draft lives on the room and clears on lock, owner change, room change, session clear, successful save, and destroy. `openVaultRecords` still returns the same record capability.
+- Remaining old symbol/path search, including config and discovery: the read-only lab expectation is gone from `health-room.component.spec.ts`. Town e2e discovery still lists 14 files. `health-entry.spec.ts` stays inside `townTestMatch`. No passphrase UI was added under `apps/web/src/app/town/`.
+- Follow-up change: which production files and independent policy owners now need editing: HEAL-04 owns history and sparklines. No queue or parent ledger was edited.
+- Tests/docs/generated changes separately: tests +402/−16, net +386, including `apps/web/e2e/health-entry.spec.ts` (+164), `health-room.component.spec.ts` (+167/−14), and `health-entry.spec.ts` (+71/−2). Docs are the Town AGENTS paragraph (298 words) and this evidence file. No generated bundle is committed. `make build-frontends` exited 0. Release `a9be867cd6df9298886dec9bcd305bb5f94ea29c1ed8a023a1ea368ca1a85176`. The existing initial-bundle warning remains (678.88 kB against the 650 kB warning budget). The budget was not raised.
+- Net production delta and specific reviewed safety/compatibility exception if positive: +317 production lines. This is the feature: lab name, value, unit, and reference range, checkup notes, grouping, and the same revision-aware save and exact delete path. The positive delta is the implementation, not a simplification claim. No Reviewed boundary exception was added.
+- No behavior/data/meaningful assertion silently removed: confirmed. The HEAL-01 locked, setup, corrupt-row, and Add lift journeys and the HEAL-02 vital journeys still pass in the town Playwright file. The five skipped Finance Playwright tests are existing Finance specs this leaf does not edit.
+
+## Verification
+
+Commands ran in `/tmp/vivek-heal-03`. `make test-fast`, `make build-frontends`, `make e2e`, and Playwright used `PATH="/tmp/vivek-heal-03/.venv/bin:$PATH"` because the Makefile calls `python3` and the worktree `.venv` is a symlink to the shared virtualenv. Karma used `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`. `node_modules` is a symlink to the shared install. Neither the symlink nor the virtualenv is committed.
+
+A Finance Karma run started while Town Playwright and the suite project were still using Chrome. `vault-crypto.spec.ts` (“does not wipe a newer key when a legacy migration goes stale”) then saw a null restored key. That spec is unchanged and outside this leaf. The isolated rerun below is the recorded gate. No assertion was weakened.
+
+| Command | Tested SHA | Result |
+| --- | --- | --- |
+| `PATH="/tmp/vivek-heal-03/.venv/bin:$PATH" make test-fast` | `IMPLEMENTATION_SHA` | PASS. Doc paths OK. Town AGENTS.md is 298 words. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. Town e2e discovery listed 14 files. Suite discovery listed 12. Finance 49, travel 32, and media 27 were listed and not executed. Shared boundaries OK. |
+| `make lint-web` | `IMPLEMENTATION_SHA` | PASS. eslint-finance 344, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. No baseline was raised. |
+| `make typecheck-web` | `IMPLEMENTATION_SHA` | PASS. `tsc --noEmit` for web app, web spec, finance app, finance spec, packages, site app, and site spec. |
+| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | `IMPLEMENTATION_SHA` | PASS. 492 SUCCESS. Statements 75.06% (7106/9467). Branches 61.33% (2944/4800). Functions 75.04% (1404/1871). Lines 79.87% (6175/7731). |
+| `PATH="/tmp/vivek-heal-03/.venv/bin:$PATH" make build-frontends` | `IMPLEMENTATION_SHA` | PASS. Output `/tmp/vivek-heal-03/dist/web`. Release `a9be867cd6df9298886dec9bcd305bb5f94ea29c1ed8a023a1ea368ca1a85176`. Initial total 678.88 kB. Exit 0. The 650 kB warning was not treated as a failure and the budget was not raised. |
+| `PATH="/tmp/vivek-heal-03/.venv/bin:$PATH" npx playwright test --config apps/web/e2e/playwright.config.ts` | `IMPLEMENTATION_SHA` | PASS. 139 passed (1.7m). Includes both `health-entry.spec.ts` viewports: each lab range, a checkup, a failed save, Town and vault request bodies, and reload of the saved labels. |
+| `PATH="/tmp/vivek-heal-03/.venv/bin:$PATH" npx playwright test --project=suite` | `IMPLEMENTATION_SHA` | PASS. 61 passed (1.1m). |
+| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` | `IMPLEMENTATION_SHA` | PASS on the isolated rerun. 521 SUCCESS. Exit 0. Statements 63.39% (7777/12267). Branches 49.51% (3445/6958). Functions 59.31% (1856/3129). Lines 66.83% (6867/10275). No coverage error. |
+| `PATH="/tmp/vivek-heal-03/.venv/bin:$PATH" make e2e` | `IMPLEMENTATION_SHA` | PASS. Rebuilt the frontends to the same release id, then Finance Playwright: 281 passed, 5 skipped (2.1m). The skips are existing Finance specs. |
+
+`make lint-python`, `make typecheck-python`, and the Python coverage gates were not run. The diff has no Python product file. Travel Playwright, Media Playwright, site Karma, Travel coverage, and Media coverage were not run. The diff does not change those screens. `python3 planning/implementation/plan.py launch HEAL-03` was run from this worktree. Its docs, web_front, and finance_front profiles are the commands in the table.
+
+## Handoff
+
+- PR URL (leaf closure keyword only): pending. The pull request body uses `Closes #429` only.
+- Roadmap #134 append-only status-note URL: after merge.
+- Merged/activation status (actual evidence, not assumption): not merged and not deployed.
+- Remaining external prerequisites or approved scope decisions: #304, #256, #90, #134, and #277 stay open. This leaf does not deploy.
+- Next actor: wait for green required checks, then merge with a merge commit.
