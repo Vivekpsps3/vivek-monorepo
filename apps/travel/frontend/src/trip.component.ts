@@ -32,6 +32,7 @@ import {
   UiPageHeaderComponent,
 } from "@vivek/ui";
 import { MapComponent, TravelPlace } from "./map.component";
+import { cardPlaces, placeSearchCurrent } from "./trip-list.mjs";
 import { PtoDaysComponent } from "./pto-days.component";
 import {
   allocationDraft,
@@ -206,26 +207,27 @@ export class TripComponent {
     const trip = this.data();
     return trip ? projectItinerary(trip) : null;
   });
+  readonly listedPlaces = computed(() => cardPlaces(this.data()));
   readonly mapPlaces = computed<TravelPlace[]>(() => {
     const trip = this.data();
-    return trip
-      ? [
-          ...trip.stays.map((stay) => ({
-            label: stay.city,
-            lat: stay.lat,
-            lng: stay.lng,
-          })),
-          ...trip.days.flatMap((day) =>
-            day.items
-              .filter((plan) => plan.lat !== null && plan.lng !== null)
-              .map((plan) => ({
-                label: plan.title,
-                lat: plan.lat,
-                lng: plan.lng,
-              })),
-          ),
-        ]
-      : [];
+    if (!trip) return [];
+    const listed = cardPlaces(trip).map((place) => ({
+      label: place.label,
+      lat: place.lat,
+      lng: place.lng,
+      kindLabel: place.kindLabel,
+    }));
+    const plans = trip.days.flatMap((day) =>
+      day.items
+        .filter((plan) => plan.lat !== null && plan.lng !== null)
+        .map((plan) => ({
+          label: plan.title,
+          lat: plan.lat,
+          lng: plan.lng,
+          kindLabel: plan.kind === "lodging" ? "Lodging" : "",
+        })),
+    );
+    return [...listed, ...plans];
   });
   readonly error = signal("");
   readonly saving = signal(false);
@@ -832,8 +834,8 @@ export class TripComponent {
     });
   }
   /** The typed value can land before the input listener. That draft still wins. */
-  private activityDraftMoved(sent: Record<string, unknown>): boolean {
-    if (this.editor !== "activity") return false;
+  private editorDraftMoved(sent: Record<string, unknown>): boolean {
+    if (this.editor !== "activity" && this.editor !== "destination") return false;
     const dialog = this.host.nativeElement.querySelector("ui-dialog");
     if (!(dialog instanceof HTMLElement)) return false;
     const text = (name: string, key: string) => {
@@ -850,6 +852,16 @@ export class TripComponent {
       const expected = sent[key] == null ? "" : String(sent[key]);
       return node.value !== expected;
     };
+    if (this.editor === "destination") {
+      return (
+        text("city", "city") ||
+        text("arrive", "arrive_on") ||
+        text("leave", "leave_on") ||
+        text("lodging", "lodging_name") ||
+        text("address", "lodging_address") ||
+        text("notes", "notes")
+      );
+    }
     if (
       text("title", "title") ||
       text("date", "on_date") ||
@@ -899,7 +911,7 @@ export class TripComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: () => {
-          const current = this.settle(epoch, tripId) && !this.activityDraftMoved(cleaned);
+          const current = this.settle(epoch, tripId) && !this.editorDraftMoved(cleaned);
           const latest = token === this.inflight;
           if (!current) {
             if (latest && this.sessionActive && this.id === tripId) this.saving.set(false);
@@ -916,7 +928,7 @@ export class TripComponent {
           this.load();
         },
         error: (e) => {
-          const current = this.settle(epoch, tripId) && !this.activityDraftMoved(cleaned);
+          const current = this.settle(epoch, tripId) && !this.editorDraftMoved(cleaned);
           const latest = token === this.inflight;
           if (!current) {
             if (latest && this.sessionActive && this.id === tripId) this.saving.set(false);
@@ -1246,6 +1258,16 @@ export class TripComponent {
     this.places.set([]);
     this.placeError.set("");
   }
+  private placeCurrent(stayId: number, query: string): boolean {
+    return placeSearchCurrent({
+      sessionActive: this.sessionActive,
+      editor: this.editor,
+      stayId,
+      currentStayId: this.placeStay?.id,
+      query,
+      currentQuery: this.placeQuery,
+    });
+  }
   findPlaces(): void {
     const query = this.placeQuery.trim();
     if (!this.placeStay || this.editor !== "location" || this.finding() || this.saving()) return;
@@ -1263,17 +1285,13 @@ export class TripComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (r) => {
-          if (
-            this.editor !== "location" ||
-            this.placeStay?.id !== stayId ||
-            this.placeQuery.trim() !== query
-          )
-            return;
+          if (!this.placeCurrent(stayId, query)) return;
           this.places.set(r.results);
           this.placeSearched.set(true);
           this.finding.set(false);
         },
         error: (e) => {
+          if (!this.placeCurrent(stayId, query)) return;
           this.placeError.set(travelError(e));
           this.finding.set(false);
         },
