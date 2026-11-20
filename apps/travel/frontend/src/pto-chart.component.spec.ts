@@ -69,6 +69,10 @@ describe("PtoChartComponent combined forecast", () => {
     expect(root.textContent).toContain("● PTO");
     expect(root.textContent).toContain("■ Sick");
     expect(root.textContent).toContain("Today");
+    const boundary = root.querySelector(".pto-accrual-boundary");
+    expect(boundary?.textContent).toContain("Accrual boundary");
+    expect(boundary?.textContent).toContain(`${body().pto.points[0].days} days \u00b7 ${body().pto.points[0].hours} h`);
+    expect(root.querySelectorAll(".pto-accrual-boundary").length).toBe(2);
     expect(root.textContent).toContain("PTO drops below zero on Nov 2, 2026");
     expect(root.textContent).toContain("end of your policy year");
     const table = root.querySelector("table");

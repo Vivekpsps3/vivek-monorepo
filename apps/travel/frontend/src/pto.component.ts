@@ -24,7 +24,7 @@ import {
   silentErrorToast,
 } from "@vivek/ui";
 import { localTodayIso } from "@vivek/browser";
-import { Subscription, firstValueFrom } from "rxjs";
+import { Subscription, filter, firstValueFrom, merge, take } from "rxjs";
 import { showRange } from "./display";
 import { PtoChartComponent } from "./pto-chart.component";
 import { CHART_ERROR } from "./pto-chart.mjs";
@@ -55,8 +55,10 @@ import {
   fieldHint,
   firstInvalid,
   formatBalance,
+  overlapSentence,
   policyBody,
   policyErrors,
+  policyFacts,
   previewKey,
 } from "./pto-model.mjs";
 import {
@@ -196,6 +198,18 @@ type Busy = "" | "policy" | "entry" | "remove";
             }
           </section>
         </div>
+        @if (overlaps(board).length) {
+          <section class="pto-overlaps" aria-labelledby="pto-overlaps-title">
+            <h2 id="pto-overlaps-title">Overlapping days</h2>
+            <ul>
+              @for (conflict of overlaps(board); track conflict.on_date) {
+                <li>
+                  <p class="pto-overlap" role="status">{{ overlapText(conflict) }}</p>
+                </li>
+              }
+            </ul>
+          </section>
+        }
         <div class="pto-lower">
           <section>
             <ui-card>
@@ -323,6 +337,18 @@ type Busy = "" | "policy" | "entry" | "remove";
                 <h2>{{ label(name) }}</h2>
                 @if (board.buckets[name]?.configured) {
                   <p>{{ balanceText(board, name) }}</p>
+                  @if (factsFor(board.buckets[name]); as facts) {
+                    <dl class="pto-facts">
+                      <dt>Carry</dt>
+                      <dd>{{ facts.carry }}</dd>
+                      <dt>Cap</dt>
+                      <dd>{{ facts.cap }}</dd>
+                      <dt>Policy year</dt>
+                      <dd>{{ facts.reset }}</dd>
+                      <dt>Accrual boundary</dt>
+                      <dd>{{ facts.boundary }}</dd>
+                    </dl>
+                  }
                   <div class="button-row">
                     <ui-button
                       variant="ghost"
@@ -585,6 +611,18 @@ type Busy = "" | "policy" | "entry" | "remove";
       .field-error { color: var(--danger); }
       .pto-chart-slot { min-width: 0; }
       .pto-chart-slot:empty { min-height: 0; }
+      .pto-facts { margin: 0.5rem 0 0.75rem; }
+      .pto-facts dt {
+        margin: 0.45rem 0 0;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .pto-facts dd { margin: 0; }
+      .pto-overlaps { margin: 0.75rem 0; min-width: 0; }
+      .pto-overlaps ul { list-style: none; margin: 0; padding: 0; }
+      .pto-overlaps li { margin: 0.35rem 0 0; }
       .pto-chart-skel { height: 220px; border-radius: var(--radius-md); background: var(--surface-sunken, var(--surface)); }
       @media (min-width: 1280px) {
         .pto-top { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 1rem; align-items: start; }
@@ -649,6 +687,7 @@ export class PtoComponent {
   private loading?: Subscription;
   private seriesSub?: Subscription;
   private seriesEpoch = 0;
+  private sessionActive = true;
   private policyAttempt: { bucket: BucketName; body: object; draft: string } | null = null;
   private entryAttempt: object | null = null;
   @ViewChild("startBalance") private startBalance?: ElementRef<HTMLInputElement>;
@@ -690,7 +729,25 @@ export class PtoComponent {
     this.drafts = { pto: blankDraft(today), sick: blankDraft(today) };
     this.savedDrafts = { pto: blankDraft(today), sick: blankDraft(today) };
     this.destroy.onDestroy(() => this.seriesSub?.unsubscribe());
+    merge(
+      this.session.cleared$,
+      this.session.user$.pipe(filter((user) => user?.id !== this.ownerId)),
+    )
+      .pipe(take(1), takeUntilDestroyed())
+      .subscribe(() => this.clearPrivate());
     this.load();
+  }
+
+  factsFor(row: BucketState | null | undefined) {
+    return policyFacts(row);
+  }
+
+  overlaps(board: PtoBoard) {
+    return board.policy?.conflicts ?? [];
+  }
+
+  overlapText(conflict: { on_date: string; amount: string; labels: readonly string[] }): string {
+    return overlapSentence(conflict);
   }
 
   label(name: BucketName): string {
@@ -736,16 +793,19 @@ export class PtoComponent {
   }
 
   load(): void {
-    if (this.busy()) return;
+    if (!this.sessionActive || !this.ownsSession || this.busy()) return;
     this.loading?.unsubscribe();
     this.phase.set(this.data() ? "ready" : "loading");
     this.loading = this.http
       .get<PtoBoard>("/travel/api/pto", { context: silentErrorToast() })
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
-        next: (board) => this.adopt(board),
+        next: (board) => {
+          if (!this.sessionActive || !this.ownsSession) return;
+          this.adopt(board);
+        },
         error: (error: HttpErrorResponse) => {
-          if (error.status === 401) return;
+          if (!this.sessionActive || error.status === 401) return;
           this.phase.set("error");
         },
       });
@@ -753,7 +813,7 @@ export class PtoComponent {
   }
 
   loadSeries(): void {
-    if (!this.ownsSession) return;
+    if (!this.sessionActive || !this.ownsSession) return;
     this.seriesSub?.unsubscribe();
     const epoch = ++this.seriesEpoch;
     this.chartPhase.set("loading");
@@ -761,12 +821,12 @@ export class PtoComponent {
       .get<Series>("/travel/api/pto/series", { context: silentErrorToast() })
       .subscribe({
         next: (body) => {
-          if (!this.ownsSession || epoch !== this.seriesEpoch) return;
+          if (!this.sessionActive || !this.ownsSession || epoch !== this.seriesEpoch) return;
           this.series.set(body);
           this.chartPhase.set("ready");
         },
         error: (error: HttpErrorResponse) => {
-          if (epoch !== this.seriesEpoch || error.status === 401) return;
+          if (!this.sessionActive || epoch !== this.seriesEpoch || error.status === 401) return;
           this.chartPhase.set("error");
         },
       });
@@ -816,6 +876,7 @@ export class PtoComponent {
   }
 
   savePolicy(name: BucketName): void {
+    if (!this.sessionActive || !this.ownsSession) return;
     this.settleHour(name, "start_balance_hours");
     this.settleHour(name, "accrual_hours");
     this.settleHour(name, "cap_hours");
@@ -862,6 +923,7 @@ export class PtoComponent {
   }
 
   saveEntry(): void {
+    if (!this.sessionActive || !this.ownsSession) return;
     const errors = { ...entryErrors(this.leave), ...dateErrors(this.leave) };
     this.entryFieldErrors.set(errors);
     if (errors["label"]) {
@@ -902,6 +964,7 @@ export class PtoComponent {
   }
 
   preview(): void {
+    if (!this.sessionActive || !this.ownsSession) return;
     const dates = dateErrors(this.leave);
     if (dates["start_date"] || dates["end_date"]) {
       this.entryFieldErrors.set(dates);
@@ -920,19 +983,19 @@ export class PtoComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (body) => {
-          if (previewKey(this.previewInput()) !== key) return;
+          if (!this.sessionActive || !this.ownsSession || previewKey(this.previewInput()) !== key) return;
           this.forecastFor.set(key);
           this.forecast.set(body);
         },
         error: (error: HttpErrorResponse) => {
-          if (error.status === 401) return;
+          if (!this.sessionActive || !this.ownsSession || error.status === 401) return;
           this.toast.error("Couldn't preview that time off.", { label: "Retry", run: () => this.preview() });
         },
       });
   }
 
   async removeSick(): Promise<void> {
-    if (this.busy() || !this.ownsSession) return;
+    if (this.busy() || !this.sessionActive || !this.ownsSession) return;
     const revision = this.sickRevision();
     if (revision === null) return;
     let failed = false;
@@ -950,8 +1013,8 @@ export class PtoComponent {
           throw error;
         }),
     });
-    if (!removed || this.destroy.destroyed || !this.ownsSession) {
-      if (failed && !this.destroy.destroyed && this.ownsSession) this.load();
+    if (!removed || this.destroy.destroyed || !this.sessionActive || !this.ownsSession) {
+      if (failed && !this.destroy.destroyed && this.sessionActive && this.ownsSession) this.load();
       return;
     }
     this.toast.success("Sick policy removed.");
@@ -960,6 +1023,7 @@ export class PtoComponent {
   async remove(id: number): Promise<void> {
     if (
       this.busy() ||
+      !this.sessionActive ||
       !this.ownsSession ||
       !(await this.confirm.ask(
         "Remove this leave?",
@@ -969,17 +1033,19 @@ export class PtoComponent {
       ))
     )
       return;
-    if (this.destroy.destroyed || !this.ownsSession || this.busy()) return;
+    if (this.destroy.destroyed || !this.sessionActive || !this.ownsSession || this.busy()) return;
     this.busy.set("remove");
     this.http
       .delete("/travel/api/pto/entries/" + id, { context: silentErrorToast() })
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: () => {
+          if (!this.sessionActive || !this.ownsSession) return;
           this.busy.set("");
           this.load();
         },
         error: (error: HttpErrorResponse) => {
+          if (!this.sessionActive || !this.ownsSession) return;
           this.busy.set("");
           if (error.status !== 401) this.toast.error(ENTRY_FAILED);
         },
@@ -987,16 +1053,18 @@ export class PtoComponent {
   }
 
   dismissPrompt(): void {
+    if (!this.sessionActive || !this.ownsSession) return;
     this.http
       .put("/travel/api/settings/pto", { sick_prompt_dismissed: true }, { context: silentErrorToast() })
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: () => {
+          if (!this.sessionActive || !this.ownsSession) return;
           const board = this.data();
           if (board) this.data.set({ ...board, pto_sick_prompt_dismissed: true });
         },
         error: (error: HttpErrorResponse) => {
-          if (error.status === 401) return;
+          if (!this.sessionActive || !this.ownsSession || error.status === 401) return;
           this.toast.error(DISMISS_FAILED, { label: "Retry", run: () => this.dismissPrompt() });
         },
       });
@@ -1015,6 +1083,10 @@ export class PtoComponent {
         })
         .subscribe({
           next: (board) => {
+            if (!this.sessionActive || !this.ownsSession) {
+              resolve();
+              return;
+            }
             this.adopt(board, attempt.bucket, attempt.draft);
             this.busy.set("");
             this.toast.success(POLICY_SAVED[attempt.bucket]);
@@ -1026,6 +1098,10 @@ export class PtoComponent {
             resolve();
           },
           error: (error: HttpErrorResponse) => {
+            if (!this.sessionActive || !this.ownsSession) {
+              reject(error);
+              return;
+            }
             this.failPolicy(error);
             reject(error);
           },
@@ -1044,6 +1120,7 @@ export class PtoComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (board) => {
+          if (!this.sessionActive || !this.ownsSession) return;
           const clear = this.leaveState() === submitted;
           this.adopt(board);
           if (clear) this.clearLeave();
@@ -1052,6 +1129,7 @@ export class PtoComponent {
           this.loadSeries();
         },
         error: (error: HttpErrorResponse) => {
+          if (!this.sessionActive || !this.ownsSession) return;
           this.busy.set("");
           if (error.status === 401) return;
           const fields = fieldErrorMap(error.error);
@@ -1065,6 +1143,7 @@ export class PtoComponent {
   }
 
   private failPolicy(error: HttpErrorResponse): void {
+    if (!this.sessionActive || !this.ownsSession) return;
     this.busy.set("");
     if (error.status === 401) return;
     const fields = fieldErrorMap(error.error);
@@ -1084,7 +1163,7 @@ export class PtoComponent {
   }
 
   private adopt(board: PtoBoard, bucket?: BucketName, submittedDraft?: string): void {
-    if (!this.ownsSession) return;
+    if (!this.sessionActive || !this.ownsSession) return;
     this.clearCorrection();
     const today = localTodayIso();
     for (const name of this.bothBuckets) {
@@ -1133,7 +1212,7 @@ export class PtoComponent {
         { context: silentErrorToast() },
       ),
     ).then((board) => {
-      if (this.destroy.destroyed || !this.ownsSession) return;
+      if (this.destroy.destroyed || !this.sessionActive || !this.ownsSession) return;
       this.drafts.sick = { ...this.savedDrafts.sick };
       this.edited.sick.clear();
       this.adopt(board);
@@ -1176,14 +1255,14 @@ export class PtoComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (impact) => {
-          if (epoch !== this.correctionEpoch || impact.entries_rewritten) return;
+          if (!this.sessionActive || !this.ownsSession || epoch !== this.correctionEpoch || impact.entries_rewritten) return;
           const hours = this.data()?.hours_per_day || "8";
           this.correctionPreview.set(
             `Balance today would be ${formatBalance(impact.balance_today_hours, hours)}. Past leave stays recorded.`,
           );
         },
         error: (error: HttpErrorResponse) => {
-          if (epoch !== this.correctionEpoch || error.status === 401) return;
+          if (!this.sessionActive || !this.ownsSession || epoch !== this.correctionEpoch || error.status === 401) return;
           this.correctionPreview.set("");
         },
       });
@@ -1191,6 +1270,32 @@ export class PtoComponent {
 
   private clearCorrection(): void {
     this.correctionEpoch += 1;
+    this.correctionPreview.set("");
+  }
+
+  private clearPrivate(): void {
+    this.sessionActive = false;
+    this.seriesEpoch += 1;
+    this.correctionEpoch += 1;
+    this.loading?.unsubscribe();
+    this.seriesSub?.unsubscribe();
+    const today = localTodayIso();
+    this.drafts = { pto: blankDraft(today), sick: blankDraft(today) };
+    this.savedDrafts = { pto: blankDraft(today), sick: blankDraft(today) };
+    this.stored = { pto: null, sick: null };
+    this.edited.pto.clear();
+    this.edited.sick.clear();
+    this.clearLeave();
+    this.policyAttempt = null;
+    this.data.set(null);
+    this.series.set(null);
+    this.fieldErrors.set({});
+    this.notes.set({});
+    this.message.set("");
+    this.busy.set("");
+    this.editing.set(null);
+    this.phase.set("loading");
+    this.chartPhase.set("loading");
     this.correctionPreview.set("");
   }
 

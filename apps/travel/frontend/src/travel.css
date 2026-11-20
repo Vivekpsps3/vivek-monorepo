@@ -128,7 +128,10 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .travel-page .trip-postcard,
-  .travel-page .trip-postcard * {
+  .travel-page .trip-postcard *,
+  .travel-page .pto-allocation,
+  .travel-page .pto-day--weekend,
+  .travel-page .pto-overlap {
     animation: none;
     transition: none;
   }
@@ -220,6 +223,26 @@
   gap: 0.35rem;
   min-width: 0;
   max-width: 100%;
+}
+.travel-page .pto-allocation {
+  min-width: 0;
+}
+.travel-page .pto-day--weekend {
+  padding: 0.65rem;
+  border: 1px dashed var(--coral, var(--accent));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--coral, var(--accent)) 10%, var(--card-bg, var(--surface)));
+}
+.travel-page .pto-weekend {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.travel-page .pto-overlap {
+  margin: 0.35rem 0 0;
+  color: var(--text);
 }
 .travel-page .pto-day-date {
   min-width: 0;

@@ -1,5 +1,6 @@
 /** Hours, days, and leave-form checks. The page only wires these. */
 
+import { formatDay } from "../../../../packages/browser/runtime/calendar-format.mjs";
 import { formatDate, parseDateOnly } from "../../../../packages/browser/runtime/date.mjs";
 
 export const MINUS = "\u2212";
@@ -453,12 +454,19 @@ export function allocationText(raw) {
   return parsed.text;
 }
 
+/** Saturday and Sunday. Invalid text is not a weekend. */
+export function isWeekend(iso) {
+  const date = parseDateOnly(String(iso || ""));
+  if (!date) return false;
+  const weekday = date.getDay();
+  return weekday === 0 || weekday === 6;
+}
+
 /** Monday–Friday starts as one day on an unsaved form. The server stores the choice. */
 export function defaultAllocation(iso) {
   const date = parseDateOnly(String(iso || ""));
   if (!date) return "0";
-  const weekday = date.getDay();
-  return weekday === 0 || weekday === 6 ? "0" : "1";
+  return isWeekend(iso) ? "0" : "1";
 }
 
 function addAmounts(left, right) {
@@ -498,6 +506,88 @@ export function allocationDraft(dates, amounts, enabled = true) {
     payload: rows.map(({ on_date, amount }) => ({ on_date, amount })),
     rows,
   };
+}
+
+/**
+ * Readable policy terms from the saved bucket.
+ * Dates and hour text are copied. This does not project a balance.
+ */
+export function policyFacts(row) {
+  if (!row?.configured) return null;
+  const year = String(row.year_start || "");
+  const [month, day] = year.split("-");
+  const monthName = MONTHS.find((item) => item[0] === month)?.[1] || "";
+  const dayNumber = /^\d{2}$/.test(day || "") ? String(Number(day)) : "";
+  const reset = monthName && dayNumber ? `Policy year starts ${monthName} ${dayNumber}.` : "Policy year start is not set.";
+  const cap = row.cap_hours == null || String(row.cap_hours).trim() === "" ? "" : String(row.cap_hours);
+  const asOf = row.balance_as_of ? longDate(row.balance_as_of) : "";
+  return {
+    carry: row.carry_forward === false
+      ? "Unused hours reset at the policy year."
+      : "Unused hours carry into the next policy year.",
+    cap: cap ? `Cap is ${cap} h.` : "No cap.",
+    reset,
+    boundary: asOf
+      ? `Balance recorded through ${asOf}. Accrual starts the next day.`
+      : "Accrual starts the day after the recorded balance date.",
+  };
+}
+
+const HISTORY_LABELS = [
+  ["as_of", "Accrual boundary"],
+  ["year", "Policy year"],
+  ["post", "Scheduled accrual"],
+  ["cap", "Cap"],
+  ["resume", "Accrual resumes"],
+  ["cap_before", "Before the cap"],
+  ["year_before", "Before reset"],
+];
+
+function historyAmount(point) {
+  const days = point?.days == null ? "" : String(point.days);
+  const hours = point?.hours == null ? "" : String(point.hours);
+  if (!days && !hours) return "";
+  return `${days} days ${DOT} ${hours} h`;
+}
+
+/**
+ * Policy events already marked on /pto/series points.
+ * The day and hour text is the point's own text.
+ */
+export function forecastHistory(series) {
+  if (!series) return [];
+  const rows = [];
+  for (const bucket of ["pto", "sick"]) {
+    const points = series[bucket]?.points;
+    if (!Array.isArray(points)) continue;
+    for (const point of points) {
+      const kinds = Array.isArray(point?.kinds) ? point.kinds : [];
+      const match = HISTORY_LABELS.find(([kind]) => kinds.includes(kind));
+      if (!match || typeof point?.on !== "string" || !point.on) continue;
+      rows.push({
+        key: `${bucket}:${point.on}:${match[0]}`,
+        bucket,
+        bucketLabel: bucket === "sick" ? "Sick" : "PTO",
+        kind: match[0],
+        label: match[1],
+        on: point.on,
+        when: longDate(point.on),
+        days: point.days == null ? "" : String(point.days),
+        hours: point.hours == null ? "" : String(point.hours),
+        amount: historyAmount(point),
+      });
+    }
+  }
+  return rows;
+}
+
+/** The trip and PTO pages share this sentence. The amount and labels are the server conflict. */
+export function overlapSentence(conflict) {
+  const labels = Array.isArray(conflict?.labels) ? conflict.labels : [];
+  const amount = conflict?.amount == null ? "" : String(conflict.amount);
+  const when = formatDay(conflict?.on_date);
+  if (!when || amount === "") return "";
+  return `${when} counts ${amount} PTO days across ${labels.join(", ")}.`;
 }
 
 export function bucketLabel(bucket) {

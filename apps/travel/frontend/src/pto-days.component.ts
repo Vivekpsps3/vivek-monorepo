@@ -4,6 +4,8 @@ import {
   ALLOCATION_CHOICES,
   allocationDraft,
   allocationText,
+  isWeekend,
+  overlapSentence,
 } from "./pto-model.mjs";
 
 /** One Full/Half/None day control. Both trip forms use this. */
@@ -14,10 +16,13 @@ import {
   template: `
     <div class="pto-dates">
       @for (day of dates(); track day) {
-        <div class="pto-day">
+        <div class="pto-day" [class.pto-day--weekend]="weekend(day)">
           <span class="pto-day-date" [id]="'pto-date-' + day">{{
             dayLabel(day)
           }}</span>
+          @if (weekend(day)) {
+            <span class="pto-weekend">Weekend</span>
+          }
           <div
             class="pto-choices"
             role="radiogroup"
@@ -48,6 +53,9 @@ import {
               </label>
             }
           </div>
+          @if (conflictFor(day); as conflict) {
+            <p class="pto-overlap" role="status">{{ overlapText(conflict) }}</p>
+          }
         </div>
       }
     </div>
@@ -56,11 +64,24 @@ import {
 export class PtoDaysComponent {
   readonly dates = input.required<readonly string[]>();
   readonly amounts = input.required<Readonly<Record<string, string>>>();
+  readonly conflicts = input<readonly { on_date: string; amount: string; labels: readonly string[] }[]>([]);
   readonly picked = output<{ on_date: string; amount: string }>();
   readonly choices = ALLOCATION_CHOICES;
 
   dayLabel(day: string): string {
     return formatDay(day);
+  }
+
+  weekend(day: string): boolean {
+    return isWeekend(day);
+  }
+
+  conflictFor(day: string): { on_date: string; amount: string; labels: readonly string[] } | null {
+    return this.conflicts().find((item) => item.on_date === day) ?? null;
+  }
+
+  overlapText(conflict: { on_date: string; amount: string; labels: readonly string[] }): string {
+    return overlapSentence(conflict);
   }
 
   amountFor(day: string): string {

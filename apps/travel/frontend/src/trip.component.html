@@ -27,12 +27,6 @@
         >Edit trip</ui-button
       >
     </ui-page-header>
-    @for (conflict of trip.pto.conflicts; track conflict.on_date) {
-      <p class="local-error">
-        {{ showDay(conflict.on_date) }} counts {{ conflict.amount }} PTO days
-        across {{ conflict.labels.join(", ") }}.
-      </p>
-    }
     <div class="button-row">
       <ui-menu label="Add" icon="plus" align="start">
         <button type="button" uiMenuItem (select)="open('transport')">
@@ -348,13 +342,18 @@
       </ui-card>
     }
     <ui-card>
-      <details>
-        <summary>PTO · {{ trip.pto_days_effective }} days</summary>
+      <section class="pto-allocation" aria-labelledby="pto-allocation-title">
+        <h2 id="pto-allocation-title">PTO · {{ trip.pto_days_effective }} days</h2>
         @if (trip.pto_mode === "legacy") {
           <p class="local-error">
             This trip has a legacy PTO total. Its recorded total stays unchanged
             until you choose dates and confirm saving the new allocation.
           </p>
+        }
+        @for (conflict of trip.pto.conflicts || []; track conflict.on_date) {
+          @if (!onThisTrip(conflict.on_date)) {
+            <p class="pto-overlap" role="status">{{ overlapText(conflict) }}</p>
+          }
         }
         <label class="check-label"
           ><input type="checkbox" [(ngModel)]="ptoEnabled" />Count selected
@@ -362,6 +361,7 @@
         >
         <p class="muted">
           Weekends default to None. Turning PTO off keeps these selections.
+          Changing the dates keeps the days that still overlap.
         </p>
         <div class="button-row">
           <ui-button variant="ghost" size="sm" (click)="weekdays()">
@@ -373,6 +373,7 @@
         <travel-pto-days
           [dates]="ptoDates()"
           [amounts]="charges"
+          [conflicts]="trip.pto.conflicts || []"
           (picked)="chooseDay($event)"
         />
         <p>{{ totalPto() }} PTO days selected.</p>
@@ -389,7 +390,7 @@
         <ui-button variant="ghost" [disabled]="saving()" (click)="savePto()">
           Save PTO dates
         </ui-button>
-      </details>
+      </section>
     </ui-card>
     <travel-trip-reminders
       [reminders]="trip.reminders"

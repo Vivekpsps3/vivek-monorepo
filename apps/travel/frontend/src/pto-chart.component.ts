@@ -1,5 +1,6 @@
 import { Component, DestroyRef, ElementRef, computed, inject, input, signal } from "@angular/core";
 import { combinedForecast, type CombinedForecast, type PtoChartSeries } from "./pto-chart.mjs";
+import { forecastHistory } from "./pto-model.mjs";
 
 /** One accessible PTO/Sick forecast. Geometry stays in pto-chart.mjs. */
 @Component({
@@ -113,6 +114,24 @@ import { combinedForecast, type CombinedForecast, type PtoChartSeries } from "./
           }
         </svg>
         <p class="pto-forecast-caption">{{ g.caption }}</p>
+        @if (history().length) {
+          <section class="pto-history" aria-labelledby="pto-history-title">
+            <h2 id="pto-history-title">Policy history</h2>
+            <ul>
+              @for (row of history(); track row.key) {
+                <li
+                  class="pto-history-row"
+                  [class.pto-accrual-boundary]="row.kind === 'as_of'"
+                  [attr.data-kind]="row.kind"
+                >
+                  <p class="pto-history-label">{{ row.bucketLabel }} · {{ row.label }}</p>
+                  <p class="pto-history-when">{{ row.when }}</p>
+                  <p class="pto-history-amount">{{ row.amount }}</p>
+                </li>
+              }
+            </ul>
+          </section>
+        }
         <table class="pto-forecast-table">
           <caption>Balance by month</caption>
           <thead>
@@ -169,6 +188,34 @@ import { combinedForecast, type CombinedForecast, type PtoChartSeries } from "./
       .pto-tick, .pto-xtick, .pto-today-label, .pto-axis-name { fill: var(--text-secondary); font-size: 12px; }
       .pto-end-label { fill: var(--text); font-size: 12px; }
       .pto-forecast-caption { margin: 0.35rem 0 0; }
+      .pto-history { margin: 0.75rem 0 0; }
+      .pto-history h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+      .pto-history ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+      .pto-history-row {
+        display: grid;
+        gap: 0.1rem;
+        margin: 0;
+        padding: 0.65rem 0.75rem;
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--teal, var(--accent));
+        border-radius: var(--radius-md);
+        background: var(--card-bg, var(--surface));
+        color: var(--text);
+      }
+      .pto-accrual-boundary { border-left-color: var(--coral, var(--accent)); }
+      .pto-history-label,
+      .pto-history-when,
+      .pto-history-amount { margin: 0; }
+      .pto-history-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .pto-history-amount { font-variant-numeric: tabular-nums; font-weight: 650; }
+      @media (prefers-reduced-motion: reduce) {
+        .pto-history, .pto-history-row { animation: none; transition: none; }
+      }
       .pto-forecast-table {
         position: absolute;
         left: 0;
@@ -188,6 +235,7 @@ import { combinedForecast, type CombinedForecast, type PtoChartSeries } from "./
 })
 export class PtoChartComponent {
   readonly series = input<PtoChartSeries | null>(null);
+  readonly history = computed(() => forecastHistory(this.series()));
   readonly wide = signal(false);
   readonly plotWidth = signal(0);
   readonly geo = computed<CombinedForecast | null>(() =>

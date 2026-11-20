@@ -7,7 +7,7 @@ test('PTO checkbox has a visible keyboard focus ring and Space changes its selec
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/travel/trips/' + trip.id);
   await expect(page.getByRole('heading', { name: 'Kyoto', exact: true })).toBeVisible();
-  await page.locator('summary').filter({hasText:/^PTO ·/}).click();
+  await page.getByRole('heading', { name: /^PTO ·/ }).click();
   const box = page.getByRole('checkbox', { name: 'Count selected dates as PTO' });
   await box.scrollIntoViewIfNeeded();
   await page.locator('h1').click();
