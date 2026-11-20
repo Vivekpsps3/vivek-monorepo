@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#414](https://github.com/Vivekpsps3/vivek-monorepo/issues/414) TUX-09; parent [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. #277 stays open and was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/tux-09`; `/tmp/vivek-tux-09`. The shared checkout was not edited.
-- Base main SHA, current tested SHA: base `e6140fbc2e337d6fc219ad65a9dd5d1ed812aeba` (TUX-08 merge, pull request #541). The commands below ran on that base plus this working tree, before the commit that adds these files. The follow-up on this branch records that commit SHA. This sentence is replaced by that follow-up.
+- Base main SHA, current tested SHA: base `e6140fbc2e337d6fc219ad65a9dd5d1ed812aeba` (TUX-08 merge, pull request #541). The implementation and these command results are `8540c55203cb5193904b6abdfa695cd46dc07bac`. This sentence names that commit; the follow-up only edits this evidence file.
 - Fresh-main/prerequisite/active-PR checks: `git fetch origin main` on 2026-11-20 still returned `e6140fbc2e337d6fc219ad65a9dd5d1ed812aeba`. FUX-03 browser spend is an ancestor (`0dbf34e4`, pull request #527, issue #392). TUX-06 trip costs are an ancestor (`f373cafd`, pull request #539, issue #411). `gh pr list --state open` returned no pull requests. No open travel-costs or finance-public-api pull request. #414, #304, #134, and #277 were open.
 
 ## Acceptance
@@ -41,15 +41,15 @@ The first `make test-fast` was FAIL. `scripts/check-shared-boundaries.py` reject
 
 | Command | Tested SHA | Result |
 | --- | --- | --- |
-| `PATH="/tmp/vivek-tux-09/.venv/bin:$PATH" make test-fast` | working tree on `e6140fbc2e337d6fc219ad65a9dd5d1ed812aeba` | First run FAIL: two forbidden Travel-to-Finance imports. Repaired run PASS. The same command was run again after this evidence file existed and passed with the same counts. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. Travel e2e discovery listed 32 files, including `trip-cost-reconcile.spec.ts`. Shared boundaries OK. |
-| `make lint-web` | same working tree | PASS. eslint-finance 344, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. No baseline was raised. |
-| `make typecheck-web` | same working tree | PASS. `tsc` noEmit for web, finance, packages, and site. |
-| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | same working tree | PASS. 429 SUCCESS. Statements 72.6% (5824/8022). Branches 57.58% (2225/3864). Functions 72.13% (1165/1615). Lines 77.3% (5049/6531). |
-| `node --test apps/travel/backend/static/tests/*.test.mjs` | same working tree | PASS. 75 pass / 0 fail. |
-| `make build-frontends` | same working tree | PASS. Output `/tmp/vivek-tux-09/dist/web`. Release `60604ce986f4f64ca7c63ec137b6537b4d1d02f13dfca91c9b346c96687660ab`. Initial-bundle warning 678.03 kB. Exit 0. |
-| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --config apps/travel/e2e/playwright.config.js` | same working tree | PASS. 196 passed. |
-| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` | same working tree | PASS. 519 SUCCESS. Statements 63.37% (7770/12261). Branches 49.49% (3444/6958). Functions 59.27% (1854/3128). Lines 66.8% (6860/10269). |
-| `PATH="/tmp/vivek-tux-09/.venv/bin:$PATH" make e2e` | same working tree | PASS. Rebuild wrote the same release `60604ce986f4f64ca7c63ec137b6537b4d1d02f13dfca91c9b346c96687660ab`. Finance Playwright 281 passed, 5 skipped. |
+| `PATH="/tmp/vivek-tux-09/.venv/bin:$PATH" make test-fast` | `8540c55203cb5193904b6abdfa695cd46dc07bac` | First run FAIL: two forbidden Travel-to-Finance imports. Repaired run PASS. The same command was run again after this evidence file existed and passed with the same counts. Doc paths OK. Planning validation PASS (88 active packets, 24 parents, 99 completed packets, forty TD owners). 135 unittest tests OK. Node script tests 21 pass / 0 fail. Travel e2e discovery listed 32 files, including `trip-cost-reconcile.spec.ts`. Shared boundaries OK. |
+| `make lint-web` | `8540c55203cb5193904b6abdfa695cd46dc07bac` | PASS. eslint-finance 344, eslint-site 9, eslint-packages 1, eslint-world-engine 0, all matching baselines. Engine purity 1 pass. No baseline was raised. |
+| `make typecheck-web` | `8540c55203cb5193904b6abdfa695cd46dc07bac` | PASS. `tsc` noEmit for web, finance, packages, and site. |
+| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | `8540c55203cb5193904b6abdfa695cd46dc07bac` | PASS. 429 SUCCESS. Statements 72.6% (5824/8022). Branches 57.58% (2225/3864). Functions 72.13% (1165/1615). Lines 77.3% (5049/6531). |
+| `node --test apps/travel/backend/static/tests/*.test.mjs` | `8540c55203cb5193904b6abdfa695cd46dc07bac` | PASS. 75 pass / 0 fail. |
+| `make build-frontends` | `8540c55203cb5193904b6abdfa695cd46dc07bac` | PASS. Output `/tmp/vivek-tux-09/dist/web`. Release `60604ce986f4f64ca7c63ec137b6537b4d1d02f13dfca91c9b346c96687660ab`. Initial-bundle warning 678.03 kB. Exit 0. |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npx playwright test --config apps/travel/e2e/playwright.config.js` | `8540c55203cb5193904b6abdfa695cd46dc07bac` | PASS. 196 passed. |
+| `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` | `8540c55203cb5193904b6abdfa695cd46dc07bac` | PASS. 519 SUCCESS. Statements 63.37% (7770/12261). Branches 49.49% (3444/6958). Functions 59.27% (1854/3128). Lines 66.8% (6860/10269). |
+| `PATH="/tmp/vivek-tux-09/.venv/bin:$PATH" make e2e` | `8540c55203cb5193904b6abdfa695cd46dc07bac` | PASS. Rebuild wrote the same release `60604ce986f4f64ca7c63ec137b6537b4d1d02f13dfca91c9b346c96687660ab`. Finance Playwright 281 passed, 5 skipped. |
 
 Python lint, Python typecheck, and the Python coverage gates were not run. The diff does not change Python. Site Karma, Media coverage, Media Playwright, and Town Playwright were not run. The diff does not change those screens.
 
