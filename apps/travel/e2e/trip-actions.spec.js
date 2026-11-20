@@ -100,12 +100,13 @@ for (const width of [390, 1280]) {
       const trip = await createTrip(request);
       await seedRows(request, trip);
       await page.goto('/travel/trips/' + trip.id);
-      for (const name of ['Destinations', 'Itinerary', 'Notes', 'Reminders', 'Trip costs']) {
+      for (const name of ['Destinations', 'Itinerary', 'Reminders', 'Trip costs']) {
         await expect(page.getByRole('heading', { level: 2, name, exact: true })).toBeVisible();
       }
       const narrow = width <= 640;
-      await expect(page.getByRole('heading', { level: 2, name: 'Transport', exact: true })).toHaveCount(narrow ? 0 : 1);
-      await expect(page.getByRole('heading', { level: 2, name: 'Parking', exact: true })).toHaveCount(narrow ? 0 : 1);
+      await expect(page.getByRole('heading', { level: 2, name: 'Notes', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('heading', { level: 2, name: 'Transport', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('heading', { level: 2, name: 'Parking', exact: true })).toHaveCount(0);
       await expect(page.locator('travel-trip-costs .cost-total')).toContainText('12.00');
 
       const rows = [

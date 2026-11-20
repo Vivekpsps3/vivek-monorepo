@@ -37,11 +37,7 @@
         <button type="button" uiMenuItem (select)="open('transport')">
           Transport
         </button>
-        <button
-          type="button"
-          uiMenuItem
-          (select)="selectedDay = trip.start_date; open('activity')"
-        >
+        <button type="button" uiMenuItem (select)="open('activity')">
           Activity
         </button>
         <button type="button" uiMenuItem (select)="open('destination')">
@@ -126,35 +122,13 @@
         <div id="trip-map"><travel-map [places]="mapPlaces()" /></div>
       }
     </ui-card>
-    @if (trip.transports.length) {
-      <ui-card class="trip-detail-transport">
-        <h2>Transport</h2>
-        @for (transport of trip.transports; track transport.id) {
-          <article class="trip-row">
-            <div>
-              <ui-badge>{{ transport.role }} · {{ transport.status }}</ui-badge>
-              <h3>{{ transport.label }}</h3>
-              <p>{{ transport.depart_place }} → {{ transport.arrive_place }}</p>
-              <p>
-                {{ transportWhenText(transport) }}
-              </p>
-              @if (transportCostText(transport)) {
-                <p class="muted">
-                  <span class="money">{{ transportCostText(transport) }}</span>
-                  @if (transport.paid) {
-                    · Paid
-                  }
-                </p>
-              }
-            </div>
-          </article>
-        }
-      </ui-card>
-    }
     @if (itinerary(); as projected) {
       <ui-card>
         <h2>Itinerary</h2>
         <p class="muted">Choose a date to add a plan. Empty days stay open.</p>
+        @if (trip.notes) {
+          <p class="itinerary-trip-note">{{ trip.notes }}</p>
+        }
         <div
           class="date-strip"
           role="tablist"
@@ -189,18 +163,40 @@
               [attr.aria-labelledby]="selectedDay === day.onDate ? 'trip-day-' + day.onDate : null"
               [attr.tabindex]="selectedDay === day.onDate ? -1 : null"
             >
-              <h3>
-                {{ day.label }}
-                @if (cityOn(day.onDate)) {
-                  · {{ cityOn(day.onDate) }}
-                }
-              </h3>
+              <h3>{{ day.label }}</h3>
+              @if (cityOn(day.onDate)) {
+                <p class="muted">{{ cityOn(day.onDate) }}</p>
+              }
+              @if (day.lodging.length) {
+                <h4 class="itinerary-group">Lodging</h4>
+                <ng-container *ngTemplateOutlet="itineraryRows; context: { entries: day.lodging }" />
+              }
               <ng-container *ngTemplateOutlet="itineraryRows; context: { entries: day.entries }" />
               @if (day.unscheduled.length) {
                 <h4 class="itinerary-group">Unscheduled</h4>
                 <ng-container *ngTemplateOutlet="itineraryRows; context: { entries: day.unscheduled }" />
               }
-              @if (!day.entries.length && !day.unscheduled.length) {
+              <ui-menu [label]="'Add on ' + day.label" icon="plus" align="start">
+                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'transport')">
+                  Transport
+                </button>
+                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'activity')">
+                  Activity
+                </button>
+                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'destination')">
+                  Lodging
+                </button>
+                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'parking')">
+                  Parking
+                </button>
+                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'note')">
+                  Note
+                </button>
+                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'reminder')">
+                  Reminder
+                </button>
+              </ui-menu>
+              @if (!day.entries.length && !day.unscheduled.length && !day.lodging.length) {
                 <p class="muted">A free day. Add something when you're ready.</p>
                 <ui-button variant="ghost" size="sm" (click)="addPlan(day.onDate)">
                   Add a plan
@@ -214,13 +210,13 @@
           }
         }
         @if (projected.unscheduled.length) {
-          <section class="itinerary-day" aria-label="Unscheduled">
+          <section id="itinerary-unscheduled" class="itinerary-day" aria-label="Unscheduled" tabindex="-1">
             <h3>Unscheduled</h3>
             <ng-container *ngTemplateOutlet="itineraryRows; context: { entries: projected.unscheduled }" />
           </section>
         }
         @if (projected.outOfRange.length) {
-          <section class="itinerary-day" aria-label="Outside trip dates">
+          <section id="itinerary-outside" class="itinerary-day" aria-label="Outside trip dates" tabindex="-1">
             <h3>Outside trip dates ({{ projected.outOfRange.length }})</h3>
             <ng-container *ngTemplateOutlet="itineraryRows; context: { entries: projected.outOfRange }" />
           </section>
@@ -232,7 +228,7 @@
         }
         <ng-template #itineraryRows let-entries="entries">
           @for (entry of entries; track entry.key) {
-            <article [class]="entry.source === 'plan' ? 'trip-row' : 'itinerary-entry'">
+            <article class="itinerary-entry" [class.is-done]="entryDone(entry)">
               <div>
                 @if (planFor(entry); as plan) {
                   <strong>{{ plan.start_time }} {{ plan.title }}</strong>
@@ -252,7 +248,14 @@
                   }
                 }
                 @if (transportFor(entry); as transport) {
-                  <strong>{{ entry.part === 'arrival' ? 'Arrive' : entry.part === 'departure' ? 'Depart' : 'Transport' }} · {{ transport.label }}</strong>
+                  <div class="itinerary-title">
+                    <span class="itinerary-kicker">{{ transportPartLabel(entry) }}</span>
+                    @if (entry.primary) {
+                      <h3>{{ transport.label }}</h3>
+                    } @else {
+                      <strong>{{ transport.label }}</strong>
+                    }
+                  </div>
                   @if (entry.primary && (transport.depart_place || transport.arrive_place)) {
                     <p>{{ transport.depart_place }} → {{ transport.arrive_place }}</p>
                   }
@@ -267,33 +270,64 @@
                   }
                 }
                 @if (parkingFor(entry); as parking) {
-                  <strong>{{ parking.place_name || parking.arrangement }}</strong>
+                  <h3>{{ parking.place_name || parking.arrangement }}</h3>
                   <p>{{ parkingLine(parking) }}</p>
                   @if (parking.notes) {
                     <p>{{ parking.notes }}</p>
                   }
                 }
+                @if (entry.source === 'stay') {
+                  <p><strong>{{ lodgingText(entry) }}</strong></p>
+                }
+                @if (noteFor(entry); as note) {
+                  <p>{{ note.body }}</p>
+                }
+                @if (reminderFor(entry); as reminder) {
+                  <div class="reminder-main">
+                    <input
+                      type="checkbox"
+                      class="itinerary-check"
+                      [id]="'reminder-' + reminder.id"
+                      [checked]="reminderChecked(reminder)"
+                      [attr.aria-describedby]="'reminder-due-' + reminder.id"
+                      (change)="toggleReminder(reminder, $event)"
+                    />
+                    <div class="reminder-text">
+                      <label [for]="'reminder-' + reminder.id">{{ reminder.title }}</label>
+                      <p class="reminder-due" [id]="'reminder-due-' + reminder.id">@if (reminderOverdue(reminder)) {<ui-badge variant="danger">Overdue</ui-badge>}{{ reminderDueText(reminder) }}</p>
+                      @if (reminder.notes) {
+                        <p>{{ reminder.notes }}</p>
+                      }
+                    </div>
+                  </div>
+                }
               </div>
-              <div class="button-row itinerary-actions itinerary-actions--inline">
-                <ui-button variant="ghost" size="sm" (click)="editEntry(entry)">
-                  {{ entryAction(entry) }}
-                </ui-button>
-                <ui-button variant="ghost" size="sm" (click)="removeEntry(entry)">
-                  Remove
-                </ui-button>
-              </div>
-              <ui-menu
-                class="itinerary-actions itinerary-actions--menu"
-                [label]="'Actions for ' + entry.title"
-                [iconOnly]="true"
-              >
-                <button type="button" uiMenuItem (select)="editEntry(entry)">
-                  {{ entryAction(entry) }}
-                </button>
-                <button type="button" uiMenuItem (select)="removeEntry(entry)">
-                  Remove
-                </button>
-              </ui-menu>
+              @if (entryHasActions(entry)) {
+                <div class="button-row itinerary-actions itinerary-actions--inline">
+                  @if (entryCanEdit(entry)) {
+                    <ui-button variant="ghost" size="sm" (click)="editEntry(entry)">
+                      {{ entryAction(entry) }}
+                    </ui-button>
+                  }
+                  <ui-button variant="ghost" size="sm" (click)="removeEntry(entry)">
+                    {{ removeLabel(entry) }}
+                  </ui-button>
+                </div>
+                <ui-menu
+                  class="itinerary-actions itinerary-actions--menu"
+                  [label]="'Actions for ' + entry.title"
+                  [iconOnly]="true"
+                >
+                  @if (entryCanEdit(entry)) {
+                    <button type="button" uiMenuItem (select)="editEntry(entry)">
+                      {{ entryAction(entry) }}
+                    </button>
+                  }
+                  <button type="button" uiMenuItem (select)="removeEntry(entry)">
+                    {{ removeLabel(entry) }}
+                  </button>
+                </ui-menu>
+              }
             </article>
           }
         </ng-template>
@@ -343,67 +377,10 @@
         </ui-button>
       </details>
     </ui-card>
-    @if (trip.parking.length) {
-      <ui-card class="trip-detail-parking">
-        <h2>Parking</h2>
-        @for (parking of trip.parking; track parking.id) {
-          <article class="trip-row">
-            <div>
-              <h3>{{ parking.place_name || parking.arrangement }}</h3>
-              <p>{{ parkingLine(parking) }}</p>
-              <p>{{ parking.notes }}</p>
-            </div>
-          </article>
-        }
-      </ui-card>
-    }
-    @if (trip.note_entries.length || trip.notes) {
-      <ui-card>
-        <h2>Notes</h2>
-        @if (trip.notes) {
-          <p>{{ trip.notes }}</p>
-        }
-        @for (note of trip.note_entries; track note.id) {
-          <article class="trip-row">
-            <div>
-              <p>{{ note.body }}</p>
-              @if (note.on_date) {
-                <p class="muted">{{ formatDay(note.on_date) }}</p>
-              }
-            </div>
-            <div class="button-row row-actions row-actions--inline">
-              <ui-button
-                variant="ghost"
-                size="sm"
-                (click)="remove('/notes/' + note.id, 'note')"
-              >
-                Remove note
-              </ui-button>
-            </div>
-            <ui-menu
-              class="row-actions row-actions--menu"
-              [label]="'Actions for ' + note.body"
-              [iconOnly]="true"
-            >
-              <button
-                type="button"
-                uiMenuItem
-                [danger]="true"
-                (select)="remove('/notes/' + note.id, 'note')"
-              >
-                Remove note
-              </button>
-            </ui-menu>
-          </article>
-        }
-      </ui-card>
-    }
     <travel-trip-reminders
       [reminders]="trip.reminders"
       [busy]="saving()"
-      (toggle)="reminderDone($event.reminder, $event.revert)"
       (add)="addReminder($event.title, $event.revert)"
-      (removeReminder)="remove('/reminders/' + $event.id, 'reminder')"
     />
     <travel-trip-costs
       [budget]="trip.budget"
@@ -436,7 +413,7 @@
       @if (editor === "transport") {
         <travel-transport-editor
           [initial]="transport"
-          [date]="trip.start_date"
+          [date]="transportDate()"
           [saving]="saving()"
           [saveError]="error()"
           (submitted)="saveTransport($event)"
@@ -763,7 +740,13 @@
                 name="booked"
                 [(ngModel)]="parking.booked"
               />Booked</label
-            >
+            ><ui-field label="Date"
+              ><input
+                uiFieldControl
+                type="date"
+                name="parking_date"
+                [(ngModel)]="parkingDate"
+            /></ui-field>
             <details>
               <summary>Optional details</summary>
               <ui-field label="Address"

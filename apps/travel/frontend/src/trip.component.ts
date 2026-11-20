@@ -15,7 +15,7 @@ import { NgTemplateOutlet } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { Subscription, firstValueFrom } from "rxjs";
+import { Subscription, filter, firstValueFrom, merge, take } from "rxjs";
 import {
   SESSION_CONTEXT,
   ConfirmService,
@@ -51,9 +51,13 @@ import {
 import { formatDateRange, formatDay, formatMoney, fromDollars } from "@vivek/browser";
 import { Plan, Stay, Transport, Trip, travelError } from "./travel.models";
 import {
+  clearItineraryDraft,
   projectItinerary,
+  restoredLocalDate,
+  settleItineraryWrite,
   type ItineraryEntry,
 } from "./calendar-model.mjs";
+import { dueParts, isOverdue } from "./reminders.mjs";
 import { fieldErrors } from "./validate.mjs";
 @Component({
   standalone: true,
@@ -182,8 +186,13 @@ export class TripComponent {
   }
   private readonly session = inject(SESSION_CONTEXT);
   private readonly ownerId = this.session.currentUser?.id;
+  private sessionActive = true;
+  private saveEpoch = 0;
+  private inflight = 0;
+  /** The event that starts a save is not a newer draft. Later keystrokes are. */
+  private ignoreDraftEvent = false;
   private get ownsSession(): boolean {
-    return !!this.ownerId && this.ownerId === this.session.currentUser?.id;
+    return this.sessionActive && !!this.ownerId && this.ownerId === this.session.currentUser?.id;
   }
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
@@ -241,6 +250,18 @@ export class TripComponent {
   mapOpen = false;
   selectedDay = "";
   rovingDay = "";
+  parkingDate = "";
+  private parkingStartAt = "";
+  private reminderPending = new Map<number, boolean>();
+  readonly nowMinute = signal(localNowMinute());
+
+  /** A keystroke during a save makes that response stale. The newer draft stays. */
+  @HostListener("input")
+  @HostListener("change")
+  noteDraftActivity(): void {
+    if (this.ignoreDraftEvent || !this.saving()) return;
+    this.saveEpoch += 1;
+  }
 
   revealChip(event: Event): void {
     const target = event.target;
@@ -347,12 +368,30 @@ export class TripComponent {
     return this.data()?.parking.find((item) => item.id === entry.id) ?? null;
   }
 
+  transportPartLabel(entry: ItineraryEntry): string {
+    if (entry.part === "arrival") return "Arrive";
+    if (entry.part === "departure") return "Depart";
+    return "Transport";
+  }
+
   transportEntryText(entry: ItineraryEntry, transport: Transport): string {
+    const when = transportWhen(transport.depart_at, transport.arrive_at);
+    const phrase = entry.dateLine
+      ? "Arrives on an earlier local date"
+      : entry.overnight
+        ? "Arrives the next local day"
+        : "";
     if (!entry.primary && entry.part === "arrival") {
-      const when = transportWhen(transport.depart_at, transport.arrive_at);
-      return when.arrive ? "Arrives " + this.clockText(when.arrive.time) : "Arrives";
+      const lead = phrase || "Arrives";
+      const date = when.arrive ? formatDay(when.arrive.date) : "";
+      const clock = when.arrive ? this.clockText(when.arrive.time) : "";
+      return [lead, date, clock].filter(Boolean).join(" ");
     }
-    return this.transportWhenText(transport);
+    if (when.depart && when.depart.time === "00:00" && !when.arrive) {
+      return formatDay(when.depart.date) + " · Time not set";
+    }
+    const text = this.transportWhenText(transport);
+    return phrase ? text + " · " + phrase : text;
   }
 
   transportEntryCost(entry: ItineraryEntry, transport: Transport): string {
@@ -381,14 +420,101 @@ export class TripComponent {
     if (parking) this.open("parking", parking);
   }
 
+  noteFor(entry: ItineraryEntry): Trip["note_entries"][number] | null {
+    if (entry.source !== "note") return null;
+    return this.data()?.note_entries.find((item) => item.id === entry.id) ?? null;
+  }
+
+  reminderFor(entry: ItineraryEntry): Trip["reminders"][number] | null {
+    if (entry.source !== "reminder") return null;
+    return this.data()?.reminders.find((item) => item.id === entry.id) ?? null;
+  }
+
+  lodgingText(entry: ItineraryEntry): string {
+    const part =
+      entry.part === "check-in" ? "Check in" : entry.part === "check-out" ? "Check out" : "Staying";
+    return part + " · " + entry.title;
+  }
+
+  entryCanEdit(entry: ItineraryEntry): boolean {
+    return entry.source === "plan" || entry.source === "transport" || entry.source === "parking";
+  }
+
+  entryHasActions(entry: ItineraryEntry): boolean {
+    return entry.source !== "stay";
+  }
+
+  removeLabel(entry: ItineraryEntry): string {
+    return entry.source === "note" ? "Remove note" : "Remove";
+  }
+
+  entryDone(entry: ItineraryEntry): boolean {
+    const reminder = this.reminderFor(entry);
+    return !!reminder && this.reminderChecked(reminder);
+  }
+
+  reminderChecked(reminder: Trip["reminders"][number]): boolean {
+    return this.reminderPending.has(reminder.id)
+      ? Boolean(this.reminderPending.get(reminder.id))
+      : reminder.done;
+  }
+
+  reminderOverdue(reminder: Trip["reminders"][number]): boolean {
+    return isOverdue(reminder, this.nowMinute());
+  }
+
+  reminderDueText(reminder: Trip["reminders"][number]): string {
+    const parts = dueParts(reminder.due_at);
+    if (!parts) return "";
+    let text = formatDay(parts.date);
+    if (parts.time) text += " · " + this.clockText(parts.time);
+    if (reminder.kind) text += " · " + reminder.kind;
+    return text;
+  }
+
+  toggleReminder(reminder: Trip["reminders"][number], event: Event): void {
+    const input = event.target;
+    if (this.saving() || !this.ownsSession) {
+      if (input instanceof HTMLInputElement) input.checked = this.reminderChecked(reminder);
+      return;
+    }
+    const next = new Map(this.reminderPending);
+    next.set(reminder.id, !reminder.done);
+    this.reminderPending = next;
+    this.reminderDone(reminder, () => {
+      const restored = new Map(this.reminderPending);
+      restored.delete(reminder.id);
+      this.reminderPending = restored;
+      if (input instanceof HTMLInputElement) input.checked = reminder.done;
+    });
+  }
+
   removeEntry(entry: ItineraryEntry): void {
     if (entry.source === "plan") void this.remove("/plans/" + entry.id, "activity");
     else if (entry.source === "transport") void this.remove("/transports/" + entry.id, "transport");
-    else void this.remove("/parking/" + entry.id, "parking");
+    else if (entry.source === "parking") void this.remove("/parking/" + entry.id, "parking");
+    else if (entry.source === "note") void this.remove("/notes/" + entry.id, "note");
+    else if (entry.source === "reminder") void this.remove("/reminders/" + entry.id, "reminder");
   }
 
-  dayOpen(day: { onDate: string; entries: unknown[]; unscheduled: unknown[] }): boolean {
-    return day.entries.length > 0 || day.unscheduled.length > 0 || this.selectedDay === day.onDate;
+  dayOpen(day: { onDate: string; entries: unknown[]; unscheduled: unknown[]; lodging?: unknown[] }): boolean {
+    return (
+      day.entries.length > 0 ||
+      day.unscheduled.length > 0 ||
+      (day.lodging?.length ?? 0) > 0 ||
+      this.selectedDay === day.onDate
+    );
+  }
+
+  addOn(iso: string, kind: string): void {
+    this.selectDay(iso);
+    this.open(kind);
+  }
+
+  transportDate(): string {
+    const depart = String(this.transport?.["depart_at"] || "");
+    if (/^\d{4}-\d{2}-\d{2}/.test(depart)) return depart.slice(0, 10);
+    return this.selectedDay || this.data()?.start_date || "";
   }
   transport: Record<string, unknown> | null = null;
   charges: Record<string, string> = {};
@@ -447,11 +573,17 @@ export class TripComponent {
     notes: "",
   };
   constructor() {
+    merge(
+      this.session.cleared$,
+      this.session.user$.pipe(filter((user) => user?.id !== this.ownerId)),
+    )
+      .pipe(take(1), takeUntilDestroyed())
+      .subscribe(() => this.clearOwnedDrafts());
+    const clock = setInterval(() => this.nowMinute.set(localNowMinute()), 60_000);
+    this.destroy.onDestroy(() => clearInterval(clock));
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((p) => {
       this.id = Number(p.get("id"));
-      this.editor = "";
-      this.resetFields();
-      this.saving.set(false);
+      this.dropEditorDraft();
       this.selectedDay = "";
       this.rovingDay = "";
       this.data.set(null);
@@ -472,6 +604,8 @@ export class TripComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (d) => {
+          if (!this.sessionActive || this.destroy.destroyed) return;
+          this.reminderPending = new Map();
           this.data.set(d);
           if (!preservePto) {
             const amounts = new Map(
@@ -619,7 +753,11 @@ export class TripComponent {
     this.resetFields();
     this.editingId = item?.id || null;
     this.editor = kind;
-    if (kind === "parking")
+    const chosen = this.selectedDay || "";
+    if (kind === "parking") {
+      const record = item as Trip["parking"][number] | undefined;
+      this.parkingStartAt = String(record?.start_at || "");
+      this.parkingDate = this.parkingStartAt.slice(0, 10) || (!record ? chosen : "");
       this.parking = {
         place_name: "",
         necessary: "unknown",
@@ -632,6 +770,7 @@ export class TripComponent {
         notes: "",
         ...item,
       } as typeof this.parking;
+    }
     if (kind === "budget")
       this.budget = {
         category: "other",
@@ -642,11 +781,11 @@ export class TripComponent {
         notes: "",
         ...item,
       } as typeof this.budget;
-    if (kind === "note") this.note = { body: "", on_date: "" };
+    if (kind === "note") this.note = { body: "", on_date: chosen };
     if (kind === "reminder")
       this.reminder = {
         title: "",
-        due_at: "",
+        due_at: chosen ? chosen + "T00:00" : "",
         kind: "general",
         notes: "",
         done: false,
@@ -668,16 +807,65 @@ export class TripComponent {
         notes: "",
         ...item,
       } as typeof this.plan;
-    if (kind === "destination")
+    if (kind === "destination") {
+      const trip = this.data()!;
+      const arrive = chosen || trip.start_date;
+      const leave = trip.end_date >= arrive ? trip.end_date : arrive;
       this.stay = {
         city: "",
-        arrive_on: this.data()!.start_date,
-        leave_on: this.data()!.end_date,
+        arrive_on: arrive,
+        leave_on: leave,
         lodging_name: "",
         lodging_address: "",
         notes: "",
         ...item,
       } as typeof this.stay;
+    }
+  }
+  private settle(epoch: number, tripId: number): boolean {
+    return settleItineraryWrite({
+      epoch,
+      currentEpoch: this.saveEpoch,
+      sessionActive: this.sessionActive,
+      tripId,
+      currentTripId: this.id,
+    });
+  }
+  /** The typed value can land before the input listener. That draft still wins. */
+  private activityDraftMoved(sent: Record<string, unknown>): boolean {
+    if (this.editor !== "activity") return false;
+    const dialog = this.host.nativeElement.querySelector("ui-dialog");
+    if (!(dialog instanceof HTMLElement)) return false;
+    const text = (name: string, key: string) => {
+      const node = dialog.querySelector(`[name="${name}"]`);
+      if (
+        !(
+          node instanceof HTMLInputElement ||
+          node instanceof HTMLTextAreaElement ||
+          node instanceof HTMLSelectElement
+        )
+      ) {
+        return false;
+      }
+      const expected = sent[key] == null ? "" : String(sent[key]);
+      return node.value !== expected;
+    };
+    if (
+      text("title", "title") ||
+      text("date", "on_date") ||
+      text("start_time", "start_time") ||
+      text("end_time", "end_time") ||
+      text("kind", "kind") ||
+      text("place_name", "place_name") ||
+      text("address", "address") ||
+      text("currency", "currency") ||
+      text("notes", "notes") ||
+      text("cost", "cost")
+    ) {
+      return true;
+    }
+    const paid = dialog.querySelector('[name="paid"]');
+    return paid instanceof HTMLInputElement && paid.checked !== Boolean(sent["paid"]);
   }
   mutate(
     path: string,
@@ -685,11 +873,20 @@ export class TripComponent {
     method = "post",
     close = true,
     onFail?: () => void,
+    focusOn = "",
   ): void {
-    if (this.saving()) return;
+    if (this.saving() || !this.ownsSession) return;
+    this.ignoreDraftEvent = true;
+    // Each listener is its own task and drains microtasks before the next
+    // listener. A timeout stays set until this click finishes bubbling.
+    setTimeout(() => {
+      this.ignoreDraftEvent = false;
+    });
     this.saving.set(true);
     this.error.set("");
     const tripId = this.id;
+    const epoch = this.saveEpoch;
+    const token = ++this.inflight;
     const ptoSnapshot = this.ptoSnapshot();
     const cleaned = Object.fromEntries(
       Object.entries(body).map(([key, value]) => [
@@ -702,32 +899,140 @@ export class TripComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: () => {
-          if (!this.ownsSession || this.id !== tripId) return;
+          const current = this.settle(epoch, tripId) && !this.activityDraftMoved(cleaned);
+          const latest = token === this.inflight;
+          if (!current) {
+            if (latest && this.sessionActive && this.id === tripId) this.saving.set(false);
+            return;
+          }
           this.saving.set(false);
           if (close) {
             this.editor = "";
             this.resetFields();
+            if (focusOn) this.focusDay(focusOn);
           }
           if ("pto_dates" in body) this.ptoSaved = ptoSnapshot;
           this.message.set("Saved.");
           this.load();
         },
         error: (e) => {
-          onFail?.();
-          if (this.ownsSession && this.id === tripId) {
-            this.saving.set(false);
-            this.error.set(travelError(e));
+          const current = this.settle(epoch, tripId) && !this.activityDraftMoved(cleaned);
+          const latest = token === this.inflight;
+          if (!current) {
+            if (latest && this.sessionActive && this.id === tripId) this.saving.set(false);
+            return;
           }
+          onFail?.();
+          this.saving.set(false);
+          this.error.set(travelError(e));
+          this.focusDraft();
         },
       });
   }
+  private focusDraft(): void {
+    setTimeout(() => {
+      if (this.destroy.destroyed) return;
+      const node = this.host.nativeElement.querySelector(".travel-form [name]");
+      if (node instanceof HTMLElement) node.focus();
+    });
+  }
+  private focusDay(iso: string): void {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    const apply = () => {
+      if (this.destroy.destroyed || !this.sessionActive) return;
+      const trip = this.data();
+      if (trip?.days.some((day) => day.on_date === iso)) {
+        this.selectDay(iso, true);
+        return;
+      }
+      const node =
+        document.getElementById("itinerary-outside") ||
+        document.getElementById("itinerary-unscheduled");
+      if (node instanceof HTMLElement) node.focus();
+    };
+    afterNextRender(apply, { injector: this.injector });
+    setTimeout(apply, 0);
+  }
+  private dropEditorDraft(): void {
+    this.saveEpoch += 1;
+    this.placeSearchChanged();
+    const cleared = clearItineraryDraft();
+    this.editor = cleared.editor;
+    this.note = { body: cleared.noteBody, on_date: cleared.noteDate };
+    this.reminder = {
+      title: cleared.reminderTitle,
+      due_at: cleared.reminderDue,
+      kind: "general",
+      notes: cleared.reminderNotes,
+      done: false,
+    };
+    this.plan = {
+      ...this.plan,
+      on_date: "",
+      title: cleared.activityTitle,
+      start_time: "",
+      end_time: "",
+      place_name: "",
+      address: "",
+      url: "",
+      cost: null,
+      notes: cleared.activityNotes,
+    };
+    this.stay = {
+      ...this.stay,
+      city: "",
+      arrive_on: "",
+      leave_on: "",
+      lodging_name: "",
+      lodging_address: "",
+      notes: cleared.lodgingNotes,
+    };
+    this.parking = {
+      place_name: "",
+      necessary: "unknown",
+      booked: false,
+      arrangement: "self_park",
+      address: "",
+      confirmation: "",
+      cost: null,
+      currency: "USD",
+      notes: cleared.parkingNotes,
+    };
+    this.parkingDate = "";
+    this.parkingStartAt = "";
+    this.placeQuery = cleared.placeQuery;
+    this.transport = null;
+    this.budget = {
+      category: "other",
+      label: "",
+      amount: null,
+      currency: "USD",
+      paid: false,
+      notes: "",
+    };
+    this.reminderPending = new Map();
+    this.resetFields();
+    this.error.set("");
+    this.message.set("");
+    this.saving.set(false);
+  }
+  private clearOwnedDrafts(): void {
+    this.sessionActive = false;
+    this.inflight += 1;
+    this.loadingRequest?.unsubscribe();
+    this.dropEditorDraft();
+  }
   saveTransport(value: Record<string, unknown>): void {
+    const when = String(value["depart_at"] || value["arrive_at"] || "");
     this.mutate(
       this.editingId
         ? "/transports/" + this.editingId
         : this.path() + "/transports",
       value,
       this.editingId ? "patch" : "post",
+      true,
+      undefined,
+      when.slice(0, 10),
     );
   }
   savePlan(): void {
@@ -736,6 +1041,9 @@ export class TripComponent {
       this.editingId ? "/plans/" + this.editingId : this.path() + "/plans",
       this.plan,
       this.editingId ? "patch" : "post",
+      true,
+      undefined,
+      this.plan.on_date,
     );
   }
   saveStay(): void {
@@ -744,6 +1052,9 @@ export class TripComponent {
       this.editingId ? "/stays/" + this.editingId : this.path() + "/stays",
       this.stay,
       this.editingId ? "patch" : "post",
+      true,
+      undefined,
+      this.stay.arrive_on,
     );
   }
   async saveMeta(): Promise<void> {
@@ -860,7 +1171,11 @@ export class TripComponent {
           ),
         );
         if (!this.ownsSession) return;
-        if (!this.destroy.destroyed && this.id === tripId) this.load();
+        if (!this.destroy.destroyed && this.id === tripId) {
+          this.load();
+          const restoredDay = restoredLocalDate(kind, body as Record<string, unknown>);
+          if (restoredDay) this.focusDay(restoredDay);
+        }
         this.toast.success("Restored " + label + ".");
       } catch (error) {
         if (this.ownsSession)
@@ -989,10 +1304,20 @@ export class TripComponent {
   }
   saveParking(): void {
     if (this.explain()) return;
+    const previousDate = this.parkingStartAt.slice(0, 10);
+    const previousTime = this.parkingStartAt.slice(11, 16);
+    const startAt = /^\d{4}-\d{2}-\d{2}$/.test(this.parkingDate)
+      ? previousDate === this.parkingDate && previousTime && previousTime !== "00:00"
+        ? this.parkingStartAt.slice(0, 16)
+        : this.parkingDate + "T00:00"
+      : null;
     this.mutate(
       this.editingId ? "/parking/" + this.editingId : this.path() + "/parking",
-      this.parking,
+      { ...this.parking, start_at: startAt },
       this.editingId ? "patch" : "post",
+      true,
+      undefined,
+      this.parkingDate,
     );
   }
   saveBudget(): void {
@@ -1007,11 +1332,18 @@ export class TripComponent {
   }
   saveNote(): void {
     if (this.explain()) return;
-    this.mutate(this.endpoint("/notes"), this.note);
+    this.mutate(this.endpoint("/notes"), this.note, "post", true, undefined, this.note.on_date);
   }
   saveReminder(): void {
     if (this.explain()) return;
-    this.mutate(this.endpoint("/reminders"), this.reminder);
+    this.mutate(
+      this.endpoint("/reminders"),
+      this.reminder,
+      "post",
+      true,
+      undefined,
+      String(this.reminder.due_at || "").slice(0, 10),
+    );
   }
   endpoint(suffix: string): string {
     return this.path() + suffix;
@@ -1022,7 +1354,18 @@ export class TripComponent {
     return (
       projected.unscheduled.length > 0 ||
       projected.outOfRange.length > 0 ||
-      projected.days.some((day) => day.entries.length > 0 || day.unscheduled.length > 0)
+      projected.days.some(
+        (day) => day.entries.length > 0 || day.unscheduled.length > 0 || day.lodging.length > 0,
+      )
     );
   }
+}
+
+function localNowMinute(): string {
+  const date = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
 }
