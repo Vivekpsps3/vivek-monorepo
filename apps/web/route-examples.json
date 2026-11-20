@@ -65,6 +65,13 @@
       "status": "mounted"
     },
     {
+      "id": "pixels-day",
+      "path": "pixels/day",
+      "owner": "pixels",
+      "status": "mounted",
+      "query": "date=2024-02-29&from=year&year=2024"
+    },
+    {
       "id": "town-world",
       "path": "town/world",
       "owner": "town",

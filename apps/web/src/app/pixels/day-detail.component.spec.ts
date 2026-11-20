@@ -40,6 +40,15 @@ describe('Day detail', () => {
     fixture.detectChanges();
     const vector = dayScoreVector(day);
     expect(el.querySelector('.day-detail')?.getAttribute('data-score-vector')).toBe(vector);
+    const recap = el.querySelector('[data-recap]');
+    expect(recap?.textContent).toContain('Read synthetic');
+    expect(recap?.textContent).toContain('Synthetic concept');
+    expect(recap?.textContent).toContain('Weekly review is not available.');
+    expect(recap?.querySelector('a')).toBeNull();
+    expect(el.textContent).not.toContain('synthetic private note');
+    expect(el.querySelector('[data-source="photos"]')?.getAttribute('data-source-state')).toBe('absent');
+    expect(el.querySelector('[data-source="photos"] a')).toBeNull();
+    expect(el.querySelector('[data-source="notes"] a')).toBeNull();
     const input = el.querySelector('input');
     expect(input).not.toBeNull();
     input!.value = '2026-02-31';
@@ -84,6 +93,38 @@ describe('Day detail', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(document.activeElement).toBe(el.querySelector('#day-learning-heading'));
+  });
+
+  it('says Finance is unavailable when the join fails and keeps the year origin on the day page', () => {
+    const failed = render(view(), { financeStatus: 'unavailable' });
+    const finance = failed.el.querySelector('[data-source="finance"]');
+    expect(finance?.getAttribute('data-source-state')).toBe('unavailable');
+    expect(finance?.textContent).toContain('Finance is unavailable.');
+    expect(finance?.textContent).not.toContain('no data');
+    expect(failed.el.querySelector('a[href*="vault/unlock"]')).toBeNull();
+
+    const page = render(view({ date: '2024-02-29' }), {
+      pageMode: true,
+      originView: 'year',
+      originYear: '2024',
+    });
+    const href = decodeURIComponent(page.el.querySelector('a.back')?.getAttribute('href') ?? '');
+    expect(href).toContain('/pixels?year=2024');
+    expect(href).toContain('day=2024-02-29');
+    expect(page.el.querySelector('.open-day')).toBeNull();
+    expect(page.el.querySelector('.day-detail')?.getAttribute('data-origin')).toBe('year');
+    expect(page.el.querySelector('.day-detail')?.getAttribute('data-origin-year')).toBe('2024');
+
+    const life = render(view({ date: '2024-02-29' }), {
+      pageMode: true,
+      originView: 'life',
+      originYear: '2024',
+      originSpan: '2024-02-29',
+    });
+    const lifeHref = decodeURIComponent(life.el.querySelector('a.back')?.getAttribute('href') ?? '');
+    expect(lifeHref).toContain('/pixels/life?span=2024-02-29');
+    expect(life.el.querySelector('.day-detail')?.getAttribute('data-origin')).toBe('life');
+    expect(life.el.querySelector('.day-detail')?.getAttribute('data-origin-span')).toBe('2024-02-29');
   });
 
   it('disables the annotation actions while a change is in flight and leaves the date editable', () => {

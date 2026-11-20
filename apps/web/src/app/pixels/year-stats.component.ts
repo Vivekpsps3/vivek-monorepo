@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { UiIconComponent } from '@vivek/ui';
+import { financeStatLabel } from './day-memory';
 import type { FinanceJoinStatus } from './pixels.types';
 
 @Component({
@@ -18,4 +19,8 @@ export class YearStatsComponent {
     budgetKept: number | null;
   }>();
   financeStatus = input<FinanceJoinStatus>('locked');
+
+  protected financeLabel(): string {
+    return financeStatLabel(this.financeStatus());
+  }
 }

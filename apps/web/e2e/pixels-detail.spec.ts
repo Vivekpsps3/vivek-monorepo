@@ -100,8 +100,8 @@ test.describe('Pixels day detail', () => {
     expect(await factIdsOf(panel)).toEqual(factIds);
     await expect(panel.locator('.day-detail')).toHaveAttribute('data-score-vector', vector);
     await page.reload();
+    await expect.poll(async () => factIdsOf(panel)).toEqual(factIds);
     await expect(panel.getByRole('heading', { name: 'Synthetic concept' })).toHaveCount(0);
-    expect(await factIdsOf(panel)).toEqual(factIds);
     await expect(panel.locator('.day-detail')).toHaveAttribute('data-score-vector', vector);
   });
 

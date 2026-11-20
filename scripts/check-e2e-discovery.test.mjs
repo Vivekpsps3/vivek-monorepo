@@ -101,7 +101,7 @@ test('an owned omission is not-run and a selected file stays listed', () => {
 test('the town allowlist selects habit journeys and profile settings', () => {
   const town = intendedProjects.find((project) => project.name === 'town');
   for (const name of [
-    'pixels-year.spec.ts', 'pixels-detail.spec.ts', 'pixels-life.spec.ts', 'pixels-settings.spec.ts',
+    'pixels-year.spec.ts', 'pixels-detail.spec.ts', 'pixels-life.spec.ts', 'pixels-day.spec.ts', 'pixels-settings.spec.ts',
     'hub-pixels.spec.ts', 'world.spec.ts',
     'town.spec.ts', 'town-checkin.spec.ts', 'town-dialogs.spec.ts', 'town-media-boundary.spec.ts',
   ]) {

@@ -54,9 +54,19 @@ describe('Life week panel', () => {
 
     fixture.componentRef.setInput('financeStatus', 'no_plan');
     fixture.detectChanges();
-    expect(el.textContent).toContain('Finance · no data');
+    expect(el.textContent).toContain('Finance has no budget plan.');
+    expect(el.textContent).not.toContain('no data');
     expect(el.textContent).not.toContain('Finance is locked');
     expect(el.querySelector('a[href*="vault/unlock"]')).toBeNull();
+
+    fixture.componentRef.setInput('financeStatus', 'unavailable');
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Finance is unavailable.');
+    expect(el.textContent).not.toContain('no data');
+    const dayLink = [...el.querySelectorAll('a')].find(link => link.textContent?.includes('Open '));
+    expect(dayLink?.getAttribute('href')).toContain('/pixels/day');
+    expect(dayLink?.getAttribute('href')).toContain('date=2026-10-25');
+    expect(dayLink?.getAttribute('href')).toContain('span=2026-10-25');
   });
 
 });

@@ -65,6 +65,7 @@
               [rowCount]="life.rowCount"
               [showAge]="life.showAge"
               [financeStatus]="snapshot()?.financeStatus ?? 'locked'"
+              [unlockNext]="lifeReturn()"
               [showTown]="showTown()"
               [showMedia]="showMedia()"
               [showTravel]="showTravel()"
@@ -86,9 +87,9 @@
                 <li><span class="life-swatch life-swatch-plan" aria-hidden="true"></span> Planned trip</li>
               }
               @if (snapshot()?.financeStatus === 'locked') {
-                <li>Finance locked <a routerLink="/finance/vault/unlock" [queryParams]="{ next: '/pixels/life' }">Unlock</a></li>
-              } @else if (snapshot()?.financeStatus !== 'ready') {
-                <li>Finance · no data</li>
+                <li>Finance locked <a routerLink="/finance/vault/unlock" [queryParams]="{ next: lifeReturn() }">Unlock</a></li>
+              } @else if (financeLegendText(); as text) {
+                <li>{{ text }}</li>
               }
             </ul>
           </section>

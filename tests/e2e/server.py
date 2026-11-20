@@ -132,7 +132,7 @@ def fixture_app(directory: Path, suite: str):
             )
             db.add_all([habit, other_habit])
             db.flush()
-            for day in (date(2026, 1, 10), date(2026, 8, 15)):
+            for day in (date(2024, 2, 29), date(2026, 1, 10), date(2026, 8, 15)):
                 db.add(HabitCheckin(habit_id=habit.id, user_id=1, day=day, created_at=now))
             db.add(
                 HabitCheckin(
@@ -146,6 +146,14 @@ def fixture_app(directory: Path, suite: str):
                         title="Portland",
                         start_date=date(2026, 8, 14),
                         end_date=date(2026, 8, 17),
+                        status="booked",
+                        counts_as_pto=False,
+                    ),
+                    Trip(
+                        user_id=1,
+                        title="Leap harbor",
+                        start_date=date(2024, 2, 28),
+                        end_date=date(2024, 3, 1),
                         status="booked",
                         counts_as_pto=False,
                     ),

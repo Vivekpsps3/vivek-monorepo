@@ -17,6 +17,11 @@ export const PIXELS_ROUTES: Routes = [
         title: 'Life in Pixels',
         loadComponent: () => import('./life-page.component').then(m => m.LifePageComponent),
       },
+      {
+        path: 'day',
+        title: 'Day in Pixels',
+        loadComponent: () => import('./day-page.component').then(m => m.DayPageComponent),
+      },
     ],
   },
 ];

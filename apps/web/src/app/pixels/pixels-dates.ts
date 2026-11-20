@@ -34,6 +34,19 @@ export function shiftIsoDate(iso: string, days: number): string {
   return text;
 }
 
+/** Inclusive civil dates. A reversed or invalid range is empty. Life weeks stay within nine days. */
+export function inclusiveIsoDates(from: string, to: string): string[] {
+  if (!isIsoDate(from) || !isIsoDate(to) || from > to) return [];
+  const dates: string[] = [];
+  let cursor = from;
+  while (dates.length < 16) {
+    dates.push(cursor);
+    if (cursor === to) return dates;
+    cursor = shiftIsoDate(cursor, 1);
+  }
+  return dates;
+}
+
 export function inclusiveDays(from: string, to: string): number {
   if (!isIsoDate(from) || !isIsoDate(to) || from > to) return 0;
   let count = 1;

@@ -27,12 +27,22 @@ describe('Year stats', () => {
     expect(el.querySelector('[data-stat="active"]')?.textContent?.trim()).toBe('4');
   });
 
-  it('says no data when Finance is unlocked but has no plan or no days', () => {
-    const el = render(null, 'no_plan');
-    const kept = el.querySelector('[data-stat="budget-kept"]');
-    expect(kept?.textContent).toContain('no data');
-    expect(kept?.querySelector('[role="img"]')).toBeNull();
-    expect(el.textContent).not.toContain('Finance locked');
+  it('names an absent plan, an empty range, and a failed join differently', () => {
+    const plan = render(null, 'no_plan');
+    const planKept = plan.querySelector('[data-stat="budget-kept"]');
+    expect(planKept?.textContent).toContain('no plan');
+    expect(planKept?.textContent).not.toContain('no data');
+    expect(planKept?.querySelector('[role="img"]')).toBeNull();
+    expect(plan.textContent).not.toContain('Finance locked');
+
+    const empty = render(null, 'no_data');
+    expect(empty.querySelector('[data-stat="budget-kept"]')?.textContent).toContain('none');
+
+    const failed = render(null, 'unavailable');
+    const failedKept = failed.querySelector('[data-stat="budget-kept"]');
+    expect(failedKept?.textContent).toContain('unavailable');
+    expect(failedKept?.textContent).not.toContain('no data');
+    expect(failed.querySelector('[data-stat="budget-kept"]')?.textContent).not.toMatch(/\d/);
   });
 
 });

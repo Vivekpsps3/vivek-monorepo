@@ -1,0 +1,37 @@
+@if (notice(); as text) {
+  <p class="pixels-notice" role="status">{{ text }}</p>
+}
+
+@if (query(); as query) {
+  <ui-state
+    [state]="screen()"
+    thing="this day"
+    emptyTitle="No activity on this day"
+    emptyMessage="Named records appear when Town, Media, or Travel saved this day."
+    [updatedAt]="snapshot()?.fetchedAt ?? null"
+    [next]="unlockSource()"
+    (retry)="reload()"
+  >
+    @if (selectedDay(); as current) {
+      <app-day-detail
+        [day]="current"
+        [financeStatus]="readySnapshot()?.financeStatus ?? 'locked'"
+        [today]="today"
+        [pageMode]="true"
+        [originView]="query.from"
+        [originYear]="query.year"
+        [originSpan]="query.span"
+        [unlockSource]="unlockSource()"
+        [facts]="facts()"
+        [factsStatus]="factsStatus()"
+        [annotationError]="annotationError()"
+        [draftEpoch]="draftEpoch()"
+        [mutating]="mutating()"
+        (closed)="leave()"
+        (archive)="onArchive($event)"
+        (remove)="onRemove($event)"
+        (redate)="onRedate($event)"
+      />
+    }
+  </ui-state>
+}
