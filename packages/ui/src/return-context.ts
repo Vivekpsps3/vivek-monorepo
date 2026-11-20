@@ -79,6 +79,12 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/media/add': {},
   '/media/search': {},
   '/travel': {},
+  '/travel/terminal': {
+    object: ['board', 'desk', 'table'],
+    trip: value => /^[1-9]\d{0,15}$/.test(value),
+    leg: value => /^[1-9]\d{0,15}$/.test(value),
+    day: isReturnDate,
+  },
   '/travel/calendar': { month },
   '/travel/trips/new': {},
   '/travel/settings': {},
@@ -212,6 +218,13 @@ export class ReturnContext {
     if (!this.owner || saved?.owner !== this.owner || saved.path !== path) return null;
     if (typeof saved.top !== 'number' || !Number.isSafeInteger(saved.top) || saved.top < 0) return null;
     return { top: saved.top, focus: focusKey(saved.focus) };
+  }
+
+  /** Saved return path for this owner, or null when the entry has none. */
+  origin(): string | null {
+    const saved = this.state()[SOURCE];
+    if (!this.owner || saved?.owner !== this.owner || typeof saved.path !== 'string') return null;
+    return returnPath(saved.path);
   }
 
   private at(path: string): boolean {
