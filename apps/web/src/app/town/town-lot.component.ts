@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { buildingSprite, townSpriteUrl, type TownSpriteId } from './town-sprites';
-import { treasuryFace, type TreasuryView } from './weeks-kept';
+import { buildingSprite, townSpriteUrl } from './town-sprites';
+import { lotFace } from './town-exterior';
+import type { TreasuryView } from './weeks-kept';
 import type { Building, Habit, TownResponse } from './town.types';
 
 @Component({
@@ -45,33 +46,15 @@ export class TownLotComponent {
     return style ? townSpriteUrl(buildingSprite(style, old)) : null;
   }
   readonly view = computed(() => {
-    const kind = this.kind(), habit = this.habit(), lot = this.lot(), building = this.building();
-    let name: string, label: string, sprite: TownSpriteId, link = '', external = false;
-    if (kind === 'treasury') {
-      name = 'Treasury';
-      const face = treasuryFace(!this.vaultPresent()
-        ? { status: 'locked' }
-        : (this.treasury() ?? { status: 'loading' }));
-      label = face.label;
-      link = face.href;
-      external = face.external;
-      sprite = face.stage == null ? 'treasury-locked' : buildingSprite('treasury', face.stage);
-    } else if (kind === 'library' || kind === 'inn') {
-      name = kind === 'library' ? 'Library' : 'Inn';
-      const source = kind === 'library' ? 'Media' : 'Travel';
-      label = building?.source === 'unavailable' ? `Lv — · ${source} unavailable` : `Lv ${building?.level} · ${source}`;
-      sprite = buildingSprite(kind, building?.stage ?? 1); link = kind === 'library' ? '/town/library' : '/travel';
-    } else if (lot?.state === 'occupied' && habit) {
-      name = habit.name;
-      label = `Lv ${habit.level} · ${habit.streak.current}-${habit.streak.unit === 'days' ? 'day' : 'week'} streak`;
-      sprite = buildingSprite(habit.building_style, habit.stage);
-    } else {
-      const locked = lot?.state === 'locked';
-      name = locked ? 'Locked lot' : 'Empty lot';
-      label = locked ? `Unlocks at Lv ${lot?.unlock_level}` : 'Build here';
-      sprite = locked ? 'lot-locked' : 'lot-empty';
-    }
-    return { name, label, src: townSpriteUrl(sprite), link, external };
+    const face = lotFace({
+      kind: this.kind(),
+      building: this.building(),
+      lot: this.lot(),
+      habit: this.habit(),
+      vaultPresent: this.vaultPresent(),
+      treasury: this.treasury(),
+    });
+    return { name: face.name, label: face.label, src: face.src, link: face.link, external: face.external };
   });
 }
 

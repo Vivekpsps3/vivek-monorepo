@@ -1,10 +1,11 @@
 import { TestBed,fakeAsync,tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { BehaviorSubject,Subject } from 'rxjs';
+import { ToastService } from '@vivek/ui';
 import { VAULT_PRESENCE } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
 import { TownApiService } from './town.api';
-import { TOWN_BUDGET_KEPT,TownComponent } from './town.component';
+import { TOWN_BUDGET_KEPT, TOWN_HEALTH_STAGES, TownComponent } from './town.component';
 import { LOT_UNLOCK_LV } from './town.constants';
 import type { TownResponse } from './town.types';
 
@@ -26,6 +27,16 @@ async function flushBudget(fixture: { detectChanges(): void }): Promise<void> {
   await Promise.resolve();
   fixture.detectChanges();
 }
+function treasuryTile(el: HTMLElement): HTMLElement {
+  const tile = [...el.querySelectorAll('[aria-label="Town buildings"] li')].find(item => item.textContent?.includes('Treasury'));
+  if (!(tile instanceof HTMLElement)) throw new Error('missing treasury');
+  return tile;
+}
+function clinicLink(el: HTMLElement): HTMLAnchorElement {
+  const link = el.querySelector('[data-building="clinic"]');
+  if (!(link instanceof HTMLAnchorElement)) throw new Error('missing clinic');
+  return link;
+}
 function snapshot(): TownResponse {
   const building = { xp: 0, level: 1, stage: 1 as const, level_xp_start: 0, next_level_xp: 50, today_xp: 0, today_cap: 10, source: 'ok' as const };
   return {
@@ -39,6 +50,7 @@ describe('Town page', () => {
   let response: Subject<TownResponse>;
   let api: { getTown: jasmine.Spy; checkin: jasmine.Spy };
   let budget: jasmine.Spy;
+  let health: jasmine.Spy;
   let user: BehaviorSubject<{ id: number } | null>;
   let cleared: Subject<void>;
   const session: { user: { id: number } | null; readonly currentUser: { id: number } | null; user$: BehaviorSubject<{ id: number } | null>; cleared$: Subject<void> } = {
@@ -56,6 +68,7 @@ describe('Town page', () => {
     session.user$ = user;
     session.cleared$ = cleared;
     budget = jasmine.createSpy('loadFinanceBudgetKept').and.resolveTo({ status: 'locked' });
+    health = jasmine.createSpy('loadTownHealthStages').and.resolveTo({ state: 'locked' });
     api = { getTown: jasmine.createSpy().and.callFake(() => response), checkin: jasmine.createSpy() };
     TestBed.configureTestingModule({
       imports: [TownComponent],
@@ -64,6 +77,7 @@ describe('Town page', () => {
         { provide: TownApiService, useValue: api },
         { provide: SessionService, useValue: session },
         { provide: TOWN_BUDGET_KEPT, useValue: budget },
+        { provide: TOWN_HEALTH_STAGES, useValue: health },
       ],
     });
   });
@@ -127,13 +141,14 @@ describe('Town page', () => {
 
   it('explains a locked Finance vault on the treasury tile and in Today', () => {
     const { el } = render(snapshot());
-    const tile = el.querySelectorAll('ul > li')[2] as HTMLElement;
+    const tile = treasuryTile(el);
     expect(tile.querySelector('img')?.getAttribute('src')).toBe('/town/treasury-locked.svg');
     expect(tile.textContent).toContain('Finance vault locked');
     expect(tile.textContent).not.toMatch(/\d/);
     expect(tile.querySelector('a')?.getAttribute('href')).toBe('/finance/vault/unlock?next=%2Ftown');
     expect(el.querySelector('.treasury a')?.textContent?.trim()).toBe('Finance vault locked');
     expect(budget).not.toHaveBeenCalled();
+    expect(health).not.toHaveBeenCalled();
     expect(el.querySelector('ui-skeleton')).toBeNull();
     expect(tile.textContent).not.toMatch(/\$/);
   });
@@ -143,7 +158,7 @@ describe('Town page', () => {
     let release: (result: { status: string; weeks?: { weekStart: string; kept: boolean | null }[] }) => void = () => undefined;
     budget.and.callFake(() => new Promise(resolve => { release = resolve; }));
     const { fixture, el } = render(snapshot());
-    const tile = () => el.querySelectorAll('ul > li')[2] as HTMLElement;
+    const tile = () => treasuryTile(el);
     const xp = 'Lv 3 · 340 / 500 XP';
     expect(el.textContent).toContain(xp);
     release({ status: 'ready', weeks: [{ weekStart: '2026-10-19', kept: true }] });
@@ -190,6 +205,116 @@ describe('Town page', () => {
     fixture.detectChanges();
     expect(tile().textContent).toContain('Finance vault locked');
     expect(tile().textContent).not.toContain('No spending plan');
+  });
+
+  it('keeps the town and an open draft when a later load fails', () => {
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
+    const { fixture, el } = render(snapshot());
+    fixture.componentInstance.openHabitDialog(0, null, 'Walk 30 minutes');
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#habit-name')?.value).toBe('Walk 30 minutes');
+    response.error({ status: 503 });
+    fixture.detectChanges();
+    expect(el.querySelector('[aria-label="Town buildings"]')).not.toBeNull();
+    expect(el.textContent).toContain('Terraria-on-Sea');
+    expect(el.textContent).not.toContain('Retry');
+    expect(el.querySelector<HTMLInputElement>('#habit-name')?.value).toBe('Walk 30 minutes');
+    expect(toast.error).toHaveBeenCalledWith('Town is unavailable right now.');
+    expect(el.textContent).not.toContain('Your session ended');
+  });
+
+  it('does not paint a session banner when a ready town receives 401', () => {
+    const { fixture, el } = render(snapshot());
+    response.error({ status: 401 });
+    fixture.detectChanges();
+    expect(el.textContent).not.toContain('Your session ended');
+    expect(el.querySelector('[aria-label="Loading Town"]')).not.toBeNull();
+  });
+
+  it('shows entrances before the first habit', () => {
+    const data = snapshot();
+    data.town.founded_on = null;
+    data.town.level = 1;
+    data.town.xp = 0;
+    data.town.next_level_xp = 100;
+    data.lots = LOT_UNLOCK_LV.map((unlock_level, slot) => ({
+      slot, unlock_level, state: unlock_level > 1 ? 'locked' as const : 'empty' as const, habit_id: null,
+    }));
+    const { el } = render(data);
+    expect(el.textContent).toContain('Found Terraria-on-Sea');
+    expect(el.textContent).toContain('Choose a first habit');
+    expect(el.textContent).toContain('Read 20 pages');
+    expect(el.querySelector('a[href="/town/library"]')?.textContent).toContain('Visit the Reading Hall');
+    const list = el.querySelector('[aria-label="Town buildings"]');
+    expect(list?.textContent).toContain('Library');
+    expect(list?.textContent).toContain('Inn');
+    expect(list?.textContent).toContain('Clinic');
+    expect(list?.textContent).toContain('Empty lot');
+    expect(el.textContent).toContain('Harbor');
+    expect(el.querySelector('a[href="/travel"]')).not.toBeNull();
+    const clinic = clinicLink(el);
+    expect(clinic.getAttribute('href')).toBe('/town/clinic');
+    expect(clinic.textContent).not.toMatch(/\d/);
+  });
+
+  it('drops a late Health result on lock and keeps the Clinic route without digits', async () => {
+    localStorage.setItem(VAULT_PRESENCE, '7');
+    let release: (value: { state: 'ready'; clinic: 2; gym: 1 }) => void = () => undefined;
+    health.and.callFake(() => new Promise(resolve => { release = resolve; }));
+    const { fixture, el } = render(snapshot());
+    fixture.componentInstance.openHabitDialog(0, null, 'Walk 30 minutes');
+    fixture.detectChanges();
+    const clinic = () => clinicLink(el);
+    expect(clinic().textContent).toContain('Loading');
+    expect(el.querySelector<HTMLInputElement>('#habit-name')?.value).toBe('Walk 30 minutes');
+    window.dispatchEvent(new StorageEvent('storage', { key: null }));
+    fixture.detectChanges();
+    expect(clinic().textContent).toContain('Health locked');
+    expect(clinic().textContent).not.toMatch(/\d/);
+    expect(clinic().querySelector('img')?.getAttribute('src')).toBe('/town/clinic-locked.svg');
+    expect(clinic().getAttribute('href')).toBe('/town/clinic');
+    expect(el.querySelector<HTMLInputElement>('#habit-name')?.value).toBe('Walk 30 minutes');
+    release({ state: 'ready', clinic: 2, gym: 1 });
+    await flushBudget(fixture);
+    expect(clinic().textContent).toContain('Health locked');
+    expect(clinic().querySelector('img')?.getAttribute('src')).toBe('/town/clinic-locked.svg');
+    expect(clinic().textContent).not.toMatch(/\d/);
+  });
+
+  it('clears a private draft when the owner changes or the session ends', () => {
+    const { fixture, el } = render(snapshot());
+    fixture.componentInstance.openHabitDialog(0, null, 'Walk 30 minutes');
+    fixture.detectChanges();
+    expect(el.querySelector('#habit-name')).not.toBeNull();
+    session.user = { id: 8 };
+    user.next({ id: 8 });
+    fixture.detectChanges();
+    expect(el.querySelector('app-habit-dialog')).toBeNull();
+
+    fixture.componentInstance.openHabitDialog(1, null, 'Sleep by 12');
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#habit-name')?.value).toBe('Sleep by 12');
+    cleared.next();
+    fixture.detectChanges();
+    expect(el.querySelector('app-habit-dialog')).toBeNull();
+    expect(treasuryTile(el).textContent).toContain('Finance vault locked');
+  });
+
+  it('shows a ready Clinic and Gym without measurement digits', async () => {
+    localStorage.setItem(VAULT_PRESENCE, '7');
+    health.and.resolveTo({ state: 'ready', clinic: 2, gym: 1 });
+    const { fixture, el } = render(snapshot());
+    await flushBudget(fixture);
+    const clinic = clinicLink(el);
+    expect(clinic.textContent).toContain('Open');
+    expect(clinic.textContent).not.toMatch(/\d/);
+    expect(clinic.querySelector('img')?.getAttribute('src')).toBe('/town/clinic-2.svg');
+    expect(clinic.getAttribute('href')).toBe('/town/clinic');
+    const gym = el.querySelector('[data-building="gym"]') as HTMLAnchorElement;
+    expect(gym.querySelector('img')?.getAttribute('src')).toBe('/town/gym-1.svg');
+    expect(gym.getAttribute('href')).toBe('/town/gym');
+    expect(gym.textContent).toContain('Open');
   });
 
 });

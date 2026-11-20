@@ -19,10 +19,10 @@ test.describe('Town', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
     await expect(page.getByRole('main').getByRole('heading', { level: 1, name: 'Terraria-on-Sea' })).toBeVisible();
     const scene = page.getByRole('list', { name: 'Town buildings' });
-    await expect(scene.getByRole('listitem')).toHaveCount(9);
+    await expect(scene.getByRole('listitem')).toHaveCount(16);
     const locked = scene.getByRole('listitem').filter({ hasText: 'Unlocks at Lv 5' });
     await expect(locked).toHaveCount(1);
-    await expect(locked.locator('.tile')).toHaveJSProperty('tabIndex', -1);
+    await expect(locked.locator('.static')).toHaveJSProperty('tabIndex', -1);
     await expect(locked.locator('a, button, [tabindex]')).toHaveCount(0);
     const controls = scene.locator('a, button');
     await controls.first().focus();
@@ -52,10 +52,16 @@ test.describe('Town', () => {
       await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText(body.town.name);
       expect(await page.content()).not.toContain(FOREIGN_HABIT);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-      expect(await page.getByRole('list', { name: 'Town buildings' }).evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBe(3);
-      for (const img of await page.locator('app-town-lot img').all()) {
+      for (const name of ['Civic', 'Residential', 'Harbor', 'Culture', 'Wellness', 'Garden']) {
+        const district = page.getByRole('button', { name, exact: true });
+        await expect(district).toBeVisible();
+        const box = await district.boundingBox();
+        expect(box?.width).toBeGreaterThanOrEqual(44);
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+      }
+      await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+      for (const img of await page.locator('[aria-label="Town buildings"] img, .viewport img').all()) {
         await expect(img).toHaveAttribute('alt', '');
-        expect(await img.evaluate(el => el.getBoundingClientRect().width)).toBe(width === 390 ? 96 : 128);
         expect(await img.evaluate(el => getComputedStyle(el).imageRendering)).toBe('pixelated');
       }
       if (width === 1280) expect(await page.locator('app-town ui-card').evaluate(el => el.getBoundingClientRect().width)).toBe(360);
@@ -79,7 +85,7 @@ test.describe('Town', () => {
     const checked = await result.json();
     expect(checked.day).toBe('2026-11-01'); expect(checked.checked).toBeTruthy();
     await page.reload();
-    const lot = page.locator('app-town-lot').filter({ hasText: 'Read 20 pages' }).getByRole('button');
+    const lot = page.getByRole('list', { name: 'Town buildings' }).getByRole('button', { name: /Read 20 pages/ });
     await expect(lot).toContainText(`Lv ${checked.habit.level} · ${checked.habit.streak.current}-day streak`);
     expect(await page.content()).not.toContain(FOREIGN_HABIT);
   });
@@ -247,6 +253,94 @@ test('treasury follows completed budget weeks and clears when Finance locks', as
   await expect(todayTreasury).toContainText('Finance vault locked');
   const locked: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
   expect(locked.town.xp).toBe(before.town.xp);
+});
+
+test.describe('Town exterior', () => {
+  test.use({ timezoneId: 'America/Los_Angeles', hasTouch: true });
+  test.beforeEach(async ({ page, request }) => {
+    expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
+    await page.clock.setFixedTime(new Date('2026-10-29T19:00:00Z'));
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+  });
+
+  test('six districts, a real entrance, Today, and a locked Clinic', async ({ page }) => {
+    for (const file of ['home', 'hall', 'theater', 'music', 'arcade']) {
+      expect((await page.request.get(`/town/exterior/${file}.svg`)).ok()).toBeTruthy();
+    }
+    for (const width of [390, 1280]) {
+      for (const theme of ['light', 'dark'] as const) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
+        await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+        await page.goto('/town');
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        const scene = page.getByRole('list', { name: 'Town buildings' });
+        await expect(scene.getByRole('listitem')).toHaveCount(16);
+        for (const name of ['Civic', 'Residential', 'Harbor', 'Culture', 'Wellness', 'Garden']) {
+          const district = page.getByRole('button', { name, exact: true });
+          await expect(district).toBeVisible();
+          const box = await district.boundingBox();
+          expect(box?.width).toBeGreaterThanOrEqual(44);
+          expect(box?.height).toBeGreaterThanOrEqual(44);
+        }
+        const today = page.getByRole('button', { name: 'Mark Read 20 pages done for today' });
+        await expect(today).toBeVisible();
+        await expect(today).toBeEnabled();
+        const clinic = scene.getByRole('link', { name: /^Clinic/ });
+        await expect(clinic).toBeVisible();
+        expect(await clinic.innerText()).not.toMatch(/\d/);
+        await expect(clinic.locator('img')).toHaveAttribute('src', '/town/clinic-locked.svg');
+        const clinicBox = await clinic.boundingBox();
+        expect(clinicBox?.height).toBeGreaterThanOrEqual(44);
+        await expect(scene.getByRole('link', { name: /^Library/ })).toBeVisible();
+        await expect(scene.getByRole('link', { name: /^Gym/ })).toBeVisible();
+        await expect(page.locator('a[href="/town/world"]')).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+        expect(await page.locator('app-town').evaluate(el => el.getAnimations({ subtree: true })
+          .filter(animation => animation.effect?.getTiming().iterations === Infinity).length)).toBe(0);
+      }
+    }
+
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
+    await expect(page.getByRole('button', { name: 'Wellness', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+    const narrowClinic = page.getByRole('list', { name: 'Town buildings' }).getByRole('link', { name: /^Clinic/ });
+    expect((await narrowClinic.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const harbor = page.getByRole('button', { name: 'Harbor', exact: true });
+    await harbor.focus();
+    await page.keyboard.press('Enter');
+    await expect(harbor).toHaveAttribute('aria-pressed', 'true');
+    await expect(page).toHaveURL(/\/town\/?$/);
+    await page.getByRole('button', { name: 'Garden', exact: true }).tap();
+    await expect(page.getByRole('button', { name: 'Garden', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(harbor).toHaveAttribute('aria-pressed', 'false');
+
+    const library = page.getByRole('list', { name: 'Town buildings' }).getByRole('link', { name: /^Library/ });
+    await library.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Reading Hall', level: 1 })).toBeVisible();
+    await page.goBack();
+    await expect(library).toBeFocused();
+
+    const clinic = page.getByRole('list', { name: 'Town buildings' }).getByRole('link', { name: /^Clinic/ });
+    expect(await clinic.innerText()).not.toMatch(/\d/);
+    await clinic.click();
+    await expect(page).toHaveURL(/\/town\/clinic\/?$/);
+    await expect(page.getByText('Finance is locked. Unlock to see measurements.')).toBeVisible();
+    await page.goBack();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Mark Read 20 pages done for today' }).click();
+    const done = page.getByRole('button', { name: 'Read 20 pages, done today. Undo' });
+    await expect(done).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(done).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Garden', exact: true })).toBeVisible();
+  });
 });
 
 test('TF5 Hub card stays free of Treasury and answers loading, retry, expiry, empty, and keyboard', async ({ page, request }) => {

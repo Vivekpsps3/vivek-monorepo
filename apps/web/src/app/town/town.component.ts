@@ -18,7 +18,9 @@ import { SessionService } from '../platform/session.service';
 import { TownApiService, type CheckinResult } from './town.api';
 import { HabitDialogComponent } from './habit-dialog.component';
 import { HistoryDialogComponent } from './history-dialog.component';
-import { TownLotComponent } from './town-lot.component';
+import { loadTownHealthStages, type TownHealthStages } from './health';
+import { TownExteriorComponent } from './town-exterior.component';
+import type { ExteriorHealth } from './town-exterior';
 import { TownTodayComponent, liveCheck } from './town-today.component';
 import { stage } from './town-levels';
 import {
@@ -45,6 +47,17 @@ export const TOWN_BUDGET_KEPT = new InjectionToken<TownBudgetKept>('TOWN_BUDGET_
   factory: () => loadFinanceBudgetKept,
 });
 
+export type TownHealthLoad = (
+  injector: Injector,
+  signal: AbortSignal,
+  opts?: { deadlineMs?: number },
+) => Promise<TownHealthStages>;
+
+/** Tests replace this. Production calls the Health stage facade, which returns stages only. */
+export const TOWN_HEALTH_STAGES = new InjectionToken<TownHealthLoad>('TOWN_HEALTH_STAGES', {
+  factory: () => loadTownHealthStages,
+});
+
 function vaultOpenFor(userId: number | null): boolean {
   if (userId == null || !financeVaultPresent()) return false;
   try {
@@ -58,7 +71,7 @@ function vaultOpenFor(userId: number | null): boolean {
 
 @Component({
   selector: 'app-town',
-  imports: [RouterLink, UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent, TownLotComponent, TownTodayComponent, HabitDialogComponent, HistoryDialogComponent],
+  imports: [RouterLink, UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent, TownExteriorComponent, TownTodayComponent, HabitDialogComponent, HistoryDialogComponent],
   templateUrl: './town.component.html',
   styleUrl: './town.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -70,22 +83,25 @@ export class TownComponent {
   private readonly toast = inject(ToastService);
   private readonly injector = inject(Injector);
   private readonly budgetKept = inject(TOWN_BUDGET_KEPT);
+  private readonly healthStages = inject(TOWN_HEALTH_STAGES);
   private readonly loads = new Subject<void>();
   private budgetAbort = new AbortController();
+  private healthAbort = new AbortController();
   private budgetEpoch = 0;
+  private healthEpoch = 0;
   private ownerId: number | null | undefined;
   private pendingLive: CheckinResult | null = null;
   /** Day already requested by a visibility or interval refresh. One in-flight load, not one per tick. */
   private pendingDay: string | null = null;
   readonly data = signal<TownResponse | null>(null);
   readonly treasury = signal<TreasuryView>({ status: 'locked' });
+  readonly health = signal<ExteriorHealth>({ state: 'locked' });
   readonly financeVaultPresent = financeVaultPresent;
   readonly state = signal<'loading' | 'ready' | 'unavailable'>('loading');
   readonly live = signal('');
   readonly swapping = signal<Record<string, 1 | 2 | 3>>({});
   readonly edit = signal<{ slot: number | null; habitId: number | null; prefill: string } | null>(null);
   readonly historyOpen = signal(false);
-  readonly placeholders = Array.from({ length: 9 }, (_, i) => i);
   readonly suggestions = ['Read 20 pages', 'Walk 30 minutes', 'Sleep by 12'];
   readonly emptySprite = townSpriteUrl('lot-empty');
   readonly exploreWorld = WORLD_COPY.explore;
@@ -95,12 +111,17 @@ export class TownComponent {
     .children['primary']?.segments.map(segment => segment.path).join('/') === 'town/library';
   constructor() {
     this.session.user$.pipe(takeUntilDestroyed(this.destroy)).subscribe(user => this.noteOwner(user?.id ?? null));
-    this.session.cleared$.pipe(takeUntilDestroyed(this.destroy)).subscribe(() => this.dropTreasury());
-    this.destroy.onDestroy(bindLockNotices(() => this.dropTreasury()));
-    this.destroy.onDestroy(bindLockSnapshots(() => this.dropTreasury()));
+    this.session.cleared$.pipe(takeUntilDestroyed(this.destroy)).subscribe(() => this.invalidateOwner());
+    this.destroy.onDestroy(bindLockNotices(() => this.dropVaultViews()));
+    this.destroy.onDestroy(bindLockSnapshots(() => this.dropVaultViews()));
     this.loads.pipe(
       switchMap(() => this.api.getTown().pipe(catchError((error: { status?: number }) => {
         this.pendingDay = null;
+        // A later failure must not wipe the town, the scene camera, or an open draft.
+        if (error.status !== 401 && this.data() != null && this.state() === 'ready') {
+          this.toast.error('Town is unavailable right now.');
+          return EMPTY;
+        }
         this.data.set(null);
         // A 401 follows the global auth redirect. Town does not paint a session banner.
         this.state.set(error.status === 401 ? 'loading' : 'unavailable');
@@ -159,6 +180,7 @@ export class TownComponent {
       }, { injector: this.injector });
     }
     this.refreshTreasury(sorted.town.today);
+    this.refreshHealth();
     const pending = this.pendingLive;
     this.pendingLive = null;
     if (!pending?.checked) return;
@@ -205,9 +227,22 @@ export class TownComponent {
     }
     if (this.ownerId === userId) return;
     this.ownerId = userId;
-    this.dropTreasury();
+    this.invalidateOwner();
     const today = this.data()?.town.today;
     if (today && vaultOpenFor(userId)) this.refreshTreasury(today);
+    if (vaultOpenFor(userId)) this.refreshHealth();
+  }
+
+  /** A new owner or a cleared session drops drafts before either vault view can publish. */
+  private invalidateOwner(): void {
+    this.edit.set(null);
+    this.historyOpen.set(false);
+    this.dropVaultViews();
+  }
+
+  private dropVaultViews(): void {
+    this.dropTreasury();
+    this.dropHealth();
   }
 
   /** Drop the visible tier before any in-flight Finance result can publish it. */
@@ -221,7 +256,7 @@ export class TownComponent {
   private refreshTreasury(today: string): void {
     const owner = this.ownerId ?? null;
     if (!vaultOpenFor(owner)) {
-      this.dropTreasury();
+      this.dropVaultViews();
       return;
     }
     this.budgetEpoch += 1;
@@ -253,6 +288,46 @@ export class TownComponent {
     } catch {
       if (!still()) return;
       this.treasury.set({ status: 'unavailable' });
+    } finally {
+      work.dispose();
+    }
+  }
+
+  private dropHealth(): void {
+    this.healthEpoch += 1;
+    this.healthAbort.abort();
+    this.healthAbort = new AbortController();
+    this.health.set({ state: 'locked' });
+  }
+
+  private refreshHealth(): void {
+    const owner = this.ownerId ?? null;
+    if (!vaultOpenFor(owner)) {
+      this.dropHealth();
+      return;
+    }
+    this.healthEpoch += 1;
+    this.healthAbort.abort();
+    this.healthAbort = new AbortController();
+    const epoch = this.healthEpoch;
+    const ctrl = this.healthAbort;
+    this.health.set({ state: 'loading' });
+    void this.publishHealth(epoch, ctrl);
+  }
+
+  private async publishHealth(epoch: number, ctrl: AbortController): Promise<void> {
+    const work = openBoundedWork({ controller: ctrl });
+    const still = (): boolean => mayPublish(work, epoch === this.healthEpoch)
+      && this.session.currentUser?.id === this.ownerId
+      && vaultOpenFor(this.ownerId ?? null);
+    try {
+      if (!still()) return;
+      const stages = await this.healthStages(this.injector, work.signal);
+      if (!still()) return;
+      this.health.set(stages);
+    } catch {
+      if (!still()) return;
+      this.health.set({ state: 'unavailable' });
     } finally {
       work.dispose();
     }
