@@ -1,9 +1,9 @@
 # Town and private Health
 
 The [Town server](../../../../server/town/) owns habit/XP/calendar rules;
-[clock](../../../../server/town/clock.py) is the time authority. UI code projects
-those results rather than maintaining a competing ledger. Habit streak weeks and
-Finance budget-kept weeks differ; treasury integration must preserve that.
+[clock](../../../../server/town/clock.py) is the time authority. UI projects those
+results. Habit streak weeks and Finance budget-kept weeks differ; treasury
+integration must preserve that.
 
 [Health store](health/health-store.service.ts) owns browser-local Health records
 through Finance's public vault API. Clinic and Gym mount
@@ -18,11 +18,12 @@ Weight, resting heart rate, blood pressure, sleep, labs, and checkups are create
 Use [health constants](health/health.constants.ts) and existing pure logic for units,
 thresholds, and badges. Do not duplicate conversion or XP math.
 
-Reuse shared controls; extract only to remove a repeated decision. Town reset fixtures and worker
-clock ownership stay deterministic. Root test gates apply, including Town Playwright
-for affected screens and server coverage for Town backend work.
+Reuse shared controls. Town reset fixtures and worker clock ownership stay
+deterministic. Root test gates apply, including Town Playwright and server
+coverage for Town backend work.
 
-Reading Hall's [asset metadata](library-room.assets.ts) owns display bounds,
-anchors, layering, theme schemes, and source attribution. Use the same rectangle
-for artwork and selection. Load room art only from the room route and keep the
-object list usable when art fails. No room animation runs off-route.
+Reading Hall's [asset metadata](library-room.assets.ts) owns bounds, anchors,
+layers, palette, and source. One rectangle paints and picks; the higher layer wins.
+Pan and zoom use it. A tap opens the front object. A drag or pointer cancel does not.
+The keyboard list reaches those objects. Art loads only on the room route. No
+off-route room animation. Camera is not a second store.
