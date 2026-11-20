@@ -55,8 +55,8 @@ An earlier town Playwright run waited on an `aria-disabled` Delete button after 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending. The body will use `Closes #428` only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/547 (`Closes #428` only).
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #256, #90, #134, and #277 stay open. This leaf does not deploy.
-- Next actor: push `agent/heal-02`, open the pull request, wait for green required checks, then merge with a merge commit.
+- Next actor: wait for green required checks, then merge with a merge commit.
