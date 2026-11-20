@@ -7,11 +7,12 @@
     @if (nameError() || fieldErrors()['name']; as message) { <p id="habit-name-error" role="alert">{{ message }}</p> }
     @if (!editing()) {
       <label for="habit-lot">Lot</label>
-      <select id="habit-lot" (change)="onSlot($event)">
+      <select id="habit-lot" (change)="onSlot($event)" [attr.aria-invalid]="fieldErrors()['slot'] ? 'true' : null" [attr.aria-describedby]="fieldErrors()['slot'] ? 'habit-lot-error' : null">
         @for (slot of slotChoices(); track slot) { <option [value]="slot" [selected]="slot === chosenSlot()">Slot {{ slot }}</option> }
       </select>
+      @if (fieldErrors()['slot']; as message) { <p id="habit-lot-error" role="alert">{{ message }}</p> }
     }
-    <fieldset>
+    <fieldset [attr.aria-describedby]="fieldErrors()['building_style'] ? 'habit-style-error' : null">
       <legend>Building</legend>
       @for (choice of styles; track choice) {
         <label class="card">
@@ -21,17 +22,19 @@
         </label>
       }
     </fieldset>
+    @if (fieldErrors()['building_style']; as message) { <p id="habit-style-error" role="alert">{{ message }}</p> }
     <label for="habit-cadence">Cadence</label>
-    <select id="habit-cadence" (change)="onCadence($event)">
+    <select id="habit-cadence" (change)="onCadence($event)" [attr.aria-invalid]="fieldErrors()['per_week'] ? 'true' : null" [attr.aria-describedby]="fieldErrors()['per_week'] ? 'habit-cadence-error' : null">
       @for (week of weeks; track week) { <option [value]="week" [selected]="week === perWeek()">{{ cadenceLabel(week) }}</option> }
     </select>
+    @if (fieldErrors()['per_week']; as message) { <p id="habit-cadence-error" role="alert">{{ message }}</p> }
     @if (hint()) { <p class="hint">{{ hint() }}</p> }
     @if (formError()) { <p role="alert">{{ formError() }}</p> }
     <div class="actions">
       <ui-button type="submit" [busy]="busy()" [disabled]="busy()">Save</ui-button>
-      <ui-button variant="secondary" (clicked)="dismiss()">Cancel</ui-button>
+      <ui-button variant="secondary" [disabled]="busy()" (clicked)="dismiss()">Cancel</ui-button>
       @if (habit(); as habit) {
-        <ui-button variant="danger" (clicked)="archive()">Archive habit</ui-button>
+        <ui-button variant="danger" [disabled]="busy()" (clicked)="archive()">Archive habit</ui-button>
       }
     </div>
   </form>

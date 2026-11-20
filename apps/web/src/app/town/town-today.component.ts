@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, effect, inj
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { ToastService, UiBadgeComponent, UiButtonComponent, UiEmptyStateComponent } from '@vivek/ui';
+import { SessionService } from '../platform/session.service';
 import { TownApiService, type CheckinResult } from './town.api';
 import { treasuryFace as presentTreasury, type TreasuryFace, type TreasuryView } from './weeks-kept';
 import type { Building, Habit, TownResponse } from './town.types';
@@ -23,6 +24,15 @@ export function restNote(habits: readonly Habit[]): string {
 }
 
 /** Polite check-in announcement. The XP clause is omitted at max level and when a level-up toast fired. */
+export function liveUndo(name: string): string {
+  return `${name} undone.`;
+}
+
+/** Repeat an identical announcement so a second check or undo is spoken again. */
+export function liveAgain(previous: string, message: string): string {
+  return previous === message ? `${message}\u200b` : message;
+}
+
 export function liveCheck(
   name: string,
   habit: Habit,
@@ -54,8 +64,12 @@ function problem(error: unknown): { code?: string; message: string } {
 export class TownTodayComponent {
   private readonly api = inject(TownApiService);
   private readonly toast = inject(ToastService);
+  private readonly session = inject(SessionService);
   private readonly destroy = inject(DestroyRef);
   private readonly host = inject(ElementRef<HTMLElement>);
+  private actionEpoch = 0;
+  private ownerId: number | null | undefined;
+  private readonly inflight = signal<Readonly<Record<number, true>>>({});
   readonly data = input.required<TownResponse>();
   readonly vaultPresent = input(false);
   /** Completed Finance budget weeks. Habit streaks do not fill this in. */
@@ -71,6 +85,17 @@ export class TownTodayComponent {
   private focusBaseline: TownResponse | null = null;
 
   constructor() {
+    this.session.user$.pipe(takeUntilDestroyed(this.destroy)).subscribe(user => {
+      const id = user?.id ?? null;
+      if (this.ownerId === undefined) {
+        this.ownerId = id;
+        return;
+      }
+      if (this.ownerId === id) return;
+      this.ownerId = id;
+      this.dropPending();
+    });
+    this.session.cleared$.pipe(takeUntilDestroyed(this.destroy)).subscribe(() => this.dropPending());
     effect(() => {
       const data = this.data();
       const pending = this.pending();
@@ -150,15 +175,48 @@ export class TownTodayComponent {
     return `${source} · +${building.today_xp}/${building.today_cap} XP today`;
   }
 
+  busyCheck(habit: Habit): boolean {
+    return this.inflight()[habit.id] === true;
+  }
+
   toggle(habit: Habit): void {
+    if (this.busyCheck(habit)) return;
     const next = !this.pressed(habit);
     const day = this.data().town.today;
+    const epoch = this.actionEpoch;
+    const owner = this.ownerId;
     this.pending.update(state => ({ ...state, [habit.id]: next }));
+    this.inflight.update(state => ({ ...state, [habit.id]: true }));
     this.focusHabit.set(habit.id);
     const request = next ? this.api.checkin(habit.id, day) : this.api.undoCheckin(habit.id, day);
     request.pipe(takeUntilDestroyed(this.destroy)).subscribe({
-      next: result => this.settled.emit(result),
-      error: (error: unknown) => this.fail(habit.id, problem(error)),
+      next: result => {
+        this.clearInflight(habit.id);
+        if (epoch !== this.actionEpoch || owner !== this.ownerId) return;
+        this.settled.emit(result);
+      },
+      error: (error: unknown) => {
+        this.clearInflight(habit.id);
+        if (epoch !== this.actionEpoch || owner !== this.ownerId) return;
+        this.fail(habit.id, problem(error));
+      },
+    });
+  }
+
+  private dropPending(): void {
+    this.actionEpoch += 1;
+    this.pending.set({});
+    this.inflight.set({});
+    this.focusHabit.set(null);
+    this.focusBaseline = null;
+  }
+
+  private clearInflight(id: number): void {
+    this.inflight.update(state => {
+      if (!state[id]) return state;
+      const copy = { ...state };
+      delete copy[id];
+      return copy;
     });
   }
 

@@ -21,7 +21,7 @@ import { HistoryDialogComponent } from './history-dialog.component';
 import { loadTownHealthStages, type TownHealthStages } from './health';
 import { TownExteriorComponent } from './town-exterior.component';
 import type { ExteriorHealth } from './town-exterior';
-import { TownTodayComponent, liveCheck } from './town-today.component';
+import { TownTodayComponent, liveAgain, liveCheck, liveUndo } from './town-today.component';
 import { stage } from './town-levels';
 import {
   FINANCE_BUDGET_WEEKS,
@@ -183,9 +183,12 @@ export class TownComponent {
     this.refreshHealth();
     const pending = this.pendingLive;
     this.pendingLive = null;
-    if (!pending?.checked) return;
+    if (!pending) return;
     const habit = sorted.habits.find(item => item.id === pending.habit.id) ?? pending.habit;
-    this.live.set(liveCheck(habit.name, habit, sorted.town, toasted));
+    const message = pending.checked
+      ? liveCheck(habit.name, habit, sorted.town, toasted)
+      : liveUndo(habit.name);
+    this.live.set(liveAgain(this.live(), message));
   }
   private observe(data: TownResponse): boolean {
     const userId = this.session.currentUser?.id;
@@ -235,6 +238,7 @@ export class TownComponent {
 
   /** A new owner or a cleared session drops drafts before either vault view can publish. */
   private invalidateOwner(): void {
+    this.pendingLive = null;
     this.edit.set(null);
     this.historyOpen.set(false);
     this.dropVaultViews();
