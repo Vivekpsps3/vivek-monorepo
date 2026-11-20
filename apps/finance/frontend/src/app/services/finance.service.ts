@@ -481,17 +481,36 @@ export class FinanceService {
   }
 
   /**
-   * Full unlocked ledger for the Travel spend bridge.
-   * A lock or session change before the read returns publishes nothing.
+   * Fresh unlocked ledger for one cost link.
+   * Reloads transactions so a deleted source is not confirmed from cache.
+   * A lock or session change is `invalid`. An ordinary read error is `failed`
+   * and leaves the cached rows in place.
+   */
+  readTripSpendLedgerStatus(): Promise<'invalid' | 'failed' | { rows: Transaction[] }> {
+    if (!hasDek()) return Promise.resolve('invalid');
+    const lock = readLockEpoch();
+    const session = this.encStore.sessionToken;
+    const ended = () => lock !== readLockEpoch() || !hasDek() || session !== this.encStore.sessionToken;
+    return Promise.resolve()
+      .then(() => this.encStore.reloadCollections(['transactions'], { silent: true }))
+      .then(() => this.encStore.getTransactions())
+      .then(rows => ended() ? 'invalid' as const : { rows }, () => ended() ? 'invalid' as const : 'failed' as const);
+  }
+
+  /**
+   * Cached ledger for the spend producer.
+   * A lock, session change, or rejected read publishes nothing.
    */
   readTripSpendLedger(): Promise<Transaction[] | null> {
     if (!hasDek()) return Promise.resolve(null);
     const lock = readLockEpoch();
     const session = this.encStore.sessionToken;
-    return this.encStore.getTransactions().then(rows => {
-      if (lock !== readLockEpoch() || !hasDek() || session !== this.encStore.sessionToken) return null;
-      return rows;
-    }, () => null);
+    return Promise.resolve()
+      .then(() => this.encStore.getTransactions())
+      .then(rows => {
+        if (lock !== readLockEpoch() || !hasDek() || session !== this.encStore.sessionToken) return null;
+        return rows;
+      }, () => null);
   }
 
   getDashboardTransactions(_options?: { limit?: number }): Observable<Transaction[]> {

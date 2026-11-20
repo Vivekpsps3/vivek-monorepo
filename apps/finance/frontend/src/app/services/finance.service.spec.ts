@@ -748,6 +748,22 @@ describe('FinanceService', () => {
     }) as never);
     expect(await service.readTripSpendLedger()).toBeNull();
   });
+
+  it('keeps a failed trip-spend refresh distinct from a lock', async () => {
+    const rows = [{ id: 4, date: '2026-11-02', type: 'expense', category: 'Travel', amount: 420, trip_id: 7 }];
+    (encStore as unknown as { sessionToken: number }).sessionToken = 3;
+    encStore.reloadCollections.and.resolveTo();
+    encStore.getTransactions.and.resolveTo(rows as never);
+    await expectAsync(service.readTripSpendLedgerStatus()).toBeResolvedTo({ rows: rows as never });
+    expect(encStore.reloadCollections).toHaveBeenCalledWith(['transactions'], { silent: true });
+
+    encStore.reloadCollections.and.rejectWith(new Error('offline'));
+    await expectAsync(service.readTripSpendLedgerStatus()).toBeResolvedTo('failed');
+    expect(await service.readTripSpendLedger()).toEqual(rows as never);
+
+    wipeDek();
+    await expectAsync(service.readTripSpendLedgerStatus()).toBeResolvedTo('invalid');
+  });
 });
 
 describe('FinanceService with EncryptedStoreService', () => {

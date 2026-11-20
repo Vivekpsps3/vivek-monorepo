@@ -104,8 +104,11 @@ export function spendState(lookup, tripId) {
     if (existing) {
       existing.cents += cents;
       existing.count += count;
+      absorbPostings(existing, entry);
     } else {
-      byCurrency.set(currency, { currency, cents, count });
+      const row = { currency, cents, count };
+      absorbPostings(row, entry);
+      byCurrency.set(currency, row);
     }
   }
   const rows = [...byCurrency.values()].sort((a, b) =>
@@ -117,4 +120,138 @@ export function spendState(lookup, tripId) {
 
 export function countLabel(n) {
   return n === 1 ? "1 transaction" : `${n} transactions`;
+}
+
+function absorbPostings(target, entry) {
+  if (!Array.isArray(entry?.postings)) return;
+  for (const posting of entry.postings) {
+    if (!posting || typeof posting !== "object") continue;
+    const id = Number(posting.id);
+    if (!Number.isSafeInteger(id) || id <= 0) continue;
+    const cents = Number(posting.cents);
+    if (!Number.isFinite(cents)) continue;
+    const label = typeof posting.label === "string" ? posting.label : "";
+    if (!target.postings) target.postings = [];
+    if (target.postings.some((row) => row.id === id)) continue;
+    target.postings.push({ id, cents, label });
+  }
+}
+
+function lineSourceId(line) {
+  return Number(line?.source_id ?? line?.sourceId);
+}
+
+/** Positive booked cost and positive posted row share one payment. Refunds add nothing. */
+export function countedCents(lineCents, postingCents) {
+  if (!(lineCents > 0) || !(postingCents > 0)) return 0;
+  return Math.min(lineCents, postingCents);
+}
+
+/**
+ * Planned and booked are Travel line amounts. Posted is the unlocked facade total
+ * for that currency, or null when Finance is locked or has no row in that currency.
+ * countedOnce is the overlap of an explicit link, each line and posting at most once.
+ */
+export function reconcileStages(lines, spend, links, currency, tripId) {
+  const code = String(currency || "").trim();
+  const rows = (Array.isArray(lines) ? lines : []).filter(
+    (line) => line && String(line.currency || "").trim() === code,
+  );
+  let planned = 0;
+  let booked = 0;
+  for (const line of rows) {
+    const cents = Number(line.amount_cents);
+    if (!Number.isFinite(cents)) continue;
+    if (line.paid) booked += cents;
+    else planned += cents;
+  }
+  const locked = spend == null || spend.kind === "locked";
+  let posted = null;
+  let postings = [];
+  if (!locked && spend.kind === "some") {
+    const row = (spend.rows || []).find((item) => item && item.currency === code);
+    if (row) {
+      posted = Number.isFinite(Number(row.cents)) ? Number(row.cents) : 0;
+      postings = Array.isArray(row.postings) ? row.postings : [];
+    }
+  }
+  const tripLinks = (Array.isArray(links) ? links : []).filter(
+    (link) => link && Number(link.tripId) === Number(tripId),
+  );
+  let countedOnce = 0;
+  const usedLines = new Set();
+  const usedPostings = new Set();
+  if (!locked && posted != null) {
+    for (const link of tripLinks) {
+      const sourceId = Number(link.sourceId ?? link.source_id);
+      const line = rows.find(
+        (item) => item.paid && item.source === link.source && lineSourceId(item) === sourceId,
+      );
+      if (!line) continue;
+      const lineKey = `${line.source}:${lineSourceId(line)}`;
+      if (usedLines.has(lineKey)) continue;
+      const postingId = Number(link.transactionId);
+      if (usedPostings.has(postingId)) continue;
+      const posting = postings.find((item) => Number(item?.id) === postingId);
+      if (!posting) continue;
+      usedLines.add(lineKey);
+      usedPostings.add(postingId);
+      countedOnce += countedCents(Number(line.amount_cents), Number(posting.cents));
+    }
+  }
+  return { currency: code, planned, booked, posted, countedOnce, locked };
+}
+
+/** Paid lines can choose a posting that is not already linked to another line. */
+export function linkChoices(postings, links, line) {
+  if (!line?.paid) return [];
+  const ownId = lineSourceId(line);
+  const taken = new Set(
+    (Array.isArray(links) ? links : [])
+      .filter((link) => !(link && link.source === line.source && Number(link.sourceId ?? link.source_id) === ownId))
+      .map((link) => Number(link.transactionId)),
+  );
+  return (Array.isArray(postings) ? postings : []).filter(
+    (posting) => posting && !taken.has(Number(posting.id)),
+  );
+}
+
+/** Unlocked spend no longer contains the linked posting. Locked spend stays private. */
+export function linkedPostingMissing(line, spend, link) {
+  if (!line || !link) return false;
+  if (spend == null || spend.kind === "locked") return false;
+  const rows = spend.kind === "some" ? spend.rows || [] : [];
+  const row = rows.find((item) => item && item.currency === String(line.currency || "").trim());
+  const postings = Array.isArray(row?.postings) ? row.postings : [];
+  return !postings.some((posting) => Number(posting?.id) === Number(link.transactionId));
+}
+
+const SAVE_ERROR = "Couldn't save this link. Try again.";
+const MISSING_ERROR = "That posted transaction is no longer available.";
+
+/**
+ * Apply a confirm result only when it still matches the current selection.
+ * A late or losing response drops. Invalidation clears the draft. A failed
+ * read keeps the draft so the same choice can be retried.
+ */
+export function settleCostLink(request, current) {
+  const same = current
+    && request
+    && request.epoch === current.epoch
+    && Number(request.tripId) === Number(current.tripId)
+    && request.source === current.source
+    && Number(request.sourceId) === Number(current.sourceId)
+    && Number(request.transactionId) === Number(current.transactionId);
+  if (!same) return { action: "drop", clearDraft: false, error: null };
+  if (!current.sessionActive || current.spendLocked || request.status === "invalid") {
+    return { action: "drop", clearDraft: true, error: null };
+  }
+  if (request.status === "failed") {
+    return { action: "keep", clearDraft: false, error: SAVE_ERROR };
+  }
+  const posting = request.posting;
+  if (request.status !== "posted" || !posting || Number(posting.id) !== Number(request.transactionId)) {
+    return { action: "drop", clearDraft: true, error: MISSING_ERROR };
+  }
+  return { action: "apply", clearDraft: true, error: null };
 }

@@ -64,7 +64,7 @@ export { UserMenuContent } from './user-menu-content';
 export { UiMenuComponent } from './ui-menu/ui-menu.component';
 export { UiMenuItemDirective } from './ui-menu/ui-menu-item.directive';
 export { UiSegmentedComponent, type UiSegmentedOption } from './ui-segmented/ui-segmented.component';
-export { FinanceTripSpendRegistry, type TripSpendLookup, type TripSpendTotal } from './finance-trip-spend';
+export { FinanceTripSpendRegistry, type TripSpendConfirmResult, type TripSpendConfirmer, type TripSpendLookup, type TripSpendPosting, type TripSpendTotal } from './finance-trip-spend';
 
 export {
   CHANNEL_CAP,
