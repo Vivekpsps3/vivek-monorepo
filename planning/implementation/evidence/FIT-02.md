@@ -56,7 +56,7 @@ Python lint, Python typecheck, and the Python coverage gates were not run. The d
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): after open. The body uses `Closes #432` only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/554 (`Closes #432` only).
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #90, #134, and #277 stay open. This leaf does not deploy.
