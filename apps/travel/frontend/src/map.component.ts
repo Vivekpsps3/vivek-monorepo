@@ -15,6 +15,7 @@ export interface TravelPlace {
   label: string;
   lat: number | null;
   lng: number | null;
+  kindLabel?: string;
 }
 @Component({
   imports: [UiButtonComponent],
@@ -71,6 +72,9 @@ export interface TravelPlace {
     <ul class="place-list">
       @for (place of places; track $index) {
         <li>
+          @if (place.kindLabel) {
+            <span class="place-kind">{{ place.kindLabel }}</span>
+          }
           <span>{{ place.label }}</span>
           @if (valid(place)) {
             <ui-button variant="ghost" type="button" (click)="show($index)">

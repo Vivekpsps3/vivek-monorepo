@@ -15,6 +15,7 @@
     <ui-page-header
       backLabel="← Trips"
       backLink="/travel"
+      backSource="/travel"
       [title]="trip.title"
     >
       <p>{{ trip.status }} · {{ trip.phase }}</p>
@@ -58,10 +59,14 @@
       @for (stay of trip.stays; track stay.id) {
         <article class="trip-row">
           <div>
+            <p class="place-kind">City</p>
             <h3>{{ stay.city }}</h3>
             <p>{{ showRange(stay.arrive_on, stay.leave_on) }}</p>
             @if (stay.lodging_name) {
-              <p>{{ stay.lodging_name }} · {{ stay.lodging_address }}</p>
+              <p><span class="place-kind">Lodging</span> {{ stay.lodging_name }}</p>
+            }
+            @if (stay.lodging_address) {
+              <p>{{ stay.lodging_address }}</p>
             }
             @if (stay.lat === null || stay.lng === null) {
               <p class="muted">Location has not been chosen.</p>
@@ -109,6 +114,11 @@
         <p class="muted">
           No destinations saved. Add one when you know where you're staying.
         </p>
+      }
+      @for (place of listedPlaces(); track place.kind + place.label) {
+        @if (place.kind === "airport") {
+          <p><span class="place-kind">Airport</span> {{ place.label }}</p>
+        }
       }
       <ui-button
         variant="ghost"
@@ -223,7 +233,11 @@
         }
         @if (!hasPlans() && !selectedDay) {
           <p class="muted">
-            No activities yet. Your dates and destinations are saved.
+            @if (trip.stays.length) {
+              No activities yet. Your dates and destinations are saved.
+            } @else {
+              No activities yet. Your dates are saved.
+            }
           </p>
         }
         <ng-template #itineraryRows let-entries="entries">
