@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#434](https://github.com/Vivekpsps3/vivek-monorepo/issues/434) FIT-04. Parents [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304), [#90](https://github.com/Vivekpsps3/vivek-monorepo/issues/90), and roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stay open. #277 stays open and was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/fit-04`; `/tmp/vivek-fit-04`. The shared checkout was not used for source edits. Travel and Town habit flows outside `apps/web/src/app/town/health/` were not edited by this leaf. The Town guidance file records the archive invariant.
-- Base main SHA, current tested SHA: base `7e2acd1e6628f5acb70abd64853f8619611f7993` (ROOM-04 merge, pull request #557). `git fetch origin main` on 2026-11-20 returned that SHA. The branch fast-forwarded onto it before the gates below. Commands ran on that base plus the FIT-04 working tree. The implementation commit is named in the handoff after it exists.
+- Base main SHA, current tested SHA: base `7e2acd1e6628f5acb70abd64853f8619611f7993` (ROOM-04 merge, pull request #557). `git fetch origin main` on 2026-11-20 returned that SHA. The branch fast-forwarded onto it before the gates below. Commands ran on that base plus the FIT-04 diff. The implementation and these command results are `91a62e4dcc3d02714e541dab2af150c5a95aee27`. This sentence names that commit.
 - Fresh-main/prerequisite/active-PR checks: FIT-03 is on this base as pull request #556 (`e8ff90ea5d736ea1fd01c73be02c2478e9d7cab0`), which is an ancestor of the base. The session floor, canonical previews, `updateWorkoutSession`, and `deleteWorkout` are present in `apps/web/src/app/town/health/`. Issue #433 is closed. Issue #434 is open. The only open pull request at this check was #558 (`agent/scene-04`). Its files are Town habit dialogs, today, and e2e discovery. It does not touch `apps/web/src/app/town/health/` or the Finance public vault API. No open pull request touched `health-store` or `health-ui`.
 
 ## Acceptance
@@ -61,4 +61,4 @@ Python lint, Python typecheck, and the Python coverage gates were not run. The F
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #90, #134, and #277 stay open. This leaf does not deploy.
-- Next actor: push `agent/fit-04`, open the pull request, wait for green required checks, then merge with a merge commit.
+- Next actor: push `agent/fit-04`, open the pull request, wait for green required checks, then merge with a merge commit. The tested implementation commit is `91a62e4dcc3d02714e541dab2af150c5a95aee27`.
