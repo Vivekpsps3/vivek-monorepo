@@ -53,8 +53,8 @@ Commands ran in `/tmp/vivek-scene-04`. Python gates and `make test-fast` used `P
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this commit. The body uses the leaf closure keyword for #442 only and names the parents that stay open.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/558. The body uses the leaf closure keyword for #442 only and names the parents that stay open.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
 - Merged/activation status (actual evidence, not assumption): not merged when this sentence is written. Base `e8ff90ea5d736ea1fd01c73be02c2478e9d7cab0` is `origin/main` at verification.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate. `TownLotComponent` stays because the Health passphrase scanner imports it.
-- Next actor: this implementer commits, pushes `agent/scene-04`, opens the pull request, waits for the required checks, then merges with a merge commit.
+- Next actor: this implementer waits for the required checks on pull request #558, then merges with a merge commit.
