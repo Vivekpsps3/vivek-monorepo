@@ -55,7 +55,7 @@ Commands ran in `/tmp/vivek-scene-02`. `make test-fast`, `make build-frontends`,
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this evidence update. The body uses `Closes #440` and names the parents that stay open.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/553. The body says `Closes #440` and names the parents that stay open.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
 - Merged/activation status (actual evidence, not assumption): `origin/main` `564256757945305d641107aea008599f1789d81f` is merged as `fd76b97ccfd2eae1098a2d83cc83487014e1ddc4`. The pull request itself is not merged when this sentence is written.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate. SCENE-03 still owns PLACE-04-EQUIV. World removal stays with MERGE-03.
