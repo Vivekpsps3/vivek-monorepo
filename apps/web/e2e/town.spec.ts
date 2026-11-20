@@ -352,7 +352,7 @@ test.describe('Reading Hall', () => {
     await expect(page.getByRole('heading', { name: 'Reading Hall', level: 1 })).toBeFocused();
     const room = page.locator('app-town-library-room');
     const objects = room.getByRole('list', { name: 'Room objects' });
-    const shelves = room.locator('.scene').getByRole('link', { name: 'Bookshelves' });
+    const shelves = room.locator('.scene').getByRole('button', { name: 'Bookshelves' });
     const paintedWidth = (await artworkBounds(shelves)).width;
     await shelves.tap();
     await expect(room.getByRole('heading', { name: 'Bookshelves' })).toBeVisible();
@@ -368,11 +368,11 @@ test.describe('Reading Hall', () => {
         await expect(shelves.locator('img')).toHaveCSS('color-scheme', theme);
         const bounds = await artworkBounds(shelves);
         if (width === 1280) expect(bounds.width).toBeGreaterThan(paintedWidth);
-        const desk = room.locator('.scene').getByRole('link', { name: 'Reading desk' });
+        const desk = room.locator('.scene').getByRole('button', { name: 'Reading desk' });
         await artworkBounds(desk);
         await desk.click();
         await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
-        await shelves.click({ position: { x: bounds.width - 3, y: bounds.height - 3 } });
+        await shelves.click({ position: { x: bounds.width - 6, y: 8 } });
         await expect(room.getByRole('heading', { name: 'Bookshelves' })).toBeVisible();
         const scan = await new AxeBuilder({ page }).include('app-town-library-room').analyze();
         expect(scan.violations).toEqual([]);
@@ -430,11 +430,11 @@ test.describe('Reading Hall', () => {
     await expect(room.getByRole('button', { name: 'Retry progress' })).toBeVisible();
     await picker.getByRole('link', { name: 'Reading desk' }).click();
     await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
-    await expect(room.locator('.scene').getByRole('link', { name: 'Reading desk' })).toHaveCount(0);
+    await expect(room.locator('.scene').getByRole('button', { name: 'Reading desk' })).toHaveCount(0);
     failedArt = false;
     await room.getByRole('button', { name: 'Retry artwork' }).click();
     await expect(picker.getByRole('link', { name: 'Reading desk' })).toBeFocused();
-    await artworkBounds(room.locator('.scene').getByRole('link', { name: 'Reading desk' }));
+    await artworkBounds(room.locator('.scene').getByRole('button', { name: 'Reading desk' }));
     expect(requests.slice(4)).toEqual(['/town/library/desk.svg?retry=1']);
     failedProgress = false;
     await room.getByRole('button', { name: 'Retry progress' }).click();
@@ -496,6 +496,174 @@ test.describe('Reading Hall', () => {
     await expect(entrance).toBeFocused();
   });
 
+  test('selects the front object after resize, pan, and zoom, and ignores drag and cancel', async ({ page, request }, info) => {
+    test.setTimeout(120_000);
+    const book = 'Synthetic Scene Atlas';
+    await readOk(await request.post('/media/api/library', {
+      data: { kind: 'book', title: book, status: 'in_progress' },
+    }));
+    const townReads: string[] = [];
+    page.on('request', req => {
+      if (new URL(req.url()).pathname === '/api/town') townReads.push(req.url());
+    });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/town/library');
+    const room = page.locator('app-town-library-room');
+    const objects = room.getByRole('list', { name: 'Room objects' });
+    const scene = room.getByRole('group', { name: /Drag to look around/ });
+    const shelves = room.locator('.scene').getByRole('button', { name: 'Bookshelves' });
+    const desk = room.locator('.scene').getByRole('button', { name: 'Reading desk' });
+    await expect(room).toContainText('Media XP today');
+    const town = await (await request.get('/api/town?tz=America%2FLos_Angeles')).json() as TownResponse;
+    const progress = 'Level ' + town.buildings.library.level + ' · ' +
+      town.buildings.library.today_xp + ' / ' + town.buildings.library.today_cap + ' Media XP today';
+    await expect(room).toContainText(progress);
+
+    for (const [index, viewport] of [
+      { width: 390, height: 844, motion: 'reduce' },
+      { width: 1280, height: 800, motion: 'no-preference' },
+    ].entries()) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.emulateMedia({ reducedMotion: viewport.motion as 'reduce' | 'no-preference' });
+      await room.getByRole('button', { name: 'Reset view' }).click();
+      await expect.poll(() => stageMatrix(room)).toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/);
+      await expect(shelves).toBeVisible();
+      await artworkBounds(shelves);
+      await artworkBounds(desk);
+      for (const control of await room.locator('a:visible, button:visible').all()) {
+        const bounds = (await control.boundingBox())!;
+        expect(bounds.width).toBeGreaterThanOrEqual(44);
+        expect(bounds.height).toBeGreaterThanOrEqual(44);
+      }
+      const front = await overlapCenter(shelves, desk);
+      expect(front.width).toBeGreaterThan(20);
+      expect(front.height).toBeGreaterThan(12);
+      const reads = townReads.length;
+      await page.touchscreen.tap(front.cx, front.cy);
+      await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
+      await expect(objects.getByRole('link', { name: 'Reading desk' })).toBeFocused();
+      await expect(page).toHaveURL(/object=desk/);
+      expect(townReads.length).toBe(reads);
+
+      const exposed = await exposedPoint(await shelves.boundingBox(), await desk.boundingBox());
+      await page.touchscreen.tap(exposed.x, exposed.y);
+      await expect(room.getByRole('heading', { name: 'Bookshelves' })).toBeVisible();
+      await expect(objects.getByRole('link', { name: 'Bookshelves' })).toBeFocused();
+      await expect(room.getByRole('link', { name: 'Browse saved books' })).toHaveAttribute('href', '/media/library?kind=book');
+
+      await objects.getByRole('link', { name: 'Reading desk' }).focus();
+      await page.keyboard.press('Enter');
+      await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
+      await expect(objects.getByRole('link', { name: 'Reading desk' })).toBeFocused();
+      await objects.getByRole('link', { name: 'Wall calendar' }).focus();
+      await page.keyboard.press('Enter');
+      await expect(room.getByRole('heading', { name: 'Wall calendar' })).toBeVisible();
+      await expect(page).toHaveURL(/object=calendar/);
+
+      await room.getByRole('button', { name: 'Zoom in' }).click();
+      await expect.poll(() => stageMatrix(room)).toContain('matrix(1.5,');
+      const beforePan = (await desk.boundingBox())!;
+      const view = (await scene.boundingBox())!;
+      await page.mouse.move(view.x + view.width / 2, view.y + view.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(view.x + view.width / 2 + 70, view.y + view.height / 2 + 36, { steps: 8 });
+      await page.mouse.up();
+      await expect.poll(async () => (await desk.boundingBox())!.x).toBeGreaterThan(beforePan.x + 30);
+      await expect(page).toHaveURL(/object=calendar/);
+      await expect(room.getByRole('heading', { name: 'Wall calendar' })).toBeVisible();
+      expect(townReads.length).toBe(reads);
+
+      const panned = await overlapCenter(shelves, desk);
+      const viewAfter = (await scene.boundingBox())!;
+      expect(panned.cx).toBeGreaterThan(viewAfter.x + 4);
+      expect(panned.cx).toBeLessThan(viewAfter.x + viewAfter.width - 4);
+      expect(panned.cy).toBeGreaterThan(viewAfter.y + 4);
+      expect(panned.cy).toBeLessThan(viewAfter.y + viewAfter.height - 4);
+      await page.touchscreen.tap(panned.cx, panned.cy);
+      await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
+      await expect(objects.getByRole('link', { name: 'Reading desk' })).toBeFocused();
+
+      await objects.getByRole('link', { name: 'Wall calendar' }).click();
+      await expect(page).toHaveURL(/object=calendar/);
+      const client = await page.context().newCDPSession(page);
+      const origin = (await desk.boundingBox())!;
+      await client.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ x: viewAfter.x + 80, y: viewAfter.y + 80, id: 3 }],
+      });
+      await client.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: viewAfter.x + 24, y: viewAfter.y + 40, id: 3 }],
+      });
+      await expect.poll(async () => Math.abs((await desk.boundingBox())!.x - origin.x)).toBeGreaterThan(20);
+      await client.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+      await expect.poll(async () => {
+        const restored = (await desk.boundingBox())!;
+        return Math.abs(restored.x - origin.x) < 2 && Math.abs(restored.y - origin.y) < 2;
+      }).toBe(true);
+      await client.detach();
+      await expect(page).toHaveURL(/object=calendar/);
+      expect(townReads.length).toBe(reads);
+      expect(await room.evaluate(el => el.getAnimations({ subtree: true }).length)).toBe(0);
+
+      for (const theme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await expect(desk.locator('img')).toHaveCSS('color-scheme', theme);
+        const scan = await new AxeBuilder({ page }).include('app-town-library-room').analyze();
+        expect(scan.violations).toEqual([]);
+        await info.attach(`scene-overlap-${viewport.width}-${theme}-${index}`, {
+          body: await room.screenshot(), contentType: 'image/png',
+        });
+      }
+    }
+
+    await objects.getByRole('link', { name: 'Bookshelves' }).click();
+    await room.getByRole('link', { name: 'Browse saved books' }).click();
+    await expect(page).toHaveURL(/\/media\/library\?kind=book/);
+    await expect(page.getByRole('link', { name: book })).toBeVisible();
+    await page.goBack();
+    await expect(objects.getByRole('link', { name: 'Bookshelves' })).toBeFocused();
+    await expect(room).toContainText(progress);
+  });
+
+  test('keeps the scene view and selection when Library progress fails', async ({ page }) => {
+    let mode: 'hold' | 'fail' | 'pass' = 'hold';
+    let release = (): void => undefined;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route(url => url.pathname === '/api/town', async route => {
+      if (mode === 'hold') await held;
+      if (mode === 'fail') {
+        await route.fulfill({ status: 503 });
+        return;
+      }
+      await route.continue();
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const pending = page.waitForRequest(req => new URL(req.url()).pathname === '/api/town');
+    await page.goto('/town/library?object=desk');
+    await pending;
+    const room = page.locator('app-town-library-room');
+    await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
+    await expect(room.getByText('Loading Library progress…')).toBeVisible();
+    await room.getByRole('button', { name: 'Zoom in' }).click();
+    await expect.poll(() => stageMatrix(room)).toContain('matrix(1.5,');
+    const zoomed = await stageMatrix(room);
+    mode = 'fail';
+    release();
+    await expect(room.getByText('Library progress is unavailable.')).toBeVisible();
+    await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
+    await expect(page).toHaveURL(/object=desk/);
+    expect(await stageMatrix(room)).toBe(zoomed);
+    mode = 'pass';
+    await room.getByRole('button', { name: 'Retry progress' }).click();
+    await expect(room.getByRole('heading', { name: 'Library progress' })).toBeFocused();
+    await expect(room).toContainText('Media XP today');
+    await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
+    expect(await stageMatrix(room)).toBe(zoomed);
+  });
+
   test('keeps the roster and canonical action usable at 320px and 200% text', async ({ page }, info) => {
     await page.setViewportSize({ width: 320, height: 844 });
     await page.goto('/town/library?object=calendar');
@@ -507,6 +675,38 @@ test.describe('Reading Hall', () => {
     await info.attach('reading-hall-320-text-200', { body: await room.screenshot(), contentType: 'image/png' });
   });
 });
+
+function stageMatrix(room: Locator): Promise<string> {
+  return room.locator('.stage').evaluate(el => getComputedStyle(el).transform);
+}
+
+async function overlapCenter(first: Locator, second: Locator) {
+  const [a, b] = await Promise.all([first.boundingBox(), second.boundingBox()]);
+  if (!a || !b) throw new Error('missing scene bounds');
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const bottom = Math.min(a.y + a.height, b.y + b.height);
+  return { x, y, width: right - x, height: bottom - y, cx: (x + right) / 2, cy: (y + bottom) / 2 };
+}
+
+function exposedPoint(
+  target: { x: number; y: number; width: number; height: number } | null,
+  blocker: { x: number; y: number; width: number; height: number } | null,
+) {
+  if (!target || !blocker) throw new Error('missing scene bounds');
+  const samples = [
+    [target.x + 8, target.y + 8],
+    [target.x + target.width - 8, target.y + 8],
+    [target.x + target.width / 2, target.y + 12],
+    [target.x + 8, target.y + target.height / 2],
+  ];
+  const hit = samples.find(([x, y]) => x > target.x && x < target.x + target.width
+    && y > target.y && y < target.y + target.height
+    && (x < blocker.x || x > blocker.x + blocker.width || y < blocker.y || y > blocker.y + blocker.height));
+  if (!hit) throw new Error('no exposed shelves point');
+  return { x: hit[0], y: hit[1] };
+}
 
 async function artworkBounds(link: Locator) {
   const artwork = link.locator('img');
