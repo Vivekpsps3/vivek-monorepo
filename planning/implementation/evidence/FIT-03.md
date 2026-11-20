@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#433](https://github.com/Vivekpsps3/vivek-monorepo/issues/433) FIT-03. Parents [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304), [#90](https://github.com/Vivekpsps3/vivek-monorepo/issues/90), and roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stay open. #277 stays open and was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/fit-03`; `/tmp/vivek-fit-03`. The shared checkout was not used for source edits. Travel and Town rooms outside `apps/web/src/app/town/health/` were not edited by this leaf.
-- Base main SHA, current tested SHA: base `57b69462126defe6bf3b8853237a8b18c1c9abcf` (SCENE-03 merge, pull request #555). `git fetch origin main` on 2026-11-20 returned that SHA before the post-merge gates below. The implementation commit is recorded in the handoff after this file is committed.
+- Base main SHA, current tested SHA: base `57b69462126defe6bf3b8853237a8b18c1c9abcf` (SCENE-03 merge, pull request #555). `git fetch origin main` on 2026-11-20 returned that SHA before the post-merge gates below. The implementation and these command results are `7dd395f1fac15453d58ab718d8adf785bb7fd720`. This sentence names that commit.
 - Fresh-main/prerequisite/active-PR checks: FIT-02 is on this base as pull request #554 (`748b75c9fca84f46567eee5b3b8a717adca565f6`): one Health store, session drafts, stable part ids, entered sets only, and revision-aware `updateWorkoutSession`. STYLE-02 is on this base as pull request #495 (`6303c08a`). Issue #432 and issue #383 are already closed. The only open pull request at the pre-merge check was #555 (`agent/scene-03`). Its diff does not touch `apps/web/src/app/town/health/` or the Finance public vault API. #433 was open. No open pull request touched `health-store` or `health-ui`.
 
 ## Acceptance
@@ -60,4 +60,4 @@ Python lint, Python typecheck, and the Python coverage gates were not run. The d
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #90, #134, and #277 stay open. This leaf does not deploy.
-- Next actor: push `agent/fit-03`, open the pull request, wait for green required checks, then merge with a merge commit.
+- Next actor: push `agent/fit-03`, open the pull request, wait for green required checks, then merge with a merge commit. The tested implementation commit is `7dd395f1fac15453d58ab718d8adf785bb7fd720`.
