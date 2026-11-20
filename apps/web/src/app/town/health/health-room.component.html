@@ -133,8 +133,13 @@
           } @else {
             <ul class="entries" aria-label="Workouts">
               @for (row of workoutRows(); track row.clientId) {
-                <li [attr.data-workout-kind]="row.kind">
+                <li [attr.data-workout-kind]="row.kind" [attr.data-workout-state]="row.state" [attr.data-set-count]="row.setCount">
                   <span class="entry-label" [id]="'health-workout-' + row.clientId" tabindex="-1">{{ row.label }}</span>
+                  @if (row.state === 'draft') {
+                    <span class="entry-actions">
+                      <ui-button variant="secondary" [attr.id]="'health-resume-' + row.clientId" [ariaLabel]="'Resume ' + row.label" (clicked)="resumeWorkout(row.clientId)">Resume</ui-button>
+                    </span>
+                  }
                 </li>
               }
             </ul>

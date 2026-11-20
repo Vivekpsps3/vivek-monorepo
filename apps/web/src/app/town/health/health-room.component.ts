@@ -46,6 +46,7 @@ import {
 } from './health-store.service';
 import type { HealthPr, HealthStat } from './health.types';
 import {
+  draftFromSession,
   emptyWorkoutDraft,
   formatWorkout,
   reformatWorkoutDraft,
@@ -266,6 +267,10 @@ export class HealthRoomComponent implements OnInit {
     clientId: entry.clientId,
     label: formatWorkout(entry.value, this.units()),
     kind: entry.value.kind,
+    state: entry.value.kind === 'session' ? entry.value.state : '',
+    setCount: entry.value.kind === 'session'
+      ? entry.value.exercises.reduce((sum, line) => sum + line.sets.length, 0)
+      : 0,
   })));
 
   constructor() {
@@ -369,7 +374,25 @@ export class HealthRoomComponent implements OnInit {
     this.workoutFormError.set('');
     this.returnWorkoutFocus.set(`health-add-${kind}`);
     const draft = this.workoutDraft();
-    if (!draft || draft.kind !== kind) this.workoutDraft.set(emptyWorkoutDraft(kind, this.today()));
+    if (!draft || draft.kind !== kind || draft.clientId !== '') {
+      this.workoutDraft.set(emptyWorkoutDraft(kind, this.today()));
+    }
+    this.workoutDialogOpen.set(true);
+  }
+
+  protected resumeWorkout(clientId: string): void {
+    this.workoutFormError.set('');
+    this.returnWorkoutFocus.set(`health-resume-${clientId}`);
+    const held = this.workoutDraft();
+    if (!held || held.clientId !== clientId) {
+      const entry = this.workouts().find(item => item.clientId === clientId);
+      if (!entry || entry.value.kind !== 'session' || entry.value.state !== 'draft') return;
+      this.workoutDraft.set(draftFromSession({
+        clientId: entry.clientId,
+        revision: entry.revision,
+        value: entry.value,
+      }));
+    }
     this.workoutDialogOpen.set(true);
   }
 
@@ -530,7 +553,18 @@ export class HealthRoomComponent implements OnInit {
     this.workoutFormError.set('');
     this.workoutBusy.set(true);
     try {
-      await this.store.createWorkout(value, this.today());
+      if (value.kind === 'session' && submitted?.clientId) {
+        const current = this.store.workoutsSnapshot.find(item => item.clientId === submitted.clientId);
+        if (!this.current(generation)) return;
+        if (!current || current.value.kind !== 'session') {
+          this.workoutFormError.set('That session is no longer saved. Your draft is still here.');
+          return;
+        }
+        const revision = submitted.revision ?? current.revision;
+        await this.store.updateWorkoutSession({ ...current, revision }, value, this.today());
+      } else {
+        await this.store.createWorkout(value, this.today());
+      }
       if (!this.current(generation)) return;
       this.publish();
       this.finishWorkout(generation, submitted);
