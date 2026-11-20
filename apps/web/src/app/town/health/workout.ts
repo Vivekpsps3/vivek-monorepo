@@ -65,6 +65,16 @@ export interface WorkoutSession {
 
 export type WorkoutRecord = WorkoutExercise | WorkoutRoutine | WorkoutSession;
 
+/** One set the user has entered. Numbers are canonical, so a unit change does not rewrite them. */
+export interface WorkoutDraftSet {
+  id: string;
+  setType: SetType;
+  kg?: number;
+  reps?: number;
+  seconds?: number;
+  metres?: number;
+}
+
 export interface WorkoutDraft {
   kind: WorkoutKind;
   name: string;
@@ -79,6 +89,16 @@ export interface WorkoutDraft {
   state: 'draft' | 'completed';
   exerciseLineId: string;
   setId: string;
+  /** Empty until the session has been saved. */
+  clientId: string;
+  /** Revision captured when the session was opened. Null creates a record. */
+  revision: number | null;
+  /** Empty until the first save. Later saves keep this value. */
+  loggedOn: string;
+  /** Custom definition id when the line already has one. Empty derives a static id. */
+  exerciseId: string;
+  /** Sets already entered. The open fields are not included until they are committed. */
+  sets: WorkoutDraftSet[];
 }
 
 const PART_ID = /^w(?:ex|st)_[A-Za-z0-9_-]{8,64}$/;
@@ -107,6 +127,11 @@ export function emptyWorkoutDraft(kind: WorkoutKind, today: string): WorkoutDraf
     state: 'completed',
     exerciseLineId: newWorkoutPartId('wex'),
     setId: newWorkoutPartId('wst'),
+    clientId: '',
+    revision: null,
+    loggedOn: '',
+    exerciseId: '',
+    sets: [],
   };
 }
 
@@ -148,6 +173,12 @@ export function exerciseTypeLabel(type: ExerciseType): string {
   }
 }
 
+export function setTypeLabel(type: SetType): string {
+  if (type === 'warmup') return 'Warm-up';
+  if (type === 'drop') return 'Drop';
+  return 'Work';
+}
+
 export function formatWorkout(record: WorkoutRecord, units: HealthUnits): string {
   if (record.kind === 'exercise') return `Exercise · ${record.name} · ${exerciseTypeLabel(record.exercise_type)}`;
   if (record.kind === 'routine') {
@@ -155,13 +186,25 @@ export function formatWorkout(record: WorkoutRecord, units: HealthUnits): string
     return `Routine · ${record.name} · ${count} ${count === 1 ? 'exercise' : 'exercises'}`;
   }
   const line = record.exercises[0];
+  const count = record.exercises.reduce((sum, item) => sum + item.sets.length, 0);
+  const prefix = record.state === 'draft' ? 'Draft session' : 'Session';
+  if (count !== 1) return `${prefix} · ${line?.name || 'Session'} · ${record.measured_on} · ${count} sets`;
   const set = line?.sets[0];
   const parts = [line?.name || 'Session', record.measured_on];
   if (typeof set?.kg === 'number') parts.push(`${displayWeight(set.kg, units.weight)} ${units.weight}`);
   if (typeof set?.reps === 'number') parts.push(`${set.reps} reps`);
   if (typeof set?.seconds === 'number') parts.push(`${set.seconds} s`);
   if (typeof set?.metres === 'number') parts.push(`${displayDistance(set.metres, units.distance)} ${units.distance}`);
-  return `Session · ${parts.join(' · ')}`;
+  return `${prefix} · ${parts.join(' · ')}`;
+}
+
+export function formatEnteredSet(set: WorkoutDraftSet, index: number, units: HealthUnits): string {
+  const parts = [`Set ${index + 1}`, setTypeLabel(set.setType)];
+  if (typeof set.kg === 'number') parts.push(`${displayWeight(set.kg, units.weight)} ${units.weight}`);
+  if (typeof set.reps === 'number') parts.push(`${set.reps} reps`);
+  if (typeof set.seconds === 'number') parts.push(`${set.seconds} s`);
+  if (typeof set.metres === 'number') parts.push(`${displayDistance(set.metres, units.distance)} ${units.distance}`);
+  return parts.join(' · ');
 }
 
 export function workoutFieldMessage(code: string | undefined): string {
@@ -227,6 +270,70 @@ export function reformatWorkoutDraft(draft: WorkoutDraft, from: HealthUnits, to:
   return { ...draft, load, distance };
 }
 
+export function progressBlank(draft: WorkoutDraft): boolean {
+  return draft.load.trim() === '' && draft.reps.trim() === '' && draft.seconds.trim() === '' && draft.distance.trim() === '';
+}
+
+/** Append the open set to a session draft. A blank set is not invented. */
+export function commitEnteredSet(
+  draft: WorkoutDraft,
+  units: HealthUnits,
+  today: string,
+): { draft: WorkoutDraft; fieldErrors: FieldErrors } {
+  if (draft.kind !== 'session') return { draft, fieldErrors: {} };
+  if (progressBlank(draft)) {
+    return { draft, fieldErrors: { [progressField(draft.exerciseType)]: 'required' } };
+  }
+  const probe = workoutFromDraft({ ...draft, sets: [], note: '' }, today, units);
+  const checked = validateWorkoutRecord(probe, 0, today);
+  if (Object.keys(checked.fieldErrors).length > 0 || checked.value.kind !== 'session') {
+    return { draft, fieldErrors: checked.fieldErrors };
+  }
+  const set = checked.value.exercises[0]?.sets[0];
+  if (!set) return { draft, fieldErrors: { sets: 'required' } };
+  return {
+    draft: {
+      ...draft,
+      sets: [...draft.sets, draftSetFromStored(set)],
+      load: '',
+      reps: '',
+      seconds: '',
+      distance: '',
+      setType: 'work',
+      setId: newWorkoutPartId('wst'),
+    },
+    fieldErrors: {},
+  };
+}
+
+/** Resume a saved session. The open set is blank, so reload shows only stored sets. */
+export function draftFromSession(
+  entry: { clientId: string; revision: number; value: WorkoutSession },
+): WorkoutDraft {
+  const line = entry.value.exercises[0];
+  const fresh = emptyWorkoutDraft('session', entry.value.measured_on);
+  return {
+    ...fresh,
+    name: line?.name ?? '',
+    exerciseType: line?.exercise_type ?? 'load-reps',
+    measuredOn: entry.value.measured_on,
+    note: entry.value.note ?? '',
+    load: '',
+    reps: '',
+    seconds: '',
+    distance: '',
+    setType: 'work',
+    state: entry.value.state,
+    exerciseLineId: line?.id && PART_ID.test(line.id) ? line.id : fresh.exerciseLineId,
+    setId: fresh.setId,
+    clientId: entry.clientId,
+    revision: entry.revision,
+    loggedOn: entry.value.logged_on,
+    exerciseId: line?.exercise_id ?? '',
+    sets: (line?.sets ?? []).map(draftSetFromStored),
+  };
+}
+
 export function workoutFromDraft(draft: WorkoutDraft, today: string, units: HealthUnits): WorkoutRecord {
   if (draft.kind === 'exercise') {
     return {
@@ -237,23 +344,72 @@ export function workoutFromDraft(draft: WorkoutDraft, today: string, units: Heal
       archived: false,
     };
   }
-  const line = exerciseLineFromDraft(draft, units, draft.kind === 'session' && draft.state === 'completed');
   if (draft.kind === 'routine') {
-    return { v: 1, kind: 'routine', name: draft.name, archived: false, exercises: [line] };
+    return {
+      v: 1,
+      kind: 'routine',
+      name: draft.name,
+      archived: false,
+      exercises: [exerciseLineFromDraft(draft, units, false)],
+    };
   }
   const session: WorkoutSession = {
     v: 1,
     kind: 'session',
     measured_on: draft.measuredOn,
-    logged_on: today,
+    logged_on: draft.loggedOn !== '' ? draft.loggedOn : today,
     state: draft.state,
-    exercises: [line],
+    exercises: [sessionLineFromDraft(draft, units)],
   };
   if (draft.note !== '') session.note = draft.note;
   return session;
 }
 
-function exerciseLineFromDraft(draft: WorkoutDraft, units: HealthUnits, completed: boolean): WorkoutExerciseLine {
+function progressField(type: ExerciseType): string {
+  if (type === 'bodyweight-reps') return 'reps';
+  if (type === 'time-only' || type === 'time-distance') return 'seconds';
+  return 'kg';
+}
+
+function draftSetFromStored(set: WorkoutSet): WorkoutDraftSet {
+  return {
+    id: set.id,
+    setType: set.set_type,
+    ...(set.kg !== undefined ? { kg: set.kg } : {}),
+    ...(set.reps !== undefined ? { reps: set.reps } : {}),
+    ...(set.seconds !== undefined ? { seconds: set.seconds } : {}),
+    ...(set.metres !== undefined ? { metres: set.metres } : {}),
+  };
+}
+
+function exerciseIdFromDraft(draft: WorkoutDraft): string {
+  if (CUSTOM_ID.test(draft.exerciseId)) return draft.exerciseId;
+  return staticExerciseId(draft.name);
+}
+
+function sessionLineFromDraft(draft: WorkoutDraft, units: HealthUnits): WorkoutExerciseLine {
+  const completed = draft.state === 'completed';
+  const sets = draft.sets.map(set => storedSet(set, completed));
+  if (!progressBlank(draft)) sets.push(progressSet(draft, units, completed));
+  return {
+    id: draft.exerciseLineId,
+    exercise_id: exerciseIdFromDraft(draft),
+    exercise_type: draft.exerciseType,
+    name: draft.name,
+    sets,
+  };
+}
+
+function storedSet(set: WorkoutDraftSet, completed: boolean): WorkoutSet {
+  const value: WorkoutSet = { id: set.id, set_type: set.setType, completed };
+  if (set.kg !== undefined) value.kg = set.kg;
+  if (set.reps !== undefined) value.reps = set.reps;
+  if (set.seconds !== undefined) value.seconds = set.seconds;
+  if (set.metres !== undefined) value.metres = set.metres;
+  return value;
+}
+
+function progressSet(draft: WorkoutDraft, units: HealthUnits, completed: boolean): WorkoutSet {
   const set: WorkoutSet = { id: draft.setId, set_type: draft.setType, completed };
   if (draft.exerciseType === 'load-reps' || draft.exerciseType === 'assisted-reps') {
     const kg = canonicalKg(draft.load, units.weight);
@@ -272,12 +428,16 @@ function exerciseLineFromDraft(draft: WorkoutDraft, units: HealthUnits, complete
     const seconds = parseHealthNumber(draft.seconds);
     if (seconds !== undefined) set.seconds = seconds;
   }
+  return set;
+}
+
+function exerciseLineFromDraft(draft: WorkoutDraft, units: HealthUnits, completed: boolean): WorkoutExerciseLine {
   return {
     id: draft.exerciseLineId,
-    exercise_id: staticExerciseId(draft.name),
+    exercise_id: exerciseIdFromDraft(draft),
     exercise_type: draft.exerciseType,
     name: draft.name,
-    sets: [set],
+    sets: [progressSet(draft, units, completed)],
   };
 }
 

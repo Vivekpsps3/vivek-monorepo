@@ -265,6 +265,13 @@ function typeInto(el: HTMLElement, selector: string, value: string): HTMLInputEl
   return input;
 }
 
+function choose(el: HTMLElement, selector: string, value: string): void {
+  const input = el.querySelector<HTMLSelectElement>(selector);
+  if (!input) throw new Error(`missing ${selector}`);
+  input.value = value;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function href(el: HTMLElement, label: string): string {
   const link = [...el.querySelectorAll('a')].find(item => item.textContent?.includes(label));
   if (!(link instanceof HTMLAnchorElement)) throw new Error(`missing ${label}`);
@@ -1456,6 +1463,165 @@ describe('Health room shell', () => {
     expect(visible(el)).not.toContain('WORKOUT_DRAFT_MARKER');
     expect(el.querySelector('#health-workout-name')).toBeNull();
     expect(el.textContent).toContain(`${displayWeight(40, 'lb')} lb`);
+  });
+
+  it('resumes only the entered sets and a losing save keeps the draft', async () => {
+    unlock();
+    seed();
+    route.routeData.next({ healthRoom: 'gym' });
+    route.query.next(convertToParamMap({}));
+    const { fixture, el } = await show();
+    const today = localTodayIso();
+    button(el, 'Add session').click();
+    fixture.detectChanges();
+    expect(button(el, 'Add set').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    typeInto(el, '#health-workout-name', 'Synthetic press');
+    typeInto(el, '#health-workout-load', '100');
+    typeInto(el, '#health-workout-reps', '5');
+    fixture.detectChanges();
+    button(el, 'Add set').click();
+    fixture.detectChanges();
+    const setId = el.querySelector('[data-entered-set]')?.getAttribute('data-entered-set') ?? '';
+    expect(setId).toMatch(/^wst_/);
+    expect(el.querySelectorAll('[data-entered-set]')).toHaveSize(1);
+    expect(el.querySelector<HTMLInputElement>('#health-workout-load')?.value).toBe('');
+    expect(el.querySelector<HTMLInputElement>('#health-workout-reps')?.value).toBe('');
+    choose(el, '#health-workout-state', 'draft');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const row = el.querySelector('[data-workout-state="draft"]');
+    expect(row?.getAttribute('data-set-count')).toBe('1');
+    expect(el.textContent).toContain(`Draft session · Synthetic press · ${today}`);
+    expect(button(el, 'Resume').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    const stored = fake.rows.find(item => item.collection === 'health_workouts');
+    if (!stored) throw new Error('missing session');
+    const decoded = decode(stored.ciphertext_b64) as {
+      state: string;
+      logged_on: string;
+      measured_on: string;
+      exercises: Array<{ sets: Array<{ id: string; reps?: number; completed: boolean }> }>;
+    };
+    expect(decoded.state).toBe('draft');
+    expect(decoded.logged_on).toBe(today);
+    expect(decoded.measured_on).toBe(today);
+    expect(decoded.exercises[0].sets.map(set => set.id)).toEqual([setId]);
+    expect(decoded.exercises[0].sets[0].reps).toBe(5);
+    expect(decoded.exercises[0].sets[0].completed).toBeFalse();
+    const cipher = stored.ciphertext_b64;
+    const revision = stored.revision;
+
+    button(el, 'Resume').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#health-workout-title')?.textContent).toContain('Resume session');
+    expect(el.querySelector('[data-entered-set]')?.getAttribute('data-entered-set')).toBe(setId);
+    expect(el.querySelectorAll('[data-entered-set]')).toHaveSize(1);
+    expect(el.querySelector<HTMLInputElement>('#health-workout-measured-on')?.value).toBe(today);
+    expect(el.querySelector('.logged-on time')?.getAttribute('datetime')).toBe(today);
+    expect(el.querySelector<HTMLInputElement>('#health-workout-load')?.value).toBe('');
+    button(el, 'Cancel').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise(resolve => setTimeout(resolve));
+    expect(document.activeElement).toBe(el.querySelector(`#health-resume-${stored.client_id} button`));
+
+    button(el, 'Resume').click();
+    fixture.detectChanges();
+    fake.failUpsert = true;
+    typeInto(el, '#health-workout-note', 'Synthetic kept');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Could not save this workout. Try again.');
+    expect(el.querySelector<HTMLTextAreaElement>('#health-workout-note')?.value).toBe('Synthetic kept');
+    expect(stored.ciphertext_b64).toBe(cipher);
+    expect(stored.revision).toBe(revision);
+    fake.failUpsert = false;
+
+    const winner = decode(cipher) as typeof decoded & { note?: string };
+    winner.exercises[0].sets[0].reps = 6;
+    winner.note = 'Synthetic winner';
+    stored.ciphertext_b64 = encode(winner);
+    stored.revision = revision + 1;
+    typeInto(el, '#health-workout-note', 'Synthetic loser');
+    typeInto(el, '#health-workout-load', '60');
+    typeInto(el, '#health-workout-reps', '4');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain(HEALTH_CONFLICT_MESSAGE);
+    expect(el.querySelector<HTMLTextAreaElement>('#health-workout-note')?.value).toBe('Synthetic loser');
+    expect(el.querySelector<HTMLInputElement>('#health-workout-reps')?.value).toBe('4');
+    expect(el.querySelectorAll('[data-entered-set]')).toHaveSize(1);
+    const after = decode(stored.ciphertext_b64) as typeof winner;
+    expect(after.note).toBe('Synthetic winner');
+    expect(after.exercises[0].sets).toHaveSize(1);
+    expect(after.exercises[0].sets[0].reps).toBe(6);
+    expect(after.logged_on).toBe(today);
+    expect(stored.revision).toBe(revision + 1);
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(decode(stored.ciphertext_b64)).toEqual(after);
+    expect(el.querySelector<HTMLInputElement>('#health-workout-reps')?.value).toBe('4');
+    expect(el.querySelector<HTMLTextAreaElement>('#health-workout-note')?.value).toBe('Synthetic loser');
+  });
+
+  it('clears a resumed session draft when the owner changes during save', async () => {
+    unlock();
+    seed();
+    const sessionId = 'hlt_sessiondraft00000000aa';
+    const sessionRecord = {
+      v: 1,
+      kind: 'session',
+      measured_on: DAY,
+      logged_on: DAY,
+      state: 'draft',
+      exercises: [{
+        id: 'wex_resume0001',
+        exercise_id: 'static:synthetic-press',
+        exercise_type: 'load-reps',
+        name: 'Synthetic press',
+        sets: [{ id: 'wst_resume0001', set_type: 'work', completed: false, kg: 40, reps: 5 }],
+      }],
+    };
+    fake.rows.push(row('health_workouts', sessionId, sessionRecord));
+    route.routeData.next({ healthRoom: 'gym' });
+    route.query.next(convertToParamMap({}));
+    const { fixture, el } = await show();
+    const stored = fake.rows.find(item => item.client_id === sessionId);
+    if (!stored) throw new Error('missing session');
+    const cipher = stored.ciphertext_b64;
+    button(el, 'Resume').click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-entered-set]')?.getAttribute('data-entered-set')).toBe('wst_resume0001');
+    typeInto(el, '#health-workout-note', 'Synthetic late');
+    fixture.detectChanges();
+    fake.holdUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await until(() => fake.upsertRelease.length === 1);
+    fake.holdList = true;
+    session.users.next({ id: 8 });
+    fixture.detectChanges();
+    await until(() => el.getAttribute('data-health-state') === 'loading');
+    expect(visible(el)).not.toContain('Synthetic late');
+    fake.upsertRelease.shift()?.();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(stored.ciphertext_b64).toBe(cipher);
+    expect(visible(el)).not.toContain('Synthetic press');
+    fake.listRelease.splice(0).forEach(release => release());
+    await settle(fixture);
+    expect(el.querySelector('#health-workout-note')).toBeNull();
+    expect(visible(el)).not.toContain('Synthetic late');
   });
 });
 

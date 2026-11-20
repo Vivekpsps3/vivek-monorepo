@@ -866,6 +866,78 @@ describe('Health workout collection', () => {
     expect(fake.rows[0].ciphertext_b64).toBe(prCipher);
     expect(textOf(fake.upserted)).not.toContain('Synthetic press');
   });
+
+  it('reloads entered sets and a stale revision does not replace the saved session', async () => {
+    fake.rows = [row('health_prs', 'hlt_b', PR)];
+    await store.load();
+    const prCipher = fake.rows.find(item => item.client_id === 'hlt_b')?.ciphertext_b64;
+    const created = workoutRecord();
+    if (created.kind !== 'session') return;
+    created.state = 'draft';
+    created.exercises[0].sets[0].completed = false;
+    created.exercises[0].sets.push({
+      id: 'wst_secondset01',
+      set_type: 'work',
+      completed: false,
+      kg: 30,
+      reps: 3,
+    });
+    const saved = await store.createWorkout(created, WORKOUT_TODAY);
+    const loaded = await store.load();
+    if (loaded.state !== 'ready' || saved.value.kind !== 'session') return;
+    const session = loaded.workouts[0]?.value;
+    if (session?.kind !== 'session') return;
+    expect(session.state).toBe('draft');
+    expect(session.logged_on).toBe(WORKOUT_TODAY);
+    expect(session.measured_on).toBe(WORKOUT_TODAY);
+    expect(session.exercises[0].sets.map(set => set.id)).toEqual(saved.value.exercises[0].sets.map(set => set.id));
+    expect(session.exercises[0].sets).toHaveSize(2);
+
+    const updated = await store.updateWorkoutSession(loaded.workouts[0], {
+      ...session,
+      measured_on: '2026-10-28',
+      logged_on: '2026-11-20',
+      note: 'Synthetic note',
+    }, '2026-11-20');
+    if (updated.value.kind !== 'session') return;
+    expect(updated.value.logged_on).toBe(WORKOUT_TODAY);
+    expect(updated.value.measured_on).toBe('2026-10-28');
+    expect(updated.value.exercises[0].sets).toHaveSize(2);
+    expect(updated.revision).toBe(2);
+    expect(fake.rows.find(item => item.client_id === 'hlt_b')?.ciphertext_b64).toBe(prCipher);
+
+    const attempts = fake.upserted.length;
+    const loser = { ...updated.value, note: 'Synthetic loser', logged_on: '2026-11-20' };
+    await expectAsync(store.updateWorkoutSession(saved, loser, '2026-11-20')).toBeRejectedWithError(HealthConflictError);
+    const winner = store.workoutsSnapshot[0]?.value;
+    if (winner?.kind !== 'session') return;
+    expect(winner.note).toBe('Synthetic note');
+    expect(winner.logged_on).toBe(WORKOUT_TODAY);
+    expect(winner.exercises[0].sets).toHaveSize(2);
+    expect(textOf(winner)).not.toContain('Synthetic loser');
+    await expectAsync(store.updateWorkoutSession(saved, loser, '2026-11-20')).toBeRejectedWithError(HealthConflictError);
+    expect(store.workoutsSnapshot[0]?.value).toEqual(winner);
+    expect(fake.upserted.length).toBe(attempts + 2);
+    expect(fake.rows.find(item => item.client_id === 'hlt_b')?.ciphertext_b64).toBe(prCipher);
+  });
+
+  it('drops a late session update and keeps the saved sets', async () => {
+    await store.load();
+    const saved = await store.createWorkout(workoutRecord(), WORKOUT_TODAY);
+    const cipher = fake.rows.find(item => item.client_id === saved.clientId)?.ciphertext_b64;
+    fake.holdUpsert = true;
+    const next = saved.value.kind === 'session' ? { ...saved.value, note: 'Synthetic late' } : saved.value;
+    const pending = store.updateWorkoutSession(saved, next, WORKOUT_TODAY);
+    await until(() => fake.upsertRelease.length === 1);
+    localStorage.removeItem('finance-dek');
+    session.become(null);
+    expect(fake.upsertCancelled).toBe(1);
+    fake.upsertRelease.shift()?.();
+    await expectAsync(pending).toBeRejected();
+    expect(store.workoutsSnapshot).toEqual([]);
+    expect(fake.rows.find(item => item.client_id === saved.clientId)?.ciphertext_b64).toBe(cipher);
+    expect(textOf(fake.rows)).not.toContain('Synthetic late');
+  });
 });
 
 describe('loadTownHealthStages (barrel)', () => {
