@@ -14,8 +14,9 @@ its fixed date window and response-size bound belong to server composition.
 
 Preserve currencies as separate Travel amounts: a multi-currency trip total is not
 Finance's USD total. Keep day boundaries, carry/cap/reset/history and hours-per-workday
-semantics explicit. Charts display server points; components must not grow a second
-balance engine. Policy removal must preserve historical entries and conflict behavior.
+semantics explicit. Charts display server points, including history and the
+accrual boundary, without a second balance engine. Policy removal must preserve
+historical entries and conflict behavior.
 
 Reuse existing menus, confirmation, date and field controls. Migrate both real
 consumers before deleting repeated editor logic. Preserve keyboard access, save-error

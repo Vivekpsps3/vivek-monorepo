@@ -50,7 +50,7 @@ for (const [collection, label, body] of cases) test(`removing ${label} offers Un
 test('PTO typed during a save stays a draft until the next save', async ({ page, request }) => {
   const trip = await (await request.post('/travel/api/trips', { data: { title: 'PTO save race', start_date: '2026-12-01', end_date: '2026-12-02' } })).json();
   await page.goto('/travel/trips/' + trip.id);
-  await page.locator('summary').filter({ hasText: /^PTO ·/ }).click();
+  await page.getByRole('heading', { name: /^PTO ·/ }).click();
   const half = ptoOption(page, '2026-12-01', 'Half');
   await half.click();
   let release;

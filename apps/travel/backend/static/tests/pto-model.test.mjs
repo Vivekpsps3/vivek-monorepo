@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { formatDay } from "../../../../../packages/browser/runtime/calendar-format.mjs";
 import {
   ACCRUAL_COPY,
   ANCHOR_COPY,
@@ -17,6 +18,10 @@ import {
   blurHours,
   blurHoursPerDay,
   defaultAllocation,
+  forecastHistory,
+  isWeekend,
+  overlapSentence,
+  policyFacts,
   commitHour,
   entryErrors,
   fieldErrorMap,
@@ -229,4 +234,58 @@ test("Full, Half, and None stay exact and a fraction is not quarter-rounded", ()
   assert.equal(retried.payload[2].amount, "0");
   assert.equal(allocationDraft(PICK_DAYS, same, false).total, "0");
   assert.equal(allocationDraft(PICK_DAYS, same, false).payload[1].amount, "0.5");
+  assert.equal(isWeekend("2026-12-12"), true);
+  assert.equal(isWeekend("2026-12-13"), true);
+  assert.equal(isWeekend("2026-12-14"), false);
+  assert.equal(isWeekend("not-a-date"), false);
+  assert.equal(defaultAllocation(""), "0");
+});
+
+test("policy facts and forecast history copy server text", () => {
+  assert.equal(policyFacts({ configured: false }), null);
+  const facts = policyFacts({
+    configured: true,
+    carry_forward: false,
+    cap_hours: "40",
+    year_start: "04-01",
+    balance_as_of: "2026-03-15",
+  });
+  assert.equal(facts.carry, "Unused hours reset at the policy year.");
+  assert.equal(facts.cap, "Cap is 40 h.");
+  assert.equal(facts.reset, "Policy year starts Apr 1.");
+  assert.equal(facts.boundary, "Balance recorded through Mar 15, 2026. Accrual starts the next day.");
+  assert.equal(policyFacts({ configured: true, carry_forward: true, cap_hours: null, year_start: "", balance_as_of: "" }).cap, "No cap.");
+  const series = {
+    pto: {
+      points: [
+        { on: "2026-03-15", days: "10", hours: "80", kinds: ["as_of", "month"] },
+        { on: "2026-06-15", days: "11", hours: "88", kinds: ["today"] },
+        { on: "2026-12-31", days: "99", hours: "792", kinds: ["horizon"] },
+      ],
+    },
+    sick: {
+      points: [
+        { on: "2026-03-15", days: "2", hours: "16", kinds: ["as_of"] },
+      ],
+    },
+  };
+  const rows = forecastHistory(series);
+  assert.deepEqual(rows.map((row) => row.kind), ["as_of", "as_of"]);
+  assert.equal(rows[0].label, "Accrual boundary");
+  assert.equal(rows[0].bucketLabel, "PTO");
+  assert.equal(rows[0].amount, "10 days \u00b7 80 h");
+  assert.equal(rows[0].days, series.pto.points[0].days);
+  assert.equal(rows[0].hours, series.pto.points[0].hours);
+  assert.equal(rows[1].amount, "2 days \u00b7 16 h");
+  assert.equal(rows.some((row) => row.days === "99"), false);
+});
+
+test("overlap warning prints the server conflict", () => {
+  const conflict = { on_date: "2026-12-14", amount: "2", labels: ["North trip", "South trip"] };
+  assert.equal(
+    overlapSentence(conflict),
+    `${formatDay(conflict.on_date)} counts ${conflict.amount} PTO days across ${conflict.labels.join(", ")}.`,
+  );
+  assert.equal(overlapSentence({ on_date: "", amount: "1", labels: ["One"] }), "");
+  assert.equal(overlapSentence(null), "");
 });

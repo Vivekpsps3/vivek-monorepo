@@ -26,7 +26,7 @@ Places resolve only after explicit search and selection. Normal trip reads never
 
 ## PTO
 
-Each trip date stores 0, 0.5 or 1 PTO days. Weekdays start at 1; Saturday/Sunday start at 0. Turning PTO off retains selections. Date edits retain intersecting choices and default newly added dates. Trip, calendar, home and forecast use the same dated charges. Overlaps are reported with dates and labels rather than silently merged.
+Each trip date stores 0, 0.5 or 1 PTO days. Weekdays start at 1; Saturday/Sunday start at 0. Turning PTO off retains selections. Date edits retain intersecting choices and default newly added dates. Trip, calendar, home and forecast use the same dated charges. Overlaps are reported with dates and labels rather than silently merged. The forecast lists those server points, including the accrual boundary, in each point's own day and hour text. Carry, cap, and reset stay on the policy card. A trip shows each overlap on its day.
 
 A saved balance is the balance at the end of `balance_as_of`. Daily accrual, the default for existing and new policies, begins the next day: annual amount /365, monthly amount ×12/365, semimonthly ×24/365, biweekly /14 and weekly /7. Scheduled posting is opt-in. It posts the whole amount on an explicit first date and then on that cadence, and it does not fill dates on or before the balance date. Same-day order is the policy-year drop, then accrual, then that day's charge. Hours convert using `hours_per_day`; a cap pauses accrual while reached. Dated trip charges apply on their dates; historical/manual aggregate usage retains its recorded start-date semantics.
 

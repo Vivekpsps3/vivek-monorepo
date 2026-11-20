@@ -215,8 +215,8 @@ import { dateOrderError, requiredText } from "./validate.mjs";
               [placeholder]="name()"
           /></ui-field>
         </details>
-        <details>
-          <summary>Time off</summary>
+        <section class="pto-allocation" aria-labelledby="new-pto-title">
+          <h2 id="new-pto-title">Time off</h2>
           <label class="check-label"
             ><input
               type="checkbox"
@@ -227,7 +227,8 @@ import { dateOrderError, requiredText } from "./validate.mjs";
           >
           <p class="muted">
             Weekdays start as Full. Weekends start as None. Turning PTO off
-            keeps your choices.
+            keeps your choices. Changing the dates keeps the days that still
+            overlap.
           </p>
           <div class="button-row">
             <ui-button
@@ -252,7 +253,7 @@ import { dateOrderError, requiredText } from "./validate.mjs";
             (picked)="chooseDay($event)"
           />
           <p>{{ total() }} PTO days selected.</p>
-        </details>
+        </section>
         @if (transports.length) {
           <section>
             <h2>Transport</h2>

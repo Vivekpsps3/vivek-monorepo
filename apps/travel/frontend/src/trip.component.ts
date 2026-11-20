@@ -38,6 +38,7 @@ import {
   allocationDraft,
   allocationText,
   defaultAllocation,
+  overlapSentence,
 } from "./pto-model.mjs";
 import { TransportEditorComponent } from "./transport-editor.component";
 import { TripCostsComponent } from "./trip-costs.component";
@@ -621,6 +622,14 @@ export class TripComponent {
             );
             this.ptoEnabled = d.counts_as_pto;
             this.ptoSaved = this.ptoSnapshot();
+          } else {
+            const amounts = { ...this.charges };
+            for (const day of d.days) {
+              if (amounts[day.on_date] === undefined) {
+                amounts[day.on_date] = defaultAllocation(day.on_date);
+              }
+            }
+            this.charges = amounts;
           }
           this.meta = {
             title: d.title,
@@ -1033,6 +1042,12 @@ export class TripComponent {
     this.inflight += 1;
     this.loadingRequest?.unsubscribe();
     this.dropEditorDraft();
+    this.charges = {};
+    this.ptoEnabled = true;
+    this.ptoSaved = this.ptoSnapshot();
+    this.data.set(null);
+    this.error.set("");
+    this.message.set("");
   }
   saveTransport(value: Record<string, unknown>): void {
     const when = String(value["depart_at"] || value["arrive_at"] || "");
@@ -1100,6 +1115,12 @@ export class TripComponent {
   }
   ptoDates(): string[] {
     return this.data()?.days.map((day) => day.on_date) ?? [];
+  }
+  onThisTrip(day: string): boolean {
+    return this.ptoDates().includes(day);
+  }
+  overlapText(conflict: { on_date: string; amount: string; labels: readonly string[] }): string {
+    return overlapSentence(conflict);
   }
   chooseDay(choice: { on_date: string; amount: string }): void {
     this.charges = { ...this.charges, [choice.on_date]: choice.amount };

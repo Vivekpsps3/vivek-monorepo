@@ -87,7 +87,35 @@ export function policyBody(
 };
 export const ALLOCATION_CHOICES: { id: string; label: string; amount: string }[];
 export function allocationText(raw: unknown): string;
+export function isWeekend(iso: string): boolean;
 export function defaultAllocation(iso: string): string;
+export function policyFacts(row: {
+  configured?: boolean;
+  carry_forward?: boolean;
+  cap_hours?: string | null;
+  year_start?: string | null;
+  balance_as_of?: string | null;
+} | null | undefined): { carry: string; cap: string; reset: string; boundary: string } | null;
+export function forecastHistory(series: {
+  pto?: { points?: readonly { on?: string; days?: string | number; hours?: string | number; kinds?: readonly string[] }[] | null } | null;
+  sick?: { points?: readonly { on?: string; days?: string | number; hours?: string | number; kinds?: readonly string[] }[] | null } | null;
+} | null | undefined): {
+  key: string;
+  bucket: string;
+  bucketLabel: string;
+  kind: string;
+  label: string;
+  on: string;
+  when: string;
+  days: string;
+  hours: string;
+  amount: string;
+}[];
+export function overlapSentence(conflict: {
+  on_date?: string;
+  amount?: string | number;
+  labels?: readonly string[];
+} | null | undefined): string;
 export function allocationDraft(
   dates: readonly string[] | null | undefined,
   amounts: Readonly<Record<string, string | number>> | null | undefined,
