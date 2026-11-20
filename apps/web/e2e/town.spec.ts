@@ -12,7 +12,7 @@ test.describe('Town', () => {
     expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
     await page.clock.setFixedTime(new Date('2026-10-29T19:00:00Z'));
   });
-  test('7: locked lots are read in order and skipped by Tab; 9: other users stay out of the DOM', async ({ page }) => {
+  test('7: locked lots are inspected from the keyboard; 9: other users stay out of the DOM', async ({ page }) => {
     await page.goto('/town');
     await expect(page.getByRole('main')).toHaveCount(1);
     await expect(page.locator('main > header')).toHaveCount(1);
@@ -22,8 +22,17 @@ test.describe('Town', () => {
     await expect(scene.getByRole('listitem')).toHaveCount(16);
     const locked = scene.getByRole('listitem').filter({ hasText: 'Unlocks at Lv 5' });
     await expect(locked).toHaveCount(1);
-    await expect(locked.locator('.static')).toHaveJSProperty('tabIndex', -1);
-    await expect(locked.locator('a, button, [tabindex]')).toHaveCount(0);
+    const lockedButton = locked.getByRole('button');
+    await lockedButton.focus();
+    await page.keyboard.press('Enter');
+    const inspector = page.locator('app-town-exterior [data-inspector]');
+    await expect(inspector).toHaveAttribute('data-inspector', 'locked');
+    await expect(inspector).toContainText('Unlocks at level 5');
+    await expect(inspector).toContainText('Nothing can be built here yet.');
+    await expect(inspector.getByRole('button', { name: 'Build here' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+    await expect(page.locator('app-habit-dialog')).toHaveCount(0);
+    await expect(page.getByRole('list', { name: 'Archived habits' })).toBeVisible();
     const controls = scene.locator('a, button');
     await controls.first().focus();
     for (let i = 0; i < await controls.count(); i++) {
@@ -340,6 +349,94 @@ test.describe('Town exterior', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(done).toBeVisible();
     await expect(page.getByRole('button', { name: 'Garden', exact: true })).toBeVisible();
+  });
+
+  test('inspects locked, empty, and archived lots and keeps a failed draft', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto('/town');
+    const before: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+    const walk = before.habits.find(item => item.name === 'Walk 30 minutes');
+    expect(walk?.id).toBeGreaterThan(0);
+    await readOk(await page.request.patch(`/api/town/habits/${walk!.id}?tz=America%2FLos_Angeles`, {
+      headers: { 'X-CSRF-Token': 'synthetic-csrf' }, data: { archived: true },
+    }));
+
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/town?inspect=slot-3');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    const inspector = page.locator('app-town-exterior [data-inspector]');
+    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+    await expect(inspector).toHaveAttribute('data-inspector', 'locked');
+    await expect(inspector).toContainText('Unlocks at level 5');
+    await expect(inspector.getByRole('button', { name: 'Build here' })).toHaveCount(0);
+    await expect(page.locator('app-town-today')).toContainText('Read 20 pages');
+    await expect(page.locator('app-town-exterior .inspector.sheet')).toHaveCount(0);
+    for (const control of await page.locator('app-town-exterior .inspector a:visible, app-town-exterior .inspector button:visible, app-town-exterior .place a:visible').all()) {
+      const box = await control.boundingBox();
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+    }
+
+    const empty = page.getByRole('list', { name: 'Town buildings' }).getByRole('button', { name: /Empty lot/ }).first();
+    await empty.focus();
+    await page.keyboard.press('Enter');
+    await expect(inspector).toHaveAttribute('data-inspector', 'empty');
+    await expect(inspector).toContainText('This lot is ready for a habit.');
+    const build = inspector.getByRole('button', { name: 'Build here' });
+    await build.focus();
+    await page.keyboard.press('Enter');
+    const name = page.locator('#habit-name');
+    await expect(name).toBeVisible();
+    await name.fill('Synthetic route habit');
+    await page.route(url => url.pathname === '/api/town/habits', route => {
+      if (route.request().method() === 'POST') {
+        return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'unavailable' }) });
+      }
+      return route.continue();
+    });
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(name).toHaveValue('Synthetic route habit');
+    await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('Town is unavailable right now.');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('heading', { name: 'New habit' })).toHaveCount(0);
+    await expect(inspector).toHaveAttribute('data-inspector', 'empty');
+    await page.unroute(url => url.pathname === '/api/town/habits');
+
+    const archived = page.getByRole('list', { name: 'Archived habits' }).getByRole('button', { name: /Walk 30 minutes/ });
+    await archived.focus();
+    await page.keyboard.press('Enter');
+    await expect(inspector).toHaveAttribute('data-inspector', 'archived');
+    await inspector.getByRole('button', { name: 'Open history' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
+    await expect(page.locator('app-history-dialog')).toContainText('Walk 30 minutes');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('heading', { name: 'History' })).toHaveCount(0);
+    await expect(inspector).toHaveAttribute('data-inspector', 'archived');
+
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/town?inspect=slot-3');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect(page.locator('app-town-exterior .inspector.sheet')).toBeVisible();
+    await expect(inspector).toHaveAttribute('data-inspector', 'locked');
+    await expect(page.locator('app-town-exterior [aria-modal="true"]')).toHaveCount(0);
+    const close = page.getByRole('button', { name: 'Close details' });
+    expect((await close.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    const zoom = page.getByRole('button', { name: 'Zoom in' });
+    await zoom.focus();
+    await expect(zoom).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page).not.toHaveURL(/inspect=/);
+    await expect(page.getByRole('button', { name: /Unlocks at Lv 5/ })).toBeFocused();
+    const emptyPhone = page.getByRole('list', { name: 'Town buildings' }).getByRole('button', { name: /Empty lot/ }).first();
+    await emptyPhone.tap();
+    await expect(inspector).toHaveAttribute('data-inspector', 'empty');
+    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+    const scan = await new AxeBuilder({ page }).include('app-town').analyze();
+    expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
   });
 });
 
@@ -765,6 +862,122 @@ test.describe('Reading Hall', () => {
     await expect(room.getByRole('link', { name: 'Open Media calendar' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
     await info.attach('reading-hall-320-text-200', { body: await room.screenshot(), contentType: 'image/png' });
+  });
+
+  test('returns from an object with the room, camera, and selection restored', async ({ page, request }, info) => {
+    test.setTimeout(180_000);
+    const book = 'Synthetic Layered Atlas';
+    await readOk(await request.post('/media/api/library', {
+      data: { kind: 'book', title: book, status: 'in_progress' },
+    }));
+    const room = page.locator('app-town-library-room');
+    const objects = room.getByRole('list', { name: 'Room objects' });
+
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/town/library');
+    await expect(room.getByRole('heading', { name: 'Reading Hall', level: 1 })).toBeVisible();
+    await objects.getByRole('link', { name: 'Reading desk' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
+    await expect(room.locator('img.room.cutaway')).toBeVisible();
+    await expect(room.locator('[data-scene-object="desk"]')).not.toHaveClass(/faded/);
+    await objects.getByRole('link', { name: 'Bookshelves' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(room.getByRole('heading', { name: 'Bookshelves' })).toBeVisible();
+    await expect(room.locator('[data-scene-object="desk"]')).toHaveClass(/faded/);
+    await expect(room.locator('[data-scene-object="shelves"]')).not.toHaveClass(/faded/);
+    await room.getByRole('button', { name: 'Zoom in' }).click();
+    await expect(page).toHaveURL(/object=shelves/);
+    await expect(page).toHaveURL(/scale=1\.5/);
+    const matrix = await stageMatrix(room);
+    expect(matrix).toContain('matrix(1.5,');
+    await expect(room.locator('.inspector.sheet')).toBeVisible();
+    await expect(room.locator('[aria-modal="true"]')).toHaveCount(0);
+    const zoom = room.getByRole('button', { name: 'Zoom in' });
+    await zoom.focus();
+    await expect(zoom).toBeFocused();
+    const close = room.getByRole('button', { name: 'Close details' });
+    expect((await close.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    await room.getByRole('link', { name: 'Browse saved books' }).click();
+    await expect(page).toHaveURL(/\/media\/library\?kind=book/);
+    await expect(page.getByRole('link', { name: book })).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/object=shelves/);
+    await expect(page).toHaveURL(/scale=1\.5/);
+    await expect.poll(() => stageMatrix(room)).toBe(matrix);
+    await expect(objects.getByRole('link', { name: 'Bookshelves' })).toBeFocused();
+    await expect(objects.getByRole('link', { name: 'Bookshelves' })).toHaveAttribute('aria-current', 'true');
+    await expect(room.locator('img.room.cutaway')).toBeVisible();
+    await expect(room.locator('[data-scene-object="desk"]')).toHaveClass(/faded/);
+    await page.keyboard.press('Escape');
+    await expect(page).not.toHaveURL(/object=/);
+    await expect(page).toHaveURL(/scale=1\.5/);
+    await expect.poll(() => stageMatrix(room)).toBe(matrix);
+    await expect(objects.getByRole('link', { name: 'Bookshelves' })).toBeFocused();
+    expect(await room.evaluate(el => el.getAnimations({ subtree: true }).length)).toBe(0);
+
+    await page.route(url => url.pathname === '/api/town', route => route.fulfill({
+      status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'unavailable' }),
+    }));
+    await page.reload();
+    await expect(room.getByText('Library progress is unavailable.')).toBeVisible();
+    await objects.getByRole('link', { name: 'Wall calendar' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(room.locator('[data-inspector]')).toHaveAttribute('data-inspector', 'error');
+    await expect(room.locator('.inspector.sheet')).toBeVisible();
+    await expect(room.locator('[aria-modal="true"]')).toHaveCount(0);
+    const errored = await stageMatrix(room);
+    await page.keyboard.press('Escape');
+    await expect(page).not.toHaveURL(/object=/);
+    await expect.poll(() => stageMatrix(room)).toBe(errored);
+    await expect(objects.getByRole('link', { name: 'Wall calendar' })).toBeFocused();
+    await page.unroute(url => url.pathname === '/api/town');
+
+    await page.route(url => url.pathname === '/api/town', async route => {
+      const response = await route.fetch();
+      const body = await response.json() as TownResponse;
+      body.buildings.library.source = 'unavailable';
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    });
+    await room.getByRole('button', { name: 'Retry progress' }).click();
+    await expect(room.locator('[data-inspector]')).toHaveAttribute('data-inspector', 'locked');
+    await expect(room.getByText('Media is unavailable. Library progress may be out of date.')).toBeVisible();
+    await objects.getByRole('link', { name: 'Wall calendar' }).focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    await expect(objects.getByRole('link', { name: 'Wall calendar' })).toBeFocused();
+    await page.unroute(url => url.pathname === '/api/town');
+
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/town/library?object=desk&scale=1.5&x=-12&y=-4');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect(room.locator('.inspector.sheet')).toHaveCount(0);
+    await expect(room.locator('[data-inspector]')).toHaveAttribute('data-inspector', 'ready');
+    await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
+    await expect(room.locator('img.room.cutaway')).toBeVisible();
+    await expect.poll(() => stageMatrix(room)).toContain('matrix(1.5,');
+    const desktop = await stageMatrix(room);
+    for (const control of await room.locator('.inspector a:visible, .inspector button:visible, .place a:visible').all()) {
+      const box = await control.boundingBox();
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+    }
+    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(/object=desk/);
+    expect(await stageMatrix(room)).toBe(desktop);
+    await room.getByRole('link', { name: 'Open Media Now' }).click();
+    await expect(page).toHaveURL(/\/media\/?$/);
+    await page.goBack();
+    await expect(page).toHaveURL(/object=desk/);
+    await expect(page).toHaveURL(/scale=1\.5/);
+    await expect.poll(() => stageMatrix(room)).toBe(desktop);
+    await expect(objects.getByRole('link', { name: 'Reading desk' })).toBeFocused();
+    await expect(room.locator('[data-scene-object="desk"]')).toHaveAttribute('aria-current', 'true');
+    const scan = await new AxeBuilder({ page }).include('app-town-library-room').analyze();
+    expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+    await info.attach('scene-03-room-1280-dark', { body: await room.screenshot(), contentType: 'image/png' });
   });
 });
 

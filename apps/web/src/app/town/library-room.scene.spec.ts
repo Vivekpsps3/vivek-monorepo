@@ -1,12 +1,15 @@
 import { readingRoom, readingRoomObjects } from './library-room.assets';
 import {
   REST_CAMERA,
+  cameraFromQuery,
   frontObject,
   movedPastSlop,
+  occludingIds,
   panCamera,
   roomRect,
   roomToScreen,
   sceneFrame,
+  sceneQuery,
   screenToRoom,
   zoomToward,
 } from './library-room.scene';
@@ -71,5 +74,19 @@ describe('Reading Hall scene geometry', () => {
     const front = { x: 12, y: 12, asset: { id: 'front', layer: 4, bounds: { width: 20, height: 20 }, anchor: { x: 0, y: 0 } } };
     expect(frontObject([back, front], { x: 15, y: 15 })?.asset.id).toBe('front');
     expect(frontObject([front, back], { x: 15, y: 15 })?.asset.id).toBe('back');
+  });
+
+  it('fades the object in front and round-trips a direct camera route', () => {
+    expect(occludingIds(readingRoomObjects, 'shelves')).toEqual(['desk']);
+    expect(occludingIds(readingRoomObjects, 'desk')).toEqual([]);
+    expect(occludingIds(readingRoomObjects, 'calendar')).toEqual([]);
+    expect(occludingIds(readingRoomObjects, null)).toEqual([]);
+    const camera = { x: -12.3, y: -4.2, scale: 1.5 };
+    const query = sceneQuery('shelves', camera);
+    expect(query).toEqual({ object: 'shelves', scale: '1.5', x: '-12.3', y: '-4.2' });
+    expect(cameraFromQuery({ get: name => query[name] ?? null })).toEqual(camera);
+    expect(sceneQuery('desk', REST_CAMERA)).toEqual({ object: 'desk' });
+    expect(cameraFromQuery({ get: () => null })).toEqual(REST_CAMERA);
+    expect(cameraFromQuery({ get: name => name === 'scale' ? 'nope' : '1' })).toEqual(REST_CAMERA);
   });
 });

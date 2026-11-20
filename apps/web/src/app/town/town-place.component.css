@@ -1,0 +1,24 @@
+.place { margin: 0 0 8px; }
+.place ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.place a, .place [aria-current="page"] {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+.place a { text-decoration: underline; }
+.place a:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}

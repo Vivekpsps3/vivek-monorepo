@@ -42,6 +42,10 @@ p { margin-block: 8px 12px; }
 .scene-hint { margin: 8px 0 0; color: var(--text-muted); }
 .camera-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .camera-controls .action { white-space: normal; }
+.room.cutaway {
+  mask-image: linear-gradient(to bottom, transparent 0%, transparent 12%, #000 26%);
+}
+.piece.faded { opacity: 0.28; }
 .piece:hover, .piece[aria-current="true"] {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 2px;
@@ -87,6 +91,17 @@ p { margin-block: 8px 12px; }
   background: var(--surface-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+}
+@media (max-width: 799px) {
+  .inspector.sheet {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    max-height: min(420px, 55vh);
+    overflow: auto;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: 0 -8px 24px color-mix(in srgb, var(--text) 16%, transparent);
+  }
 }
 .progress { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; }
 .progress p { margin-bottom: 0; }

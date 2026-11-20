@@ -12,6 +12,7 @@ import {
   type SceneSize,
 } from './library-room.scene';
 import { buildingSprite, townSpriteUrl, type TownSpriteId } from './town-sprites';
+import { formatTownDay } from './town-text';
 import type { Building, Habit, TownResponse } from './town.types';
 import { treasuryFace, type TreasuryView } from './weeks-kept';
 
@@ -385,4 +386,84 @@ export function frameDistrict(focus: RoomRect, viewport: SceneSize): SceneCamera
     x: viewport.width / 2 - centerX * scale,
     y: viewport.height / 2 - centerY * scale,
   }, viewport);
+}
+
+export interface InspectedPlace {
+  readonly id: string;
+  readonly name: string;
+  readonly detail: string;
+  readonly state: 'empty' | 'locked' | 'occupied' | 'archived' | 'missing';
+  readonly action: string | null;
+  readonly slot: number | null;
+  readonly habitId: number | null;
+}
+
+function missingPlace(id: string): InspectedPlace {
+  return {
+    id,
+    name: 'Missing place',
+    detail: 'That place is not on this town.',
+    state: 'missing',
+    action: null,
+    slot: null,
+    habitId: null,
+  };
+}
+
+/** One inspector record for a lot or an archived habit. Unknown ids stay visible and do nothing. */
+export function inspectedPlace(data: TownResponse, id: string | null): InspectedPlace | null {
+  if (!id) return null;
+  if (id.startsWith('archived-')) {
+    const habitId = Number(id.slice('archived-'.length));
+    const item = data.archived.find(habit => habit.id === habitId);
+    if (!item || !Number.isInteger(habitId)) return missingPlace(id);
+    const weeks = item.best_weeks > item.best_days;
+    return {
+      id,
+      name: item.name,
+      detail: `Archived ${formatTownDay(item.archived_on)}. Level ${item.level}. Best ${weeks ? `${item.best_weeks} weeks` : `${item.best_days} days`}.`,
+      state: 'archived',
+      action: 'Open history',
+      slot: null,
+      habitId: item.id,
+    };
+  }
+  if (!id.startsWith('slot-')) return missingPlace(id);
+  const slot = Number(id.slice('slot-'.length));
+  const lot = Number.isInteger(slot) ? data.lots.find(item => item.slot === slot) : undefined;
+  if (!lot) return missingPlace(id);
+  if (lot.state === 'locked') {
+    return {
+      id,
+      name: 'Locked lot',
+      detail: `Unlocks at level ${lot.unlock_level}. Nothing can be built here yet.`,
+      state: 'locked',
+      action: null,
+      slot,
+      habitId: null,
+    };
+  }
+  if (lot.state === 'empty' || lot.habit_id == null) {
+    return {
+      id,
+      name: 'Empty lot',
+      detail: 'This lot is ready for a habit.',
+      state: 'empty',
+      action: 'Build here',
+      slot,
+      habitId: null,
+    };
+  }
+  const habit = data.habits.find(item => item.id === lot.habit_id);
+  if (!habit) return missingPlace(id);
+  const unit = habit.streak.unit === 'days' ? 'day' : 'week';
+  return {
+    id,
+    name: habit.name,
+    detail: `Level ${habit.level}. ${habit.streak.current}-${unit} streak.`,
+    state: 'occupied',
+    action: 'Edit habit',
+    slot,
+    habitId: habit.id,
+  };
 }

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, input, output, signal, viewChild } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Router, RouterLink } from '@angular/router';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { distinctUntilChanged, map } from 'rxjs';
 import { SessionService } from '../platform/session.service';
 import {
@@ -19,12 +19,15 @@ import {
   exteriorBuildings,
   exteriorPlates,
   frameDistrict,
+  inspectedPlace,
   type DistrictId,
   type ExteriorBuilding,
   type ExteriorHealth,
+  type InspectedPlace,
 } from './town-exterior';
 import type { TownResponse } from './town.types';
 import type { TreasuryView } from './weeks-kept';
+import { TownPlaceComponent, type PlaceCrumb } from './town-place.component';
 
 interface SceneGesture {
   id: number;
@@ -37,14 +40,17 @@ interface SceneGesture {
 
 @Component({
   selector: 'app-town-exterior',
-  imports: [RouterLink],
+  imports: [RouterLink, TownPlaceComponent],
   templateUrl: './town-exterior.component.html',
   styleUrl: './town-exterior.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '(document:keydown.escape)': 'onEscape()' },
 })
 export class TownExteriorComponent {
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly session = inject(SessionService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
   private gesture: SceneGesture | null = null;
   private owner: number | null = null;
@@ -56,13 +62,25 @@ export class TownExteriorComponent {
   readonly health = input<ExteriorHealth>({ state: 'locked' });
   readonly swaps = input<Readonly<Record<string, 1 | 2 | 3>>>({});
   readonly openHabit = output<{ slot: number | null; habitId: number | null }>();
+  readonly openHistory = output<void>();
 
+  private readonly params = toSignal(this.route.queryParamMap, { requireSync: true });
+  private readonly narrow = signal(false);
+  private readonly picked = signal<string | null>(null);
   protected readonly districts = DISTRICTS;
   protected readonly plates = exteriorPlates();
   protected readonly room = EXTERIOR_ROOM;
   protected readonly camera = signal<SceneCamera>(REST_CAMERA);
-  protected readonly selected = signal<string | null>(null);
   protected readonly framed = signal<DistrictId | null>(null);
+  protected readonly inspected = computed(() => this.params().get('inspect') || this.picked());
+  protected readonly place = computed((): InspectedPlace | null => inspectedPlace(this.data(), this.inspected()));
+  protected readonly sheet = computed(() => this.narrow() && this.place() != null);
+  protected readonly crumbs = computed((): readonly PlaceCrumb[] => {
+    const place = this.place();
+    return place
+      ? [{ label: 'Town', href: '/town', query: { inspect: null } }, { label: place.name }]
+      : [{ label: 'Town' }];
+  });
   protected readonly buildings = computed(() => exteriorBuildings({
     data: this.data(),
     treasury: this.treasury(),
@@ -77,6 +95,13 @@ export class TownExteriorComponent {
 
   constructor() {
     const destroyRef = inject(DestroyRef);
+    const media = typeof matchMedia === 'function' ? matchMedia('(max-width: 799px)') : null;
+    if (media) {
+      this.narrow.set(media.matches);
+      const onNarrow = (): void => this.narrow.set(media.matches);
+      media.addEventListener('change', onNarrow);
+      destroyRef.onDestroy(() => media.removeEventListener('change', onNarrow));
+    }
     destroyRef.onDestroy(() => {
       this.alive = false;
       this.gesture = null;
@@ -86,8 +111,10 @@ export class TownExteriorComponent {
       distinctUntilChanged(),
       takeUntilDestroyed(),
     ).subscribe(owner => {
+      const previous = this.owner;
       this.owner = owner;
       this.dropUncommittedGesture();
+      if (previous !== null && previous !== owner) this.clearInspect();
     });
   }
 
@@ -120,10 +147,10 @@ export class TownExteriorComponent {
   }
 
   protected choose(building: ExteriorBuilding): void {
-    if (!this.alive || building.control === 'locked') return;
-    this.selected.set(building.id);
-    if (building.control === 'habit') {
-      this.openHabit.emit({ slot: building.slot, habitId: building.habitId });
+    if (!this.alive) return;
+    if (building.control === 'locked' || building.control === 'habit') {
+      this.picked.set(building.id);
+      this.publishInspect(building.id);
       return;
     }
     if (building.control === 'select') {
@@ -209,8 +236,74 @@ export class TownExteriorComponent {
     this.gesture = null;
   }
 
+  protected marked(id: string): boolean {
+    return this.picked() === id || this.inspected() === id;
+  }
+
+  protected inspectorState(): 'empty' | 'locked' | 'occupied' | 'archived' | 'error' {
+    const state = this.place()?.state;
+    if (!state) return 'empty';
+    return state === 'missing' ? 'error' : state;
+  }
+
+  protected inspectArchived(id: number): void {
+    if (!this.alive) return;
+    const inspect = `archived-${id}`;
+    this.picked.set(inspect);
+    this.publishInspect(inspect);
+  }
+
+  protected invoke(place: InspectedPlace): void {
+    if (!this.alive || !place.action) return;
+    if (place.state === 'archived') {
+      this.openHistory.emit();
+      return;
+    }
+    this.openHabit.emit({ slot: place.slot, habitId: place.habitId });
+  }
+
+  protected onEscape(): void {
+    if (!this.sheet() || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+    this.closeSheet();
+  }
+
+  protected closeSheet(): void {
+    const id = this.inspected();
+    this.picked.set(null);
+    this.publishInspect(null, () => this.focusInspected(id));
+  }
+
   protected reducedMotion(): boolean {
     return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  private publishInspect(id: string | null, after?: () => void): void {
+    if (!this.alive) return;
+    const owner = this.owner;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { inspect: id },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    }).then(() => {
+      if (!this.alive || this.owner !== owner) return;
+      after?.();
+    });
+  }
+
+  private clearInspect(): void {
+    this.picked.set(null);
+    if (!this.params().get('inspect')) return;
+    this.publishInspect(null);
+  }
+
+  private focusInspected(id: string | null): void {
+    if (!id) return;
+    const archived = id.startsWith('archived-') ? id.slice('archived-'.length) : null;
+    const target = archived
+      ? this.host.nativeElement.querySelector<HTMLElement>(`[data-archived="${archived}"]`)
+      : this.host.nativeElement.querySelector<HTMLElement>(`[data-building="${id}"]`);
+    target?.focus();
   }
 
   private dropUncommittedGesture(): void {

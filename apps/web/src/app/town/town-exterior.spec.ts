@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { SessionService } from '../platform/session.service';
 import { frontObject, REST_CAMERA, type RoomRect } from './library-room.scene';
@@ -11,9 +11,11 @@ import {
   EXTERIOR_ROOM,
   exteriorBuildings,
   frameDistrict,
+  inspectedPlace,
   type ExteriorBuilding,
   type ExteriorHealth,
 } from './town-exterior';
+import { formatTownDay } from './town-text';
 import type { Habit, TownResponse } from './town.types';
 
 function habit(name: string): Habit {
@@ -187,6 +189,33 @@ describe('Town exterior model', () => {
     expect(framed.x).toBeLessThan(0);
     expect(framed.y).toBe(0);
   });
+
+  it('describes locked, empty, occupied, archived, and missing places', () => {
+    const founded = town('founded');
+    const rich = town('rich');
+    rich.archived = [{
+      id: 9, name: 'Old walk', xp: 4, level: 1, best_days: 2, best_weeks: 4,
+      created_on: '2026-10-01', archived_on: '2026-10-20',
+    }];
+    expect(inspectedPlace(founded, null)).toBeNull();
+    expect(inspectedPlace(founded, 'slot-5')).toEqual(jasmine.objectContaining({
+      state: 'locked', action: null, slot: 5, detail: 'Unlocks at level 9. Nothing can be built here yet.',
+    }));
+    expect(inspectedPlace(founded, 'slot-0')).toEqual(jasmine.objectContaining({
+      state: 'empty', action: 'Build here', name: 'Empty lot', slot: 0, habitId: null,
+    }));
+    expect(inspectedPlace(rich, 'slot-0')).toEqual(jasmine.objectContaining({
+      state: 'occupied', action: 'Edit habit', name: 'Read 20 pages', habitId: 4,
+    }));
+    expect(inspectedPlace(rich, 'slot-0')?.detail).toContain('3-day streak');
+    const archived = inspectedPlace(rich, 'archived-9');
+    expect(archived).toEqual(jasmine.objectContaining({ state: 'archived', action: 'Open history', habitId: 9 }));
+    expect(archived?.detail).toContain(formatTownDay('2026-10-20'));
+    expect(archived?.detail).toContain('4 weeks');
+    expect(inspectedPlace(rich, 'archived-99')?.state).toBe('missing');
+    expect(inspectedPlace(rich, 'home')?.detail).toBe('That place is not on this town.');
+    expect(inspectedPlace(rich, 'slot-40')?.state).toBe('missing');
+  });
 });
 
 describe('Town exterior scene', () => {
@@ -296,9 +325,19 @@ describe('Town exterior scene', () => {
     const locked = at(viewport, byId(items, 'slot-5'));
     viewport.dispatchEvent(pointer('pointerdown', locked.x, locked.y));
     viewport.dispatchEvent(pointer('pointerup', locked.x, locked.y));
-    expect(navigate).toHaveBeenCalledTimes(1);
+    fixture.detectChanges();
     expect(opened).toEqual([]);
+    expect(navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
+      queryParams: { inspect: 'slot-5' }, queryParamsHandling: 'merge', replaceUrl: true,
+    }));
+    expect(el.querySelector('[data-inspector]')?.getAttribute('data-inspector')).toBe('locked');
+    expect(el.textContent).toContain('Nothing can be built here yet.');
+    expect([...el.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Build here')).toBeFalse();
     (el.querySelector('[data-building="slot-0"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(opened).toEqual([]);
+    expect(el.querySelector('[data-inspector]')?.getAttribute('data-inspector')).toBe('empty');
+    control(el, 'Build here').click();
     expect(opened).toEqual([{ slot: 0, habitId: null }]);
 
     navigate.calls.reset();
@@ -354,6 +393,59 @@ describe('Town exterior scene', () => {
     viewport.dispatchEvent(pointer('pointerup', start.left + 90, start.top + 40));
     expect(router.navigate).not.toHaveBeenCalled();
     expect(stage(el)).toBe(zoomed);
+  });
+
+  it('reads a locked lot from the town URL and clears it when the owner changes', () => {
+    const query = new BehaviorSubject(convertToParamMap({ inspect: 'slot-3' }));
+    TestBed.overrideProvider(ActivatedRoute, {
+      useValue: { queryParamMap: query, snapshot: { queryParamMap: query.value } },
+    });
+    const navigate = spyOn(TestBed.inject(Router), 'navigate').and.callFake((_commands: unknown[], extras?: { queryParams?: { inspect?: string | null } }) => {
+      const inspect = extras?.queryParams?.inspect;
+      query.next(convertToParamMap(inspect ? { inspect } : {}));
+      return Promise.resolve(true);
+    });
+    const { fixture, el } = render(town('founded'));
+    const slot = el.querySelector('[data-building="slot-3"]') as HTMLButtonElement;
+    expect(slot.getAttribute('aria-current')).toBe('true');
+    expect(el.querySelector('[data-inspector]')?.getAttribute('data-inspector')).toBe('locked');
+    expect(el.textContent).toContain('Unlocks at level 5');
+    expect([...el.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Build here')).toBeFalse();
+    user.next({ id: 8 });
+    fixture.detectChanges();
+    expect(navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
+      queryParams: { inspect: null }, replaceUrl: true,
+    }));
+    expect(el.querySelector('[data-building="slot-3"]')?.getAttribute('aria-current')).toBeNull();
+    expect(el.querySelector('[data-inspector]')?.getAttribute('data-inspector')).toBe('empty');
+  });
+
+  it('opens history for an archived habit and does not build a locked lot', () => {
+    const { fixture, el } = render(town('founded'));
+    const opened: unknown[] = [];
+    const history: unknown[] = [];
+    fixture.componentInstance.openHabit.subscribe(event => opened.push(event));
+    fixture.componentInstance.openHistory.subscribe(() => history.push(true));
+    const data = town('founded');
+    data.archived = [{
+      id: 11, name: 'Old walk', xp: 4, level: 1, best_days: 2, best_weeks: 0,
+      created_on: '2026-10-01', archived_on: '2026-10-20',
+    }];
+    fixture.componentRef.setInput('data', data);
+    fixture.detectChanges();
+    const archived = el.querySelector('[data-archived="11"]') as HTMLButtonElement;
+    archived.focus();
+    archived.click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-inspector]')?.getAttribute('data-inspector')).toBe('archived');
+    expect(document.activeElement).toBe(archived);
+    control(el, 'Open history').click();
+    expect(history).toEqual([true]);
+    expect(opened).toEqual([]);
+    (el.querySelector('[data-building="slot-5"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-inspector]')?.getAttribute('data-inspector')).toBe('locked');
+    expect([...el.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Build here')).toBeFalse();
   });
 
   it('shows the outgoing sprite when motion is allowed', () => {
