@@ -1,0 +1,68 @@
+<div class="exterior">
+  <div class="districts" role="group" aria-label="Town districts">
+    @for (district of districts; track district.id) {
+      <button type="button" class="action" [attr.aria-pressed]="framed() === district.id" (click)="showDistrict(district.id)">{{ district.label }}</button>
+    }
+  </div>
+  <div #viewport class="viewport" role="group" aria-label="Town exterior"
+    (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
+    (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
+    <div class="stage" [style.transform]="cameraTransform()">
+      <div class="scene">
+        @for (plate of plates; track plate.id) {
+          <div class="plate {{ plate.id }}" aria-hidden="true"
+            [style.left.%]="plate.frame.left" [style.top.%]="plate.frame.top"
+            [style.width.%]="plate.frame.width" [style.height.%]="plate.frame.height">
+            <span>{{ plate.label }}</span>
+          </div>
+        }
+        @for (building of buildings(); track building.id) {
+          <div class="piece" aria-hidden="true" [attr.data-scene-object]="building.id"
+            [class.selected]="selected() === building.id"
+            [style.left.%]="building.frame.left" [style.top.%]="building.frame.top"
+            [style.width.%]="building.frame.width" [style.height.%]="building.frame.height"
+            [style.z-index]="building.layer">
+            @if (building.previousSprite && !reducedMotion()) {
+              <img class="old" [src]="building.previousSprite" alt="" width="32" height="32">
+            }
+            <img [src]="building.sprite" alt="" width="32" height="32">
+            <span class="caption">{{ building.name }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+  <p class="scene-hint">Drag to look around. Choose a district or a building. Dragging does not open it.</p>
+  <div class="camera-controls" role="group" aria-label="Scene view">
+    <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
+    <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
+    <button type="button" class="action" (click)="resetView()">Reset view</button>
+  </div>
+  <ul class="buildings" role="list" aria-label="Town buildings">
+    @for (building of buildings(); track building.id) {
+      <li role="listitem" [attr.data-district]="building.district">
+        @if (building.control === 'external') {
+          <a class="action" [attr.data-building]="building.id" [href]="building.href" [attr.aria-current]="selected() === building.id ? 'true' : null">
+            <img [src]="building.sprite" alt="" width="32" height="32">
+            <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
+          </a>
+        } @else if (building.control === 'link') {
+          <a class="action" [attr.data-building]="building.id" [routerLink]="building.path" [queryParams]="building.query" [attr.aria-current]="selected() === building.id ? 'true' : null">
+            <img [src]="building.sprite" alt="" width="32" height="32">
+            <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
+          </a>
+        } @else if (building.control === 'habit' || building.control === 'select') {
+          <button type="button" class="action" [attr.data-building]="building.id" [attr.aria-current]="selected() === building.id ? 'true' : null" (click)="choose(building)">
+            <img [src]="building.sprite" alt="" width="32" height="32">
+            <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
+          </button>
+        } @else {
+          <div class="static" [attr.data-building]="building.id">
+            <img [src]="building.sprite" alt="" width="32" height="32">
+            <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
+          </div>
+        }
+      </li>
+    }
+  </ul>
+</div>
