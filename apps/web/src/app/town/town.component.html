@@ -42,7 +42,7 @@
     }
     <div class="town-layout">
       <app-town-exterior [data]="data" [treasury]="treasury()" [vaultPresent]="financeVaultPresent()" [health]="health()"
-        [swaps]="swapping()" (openHabit)="openHabitDialog($event.slot, $event.habitId)" />
+        [swaps]="swapping()" (openHabit)="openHabitDialog($event.slot, $event.habitId)" (openHistory)="openHistory()" />
       <ui-card><h2>Today</h2>
         <app-town-today [data]="data" [live]="live()" [vaultPresent]="financeVaultPresent()" [treasury]="treasury()"
           (newHabit)="openHabitDialog(null, null)" (history)="openHistory()"

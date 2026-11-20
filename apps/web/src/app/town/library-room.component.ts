@@ -8,15 +8,20 @@ import { readingRoom, readingRoomObjects, type ReadingRoomAsset } from './librar
 import {
   REST_CAMERA,
   SCENE_SCALES,
+  cameraFromQuery,
   clampCamera,
   frontObject,
   movedPastSlop,
+  occludingIds,
   panCamera,
+  sameCamera,
+  sceneQuery,
   screenToRoom,
   zoomToward,
   type SceneCamera,
 } from './library-room.scene';
 import { TownApiService } from './town.api';
+import { TownPlaceComponent, type PlaceCrumb } from './town-place.component';
 
 interface SceneGesture {
   id: number;
@@ -29,10 +34,11 @@ interface SceneGesture {
 
 @Component({
   selector: 'app-town-library-room',
-  imports: [RouterLink, UiButtonComponent],
+  imports: [RouterLink, UiButtonComponent, TownPlaceComponent],
   templateUrl: './library-room.component.html',
   styleUrl: './library-room.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '(document:keydown.escape)': 'onEscape()' },
 })
 export class LibraryRoomComponent {
   private readonly api = inject(TownApiService);
@@ -53,6 +59,7 @@ export class LibraryRoomComponent {
   protected readonly room = readingRoom;
   protected readonly objects = readingRoomObjects;
   protected readonly camera = signal<SceneCamera>(REST_CAMERA);
+  private readonly narrow = signal(false);
   protected readonly cameraTransform = computed(() => {
     const camera = this.camera();
     return `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
@@ -60,6 +67,23 @@ export class LibraryRoomComponent {
   protected readonly theme = toSignal(this.themeService.theme$, { requireSync: true });
   private readonly params = toSignal(this.route.queryParamMap, { requireSync: true });
   protected readonly selected = computed(() => this.objects.find(object => object.asset.id === this.params().get('object')));
+  protected readonly sheet = computed(() => this.narrow() && this.selected() != null);
+  protected readonly occluded = computed(() => new Set(occludingIds(this.objects, this.selected()?.asset.id ?? null)));
+  protected readonly crumbs = computed((): readonly PlaceCrumb[] => {
+    const object = this.selected();
+    const roomCrumb: PlaceCrumb = object
+      ? { label: 'Reading Hall', href: '/town/library', query: sceneQuery(null, this.camera()) }
+      : { label: 'Reading Hall' };
+    return object
+      ? [{ label: 'Town', href: '/town' }, roomCrumb, { label: object.label }]
+      : [{ label: 'Town', href: '/town' }, roomCrumb];
+  });
+  protected readonly inspectorState = computed(() => {
+    const progress = this.progress();
+    if (progress == null) return 'error';
+    if (progress !== 'loading' && progress.source === 'unavailable') return 'locked';
+    return this.selected() ? 'ready' : 'empty';
+  });
   protected readonly progress = toSignal(this.session.user$.pipe(
     map(user => user?.id),
     distinctUntilChanged(),
@@ -74,7 +98,15 @@ export class LibraryRoomComponent {
   ), { requireSync: true });
 
   constructor() {
+    this.camera.set(cameraFromQuery(this.route.snapshot.queryParamMap));
     const destroyRef = inject(DestroyRef);
+    const media = typeof matchMedia === 'function' ? matchMedia('(max-width: 799px)') : null;
+    if (media) {
+      this.narrow.set(media.matches);
+      const onNarrow = (): void => this.narrow.set(media.matches);
+      media.addEventListener('change', onNarrow);
+      destroyRef.onDestroy(() => media.removeEventListener('change', onNarrow));
+    }
     destroyRef.onDestroy(() => {
       this.alive = false;
       this.gesture = null;
@@ -94,7 +126,10 @@ export class LibraryRoomComponent {
       if (!element || typeof ResizeObserver === 'undefined') return;
       this.resizeObserver = new ResizeObserver(() => {
         if (!this.alive) return;
-        this.camera.set(clampCamera(this.camera(), this.viewportSize()));
+        const size = this.viewportSize();
+        if (size.width <= 0 || size.height <= 0) return;
+        const next = clampCamera(this.camera(), size);
+        if (!sameCamera(next, this.camera())) this.camera.set(next);
       });
       this.resizeObserver.observe(element);
     });
@@ -109,15 +144,33 @@ export class LibraryRoomComponent {
   }
 
   protected zoomIn(): void {
-    this.camera.set(zoomToward(this.camera(), this.viewportSize(), 1));
+    this.applyCamera(zoomToward(this.camera(), this.viewportSize(), 1));
   }
 
   protected zoomOut(): void {
-    this.camera.set(zoomToward(this.camera(), this.viewportSize(), -1));
+    this.applyCamera(zoomToward(this.camera(), this.viewportSize(), -1));
   }
 
   protected resetView(): void {
-    this.camera.set(REST_CAMERA);
+    this.applyCamera(REST_CAMERA);
+  }
+
+  protected faded(id: string): boolean {
+    return this.occluded().has(id);
+  }
+
+  protected linkQuery(id: string): Record<string, string | null> {
+    return sceneQuery(id, this.camera());
+  }
+
+  protected onEscape(): void {
+    if (!this.sheet() || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+    this.closeSheet();
+  }
+
+  protected closeSheet(): void {
+    const id = this.selected()?.asset.id ?? null;
+    this.publish(sceneQuery(null, this.camera()), () => this.focusObject(id));
   }
 
   protected beginPointer(event: PointerEvent): void {
@@ -154,7 +207,11 @@ export class LibraryRoomComponent {
     const gesture = this.gesture;
     if (!gesture || event.pointerId !== gesture.id) return;
     this.gesture = null;
-    if (gesture.moved || !this.alive || this.owner !== gesture.owner) return;
+    if (gesture.moved) {
+      if (this.alive && this.owner === gesture.owner) this.applyCamera(this.camera());
+      return;
+    }
+    if (!this.alive || this.owner !== gesture.owner) return;
     const element = this.viewport()?.nativeElement;
     if (!element) return;
     const rect = element.getBoundingClientRect();
@@ -219,19 +276,41 @@ export class LibraryRoomComponent {
     this.gesture = null;
   }
 
-  private selectObject(id: string): void {
+  private applyCamera(next: SceneCamera): void {
+    const size = this.viewportSize();
+    const clamped = size.width > 0 && size.height > 0 ? clampCamera(next, size) : next;
+    const camera = {
+      scale: clamped.scale,
+      x: Math.round(clamped.x * 100) / 100,
+      y: Math.round(clamped.y * 100) / 100,
+    };
+    if (sameCamera(camera, this.camera())) return;
+    this.camera.set(camera);
+    this.publish(sceneQuery(this.selected()?.asset.id ?? null, camera));
+  }
+
+  private publish(query: Record<string, string | null>, after?: () => void): void {
     if (!this.alive) return;
     const owner = this.owner;
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { object: id },
+      queryParams: query,
       replaceUrl: true,
     }).then(() => {
       if (!this.alive || this.owner !== owner) return;
-      const link = [...this.host.nativeElement.querySelectorAll<HTMLElement>('.objects [data-object]')]
-        .find(item => item.dataset['object'] === id);
-      link?.focus();
+      after?.();
     });
+  }
+
+  private focusObject(id: string | null): void {
+    const link = id ? [...this.host.nativeElement.querySelectorAll<HTMLElement>('.objects [data-object]')]
+      .find(item => item.dataset['object'] === id) : null;
+    (link ?? this.host.nativeElement.querySelector<HTMLElement>('.objects a'))?.focus();
+  }
+
+  private selectObject(id: string): void {
+    if (!this.alive) return;
+    this.publish(sceneQuery(id, this.camera()), () => this.focusObject(id));
   }
 
   private viewportSize(): { width: number; height: number } {

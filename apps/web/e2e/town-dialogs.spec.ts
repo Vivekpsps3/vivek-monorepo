@@ -55,6 +55,7 @@ test.describe('Town dialogs', () => {
     await expect(tile).toBeVisible();
     expect(await tile.locator('.name').evaluate(node => getComputedStyle(node).textOverflow)).toBe('ellipsis');
     await tile.click();
+    await page.locator('app-town-exterior').getByRole('button', { name: 'Edit habit' }).click();
     await page.getByRole('button', { name: 'Archive habit' }).click();
     await page.getByRole('button', { name: 'Archive', exact: true }).click();
     await expect(page.locator('main header p')).toHaveText(before ?? '');
@@ -67,12 +68,14 @@ test.describe('Town dialogs', () => {
     expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
     await page.reload();
     await page.getByRole('button', { name: /Walk 30 minutes/ }).first().click();
+    await page.locator('app-town-exterior').getByRole('button', { name: 'Edit habit' }).click();
     await page.locator('#habit-cadence').selectOption('4');
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(page.getByText(/\/3 this week/)).toBeVisible();
     await expect(page.getByText(/\/4 this week/)).toHaveCount(0);
     await page.getByRole('button', { name: /Walk 30 minutes/ }).first().click();
+    await page.locator('app-town-exterior').getByRole('button', { name: 'Edit habit' }).click();
     await expect(page.getByText('Changes to 4× a week from Mon 2 Nov')).toBeVisible();
   });
 });

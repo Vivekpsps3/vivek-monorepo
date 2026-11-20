@@ -1,4 +1,5 @@
 <div class="exterior">
+  <app-town-place [crumbs]="crumbs()" />
   <div class="districts" role="group" aria-label="Town districts">
     @for (district of districts; track district.id) {
       <button type="button" class="action" [attr.aria-pressed]="framed() === district.id" (click)="showDistrict(district.id)">{{ district.label }}</button>
@@ -18,7 +19,7 @@
         }
         @for (building of buildings(); track building.id) {
           <div class="piece" aria-hidden="true" [attr.data-scene-object]="building.id"
-            [class.selected]="selected() === building.id"
+            [class.selected]="marked(building.id)"
             [style.left.%]="building.frame.left" [style.top.%]="building.frame.top"
             [style.width.%]="building.frame.width" [style.height.%]="building.frame.height"
             [style.z-index]="building.layer">
@@ -42,27 +43,54 @@
     @for (building of buildings(); track building.id) {
       <li role="listitem" [attr.data-district]="building.district">
         @if (building.control === 'external') {
-          <a class="action" [attr.data-building]="building.id" [href]="building.href" [attr.aria-current]="selected() === building.id ? 'true' : null">
+          <a class="action" [attr.data-building]="building.id" [href]="building.href" [attr.aria-current]="inspected() === building.id ? 'true' : null">
             <img [src]="building.sprite" alt="" width="32" height="32">
             <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
           </a>
         } @else if (building.control === 'link') {
-          <a class="action" [attr.data-building]="building.id" [routerLink]="building.path" [queryParams]="building.query" [attr.aria-current]="selected() === building.id ? 'true' : null">
+          <a class="action" [attr.data-building]="building.id" [routerLink]="building.path" [queryParams]="building.query" [attr.aria-current]="inspected() === building.id ? 'true' : null">
             <img [src]="building.sprite" alt="" width="32" height="32">
             <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
           </a>
         } @else if (building.control === 'habit' || building.control === 'select') {
-          <button type="button" class="action" [attr.data-building]="building.id" [attr.aria-current]="selected() === building.id ? 'true' : null" (click)="choose(building)">
+          <button type="button" class="action" [attr.data-building]="building.id" [attr.aria-current]="inspected() === building.id ? 'true' : null" (click)="choose(building)">
             <img [src]="building.sprite" alt="" width="32" height="32">
             <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
           </button>
         } @else {
-          <div class="static" [attr.data-building]="building.id">
+          <button type="button" class="action" [attr.data-building]="building.id" [attr.aria-current]="inspected() === building.id ? 'true' : null" (click)="choose(building)">
             <img [src]="building.sprite" alt="" width="32" height="32">
             <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
-          </div>
+          </button>
         }
       </li>
     }
   </ul>
+  <ul class="buildings" aria-label="Archived habits">
+    @if (data().archived.length === 0) {
+      <li><span class="static">No archived habits</span></li>
+    }
+    @for (item of data().archived; track item.id) {
+      <li>
+        <button type="button" class="action" [attr.data-archived]="item.id" [attr.aria-current]="inspected() === 'archived-' + item.id ? 'true' : null" (click)="inspectArchived(item.id)">
+          <span class="copy"><span class="name">{{ item.name }}</span><span class="sub-label">Archived</span></span>
+        </button>
+      </li>
+    }
+  </ul>
+  <aside class="inspector" [class.sheet]="sheet()" [attr.data-inspector]="inspectorState()" aria-label="Town details">
+    @if (sheet()) {
+      <button type="button" class="action" (click)="closeSheet()">Close details</button>
+    }
+    @if (place(); as place) {
+      <h2>{{ place.name }}</h2>
+      <p>{{ place.detail }}</p>
+      @if (place.action) {
+        <button type="button" class="action" (click)="invoke(place)">{{ place.action }}</button>
+      }
+    } @else {
+      <h2>Town</h2>
+      <p>Choose a lot to inspect it. Today stays available for check-in.</p>
+    }
+  </aside>
 </div>

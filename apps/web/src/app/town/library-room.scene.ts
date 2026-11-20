@@ -140,3 +140,50 @@ export function panCamera(camera: SceneCamera, viewport: SceneSize, dx: number, 
 export function movedPastSlop(dx: number, dy: number): boolean {
   return dx * dx + dy * dy > SCENE_TAP_SLOP_PX * SCENE_TAP_SLOP_PX;
 }
+
+export function rectsOverlap(a: RoomRect, b: RoomRect): boolean {
+  return a.left < b.left + b.width && b.left < a.left + a.width
+    && a.top < b.top + b.height && b.top < a.top + a.height;
+}
+
+/** Higher layer, or the later object on a tie, fades when it covers the selection. */
+export function occludingIds(objects: readonly ScenePlacement[], selectedId: string | null): readonly string[] {
+  if (!selectedId) return [];
+  const selectedIndex = objects.findIndex(object => object.asset.id === selectedId);
+  if (selectedIndex < 0) return [];
+  const selected = objects[selectedIndex];
+  const target = roomRect(selected);
+  const ids: string[] = [];
+  objects.forEach((object, index) => {
+    if (index === selectedIndex) return;
+    const inFront = object.asset.layer > selected.asset.layer
+      || (object.asset.layer === selected.asset.layer && index > selectedIndex);
+    if (inFront && rectsOverlap(roomRect(object), target)) ids.push(object.asset.id);
+  });
+  return ids;
+}
+
+function viewCoord(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}
+
+/** Direct room route. A resting camera omits its keys so the object link stays stable. */
+export function sceneQuery(objectId: string | null, camera: SceneCamera): Record<string, string | null> {
+  const query: Record<string, string | null> = { object: objectId };
+  if (camera.scale === REST_CAMERA.scale && camera.x === REST_CAMERA.x && camera.y === REST_CAMERA.y) return query;
+  return { ...query, scale: viewCoord(camera.scale), x: viewCoord(camera.x), y: viewCoord(camera.y) };
+}
+
+export function cameraFromQuery(params: { get(name: string): string | null }): SceneCamera {
+  const scale = params.get('scale');
+  const x = params.get('x');
+  const y = params.get('y');
+  if (scale == null && x == null && y == null) return REST_CAMERA;
+  const camera = { scale: Number(scale), x: Number(x), y: Number(y) };
+  if (!Number.isFinite(camera.scale) || !Number.isFinite(camera.x) || !Number.isFinite(camera.y)) return REST_CAMERA;
+  return camera;
+}
+
+export function sameCamera(a: SceneCamera, b: SceneCamera): boolean {
+  return a.scale === b.scale && a.x === b.x && a.y === b.y;
+}

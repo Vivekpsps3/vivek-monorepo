@@ -1,11 +1,25 @@
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { SessionService } from '../platform/session.service';
 import { readingRoom, readingRoomObjects } from './library-room.assets';
 import { LibraryRoomComponent } from './library-room.component';
 import { REST_CAMERA, roomRect, roomToScreen } from './library-room.scene';
 import { TownApiService } from './town.api';
+
+function narrowScreen(matches: boolean): void {
+  spyOn(window, 'matchMedia').and.callFake((query: string) => ({
+    matches: matches && query.includes('max-width'),
+    media: query,
+    addEventListener(): void { /* test double */ },
+    removeEventListener(): void { /* test double */ },
+    addListener(): void { /* test double */ },
+    removeListener(): void { /* test double */ },
+    dispatchEvent(): boolean { return false; },
+    onchange: null,
+  } as MediaQueryList));
+}
 
 describe('Reading Hall load ownership', () => {
   it('ignores held Library progress on owner change and on room destruction', () => {
@@ -105,6 +119,11 @@ describe('Reading Hall load ownership', () => {
     const stage = host.querySelector('.stage') as HTMLElement;
     const zoomed = stage.style.transform;
     expect(zoomed).toContain('scale(1.5)');
+    expect(navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
+      queryParams: jasmine.objectContaining({ object: null, scale: '1.5' }),
+      replaceUrl: true,
+    }));
+    navigate.calls.reset();
     progress.error(new Error('unavailable'));
     fixture.detectChanges();
     expect(host.textContent).toContain('Library progress is unavailable');
@@ -138,5 +157,81 @@ describe('Reading Hall load ownership', () => {
     pointer('pointerup', movedX, movedY);
     expect(navigate).not.toHaveBeenCalled();
     expect(host.textContent).not.toContain('Level 19');
+    fixture.destroy();
+    zoomIn.click();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('restores a direct room route and lets Escape leave only the phone sheet', async () => {
+    narrowScreen(true);
+    const user$ = new BehaviorSubject<{ id: number } | null>({ id: 1 });
+    const progress = new Subject<unknown>();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'town/library', component: LibraryRoomComponent }]),
+        { provide: SessionService, useValue: { user$ } },
+        { provide: TownApiService, useValue: { getTown: () => progress } },
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/town/library?object=shelves&scale=1.5&x=-12&y=-4');
+    const host = harness.routeNativeElement as HTMLElement;
+    host.style.width = '390px';
+    harness.detectChanges();
+    const stage = host.querySelector('.stage') as HTMLElement;
+    expect(stage.style.transform).toContain('translate(-12px, -4px)');
+    expect(stage.style.transform).toContain('scale(1.5)');
+    expect(host.querySelector('.room')?.classList.contains('cutaway')).toBeTrue();
+    expect(host.querySelector('[data-scene-object="desk"]')?.classList.contains('faded')).toBeTrue();
+    expect(host.querySelector('[data-scene-object="shelves"]')?.classList.contains('faded')).toBeFalse();
+    expect(host.querySelector('[data-inspector]')?.getAttribute('data-inspector')).toBe('ready');
+    expect(host.querySelector('.inspector.sheet')).not.toBeNull();
+    expect(host.querySelector('[aria-modal]')).toBeNull();
+    const zoom = [...host.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Zoom in') as HTMLButtonElement;
+    expect(zoom.closest('[inert]')).toBeNull();
+    expect(zoom.disabled).toBeFalse();
+    const kept = stage.style.transform;
+
+    progress.error(new Error('unavailable'));
+    harness.detectChanges();
+    expect(host.querySelector('[data-inspector]')?.getAttribute('data-inspector')).toBe('error');
+    expect(host.textContent).toContain('Library progress is unavailable.');
+    expect(stage.style.transform).toBe(kept);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(TestBed.inject(Router).url).not.toContain('object=');
+    expect(TestBed.inject(Router).url).toContain('scale=1.5');
+    expect(stage.style.transform).toBe(kept);
+    expect(document.activeElement).toBe(host.querySelector('[data-object="shelves"]'));
+    expect(host.querySelector('.inspector.sheet')).toBeNull();
+    harness.fixture.destroy();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  });
+
+  it('keeps the desktop inspector open when Escape is pressed', async () => {
+    narrowScreen(false);
+    const user$ = new BehaviorSubject<{ id: number } | null>({ id: 1 });
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'town/library', component: LibraryRoomComponent }]),
+        { provide: SessionService, useValue: { user$ } },
+        { provide: TownApiService, useValue: { getTown: () => new Subject() } },
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/town/library?object=desk&scale=1.5&x=-8&y=-2');
+    const host = harness.routeNativeElement as HTMLElement;
+    harness.detectChanges();
+    expect(host.querySelector('.inspector.sheet')).toBeNull();
+    expect(host.querySelector('[data-inspector]')?.getAttribute('data-inspector')).toBe('ready');
+    expect(host.textContent).toContain('Open Media Now');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(TestBed.inject(Router).url).toContain('object=desk');
+    expect(host.querySelector('[data-scene-object="desk"]')?.classList.contains('faded')).toBeFalse();
+    expect(host.querySelector('[data-scene-object="desk"]')?.getAttribute('aria-current')).toBe('true');
   });
 });

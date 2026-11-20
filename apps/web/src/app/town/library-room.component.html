@@ -1,5 +1,6 @@
 <main>
   <header>
+    <app-town-place [crumbs]="crumbs()" />
     <ui-button variant="ghost" href="/town" label="Back to Town" />
     <h1>Reading Hall</h1>
   </header>
@@ -12,11 +13,11 @@
         <div class="stage" [style.transform]="cameraTransform()">
           <div class="scene">
             @for (src of [artUrl(room)]; track src) {
-              <img class="room" [style.z-index]="room.layer" [src]="src" [width]="room.bounds.width" [height]="room.bounds.height"
+              <img class="room" [class.cutaway]="selected()" [style.z-index]="room.layer" [src]="src" [width]="room.bounds.width" [height]="room.bounds.height"
                 [style.color-scheme]="room.palette[theme()]" [hidden]="!painted().includes(room.id)" (load)="artLoaded(room)" (error)="artFailed(room)" alt="">
             }
             @for (object of objects; track object.asset.id) {
-              <button type="button" class="piece" tabindex="-1" [attr.data-scene-object]="object.asset.id"
+              <button type="button" class="piece" tabindex="-1" [class.faded]="faded(object.asset.id)" [attr.data-scene-object]="object.asset.id"
                 [attr.aria-label]="object.label" [attr.aria-current]="selected() === object ? 'true' : null"
                 [hidden]="!painted().includes(object.asset.id)"
                 [style.left.%]="object.left" [style.top.%]="object.top" [style.width.%]="object.width" [style.height.%]="object.height"
@@ -43,13 +44,16 @@
       <ul class="objects" aria-label="Room objects">
         @for (object of objects; track object.asset.id) {
           <li>
-            <a class="action" [attr.data-object]="object.asset.id" [routerLink]="[]" [queryParams]="{ object: object.asset.id }" [replaceUrl]="true"
+            <a class="action" [attr.data-object]="object.asset.id" [routerLink]="[]" [queryParams]="linkQuery(object.asset.id)" [replaceUrl]="true"
               [attr.aria-current]="selected() === object ? 'true' : null">{{ object.label }}</a>
           </li>
         }
       </ul>
     </div>
-    <aside class="inspector" aria-label="Reading Hall details">
+    <aside class="inspector" [class.sheet]="sheet()" [attr.data-inspector]="inspectorState()" aria-label="Reading Hall details">
+      @if (sheet()) {
+        <button type="button" class="action" (click)="closeSheet()">Close details</button>
+      }
       <section aria-live="polite">
         @if (selected(); as object) {
           <h2>{{ object.label }}</h2>
