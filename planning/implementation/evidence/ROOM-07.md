@@ -50,8 +50,8 @@ Commands ran in `/tmp/vivek-room-07` on the Theater product that became `41111c6
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened when this sentence is written. The body will say `Closes #457` only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/560. The body says `Closes #457` only.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
-- Merged/activation status (actual evidence, not assumption): not merged. `origin/main` `e7a5e16b3e2165fae856bc2e7820e18084022a09` is not an ancestor. The pull request is not open when this sentence is written.
+- Merged/activation status (actual evidence, not assumption): pull request #560 is open and not merged. `origin/main` `e7a5e16b3e2165fae856bc2e7820e18084022a09` is not an ancestor.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate. The series episode lounge stays with a later room leaf.
-- Next actor: this implementer commits, pushes, opens the pull request, waits for the required checks, then merges with a merge commit.
+- Next actor: this implementer waits for the required checks, then merges with a merge commit.
