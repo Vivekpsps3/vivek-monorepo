@@ -350,7 +350,8 @@ test('a late shelf move does not rewrite the movie shelf, and sign-out clears th
   await started.promise;
   await page.goto('/media/library?kind=movie&sort=title');
   release.resolve();
-  await expect(page.locator('.media-card--poster')).toHaveCount(1);
+  await expect(page.locator('.theater-poster')).toHaveCount(1);
+  await expect(page.locator('.media-card--poster')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Paper Lantern', exact: true })).toBeVisible();
   await expect(page.locator('media-book-shelf')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Reading now. Move Missing Cover Tale to Current' })).toHaveCount(0);
