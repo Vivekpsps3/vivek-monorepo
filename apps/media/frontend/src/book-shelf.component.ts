@@ -13,19 +13,28 @@ import {
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
+import { formatDay } from "@vivek/browser";
+import { timeout } from "rxjs";
 import {
   UiButtonComponent,
+  UiEmptyStateComponent,
   UiFieldComponent,
   UiFieldControlDirective,
   SESSION_CONTEXT,
+  silentErrorToast,
 } from "@vivek/ui";
 import {
   bookAuthorLine,
+  bookKeepsakes,
   bookProgressFact,
   bookSeriesLine,
+  emptyBookKeepsakes,
   visibleShelves,
+  type BookKeepsake,
+  type BookKeepsakeView,
 } from "./books.mjs";
 import { MediaDrafts } from "./drafts.service";
+import { collectionQuery, type LibraryFilters } from "./library-filters.mjs";
 import { errorCopy, Detail, MediaCard } from "./media.models";
 
 interface Desk {
@@ -58,11 +67,60 @@ interface Desk {
     NgTemplateOutlet,
     RouterLink,
     UiButtonComponent,
+    UiEmptyStateComponent,
     UiFieldComponent,
     UiFieldControlDirective,
   ],
   styleUrl: "./book-shelf.component.css",
   template: `<div class="book-hall" [attr.data-face]="face()">
+    <section class="reading-lobby" aria-labelledby="reading-hall-heading">
+      <h2 id="reading-hall-heading" tabindex="-1">Reading hall</h2>
+      <p class="hall-boundary">This hall lists your saved books. It does not open the text or play audio.</p>
+      <div class="hall-objects">
+        <div class="hall-object">
+          <h3>Shelf signs</h3>
+          <p>Choose Current, Read, or To read.</p>
+          <nav class="book-signs" aria-label="Shelf signs">
+            @for (sign of signs; track sign.status) {
+              <a
+                [routerLink]="['/media/library']"
+                [queryParams]="signParams(sign.status)"
+                [attr.aria-current]="status() === sign.status ? 'page' : null"
+                >{{ sign.label }}</a
+              >
+            }
+          </nav>
+        </div>
+        <div class="hall-object">
+          <h3>Spines</h3>
+          <p>Each spine shows the title and opens that book.</p>
+          <ui-button variant="secondary" (click)="focusRegion('book-stacks-heading')">Go to book spines</ui-button>
+        </div>
+        <div class="hall-object">
+          <h3>Desk</h3>
+          <p>Update progress loads the saved progress and note and saves them on the book entry.</p>
+          <ui-button variant="secondary" (click)="focusDesk()">Go to reading desk</ui-button>
+        </div>
+      </div>
+      <nav class="book-signs" aria-label="Book presentation">
+        <a
+          [routerLink]="['/media/library']"
+          [queryParams]="faceLink('spine')"
+          [attr.aria-current]="face() === 'spine' ? 'page' : null"
+          >Covers and spines</a
+        >
+        <a
+          [routerLink]="['/media/library']"
+          [queryParams]="faceLink('text')"
+          [attr.aria-current]="face() === 'text' ? 'page' : null"
+          >Text</a
+        >
+      </nav>
+      <ui-button variant="ghost" href="/hub" label="Exit to Hub" />
+    </section>
+    <section class="book-stacks" aria-labelledby="book-stacks-heading">
+      <h2 id="book-stacks-heading" tabindex="-1">Book spines</h2>
+      @if (items().length) {
     @for (shelf of shelves(); track shelf.id) {
       <section class="book-stack" [attr.data-shelf]="shelf.id">
         <h2 [id]="'book-shelf-' + shelf.id">{{ shelf.label }}</h2>
@@ -98,6 +156,77 @@ interface Desk {
         }
       </section>
     }
+      } @else {
+        <ui-empty-state [title]="emptyTitle()" [message]="emptyMessage()">
+          @if (filtered()) {
+            <ui-button variant="ghost" (click)="clearFilters.emit()">Clear filters</ui-button>
+          } @else {
+            <ui-button variant="ghost" href="/media/library" label="All items" />
+          }
+          <ui-button variant="primary" href="/media/search" [queryParams]="searchParams()" label="Search Media" />
+        </ui-empty-state>
+      }
+    </section>
+    <section class="reading-desk-room" aria-labelledby="reading-desk-heading">
+      <h2 id="reading-desk-heading" tabindex="-1">Reading desk</h2>
+      <p>Update progress opens the desk on that book. Save progress writes the book entry, which has the same progress and note.</p>
+    </section>
+    <section class="completion-keepsakes" aria-labelledby="completion-keepsakes-heading">
+      <h2 id="completion-keepsakes-heading" tabindex="-1">Completion keepsakes</h2>
+      <p>These are the derived completion keepsakes for saved books. A watched episode is not one of them.</p>
+      @if (undoMessage()) {
+        <p role="status">{{ undoMessage() }}</p>
+      }
+      @if (keepsakeError()) {
+        <p class="book-desk-error" role="alert">{{ keepsakeError() }}</p>
+        <ui-button variant="secondary" (click)="loadKeepsakes()">Retry completion keepsakes</ui-button>
+      }
+      @if (keepsakeLoading()) {
+        <p role="status">Loading completion keepsakes…</p>
+      }
+      @if (keepsakeView().status === "ok") {
+        @if (keepsakeView().truncated) {
+          <p>
+            The derived list includes {{ keepsakeView().included }} of {{ keepsakeView().total }}. This hall
+            shows the books in that list.
+          </p>
+        }
+        @if (keepsakeView().episode) {
+          <p>{{ keepsakeView().episode }}</p>
+        }
+        @for (row of keepsakeView().books; track row.id) {
+          <article class="book-keepsake" [attr.data-keepsake]="row.id" [attr.data-entry]="row.entryId">
+            <h3>{{ row.title }}</h3>
+            <p>{{ dayLabel(row.on) }}</p>
+            @if (row.note) {
+              <p>{{ row.note }}</p>
+            }
+            @if (row.dateSource === "finished_on") {
+              <p>This date is an experience finish. Changing the shelf does not remove it.</p>
+            }
+            @if (row.route) {
+              <a [routerLink]="row.route" [state]="linkState()">Open {{ row.title }}</a>
+            }
+            @if (undoError(row.entryId); as message) {
+              <p class="book-desk-error" role="alert">{{ message }}</p>
+            }
+            @if (row.dateSource === "completed_on") {
+              <ui-button
+                variant="secondary"
+                [ariaLabel]="'Undo completion for ' + row.title"
+                [disabled]="busy(row.entryId)"
+                (click)="undoCompletion(row)"
+                >Undo completion</ui-button
+              >
+            }
+          </article>
+        } @empty {
+          <p>No completed books on the derived shelf.</p>
+        }
+      } @else if (keepsakeView().status === "absent" || keepsakeView().status === "unavailable") {
+        <p>Completion keepsakes are unavailable.</p>
+      }
+    </section>
     <ng-template #volume let-item="item" let-grouped="grouped" let-inSeries="inSeries">
       <article
         class="book-volume"
@@ -106,33 +235,14 @@ interface Desk {
         [attr.data-author]="author(item).linked ? 'linked' : 'unlinked'"
         [attr.aria-busy]="busy(item.id) ? 'true' : null"
       >
-        @if (face() === "spine") {
-          <div class="book-cover" aria-hidden="true">
-            @if (covered(item)) {
-              <img [src]="item.artwork_url" alt="" (error)="markBroken(item.id)" />
-            } @else {
-              <span class="spine-title">{{ item.title }}</span>
-            }
-          </div>
-        }
         <div class="book-body">
           @if (grouped) {
             <h4 class="book-title">
-              <a
-                [attr.data-media-item]="item.id"
-                [routerLink]="['/media/item', item.id]"
-                [state]="linkState()"
-                >{{ item.title }}</a
-              >
+              <ng-container *ngTemplateOutlet="spineLink; context: { item: item }" />
             </h4>
           } @else {
             <h3 class="book-title">
-              <a
-                [attr.data-media-item]="item.id"
-                [routerLink]="['/media/item', item.id]"
-                [state]="linkState()"
-                >{{ item.title }}</a
-              >
+              <ng-container *ngTemplateOutlet="spineLink; context: { item: item }" />
             </h3>
           }
           <p class="book-author">{{ author(item).text }}</p>
@@ -188,7 +298,16 @@ interface Desk {
             [id]="'book-desk-' + item.id"
             (ngSubmit)="save()"
           >
-            <h4>Reading desk</h4>
+            <h4>Progress and note</h4>
+            <p>Saving updates this book entry.</p>
+            @if (open.ready) {
+              <a
+                class="book-entry-link"
+                [routerLink]="['/media/item', open.entryId]"
+                [state]="linkState()"
+                >Open the book entry for {{ open.title }}</a
+              >
+            }
             @if (!open.ready) {
               @if (open.error) {
                 <p class="book-desk-error" role="alert">{{ open.error }}</p>
@@ -260,6 +379,24 @@ interface Desk {
         }
       </article>
     </ng-template>
+    <ng-template #spineLink let-item="item">
+      <a
+        [attr.data-media-item]="item.id"
+        [routerLink]="['/media/item', item.id]"
+        [state]="linkState()"
+      >
+        @if (face() === "spine") {
+          <span class="book-cover">
+            @if (covered(item)) {
+              <img [src]="item.artwork_url" alt="" (error)="markBroken(item.id)" />
+            }
+            <span class="spine-title">{{ item.title }}</span>
+          </span>
+        } @else {
+          {{ item.title }}
+        }
+      </a>
+    </ng-template>
   </div>`,
 })
 export class BookShelfComponent {
@@ -275,11 +412,32 @@ export class BookShelfComponent {
   readonly items = input.required<MediaCard[]>();
   readonly status = input("");
   readonly face = input<"spine" | "text">("spine");
+  readonly query = input("");
+  readonly sort = input("activity");
+  readonly favorite = input(false);
+  readonly tags = input<string[]>([]);
+  readonly offset = input(0);
+  readonly emptyTitle = input("No books saved yet");
+  readonly emptyMessage = input("");
+  readonly filtered = input(false);
   readonly linkState = input<Record<string, unknown> | undefined>(undefined);
   readonly saved = output<Detail>();
+  readonly clearFilters = output<void>();
   readonly broken = signal<ReadonlySet<number>>(new Set());
   private readonly busyIds = signal<ReadonlySet<number>>(new Set());
   private readonly failures = signal<ReadonlyMap<number, string>>(new Map());
+  private readonly undoFailures = signal<ReadonlyMap<number, string>>(new Map());
+  readonly keepsakeView = signal<BookKeepsakeView>(emptyBookKeepsakes());
+  readonly keepsakeError = signal("");
+  readonly keepsakeLoading = signal(false);
+  readonly undoMessage = signal("");
+  private keepsakeEpoch = 0;
+  readonly signs = [
+    { status: "", label: "All shelves" },
+    { status: "in_progress", label: "Current" },
+    { status: "completed", label: "Read" },
+    { status: "want", label: "To read" },
+  ];
   desk: Desk | null = null;
 
   constructor() {
@@ -291,7 +449,109 @@ export class BookShelfComponent {
       this.returnFocus = null;
       this.busyIds.set(new Set());
       this.failures.set(new Map());
+      this.undoFailures.set(new Map());
+      this.undoMessage.set("");
+      this.keepsakeEpoch += 1;
+      this.keepsakeLoading.set(false);
+      this.keepsakeError.set("");
+      this.keepsakeView.set(emptyBookKeepsakes());
     });
+    this.loadKeepsakes();
+  }
+
+  signParams(status: string) {
+    return {
+      ...collectionQuery(this.filters(), "book"),
+      status: status || null,
+      face: this.face() === "text" ? "text" : null,
+    };
+  }
+
+  faceLink(face: "spine" | "text") {
+    return {
+      ...collectionQuery(this.filters(), "book"),
+      status: this.status() || null,
+      offset: this.offset() || null,
+      face: face === "text" ? "text" : null,
+    };
+  }
+
+  searchParams(): { kind: string } {
+    return { kind: "book" };
+  }
+
+  focusRegion(id: string): void {
+    this.host.nativeElement.querySelector<HTMLElement>(`#${id}`)?.focus({ preventScroll: false });
+  }
+
+  focusDesk(): void {
+    const field = this.host.nativeElement.querySelector<HTMLElement>(".book-desk input");
+    if (field) {
+      field.focus({ preventScroll: false });
+      return;
+    }
+    this.focusRegion("reading-desk-heading");
+  }
+
+  dayLabel(value: string): string {
+    return formatDay(value) || value;
+  }
+
+  undoError(id: number): string {
+    return this.undoFailures().get(id) || "";
+  }
+
+  loadKeepsakes(): void {
+    if (!this.owns()) return;
+    const epoch = ++this.keepsakeEpoch;
+    this.keepsakeLoading.set(true);
+    this.keepsakeError.set("");
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    this.http
+      .get<unknown>("/api/town/keepsakes", {
+        params: zone ? { tz: zone } : undefined,
+        context: silentErrorToast(),
+      })
+      .pipe(timeout(8000), takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (body) => {
+          if (!this.owns() || epoch !== this.keepsakeEpoch) return;
+          this.keepsakeLoading.set(false);
+          this.keepsakeView.set(bookKeepsakes(body));
+        },
+        error: (error) => {
+          if (!this.owns() || epoch !== this.keepsakeEpoch) return;
+          this.keepsakeLoading.set(false);
+          this.keepsakeError.set(errorCopy(error));
+        },
+      });
+  }
+
+  undoCompletion(row: BookKeepsake): void {
+    if (!this.owns() || row.dateSource !== "completed_on" || this.busy(row.entryId)) return;
+    const token = this.begin(row.entryId);
+    this.undoMessage.set("");
+    this.clearUndoError(row.entryId);
+    this.http
+      .patch<Detail>(`/media/api/entries/${row.entryId}`, { status: "in_progress" })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (detail) => {
+          if (!this.accept(row.entryId, token)) return;
+          this.finish(row.entryId, token);
+          this.clearUndoError(row.entryId);
+          this.undoMessage.set("Completion undone. The book and note stay saved.");
+          this.noteStatus(detail);
+          this.saved.emit(detail);
+          this.loadKeepsakes();
+          this.focusAfterUndo(row.entryId);
+        },
+        error: (error) => {
+          if (!this.accept(row.entryId, token)) return;
+          this.finish(row.entryId, token);
+          this.setUndoError(row.entryId, errorCopy(error));
+        },
+      });
   }
 
   failure(id: number): string {
@@ -300,6 +560,17 @@ export class BookShelfComponent {
 
   shelves() {
     return visibleShelves(this.items(), this.status());
+  }
+
+  private filters(): LibraryFilters {
+    return {
+      q: this.query(),
+      kind: "book",
+      status: this.status(),
+      sort: this.sort(),
+      favorite: this.favorite(),
+      tags: this.tags(),
+    };
   }
 
   author(item: MediaCard) {
@@ -402,6 +673,7 @@ export class BookShelfComponent {
           this.clearFailure(item.id);
           this.noteStatus(detail);
           this.saved.emit(detail);
+          this.loadKeepsakes();
           this.focusTitle(item.id);
         },
         error: (error) => {
@@ -644,6 +916,32 @@ export class BookShelfComponent {
       this.host.nativeElement
         .querySelector<HTMLElement>(`a[data-media-item="${id}"]`)
         ?.focus({ preventScroll: true });
+    });
+  }
+
+  private focusAfterUndo(id: number): void {
+    requestAnimationFrame(() => {
+      if (!this.alive) return;
+      const link = this.host.nativeElement.querySelector<HTMLElement>(`a[data-media-item="${id}"]`);
+      if (link) {
+        link.focus({ preventScroll: true });
+        return;
+      }
+      this.host.nativeElement
+        .querySelector<HTMLElement>("#completion-keepsakes-heading")
+        ?.focus({ preventScroll: true });
+    });
+  }
+
+  private setUndoError(id: number, message: string): void {
+    this.undoFailures.update((current) => new Map(current).set(id, message));
+  }
+
+  private clearUndoError(id: number): void {
+    this.undoFailures.update((current) => {
+      const next = new Map(current);
+      next.delete(id);
+      return next;
     });
   }
 }
