@@ -13,10 +13,12 @@ import {
   exerciseTypeLabel,
   firstWorkoutField,
   formatEnteredSet,
+  isCustomExerciseId,
   moveDraftSet,
   openCanonicalPreview,
   removeDraftSet,
   retagDraftSet,
+  routineTitleError,
   setTypeLabel,
   workoutFieldId,
   workoutFieldMessage,
@@ -24,6 +26,7 @@ import {
   validateWorkoutRecord,
   type ExerciseType,
   type SetType,
+  type WorkoutDefinitionChoice,
   type WorkoutDraft,
   type WorkoutDraftSet,
   type WorkoutRecord,
@@ -51,6 +54,7 @@ export class HealthWorkoutDialogComponent {
   readonly units = input.required<HealthUnits>();
   readonly draft = input<WorkoutDraft>(emptyWorkoutDraft('exercise', ''));
   readonly customExerciseCount = input(0);
+  readonly definitions = input<readonly WorkoutDefinitionChoice[]>([]);
   readonly formError = input('');
   readonly busy = input(false);
   readonly draftChange = output<WorkoutDraft>();
@@ -94,8 +98,11 @@ export class HealthWorkoutDialogComponent {
 
   protected heading(): string {
     const draft = this.local();
-    if (draft.kind === 'session' && draft.clientId) {
-      return draft.state === 'draft' ? 'Resume session' : 'Edit session';
+    if (draft.startedFrom !== '' && draft.clientId === '') return 'Start session';
+    if (draft.clientId !== '') {
+      if (draft.kind === 'session') return draft.state === 'draft' ? 'Resume session' : 'Edit session';
+      if (draft.kind === 'exercise') return 'Edit exercise';
+      return 'Edit routine';
     }
     switch (draft.kind) {
       case 'exercise': return 'Add exercise';
@@ -106,7 +113,7 @@ export class HealthWorkoutDialogComponent {
 
   protected floorLines(): FloorLineView[] {
     const draft = this.local();
-    if (draft.kind !== 'session') return [];
+    if (draft.kind === 'exercise') return [];
     const lines: FloorLineView[] = [
       ...draft.floorBefore.map(line => ({ ...line, active: false })),
       {
@@ -127,6 +134,27 @@ export class HealthWorkoutDialogComponent {
 
   protected loggedOn(): string {
     return this.local().loggedOn || this.today();
+  }
+
+  protected showSavedExercise(): boolean {
+    return this.definitions().length > 0 || isCustomExerciseId(this.local().exerciseId);
+  }
+
+  protected savedDefinitionMissing(): boolean {
+    const id = this.local().exerciseId;
+    return isCustomExerciseId(id) && !this.definitions().some(item => item.id === id);
+  }
+
+  /** The blank choice is selected only when this line is not tied to a saved definition. */
+  protected definitionSelected(id: string): boolean {
+    const current = this.local().exerciseId;
+    if (id === '') return current === '' || (!this.definitions().some(item => item.id === current) && !this.savedDefinitionMissing());
+    return current === id;
+  }
+
+  protected definitionLabel(item: WorkoutDefinitionChoice): string {
+    const draft = this.local();
+    return item.id === draft.exerciseId && draft.name !== '' ? draft.name : item.name;
   }
 
   protected usesLoad(): boolean {
@@ -157,13 +185,38 @@ export class HealthWorkoutDialogComponent {
     this.patch({ name: this.text(event) });
   }
 
+  protected onTemplateName(event: Event): void {
+    this.patch({ templateName: this.text(event) });
+  }
+
+  protected onDefinition(event: Event): void {
+    const id = this.text(event);
+    const draft = this.local();
+    if (id === '') {
+      this.patch({ exerciseId: '' });
+      return;
+    }
+    const match = this.definitions().find(item => item.id === id);
+    if (!match) return;
+    if (draft.sets.length > 0 && match.exerciseType !== draft.exerciseType) {
+      this.patch({ exerciseId: draft.exerciseId });
+      return;
+    }
+    this.patch({
+      exerciseId: match.id,
+      name: match.name,
+      exerciseType: draft.sets.length > 0 ? draft.exerciseType : match.exerciseType,
+    });
+  }
+
   protected onMeasured(event: Event): void {
     this.patch({ measuredOn: this.text(event) });
   }
 
   protected onType(event: Event): void {
     const value = this.text(event);
-    if ((EXERCISE_TYPES as readonly string[]).includes(value)) this.patch({ exerciseType: value as ExerciseType });
+    if (!(EXERCISE_TYPES as readonly string[]).includes(value) || value === this.local().exerciseType) return;
+    this.patch({ exerciseType: value as ExerciseType, exerciseId: '' });
   }
 
   protected onSetType(event: Event): void {
@@ -250,9 +303,11 @@ export class HealthWorkoutDialogComponent {
       this.customExerciseCount(),
       this.today(),
     );
-    this.errors.set(result.fieldErrors);
+    const titleError = routineTitleError(draft);
+    const fieldErrors = titleError ? { ...result.fieldErrors, template_name: titleError } : result.fieldErrors;
+    this.errors.set(fieldErrors);
     this.draftChange.emit(draft);
-    if (Object.keys(result.fieldErrors).length > 0) return;
+    if (Object.keys(fieldErrors).length > 0) return;
     this.save.emit(result.value);
   }
 

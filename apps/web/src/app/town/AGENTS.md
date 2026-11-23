@@ -13,14 +13,14 @@ asynchronous stage before publishing plaintext. Preserve corrupt rows, revision
 conflicts, and drafts. Never send private Health values in Town payloads.
 Cross-domain Town views receive approved stages and counts only.
 
-Clinic creates, corrects, and deletes weight, heart rate, blood pressure, sleep, labs, and checkups. Each kind shows its latest, sparkline, and 100 records. Labs group by name and show below, in, above, or no range. Saves send the expected revision. Display units do not rewrite stored values. Logged dates stay immutable. Deletion requires the exact confirmation phrase. Sessions, exercises, and routines use health_workouts in kilograms, metres, and seconds. A draft keeps measured date, logged date, set ids, and only entered sets. A stale save keeps it. Personal records stay in health_prs. No plaintext workout endpoint.
+Clinic creates, corrects, and deletes weight, heart rate, blood pressure, sleep, labs, and checkups. Each kind shows latest, sparkline, and 100 records. Labs group by name: below, in, above, or no range. Saves send the expected revision. Display units do not rewrite values. Logged dates stay immutable. Deletion requires the exact confirmation phrase. Sessions, exercises, and routines use health_workouts in kilograms, metres, and seconds. A draft keeps measured date, logged date, set ids, and entered sets. A stale save keeps it. Archiving a definition or routine leaves past sets unchanged. Personal records stay in health_prs. No plaintext workout endpoint.
 
 Use [health constants](health/health.constants.ts) and existing pure logic for units,
 thresholds, and badges. Do not duplicate conversion or XP math.
 
 Reuse shared controls. Town reset fixtures and worker clock ownership stay
 deterministic. Root test gates apply, including Town Playwright and server
-coverage for Town backend work.
+coverage.
 
 The Town exterior and the Reading Hall share the y-down [frame](library-room.scene.ts).
 One rectangle paints and picks; the higher layer wins. Pan, zoom, tap, drag, and
