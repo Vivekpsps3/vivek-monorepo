@@ -1,4 +1,6 @@
+import { mkdirSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
+import { scenePreferenceKey } from '../src/app/platform/scene-appearance';
 import { displayWeight, lbToKg, milesToMetres } from '../src/app/town/health/health-units';
 import { SYNTHETIC_VAULT_PASSPHRASE, syntheticVault } from '../../../tests/e2e/synthetic-vault-harness';
 import { expect, test, type Locator, type Page } from '../../../tests/e2e/fixtures';
@@ -1864,6 +1866,275 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'light'],
     });
   });
 }
+
+for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark'], [1280, 800, 'dark'], [390, 844, 'light']] as const) {
+  test.describe(`workout rest timer at ${width} ${theme}`, () => {
+    test.describe.configure({ timeout: 180_000 });
+    test.use({
+      viewport: { width, height },
+      hasTouch: width === 390,
+      timezoneId: 'America/Los_Angeles',
+    });
+
+    test.beforeEach(async ({ page, request }) => {
+      expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
+      await page.clock.setFixedTime(new Date('2026-10-29T19:00:00Z'));
+      await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: theme === 'dark' ? 'dark' : 'light' });
+      await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+      await page.addInitScript(() => {
+        const record = { constructed: 0, closed: 0, started: 0 };
+        const Original = window.AudioContext;
+        function Wrapped(this: AudioContext): AudioContext {
+          const context = new Original();
+          record.constructed += 1;
+          const close = context.close.bind(context);
+          context.close = () => {
+            record.closed += 1;
+            return close();
+          };
+          const create = context.createOscillator.bind(context);
+          context.createOscillator = () => {
+            const oscillator = create();
+            const start = oscillator.start.bind(oscillator);
+            oscillator.start = (...args: Parameters<OscillatorNode['start']>) => {
+              record.started += 1;
+              return start(...args);
+            };
+            return oscillator;
+          };
+          return context;
+        }
+        Wrapped.prototype = Original.prototype;
+        window.AudioContext = Wrapped as unknown as typeof AudioContext;
+        Object.assign(window, { __restAudio: record });
+      });
+    });
+
+    test('pauses, leaves, locks, and resumes the same session without a tick or the exercise name', async ({ page }) => {
+      test.setTimeout(240_000);
+      const touch = width === 390;
+      mkdirSync('/tmp/fit-07-captures', { recursive: true });
+      const audio = () => page.evaluate(() => {
+        const record = (window as unknown as { __restAudio?: { constructed: number; closed: number; started: number } }).__restAudio;
+        return record ?? { constructed: 0, closed: 0, started: 0 };
+      });
+      await syntheticVault(page, SEED);
+      await page.goto('/town/gym');
+      const room = page.locator('app-health-room');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(room).toHaveAttribute('data-health-state', 'locked');
+      const lockedBefore = await room.innerText();
+      expect(lockedBefore).not.toContain('Synthetic press');
+      expect(await room.locator('#health-rest-clock').count()).toBe(0);
+      const motion = await room.locator('.health-room').evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(motion).toBe('0s');
+
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+
+      await activate(page, room.getByRole('button', { name: 'Add exercise' }), touch);
+      const exercise = page.getByRole('dialog', { name: 'Add exercise' });
+      await expect(exercise.locator('#health-rest-start')).toHaveCount(0);
+      await activate(page, exercise.getByRole('button', { name: 'Cancel' }), touch);
+      await expect(exercise).toHaveCount(0);
+
+      await activate(page, room.getByRole('button', { name: 'Add session' }), touch);
+      const dialog = page.getByRole('dialog', { name: 'Add session' });
+      const rest = dialog.locator('.rest');
+      await expect(rest).toHaveAttribute('data-rest-phase', 'idle');
+      await expect(dialog.locator('#health-rest-clock')).toHaveText('0:00');
+      await expect(dialog.locator('#health-rest-status')).toHaveText('Not started');
+      await target(dialog.getByRole('button', { name: 'Start rest' }));
+      await target(dialog.getByRole('button', { name: 'Pause rest' }));
+      await target(dialog.getByRole('button', { name: 'Reset rest' }));
+      const restMotion = await rest.evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(restMotion).toBe('0s');
+      if (touch) {
+        await dialog.locator('#health-workout-name').tap();
+        await dialog.locator('#health-workout-name').fill('Synthetic press');
+        await dialog.locator('#health-workout-load').tap();
+        await dialog.locator('#health-workout-load').fill('100');
+        await dialog.locator('#health-workout-reps').tap();
+        await dialog.locator('#health-workout-reps').fill('5');
+      } else {
+        await focusControl(page, '#health-workout-name');
+        await page.keyboard.type('Synthetic press');
+        await focusControl(page, '#health-workout-load');
+        await page.keyboard.type('100');
+        await focusControl(page, '#health-workout-reps');
+        await page.keyboard.type('5');
+      }
+      const quiet = await audio();
+      // Fixed time let the page load. Counting needs Date to move while timers run.
+      await page.clock.setSystemTime(new Date('2026-10-29T19:00:00Z'));
+      await activate(page, dialog.getByRole('button', { name: 'Start rest' }), touch);
+      await expect(rest).toHaveAttribute('data-rest-phase', 'running');
+      await expect(rest).toHaveAttribute('data-rest-audio', 'off');
+      await expect(dialog.locator('#health-rest-clock')).toHaveText('0:01');
+      await rest.screenshot({ path: `/tmp/fit-07-captures/rest-${width}-${theme}-running.png` });
+      expect(await rest.innerText()).not.toContain('Synthetic press');
+      expect((await dialog.locator('#health-rest-clock').getAttribute('aria-label')) ?? '').not.toContain('Synthetic');
+      await activate(page, dialog.getByRole('button', { name: 'Pause rest' }), touch);
+      await expect(rest).toHaveAttribute('data-rest-phase', 'paused');
+      await page.waitForTimeout(1_200);
+      await expect(dialog.locator('#health-rest-clock')).toHaveText('0:01');
+      await activate(page, dialog.getByRole('button', { name: 'Reset rest' }), touch);
+      await expect(dialog.locator('#health-rest-clock')).toHaveText('0:00');
+      await expect(rest).toHaveAttribute('data-rest-phase', 'idle');
+      await activate(page, dialog.getByRole('button', { name: 'Start rest' }), touch);
+      await activate(page, dialog.getByRole('button', { name: 'Add set' }), touch);
+      await expect(rest).toHaveAttribute('data-rest-phase', 'running');
+      await expect(dialog.locator('[data-entered-set]')).toHaveCount(1);
+      await dialog.locator('#health-workout-note').fill('Synthetic kept');
+      await dialog.locator('#health-workout-state').selectOption('draft');
+      const fits = await dialog.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
+      expect(fits).toBe(true);
+      const openScan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(openScan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+      expect(await audio()).toEqual(quiet);
+      await activate(page, dialog.getByRole('button', { name: 'Save' }), touch);
+      await expect(dialog).toHaveCount(0);
+      await expect(room.locator('#health-rest-clock')).toHaveCount(0);
+      const draftRow = room.locator('[data-workout-state="draft"]');
+      await expect(draftRow).toContainText('Synthetic press');
+      await expect(draftRow).toHaveAttribute('data-set-count', '1');
+
+      const resume = room.getByRole('button', { name: /Resume/ });
+      await activate(page, resume, touch);
+      const resumed = page.getByRole('dialog', { name: 'Resume session' });
+      await expect(resumed.locator('[data-rest-phase]')).toHaveAttribute('data-rest-phase', 'idle');
+      await expect(resumed.locator('#health-rest-clock')).toHaveText('0:00');
+      await expect(resumed.locator('#health-workout-name')).toHaveValue('Synthetic press');
+      await expect(resumed.locator('#health-workout-note')).toHaveValue('Synthetic kept');
+      await expect(resumed.locator('[data-entered-set]')).toHaveCount(1);
+      await activate(page, resumed.getByRole('button', { name: 'Start rest' }), touch);
+      await expect(resumed.locator('[data-rest-phase]')).toHaveAttribute('data-rest-phase', 'running');
+      await activate(page, resumed.getByRole('button', { name: 'Cancel' }), touch);
+      await expect(resumed).toHaveCount(0);
+      await expect(resume).toBeFocused();
+      await page.waitForTimeout(1_200);
+      expect(await audio()).toEqual(quiet);
+
+      await activate(page, resume, touch);
+      await expect(resumed.locator('[data-rest-phase]')).toHaveAttribute('data-rest-phase', 'idle');
+      await expect(resumed.locator('#health-workout-note')).toHaveValue('Synthetic kept');
+      await activate(page, resumed.getByRole('button', { name: 'Start rest' }), touch);
+      await page.goto('/settings/finance');
+      await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+      await expect(page.getByText('Finance locked.')).toBeVisible();
+      await page.goto('/town/gym');
+      await expect(room).toHaveAttribute('data-health-state', 'locked', { timeout: 90_000 });
+      const locked = await room.innerText();
+      expect(locked).not.toContain('Synthetic press');
+      expect(locked).not.toContain('Synthetic kept');
+      noMeasurementDigits(locked);
+      expect(await room.locator('#health-rest-clock, #health-workout-name').count()).toBe(0);
+      await page.screenshot({ path: `/tmp/fit-07-captures/rest-${width}-${theme}-locked.png` });
+      const lockedScan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(lockedScan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+      await page.waitForTimeout(1_200);
+      expect((await audio()).started).toBe(quiet.started);
+
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await activate(page, room.getByRole('button', { name: /Resume/ }), touch);
+      const again = page.getByRole('dialog', { name: 'Resume session' });
+      await expect(again.locator('#health-workout-name')).toHaveValue('Synthetic press');
+      await expect(again.locator('#health-workout-note')).toHaveValue('Synthetic kept');
+      await expect(again.locator('[data-entered-set]')).toHaveCount(1);
+      await expect(again.locator('[data-rest-phase]')).toHaveAttribute('data-rest-phase', 'idle');
+      await expect(again.locator('#health-rest-clock')).toHaveText('0:00');
+      await expect(again.locator('[data-rest-audio]')).toHaveAttribute('data-rest-audio', 'off');
+      await target(again.getByRole('button', { name: 'Start rest' }));
+      await target(again.getByRole('button', { name: 'Pause rest' }));
+      await target(again.getByRole('button', { name: 'Reset rest' }));
+    });
+  });
+}
+
+test.describe('workout rest timer sound', () => {
+  test.describe.configure({ timeout: 180_000 });
+  test.use({ viewport: { width: 1280, height: 800 }, timezoneId: 'America/Los_Angeles' });
+
+  test('plays a tick only while the session is open and sound is on', async ({ page, request }) => {
+    test.setTimeout(240_000);
+    expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
+    await page.clock.setFixedTime(new Date('2026-10-29T19:00:00Z'));
+    await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
+    await page.addInitScript(sceneKey => {
+      localStorage.setItem('suite-theme', 'light');
+      localStorage.setItem(sceneKey, JSON.stringify({ season: 'default', sound: true }));
+      const record = { constructed: 0, closed: 0, started: 0 };
+      const Original = window.AudioContext;
+      function Wrapped(this: AudioContext): AudioContext {
+        const context = new Original();
+        record.constructed += 1;
+        const close = context.close.bind(context);
+        context.close = () => {
+          record.closed += 1;
+          return close();
+        };
+        const create = context.createOscillator.bind(context);
+        context.createOscillator = () => {
+          const oscillator = create();
+          const start = oscillator.start.bind(oscillator);
+          oscillator.start = (...args: Parameters<OscillatorNode['start']>) => {
+            record.started += 1;
+            return start(...args);
+          };
+          return oscillator;
+        };
+        return context;
+      }
+      Wrapped.prototype = Original.prototype;
+      window.AudioContext = Wrapped as unknown as typeof AudioContext;
+      Object.assign(window, { __restAudio: record });
+    }, scenePreferenceKey(987)); // harness /api/auth/me owner, not the town fixture user
+    const audio = () => page.evaluate(() => {
+      const record = (window as unknown as { __restAudio?: { constructed: number; closed: number; started: number } }).__restAudio;
+      if (!record) throw new Error('missing audio record');
+      return record;
+    });
+    await syntheticVault(page, SEED);
+    await page.goto('/town/gym');
+    const room = page.locator('app-health-room');
+    await activate(page, room.getByRole('link', { name: 'Unlock' }), false);
+    await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+    await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+    await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+    await activate(page, room.getByRole('button', { name: 'Add session' }), false);
+    const dialog = page.getByRole('dialog', { name: 'Add session' });
+    await focusControl(page, '#health-workout-name');
+    await page.keyboard.type('Synthetic press');
+    const before = await audio();
+    await page.clock.setSystemTime(new Date('2026-10-29T19:00:00Z'));
+    await activate(page, dialog.getByRole('button', { name: 'Start rest' }), false);
+    await expect(dialog.locator('[data-rest-audio]')).toHaveAttribute('data-rest-audio', 'live');
+    await expect(dialog.locator('#health-rest-clock')).toHaveText('0:01');
+    const ticking = await audio();
+    expect(ticking.constructed).toBe(before.constructed + 1);
+    expect(ticking.started).toBeGreaterThan(before.started);
+    await activate(page, dialog.getByRole('button', { name: 'Pause rest' }), false);
+    await page.waitForTimeout(1_200);
+    expect(await audio()).toEqual({ ...ticking, started: ticking.started });
+    await activate(page, dialog.getByRole('button', { name: 'Cancel' }), false);
+    await expect(dialog).toHaveCount(0);
+    await page.waitForTimeout(1_200);
+    const left = await audio();
+    expect(left.started).toBe(ticking.started);
+    expect(left.closed).toBeGreaterThanOrEqual(before.closed + 1);
+    await activate(page, room.getByRole('button', { name: 'Add session' }), false);
+    const again = page.getByRole('dialog', { name: 'Add session' });
+    await expect(again.locator('#health-workout-name')).toHaveValue('Synthetic press');
+    await expect(again.locator('[data-rest-phase]')).toHaveAttribute('data-rest-phase', 'idle');
+    await expect(again.locator('[data-rest-audio]')).toHaveAttribute('data-rest-audio', 'off');
+    await expect(again.locator('#health-rest-clock')).toHaveText('0:00');
+  });
+});
 
 async function selectedDefinition(dialog: Locator): Promise<{ value: string; label: string }> {
   return dialog.locator('#health-workout-definition').evaluate(node => {
