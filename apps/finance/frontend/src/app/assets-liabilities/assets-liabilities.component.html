@@ -1,5 +1,6 @@
 <ui-page-header title="Accounts" titleId="accounts-heading">
   <div uiPageActions class="header-actions">
+    <ui-button variant="ghost" href="/finance/have" [queryParams]="{ t: 'hall' }" label="Accounts hall" />
     <ui-button variant="primary" (clicked)="openEditor('asset')">Add asset</ui-button>
     <ui-button variant="secondary" (clicked)="openEditor('debt')">Add debt</ui-button>
   </div>
@@ -103,31 +104,4 @@
   }
 </div>
 
-<ui-dialog scrollTarget=".main-content" [open]="editor !== null" labelledBy="account-dialog-title" (closed)="closeEditor()">
-  @if (editor; as draft) {
-    @let amountField = draft.kind === 'asset' ? 'value' : 'amount';
-    <h2 id="account-dialog-title">{{ draft.id === null ? 'Add' : 'Edit' }} {{ draft.kind }}</h2>
-    @if (draft.saveError) {
-      <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ draft.saveError }}</p>
-    }
-    <form id="account-balance-form" class="sheet-form" novalidate (ngSubmit)="saveEditor()">
-      <ui-field label="Name" [error]="fieldError('name')">
-        <input uiFieldControl name="balance-name" [(ngModel)]="draft.name" data-dialog-initial-focus (blur)="revalidate()" />
-      </ui-field>
-      <ui-select label="Category" [options]="balanceKinds[draft.kind].categories" [(value)]="draft.category" />
-      <ui-field [label]="draft.kind === 'asset' ? 'Value' : 'Amount owed'" [error]="fieldError(amountField)">
-        <input uiFieldControl name="balance-value" type="text" inputmode="decimal" [(ngModel)]="draft.value" (blur)="revalidate()" />
-      </ui-field>
-      <ui-field label="As of" [optional]="true">
-        <input uiFieldControl name="balance-date" type="date" [(ngModel)]="draft.date" />
-      </ui-field>
-      <ui-field label="Notes" [optional]="true">
-        <input uiFieldControl name="balance-notes" [(ngModel)]="draft.notes" />
-      </ui-field>
-      <div class="modal-actions">
-        <ui-button variant="ghost" (clicked)="closeEditor()">Cancel</ui-button>
-        <ui-button type="submit" variant="primary" [disabled]="draft.saving">{{ draft.saving ? 'Saving…' : 'Save ' + draft.kind }}</ui-button>
-      </div>
-    </form>
-  }
-</ui-dialog>
+<app-account-balance-editor [editor]="balanceEditor" />
