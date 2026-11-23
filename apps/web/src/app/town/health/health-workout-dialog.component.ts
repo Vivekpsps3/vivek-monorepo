@@ -1,7 +1,20 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, afterRenderEffect, effect, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, NgZone, afterRenderEffect, effect, inject, input, output, signal } from '@angular/core';
 import { UiButtonComponent, UiDialogComponent, UiFieldComponent, UiFieldControlDirective } from '@vivek/ui';
+import { SceneAppearanceService } from '../../platform/scene-appearance.service';
 import type { HealthUnits } from './health-entry';
+import {
+  RestTickAudio,
+  formatRestClock,
+  idleRestTimer,
+  pauseRest,
+  resetRest,
+  restElapsed,
+  restTickAllowed,
+  startRest,
+  type RestPhase,
+  type RestTimer,
+} from './rest-timer';
 import {
   EXERCISE_TYPES,
   SET_TYPES,
@@ -70,11 +83,30 @@ export class HealthWorkoutDialogComponent {
   protected readonly enteredLabel = formatEnteredSet;
   protected readonly storedLabel = canonicalPreview;
   protected readonly message = workoutFieldMessage;
+  private readonly scene = inject(SceneAppearanceService);
+  private readonly zone = inject(NgZone);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly reducedMotion = signal(false);
+  private readonly pageVisible = signal(true);
+  private readonly rest = signal<RestTimer>(idleRestTimer());
+  private readonly restShown = signal(0);
   private formErrorSeen = '';
+  private restOwner = '';
+  private restSecond = 0;
+  private restInterval: ReturnType<typeof setInterval> | null = null;
+  private restAudio = new RestTickAudio();
 
   constructor() {
+    this.bindRestEnvironment();
     effect(() => {
       this.local.set(this.draft());
+    });
+    effect(() => {
+      const draft = this.local();
+      const owner = this.open() && draft.kind === 'session' ? `session:${draft.clientId}` : '';
+      if (owner === this.restOwner) return;
+      this.clearRest();
+      this.restOwner = owner;
     });
     afterRenderEffect(() => {
       if (!this.open()) {
@@ -135,6 +167,61 @@ export class HealthWorkoutDialogComponent {
 
   protected loggedOn(): string {
     return this.local().loggedOn || this.today();
+  }
+
+  protected restPhase(): RestPhase {
+    return this.rest().phase;
+  }
+
+  protected restClock(): string {
+    return formatRestClock(this.restShown());
+  }
+
+  protected restStatus(): string {
+    switch (this.rest().phase) {
+      case 'running': return 'Running';
+      case 'paused': return 'Paused';
+      default: return 'Not started';
+    }
+  }
+
+  /** The clock label is the time and the phase. It does not include the exercise. */
+  protected restLabel(): string {
+    return `Rest ${this.restClock()}, ${this.restStatus()}`;
+  }
+
+  protected restAudioLive(): boolean {
+    return this.restAudio.live;
+  }
+
+  protected onRestStart(): void {
+    if (this.local().kind !== 'session' || !this.open()) return;
+    const now = Date.now();
+    const next = startRest(this.rest(), now);
+    if (next === this.rest()) return;
+    this.rest.set(next);
+    this.paintRest(now);
+    this.restAudio.arm(this.tickAllowed());
+    this.ensureRestInterval();
+  }
+
+  protected onRestPause(): void {
+    const now = Date.now();
+    const next = pauseRest(this.rest(), now);
+    if (next === this.rest()) return;
+    this.rest.set(next);
+    this.paintRest(now);
+    this.restAudio.silence();
+    this.stopRestInterval();
+  }
+
+  protected onRestReset(): void {
+    this.rest.set(resetRest());
+    this.restShown.set(0);
+    this.restSecond = 0;
+    this.restAudio.dispose();
+    this.restAudio = new RestTickAudio();
+    this.stopRestInterval();
   }
 
   protected showSavedExercise(): boolean {
@@ -361,5 +448,84 @@ export class HealthWorkoutDialogComponent {
       return target.value;
     }
     return '';
+  }
+
+  private bindRestEnvironment(): void {
+    if (typeof matchMedia === 'function') {
+      const query = matchMedia('(prefers-reduced-motion: reduce)');
+      this.reducedMotion.set(query.matches);
+      const onChange = (): void => this.reducedMotion.set(query.matches);
+      query.addEventListener?.('change', onChange);
+      this.destroyRef.onDestroy(() => query.removeEventListener?.('change', onChange));
+    }
+    if (typeof document !== 'undefined') {
+      this.pageVisible.set(document.visibilityState !== 'hidden');
+      const onVisibility = (): void => {
+        const visible = document.visibilityState !== 'hidden';
+        this.pageVisible.set(visible);
+        if (!visible) this.restAudio.silence();
+      };
+      document.addEventListener('visibilitychange', onVisibility);
+      this.destroyRef.onDestroy(() => document.removeEventListener('visibilitychange', onVisibility));
+    }
+    this.destroyRef.onDestroy(() => this.clearRest());
+  }
+
+  private tickAllowed(): boolean {
+    return restTickAllowed({
+      sound: this.scene.effective().sound,
+      reducedMotion: this.reducedMotion(),
+      visible: this.pageVisible(),
+      running: this.rest().phase === 'running',
+    });
+  }
+
+  private paintRest(now: number): void {
+    const elapsed = restElapsed(this.rest(), now);
+    this.restShown.set(elapsed);
+    this.restSecond = Math.floor(elapsed / 1000);
+  }
+
+  /**
+   * The interval stays outside the Angular zone. An in-zone timer is a macrotask,
+   * so the app would never become stable and leave/lock could not finish.
+   */
+  private ensureRestInterval(): void {
+    if (this.restInterval !== null) return;
+    this.restInterval = this.zone.runOutsideAngular(() => setInterval(() => {
+      this.zone.run(() => this.onRestTick());
+    }, 200));
+  }
+
+  private onRestTick(): void {
+    if (this.rest().phase !== 'running') {
+      this.stopRestInterval();
+      return;
+    }
+    const now = Date.now();
+    const elapsed = restElapsed(this.rest(), now);
+    this.restShown.set(elapsed);
+    const second = Math.floor(elapsed / 1000);
+    if (second > this.restSecond) {
+      this.restSecond = second;
+      if (this.tickAllowed()) this.restAudio.pulse(true);
+      else this.restAudio.silence();
+    }
+  }
+
+  private stopRestInterval(): void {
+    if (this.restInterval === null) return;
+    clearInterval(this.restInterval);
+    this.restInterval = null;
+  }
+
+  /** Drop the clock and the tick. The workout draft is a separate signal. */
+  private clearRest(): void {
+    this.stopRestInterval();
+    this.restAudio.dispose();
+    this.restAudio = new RestTickAudio();
+    this.restSecond = 0;
+    this.rest.set(idleRestTimer());
+    this.restShown.set(0);
   }
 }

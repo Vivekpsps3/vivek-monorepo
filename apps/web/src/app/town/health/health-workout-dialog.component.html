@@ -9,6 +9,16 @@
           [value]="local().measuredOn" (input)="onMeasured($event)" />
       </ui-field>
       <p class="logged-on">Logged on <time [attr.datetime]="loggedOn()">{{ loggedOn() }}</time></p>
+      <section class="rest" aria-labelledby="health-rest-title" [attr.data-rest-phase]="restPhase()" [attr.data-rest-audio]="restAudioLive() ? 'live' : 'off'">
+        <h3 id="health-rest-title">Rest</h3>
+        <p id="health-rest-clock" class="rest-clock" role="timer" aria-live="off" [attr.aria-label]="restLabel()">{{ restClock() }}</p>
+        <p id="health-rest-status" class="rest-status">{{ restStatus() }}</p>
+        <div class="rest-actions">
+          <ui-button id="health-rest-start" variant="secondary" [disabled]="restPhase() === 'running'" (clicked)="onRestStart()">Start rest</ui-button>
+          <ui-button id="health-rest-pause" variant="secondary" [disabled]="restPhase() !== 'running'" (clicked)="onRestPause()">Pause rest</ui-button>
+          <ui-button id="health-rest-reset" variant="secondary" [disabled]="restPhase() === 'idle'" (clicked)="onRestReset()">Reset rest</ui-button>
+        </div>
+      </section>
     }
     @if (local().kind === 'routine') {
       <ui-field label="Routine name" [required]="true" [error]="message(errors()['template_name'])">

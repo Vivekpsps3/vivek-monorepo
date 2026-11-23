@@ -16,8 +16,32 @@ textarea {
   gap: var(--space-2);
 }
 
-.logged-on {
+.logged-on,
+.rest h3,
+.rest-clock,
+.rest-status {
   margin: 0;
+}
+
+.rest {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.rest-clock {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xl);
+}
+
+.rest-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .entered-sets {
