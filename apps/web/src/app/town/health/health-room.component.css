@@ -25,6 +25,16 @@
   margin-block: var(--space-3);
 }
 
+.form-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.form-error:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .entries {
   list-style: none;
   padding: 0;

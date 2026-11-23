@@ -1,7 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { AfterViewChecked, ChangeDetectionStrategy, Component, DestroyRef, Directive, ElementRef, InjectionToken, Injector, OnInit, afterRenderEffect, computed, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { localTodayIso } from '@vivek/browser';
 import {
   ConfirmService,
@@ -23,6 +23,8 @@ import {
   projectHealthProgress,
   type GameMedalInput,
 } from './health-progress';
+import { GymFloorComponent } from './gym-floor.component';
+import { gymFloorId, type GymFloorId, type GymGate } from './gym-floor';
 import { HealthSparklineComponent } from './health-sparkline.component';
 import {
   DEFAULT_HEALTH_UNITS,
@@ -65,6 +67,7 @@ import {
   emptyWorkoutDraft,
   formatWorkout,
   reformatWorkoutDraft,
+  workoutFromDraft,
   type WorkoutDefinitionChoice,
   type WorkoutDraft,
   type WorkoutKind,
@@ -195,6 +198,7 @@ function isStat(value: HealthStat | HealthPr): value is HealthStat {
 @Component({
   selector: 'app-health-room',
   imports: [
+    GymFloorComponent,
     HealthEntryDialogComponent,
     HealthWorkoutDialogComponent,
     HealthLinkedFocusDirective,
@@ -219,6 +223,7 @@ export class HealthRoomComponent implements OnInit {
   readonly gameMedals = input<readonly GameMedalInput[]>([]);
   protected readonly medalNote = GAME_MEDAL_EXPLANATION;
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly session = inject(SessionService);
   private readonly store = inject(HealthStoreService);
   private readonly confirm = inject(ConfirmService);
@@ -250,6 +255,7 @@ export class HealthRoomComponent implements OnInit {
   protected readonly workoutDialogOpen = signal(false);
   protected readonly workoutFormError = signal('');
   protected readonly workoutBusy = signal(false);
+  protected readonly floorObject = signal<GymFloorId | null>(null);
   protected readonly idleWorkoutDraft = emptyWorkoutDraft('exercise', '');
   private readonly returnWorkoutFocus = signal<string | null>(null);
   private readonly returnFocusKind = signal<HealthClinicKind | null>(null);
@@ -345,6 +351,20 @@ export class HealthRoomComponent implements OnInit {
       this.gameMedals(),
     );
   });
+  protected readonly floorGate = computed((): GymGate => {
+    const phase = this.phase();
+    if (phase === 'locked' || phase === 'setup' || phase === 'unavailable') return phase;
+    return 'ready';
+  });
+  protected readonly activeRoutineName = computed(() => {
+    const entry = this.workouts().find(item => item.value.kind === 'routine' && !item.value.archived);
+    return entry?.value.kind === 'routine' ? entry.value.name : '';
+  });
+  protected readonly floorCanFinish = computed(() => {
+    const held = this.workoutDraft();
+    if (held) return held.kind === 'session';
+    return this.workouts().some(item => item.value.kind === 'session' && item.value.state === 'draft');
+  });
   protected readonly workoutRows = computed(() => this.workouts().map(entry => ({
     clientId: entry.clientId,
     label: formatWorkout(entry.value, this.units()),
@@ -384,6 +404,22 @@ export class HealthRoomComponent implements OnInit {
       this.returnWorkoutFocus.set(null);
       this.revealFocusId.set(null);
       if (this.phase() === 'ready') this.publish();
+    });
+    effect(() => {
+      if (this.room() !== 'gym') {
+        this.floorObject.set(null);
+        return;
+      }
+      this.floorObject.set(gymFloorId(this.params().get('object')));
+    });
+    afterRenderEffect(() => {
+      const message = this.workoutFormError();
+      if (!message || this.workoutDialogOpen() || this.phase() !== 'ready' || this.room() !== 'gym') return;
+      this.scheduleReturnFocus(
+        () => this.workoutFormError() === message && !this.workoutDialogOpen() && this.phase() === 'ready',
+        () => document.getElementById('health-floor-error'),
+        () => undefined,
+      );
     });
     afterRenderEffect(() => {
       const kind = this.returnFocusKind();
@@ -495,6 +531,82 @@ export class HealthRoomComponent implements OnInit {
 
   protected startFromSession(clientId: string): void {
     this.startCopy(clientId, 'session');
+  }
+
+  /** The object id is the durable gym URL. Zoom stays on this floor. */
+  protected selectFloor(id: GymFloorId | null): void {
+    if (this.dead || this.room() !== 'gym') return;
+    this.floorObject.set(id);
+    // The health-room unit route has no router snapshot. A real visit still records the object.
+    if (!this.route.snapshot) return;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { object: id },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  protected useRoutineDesk(): void {
+    if (this.phase() !== 'ready' || this.workoutBusy()) return;
+    const routine = this.workouts().find(item => item.value.kind === 'routine' && !item.value.archived);
+    if (!routine) return;
+    this.selectFloor('station');
+    this.startFromRoutine(routine.clientId);
+  }
+
+  protected recordAtStation(): void {
+    if (this.phase() !== 'ready' || this.workoutBusy()) return;
+    this.selectFloor('station');
+    const held = this.workoutDraft();
+    if (held?.kind === 'session') {
+      if (held.clientId === '') {
+        this.rememberFocusAnchor();
+        this.workoutDialogOpen.set(true);
+        return;
+      }
+      if (held.state === 'draft') this.resumeWorkout(held.clientId);
+      else this.editWorkout(held.clientId);
+      return;
+    }
+    const saved = this.latestDraftSession();
+    if (saved) {
+      this.resumeWorkout(saved.clientId);
+      return;
+    }
+    this.openWorkout('session');
+  }
+
+  protected finishAtBench(): void {
+    if (this.dead || this.phase() !== 'ready' || this.workoutBusy()) return;
+    const held = this.workoutDraft();
+    let draft: WorkoutDraft | null = null;
+    if (held?.kind === 'session') draft = { ...held, state: 'completed' };
+    else if (!held) {
+      const saved = this.latestDraftSession();
+      if (!saved || saved.value.kind !== 'session') return;
+      draft = {
+        ...draftFromSession({
+          clientId: saved.clientId,
+          revision: saved.revision,
+          value: saved.value,
+        }),
+        state: 'completed',
+      };
+    }
+    if (!draft) return;
+    this.selectFloor('bench');
+    this.workoutDraft.set(draft);
+    void this.saveWorkout(workoutFromDraft(draft, this.today(), this.units()));
+  }
+
+  private latestDraftSession(): HealthEntry<WorkoutRecord> | null {
+    const rows = this.workouts();
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      const entry = rows[index];
+      if (entry.value.kind === 'session' && entry.value.state === 'draft') return entry;
+    }
+    return null;
   }
 
   protected archiveWorkout(clientId: string): void {

@@ -9,7 +9,37 @@
     <div role="status" aria-label="Loading {{ title() }}">
       <ui-skeleton variant="lines" [lines]="3" />
     </div>
-  } @else if (phase() === 'locked') {
+  } @else {
+    @if (room() === 'gym') {
+      <app-gym-floor [selected]="floorObject()" [gate]="floorGate()" (chosen)="selectFloor($event)">
+        @if (phase() === 'ready') {
+          @switch (floorObject()) {
+            @case ('desk') {
+              @if (activeRoutineName(); as name) {
+                <p>{{ name }}</p>
+                <ui-button id="health-floor-routine" (clicked)="useRoutineDesk()">Use this routine</ui-button>
+              } @else {
+                <p>Add a routine below to start one here.</p>
+              }
+            }
+            @case ('station') {
+              <ui-button id="health-floor-record" (clicked)="recordAtStation()">Record sets</ui-button>
+            }
+            @case ('bench') {
+              @if (floorCanFinish()) {
+                <ui-button id="health-floor-finish" [busy]="workoutBusy()" [disabled]="workoutBusy()" (clicked)="finishAtBench()">Finish workout</ui-button>
+              } @else {
+                <p>Nothing to finish yet.</p>
+              }
+            }
+          }
+          @if (workoutFormError() && !workoutDialogOpen()) {
+            <p class="form-error" id="health-floor-error" role="alert" tabindex="-1">{{ workoutFormError() }}</p>
+          }
+        }
+      </app-gym-floor>
+    }
+    @if (phase() === 'locked') {
     <div class="gate" role="status">
       <p>Finance is locked. Unlock to see measurements.</p>
       <ui-button href="/finance/vault/unlock" [queryParams]="returnQuery()" label="Unlock" />
@@ -256,6 +286,7 @@
         </section>
       }
     </div>
+  }
   }
 </main>
 <app-health-entry-dialog
