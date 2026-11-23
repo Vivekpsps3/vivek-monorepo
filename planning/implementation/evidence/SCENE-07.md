@@ -61,7 +61,7 @@ Town `AGENTS.md` is 300 words after the HOME-02 merge. The doc-path gate allows 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened from this branch after this file. The body is only the leaf keyword for #445.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/595. The body is only the leaf keyword for #445.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
 - Merged/activation status (actual evidence, not assumption): not merged when this sentence is written.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. The editor is a route with a Hall back link, not a scene inside the Hall room.
