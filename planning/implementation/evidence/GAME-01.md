@@ -56,7 +56,7 @@ Commands ran in `/tmp/vivek-game-01` on `b4078b0f29c73ecd5065f3dea7f50f1dcf1300f
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded after the pull request exists.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/602. The body is only `Closes #465`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: the workshop market, chapter quests, and minigames are named consumers and are not implemented here. Refund does not look for a placed unlock. The scene frame stays y-down.
