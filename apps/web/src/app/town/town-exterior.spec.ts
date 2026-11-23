@@ -126,7 +126,8 @@ describe('Town exterior model', () => {
       expect(byId(items, 'arcade').href).toBe('/media/library?kind=game');
       expect(byId(items, 'treasury').href).toContain('/finance/');
       expect(byId(items, 'clinic').control).toBe('link');
-      expect(byId(items, 'home').control).toBe('select');
+      expect(byId(items, 'home').control).toBe('link');
+      expect(byId(items, 'home').href).toBe('/town/home/living');
       expect(byId(items, 'hall').control).toBe('link');
       expect(byId(items, 'hall').href).toBe('/town/hall');
     }

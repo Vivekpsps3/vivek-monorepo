@@ -1,0 +1,132 @@
+<main>
+  <header>
+    <app-town-place [crumbs]="crumbs()" />
+    <ui-button variant="ghost" href="/town" label="Back to Town" />
+    <h1>{{ heading() }}</h1>
+    <ul class="rooms" aria-label="Home rooms">
+      @for (entry of rooms; track entry.id) {
+        <li>
+          <a class="action" [attr.data-home-link]="entry.id" [routerLink]="['/town/home', entry.id]"
+            [queryParams]="{ object: null, scale: null, x: null, y: null }"
+            [attr.aria-current]="entry.id === room()?.id ? 'page' : null">{{ entry.label }}</a>
+        </li>
+      }
+    </ul>
+  </header>
+  @if (!layoutReady) {
+    <p role="status">This home layout does not fit its rooms.</p>
+  }
+  @if (room(); as room) {
+    <div class="room-layout">
+      <div class="composition">
+        <div #viewport class="viewport" role="group" [attr.aria-label]="room.label"
+          [style.aspect-ratio]="room.bounds.width + ' / ' + room.bounds.height"
+          (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
+          (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
+          <div class="stage" [style.transform]="cameraTransform()">
+            <div class="scene">
+              <div class="shell" [class.cutaway]="selected()" data-cutaway="floor-walls" aria-hidden="true">
+                <div class="wall"></div>
+                <div class="floor" data-floor-cells="12"><span class="doorway"></span></div>
+              </div>
+              <img class="room" [class.cutaway]="selected()" alt="" [src]="roomSrc(room)" width="288" height="360"
+                [style.color-scheme]="theme() === 'dark' ? 'dark' : 'light'"
+                [hidden]="!painted().includes(room.id)" (load)="artLoaded(room.id)" (error)="artFailed(room.id)">
+              @for (object of objects(); track object.id) {
+                <button type="button" class="piece" tabindex="-1" [class.faded]="faded(object.id)"
+                  [attr.data-scene-object]="object.id" [attr.data-primary]="object.primary ? 'true' : null"
+                  [attr.aria-label]="object.label" [attr.aria-current]="selected() === object ? 'true' : null"
+                  [hidden]="!painted().includes(object.id)"
+                  [style.left.%]="object.left" [style.top.%]="object.top" [style.width.%]="object.width" [style.height.%]="object.height"
+                  [style.z-index]="object.asset.layer">
+                  <img [src]="objectSrc(object)" [width]="object.asset.bounds.width" [height]="object.asset.bounds.height"
+                    [style.color-scheme]="theme() === 'dark' ? 'dark' : 'light'" alt=""
+                    (load)="artLoaded(object.id)" (error)="artFailed(object.id)">
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+        <p id="scene-hint" class="scene-hint">Drag to look around. Tap the front object to inspect it. Dragging does not change the selection.</p>
+        <div class="camera-controls" role="group" aria-label="Scene view">
+          <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
+          <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
+          <button type="button" class="action" (click)="resetView()">Reset view</button>
+        </div>
+        @if (failed().length) {
+          <p role="status">Some room artwork is unavailable. You can still select each object below.</p>
+          <ui-button variant="secondary" (clicked)="retryArt()">Retry artwork</ui-button>
+        }
+        <ul class="objects" aria-label="Room objects">
+          @for (object of objects(); track object.id) {
+            <li>
+              <a class="action" [attr.data-object]="object.id" [attr.data-primary]="object.primary ? 'true' : null"
+                [routerLink]="[]" [queryParams]="linkQuery(object.id)" [replaceUrl]="true"
+                [attr.aria-current]="selected() === object ? 'true' : null">{{ object.label }}</a>
+            </li>
+          }
+        </ul>
+      </div>
+      <aside class="inspector" [class.sheet]="sheet()" [attr.data-inspector]="selected() ? 'ready' : 'empty'" [attr.aria-label]="room.label + ' details'">
+        @if (sheet()) {
+          <button type="button" class="action" (click)="closeSheet()">Close details</button>
+        }
+        <section aria-live="polite">
+          @if (selected(); as object) {
+            <h2>{{ object.label }}</h2>
+            <p>{{ object.detail }}</p>
+            <p>{{ object.slotLabel }}</p>
+            @if (object.action.kind === 'sample') {
+              <figure class="sample">
+                <figcaption>{{ object.action.title }}</figcaption>
+                <p>{{ object.action.caption }}</p>
+              </figure>
+            } @else if (object.action.kind === 'media') {
+              <ui-button [href]="object.action.href" [queryParams]="object.action.query" [label]="object.action.label" />
+            } @else if (object.action.kind === 'note') {
+              <label for="home-note">Dated note</label>
+              <p>{{ noteWhen() }}</p>
+              <textarea id="home-note" [value]="note()" [disabled]="!signedIn()" [attr.maxlength]="500" (input)="onNote($event)"></textarea>
+              <p>Nothing is saved. Locking or switching account clears this note.</p>
+            } @else if (object.action.kind === 'garden') {
+              <button type="button" class="action" (click)="water(object)">{{ object.action.verb }}</button>
+              @if (watered().has(object.id)) {
+                <p role="status">{{ object.action.done }}</p>
+              }
+            } @else {
+              <p>This starter is already placed.</p>
+            }
+          } @else {
+            <h2>{{ room.label }}</h2>
+            <p>{{ room.summary }}</p>
+            <p data-wall-slots>Wall slots: {{ slots(room) }}.</p>
+            <p>The floor is 12 by 12. The doorway stays open.</p>
+          }
+        </section>
+        @if (room.id === 'courtyard') {
+          <section class="lots" aria-labelledby="garden-lots">
+            <h2 id="garden-lots" tabindex="-1">Garden lots</h2>
+            <p>These are the existing habit lots. Opening one does not check it in.</p>
+            @if (townState() === 'loading') {
+              <p role="status">Loading garden lots…</p>
+            } @else if (townState() === 'unavailable' || !town()) {
+              <p role="status">Town lots are unavailable right now.</p>
+              <button type="button" class="action" (click)="retryTown()">Retry lots</button>
+            } @else if (town(); as data) {
+              <ul class="lot-links">
+                @for (slot of lotSlots; track slot) {
+                  <li>
+                    <a class="action" [attr.data-lot]="slot" routerLink="/town" [queryParams]="{ inspect: 'slot-' + slot }">{{ lotLabel(data, slot) }}</a>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+        }
+        <p class="credit">{{ room.label }} artwork: Original artwork for Terraria-on-Sea.</p>
+      </aside>
+    </div>
+  } @else {
+    <p>That room is not in this home.</p>
+  }
+</main>

@@ -115,6 +115,7 @@ export class TownComponent {
       .children['primary']?.segments.map(segment => segment.path).join('/');
     if (path === 'town/library') return '/town/library';
     if (path === 'town/hall') return '/town/hall';
+    if (path === 'town/home' || path?.startsWith('town/home/')) return '/town/home/living';
     if (path === 'town/cosmetics') return '/town/cosmetics';
     return null;
   })();
@@ -196,7 +197,9 @@ export class TownComponent {
         const active = this.document.activeElement;
         const town = this.host.nativeElement;
         if (active === this.document.body || active === town.querySelector('h1')) {
-          const selector = href === '/town/hall' ? 'a.explore-world[href="/town/hall"]' : `a[href="${href}"]`;
+          const selector = href === '/town/hall' || href === '/town/home/living'
+            ? `a.explore-world[href="${href}"]`
+            : `a[href="${href}"]`;
           town.querySelector<HTMLAnchorElement>(selector)?.focus();
         }
       }, { injector: this.injector });

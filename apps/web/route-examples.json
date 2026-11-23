@@ -106,6 +106,41 @@
       "query": "on=2026-10-01"
     },
     {
+      "id": "town-home",
+      "path": "town/home",
+      "owner": "town",
+      "status": "mounted",
+      "clientRedirect": "town/home/living"
+    },
+    {
+      "id": "town-home-living",
+      "path": "town/home/living",
+      "owner": "town",
+      "status": "mounted",
+      "query": "object=living-frame"
+    },
+    {
+      "id": "town-home-study",
+      "path": "town/home/study",
+      "owner": "town",
+      "status": "mounted",
+      "query": "object=study-desk"
+    },
+    {
+      "id": "town-home-bedroom",
+      "path": "town/home/bedroom",
+      "owner": "town",
+      "status": "mounted",
+      "query": "object=bedroom-record"
+    },
+    {
+      "id": "town-home-courtyard",
+      "path": "town/home/courtyard",
+      "owner": "town",
+      "status": "mounted",
+      "query": "object=courtyard-planter"
+    },
+    {
       "id": "have-alias",
       "path": "have",
       "owner": "finance",
