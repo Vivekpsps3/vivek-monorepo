@@ -74,6 +74,7 @@ class FakeVault implements VaultRecordCapability {
   decryptCalls: string[] = [];
   encryptCalls: unknown[] = [];
   holdList = false;
+  holdDecrypt = false;
   holdUpsert = false;
   holdDelete = false;
   failUpsert = false;
@@ -83,6 +84,7 @@ class FakeVault implements VaultRecordCapability {
   upsertCancelled = 0;
   deleteCancelled = 0;
   readonly listRelease: Array<() => void> = [];
+  readonly decryptRelease: Array<() => void> = [];
   readonly upsertRelease: Array<() => void> = [];
   readonly deleteRelease: Array<() => void> = [];
 
@@ -107,6 +109,7 @@ class FakeVault implements VaultRecordCapability {
 
   async decryptPayload<T>(ciphertextB64: string, _collection: string, clientId: string): Promise<T> {
     this.decryptCalls.push(clientId);
+    if (this.holdDecrypt) await new Promise<void>(resolve => { this.decryptRelease.push(resolve); });
     if (!ciphertextB64.startsWith('ct:')) throw new Error('undecryptable');
     return decode(ciphertextB64) as T;
   }
@@ -737,6 +740,10 @@ describe('Health room shell', () => {
     expect(el.textContent).toBe(before);
     expect(visible(el)).not.toContain('176.4');
     expect(visible(el)).not.toContain('64.25');
+    const store = TestBed.inject(HealthStoreService);
+    expect(store.statsSnapshot).toEqual([]);
+    expect(store.prsSnapshot).toEqual([]);
+    expect(store.workoutsSnapshot).toEqual([]);
   });
 
   it('edits each vital in both weight units without rewriting an unchanged record', async () => {
@@ -2084,6 +2091,12 @@ describe('Health room shell', () => {
     expect(el.querySelector('app-health-workout-dialog')?.textContent).not.toContain('Synthetic plan edited');
     button(el, 'Cancel').click();
     fixture.detectChanges();
+    await Promise.resolve();
+    const remove = el.querySelector<HTMLButtonElement>(`#health-delete-${sessionId} button`);
+    if (!remove) throw new Error('missing delete');
+    remove.focus();
+    await new Promise(resolve => setTimeout(resolve));
+    expect(document.activeElement).toBe(remove);
 
     const again = el.querySelector<HTMLButtonElement>(`#health-again-${sessionId} button`);
     if (!again) throw new Error('missing start again');
@@ -2574,6 +2587,121 @@ describe('Health room shell', () => {
     expect(visible(el)).not.toContain('220.5');
     expect(visible(el)).not.toContain('155.5');
     expect(fake.upserted).toEqual([]);
+  });
+
+  it('returns no lab or session marker when a held read resolves after lock, owner change, or leave', async () => {
+    const lab = {
+      v: 1, kind: 'lab', measured_on: DAY, logged_on: DAY,
+      lab: { name: 'Ω-marker', value: 9, unit: 'u', ref_low: 10, ref_high: 20 },
+    };
+    const sessionRecord = {
+      v: 1, kind: 'session', measured_on: DAY, logged_on: DAY, state: 'completed', note: 'Ω-session',
+      exercises: [{
+        id: 'wex_syntheticpress01', exercise_id: 'static:press', name: 'Synthetic press',
+        exercise_type: 'load-reps',
+        sets: [{ id: 'wst_syntheticset001', set_type: 'work', completed: true, kg: 40, reps: 5 }],
+      }],
+    };
+    const privateRows = [
+      row('health_stats', 'hlt_SyntheticLabEntryABCD', lab),
+      row('health_workouts', 'hlt_SyntheticSessionABCD', sessionRecord),
+    ];
+
+    unlock();
+    fake.rows = privateRows.map(item => ({ ...item }));
+    fake.holdDecrypt = true;
+    const locked = TestBed.createComponent(HealthRoomComponent);
+    locked.detectChanges();
+    await until(() => fake.decryptRelease.length >= 2);
+    const locking = lockFinance(TestBed.inject(Injector)).catch(() => undefined);
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      locked.detectChanges();
+      if (locked.nativeElement.getAttribute('data-health-state') === 'locked') break;
+      await Promise.resolve();
+    }
+    fake.decryptRelease.splice(0).forEach(release => release());
+    await locking;
+    locked.detectChanges();
+    const lockedText = visible(locked.nativeElement as HTMLElement);
+    expect(locked.nativeElement.getAttribute('data-health-state')).toBe('locked');
+    expect(lockedText).not.toContain('Ω-marker');
+    expect(lockedText).not.toContain('Ω-session');
+    expect(lockedText).not.toContain('Synthetic press');
+    const lockedStore = TestBed.inject(HealthStoreService);
+    expect(lockedStore.statsSnapshot).toEqual([]);
+    expect(lockedStore.workoutsSnapshot).toEqual([]);
+    locked.destroy();
+
+    unlock();
+    fake.holdDecrypt = true;
+    fake.decryptRelease.splice(0);
+    fake.rows = privateRows.map(item => ({ ...item }));
+    const switched = TestBed.createComponent(HealthRoomComponent);
+    switched.detectChanges();
+    await until(() => fake.decryptRelease.length >= 2);
+    fake.rows = [row('health_stats', WEIGHT_ID, { ...WEIGHT, kg: 70 })];
+    fake.holdList = true;
+    session.users.next({ id: 8 });
+    switched.detectChanges();
+    await until(() => fake.listRelease.length >= 3);
+    fake.listRelease.splice(0).forEach(release => release());
+    await until(() => fake.decryptRelease.length >= 3);
+    fake.holdDecrypt = false;
+    fake.decryptRelease.splice(0).forEach(release => release());
+    await settle(switched);
+    const switchedText = visible(switched.nativeElement as HTMLElement);
+    expect(switched.nativeElement.getAttribute('data-health-state')).toBe('ready');
+    expect(switchedText).not.toContain('Ω-marker');
+    expect(switchedText).not.toContain('Ω-session');
+    expect(switchedText).not.toContain('Synthetic press');
+    expect(switchedText).toContain(`${displayWeight(70, 'lb')} lb`);
+    switched.destroy();
+
+    unlock();
+    session.users.next({ id: 7 });
+    fake.holdDecrypt = true;
+    fake.holdList = false;
+    fake.decryptRelease.splice(0);
+    fake.rows = privateRows.map(item => ({ ...item }));
+    const left = TestBed.createComponent(HealthRoomComponent);
+    left.detectChanges();
+    await until(() => fake.decryptRelease.length >= 2);
+    const leftStore = TestBed.inject(HealthStoreService);
+    left.destroy();
+    fake.decryptRelease.splice(0).forEach(release => release());
+    await Promise.resolve();
+    expect(leftStore.statsSnapshot).toEqual([]);
+    expect(leftStore.workoutsSnapshot).toEqual([]);
+    expect(JSON.stringify(leftStore.statsSnapshot)).not.toContain('Ω-marker');
+    expect(JSON.stringify(leftStore.workoutsSnapshot)).not.toContain('Ω-session');
+  });
+
+  it('does not store a lab draft when leave wins the save', async () => {
+    unlock();
+    seed();
+    const { fixture, el } = await show();
+    const store = TestBed.inject(HealthStoreService);
+    button(el, 'Add lab result').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', DAY);
+    typeInto(el, '#health-lab-name', 'Ω-marker');
+    typeInto(el, '#health-lab-value', '9');
+    typeInto(el, '#health-lab-unit', 'u');
+    fixture.detectChanges();
+    fake.holdUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await until(() => fake.upsertRelease.length === 1);
+    fixture.destroy();
+    expect(fake.upsertCancelled).toBeGreaterThan(0);
+    fake.upsertRelease.shift()?.();
+    await Promise.resolve();
+    expect(fake.upserted).toEqual([]);
+    expect(JSON.stringify(store.statsSnapshot)).not.toContain('Ω-marker');
+    for (const item of fake.rows) {
+      if (!item.ciphertext_b64.startsWith('ct:')) continue;
+      expect(JSON.stringify(decode(item.ciphertext_b64))).not.toContain('Ω-marker');
+    }
   });
 });
 
