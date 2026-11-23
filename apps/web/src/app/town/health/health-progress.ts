@@ -1,4 +1,4 @@
-import { HEALTH_BADGES, HEALTH_LIMITS } from './health.constants';
+import { HEALTH_BADGES, HEALTH_BADGE_EXPLANATIONS, HEALTH_LIMITS } from './health.constants';
 import {
   computePrEvents,
   currentPrs,
@@ -55,10 +55,57 @@ export interface ProgressGroup {
   series: ProgressSeries[];
 }
 
+export interface HealthTrophy {
+  id: string;
+  name: string;
+  explanation: string;
+}
+
+/** A minigame result. It is not a Health badge and it is not stored here. */
+export interface GameMedalInput {
+  id: string;
+  name: string;
+}
+
+export interface PresentedMedal {
+  id: string;
+  name: string;
+  explanation: string;
+}
+
+export const GAME_MEDAL_EXPLANATION =
+  'A game medal records a minigame. It does not record a lift, a run, or a medical result.';
+
+const HEALTH_CLAIM = /\b(lifts?|runs?|marathon|plates?|medical|clinic|blood|heart|personal record)\b/i;
+const BADGE_ID = /^(?:first_pr_|pr_beaten_|plate_|run_|logged_weeks_)/;
+
+/**
+ * Keep a minigame medal out of the Health trophy list. A name or id that
+ * already belongs to a Health badge, or that claims a lift, run, or medical
+ * result, is not shown.
+ */
+export function presentGameMedals(medals: readonly GameMedalInput[]): PresentedMedal[] {
+  const badgeNames = new Set<string>(Object.values(HEALTH_BADGES));
+  const seen = new Set<string>();
+  const presented: PresentedMedal[] = [];
+  for (const medal of medals) {
+    const id = medal.id.trim();
+    const name = medal.name.trim();
+    if (!id || !name || seen.has(id) || BADGE_ID.test(id) || badgeNames.has(name)) continue;
+    if (HEALTH_CLAIM.test(id) || HEALTH_CLAIM.test(name)) continue;
+    const folded = name.toLowerCase();
+    if ([...badgeNames].some(badge => folded.includes(badge.toLowerCase()))) continue;
+    seen.add(id);
+    presented.push({ id, name, explanation: GAME_MEDAL_EXPLANATION });
+  }
+  return presented;
+}
+
 export interface HealthProgress {
   groups: ProgressGroup[];
   recent: ProgressSeries[];
-  trophies: Array<{ id: string; name: string }>;
+  trophies: HealthTrophy[];
+  medals: PresentedMedal[];
   empty: boolean;
 }
 
@@ -66,6 +113,7 @@ export const EMPTY_HEALTH_PROGRESS: HealthProgress = {
   groups: [],
   recent: [],
   trophies: [],
+  medals: [],
   empty: true,
 };
 
@@ -122,6 +170,7 @@ export function projectHealthProgress(
   units: HealthUnits,
   today: string,
   stats: readonly HealthStat[] = [],
+  medals: readonly GameMedalInput[] = [],
 ): HealthProgress {
   const manual: RecordSource[] = records.map(record => ({
     kind: 'record',
@@ -141,11 +190,12 @@ export function projectHealthProgress(
     .filter(item => item.recent)
     .sort((a, b) => byDate(b.current.measuredOn, a.current.measuredOn) || a.title.localeCompare(b.title));
   const trophies = healthBadges(stats, badgeRecords, events, today)
-    .map(id => ({ id, name: HEALTH_BADGES[id] }));
+    .map(id => ({ id, name: HEALTH_BADGES[id], explanation: HEALTH_BADGE_EXPLANATIONS[id] }));
   return {
     groups,
     recent,
     trophies,
+    medals: presentGameMedals(medals),
     empty: groups.length === 0 && trophies.length === 0,
   };
 }

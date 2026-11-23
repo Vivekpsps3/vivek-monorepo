@@ -39,28 +39,49 @@ export const PLATE_THRESHOLDS = Object.freeze({
 } as const);
 export const PR_BEATEN_THRESHOLDS = Object.freeze([1, 5, 10, 25, 50] as const);
 export const LOGGED_WEEK_THRESHOLDS = Object.freeze([4, 12, 26, 52] as const);
-// Five badges already use settled display names. The other fifteen keep the
-// id as the placeholder string. #90 settled those names; HEALTH-02 (#257)
-// applies that mapping. Do not invent a different name in this file.
+// Display names settled on parent #90. The ids and the threshold tables above
+// stay as they are. Explanations restate those same cuts.
 export const HEALTH_BADGES = Object.freeze({
   first_pr_lift: 'First lift PR',
-  first_pr_run: 'first_pr_run', // TODO(#257): apply the #90 name
-  first_pr_other: 'first_pr_other', // TODO(#257): apply the #90 name
-  pr_beaten_1: 'pr_beaten_1', // TODO(#257): apply the #90 name
+  first_pr_run: 'First run PR',
+  first_pr_other: 'First personal best',
+  pr_beaten_1: 'PR breaker',
   pr_beaten_5: 'PR breaker ×5',
-  pr_beaten_10: 'pr_beaten_10', // TODO(#257): apply the #90 name
-  pr_beaten_25: 'pr_beaten_25', // TODO(#257): apply the #90 name
-  pr_beaten_50: 'pr_beaten_50', // TODO(#257): apply the #90 name
-  plate_135: 'plate_135', // TODO(#257): apply the #90 name
+  pr_beaten_10: 'PR breaker ×10',
+  pr_beaten_25: 'PR breaker ×25',
+  pr_beaten_50: 'PR breaker ×50',
+  plate_135: 'One plate',
   plate_225: 'Two plates',
-  plate_315: 'plate_315', // TODO(#257): apply the #90 name
-  plate_405: 'plate_405', // TODO(#257): apply the #90 name
-  run_5k: 'run_5k', // TODO(#257): apply the #90 name
+  plate_315: 'Three plates',
+  plate_405: 'Four plates',
+  run_5k: '5K finisher',
   run_10k: '10K finisher',
-  run_half: 'run_half', // TODO(#257): apply the #90 name
-  run_full: 'run_full', // TODO(#257): apply the #90 name
-  logged_weeks_4: 'logged_weeks_4', // TODO(#257): apply the #90 name
+  run_half: 'Half-marathon finisher',
+  run_full: 'Marathon finisher',
+  logged_weeks_4: '4-week logger',
   logged_weeks_12: '12-week logger',
-  logged_weeks_26: 'logged_weeks_26', // TODO(#257): apply the #90 name
-  logged_weeks_52: 'logged_weeks_52', // TODO(#257): apply the #90 name
+  logged_weeks_26: '26-week logger',
+  logged_weeks_52: '52-week logger',
+} as const);
+export const HEALTH_BADGE_EXPLANATIONS = Object.freeze({
+  first_pr_lift: 'The first lift personal record.',
+  first_pr_run: 'The first run personal record.',
+  first_pr_other: 'The first personal record that is not a lift or a run.',
+  pr_beaten_1: '1 later personal record beat an earlier one.',
+  pr_beaten_5: '5 later personal records beat an earlier one.',
+  pr_beaten_10: '10 later personal records beat an earlier one.',
+  pr_beaten_25: '25 later personal records beat an earlier one.',
+  pr_beaten_50: '50 later personal records beat an earlier one.',
+  plate_135: `A lift estimated max reached ${PLATE_THRESHOLDS[135]} kg.`,
+  plate_225: `A lift estimated max reached ${PLATE_THRESHOLDS[225]} kg.`,
+  plate_315: `A lift estimated max reached ${PLATE_THRESHOLDS[315]} kg.`,
+  plate_405: `A lift estimated max reached ${PLATE_THRESHOLDS[405]} kg.`,
+  run_5k: `A run reached ${RUN_DISTANCES['5k']} m.`,
+  run_10k: `A run reached ${RUN_DISTANCES['10k']} m.`,
+  run_half: `A run reached ${RUN_DISTANCES.half} m.`,
+  run_full: `A run reached ${RUN_DISTANCES.full} m.`,
+  logged_weeks_4: 'Health was logged for 4 consecutive weeks.',
+  logged_weeks_12: 'Health was logged for 12 consecutive weeks.',
+  logged_weeks_26: 'Health was logged for 26 consecutive weeks.',
+  logged_weeks_52: 'Health was logged for 52 consecutive weeks.',
 } as const);
