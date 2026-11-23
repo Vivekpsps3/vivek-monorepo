@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#451](https://github.com/Vivekpsps3/vivek-monorepo/issues/451) ROOM-01. Parent [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304) stays open. Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. [#277](https://github.com/Vivekpsps3/vivek-monorepo/issues/277) stays open and was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/room-01`; `/tmp/vivek-room-01`. The shared checkout was not edited. Town, Health, Travel, Media, and server product files were not edited. GAME-10 arrived through the fast-forward below and those files were left as merged.
-- Base main SHA, current tested SHA: product and tests are the worktree on `df970e356ce8be8198b5bd3fa5543d359b2943d2` plus this leaf. Every gate below ran in `/tmp/vivek-room-01` on that tree. `origin/main` was fetched again before the note and was still `df970e35` (GAME-10, pull request #598). The branch started at `26dc5f33dffdd384b34d089d150dd3d8e1f71159` (ROOM-14, pull request #597). `origin/main` then moved to `df970e35`. That update is a fast-forward merge. No rebase and no force-push.
+- Base main SHA, current tested SHA: product and tests are `862c8b02d6ba19c4dc82124cc435f5cee0d19ac0`. Every gate below ran in `/tmp/vivek-room-01` on that tree. The pull-request URL line is the only later edit. `origin/main` was fetched again before the note and was still `df970e35` (GAME-10, pull request #598). The branch started at `26dc5f33dffdd384b34d089d150dd3d8e1f71159` (ROOM-14, pull request #597). `origin/main` then moved to `df970e35`. That update is a fast-forward merge. No rebase and no force-push.
 - Fresh-main/prerequisite/active-PR checks: SCENE-03 (#441, merge `57b69462`, pull request #555) and FUX-02 (#391, merge `850353ed`, pull request #526) are ancestors of `df970e35`. [Claim](https://github.com/Vivekpsps3/vivek-monorepo/issues/451#issuecomment-7110141649). `packages/ui` return-context was not edited, so a vault unlock from the hall returns to `/finance/have` and the hall starts hidden again.
 
 ## Acceptance
@@ -35,7 +35,7 @@ Fixtures are synthetic. Names, categories, and source dates stay visible so a dr
 
 ## Verification
 
-Commands ran in `/tmp/vivek-room-01` on `df970e35` plus this leaf. `make test-fast` used `PATH="/tmp/vivek-room-01/.venv/bin:$PATH"` because `/usr/bin/python3` has no project dependencies. Karma and Playwright used `CHROME_BIN` and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` at `/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`. `node_modules` and `.venv` are symlinks to the shared checkout and are not committed. Python lint, typecheck, and coverage gates were not run. The leaf diff has no Python product file. `make test-fast` was run again after this evidence file was added. That rerun passed with the same counts.
+Commands ran in `/tmp/vivek-room-01` on `862c8b02`. `make test-fast` used `PATH="/tmp/vivek-room-01/.venv/bin:$PATH"` because `/usr/bin/python3` has no project dependencies. Karma and Playwright used `CHROME_BIN` and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` at `/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`. `node_modules` and `.venv` are symlinks to the shared checkout and are not committed. Python lint, typecheck, and coverage gates were not run. The leaf diff has no Python product file. `make test-fast` was run again after this evidence file was added. That rerun passed with the same counts.
 
 | Command | Result |
 | --- | --- |
@@ -49,7 +49,7 @@ Commands ran in `/tmp/vivek-room-01` on `df970e35` plus this leaf. `make test-fa
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded when the pull request opens. The body is only `Closes #451`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/599. The body is only `Closes #451`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: none. Vault return still drops `t=hall` because that query is outside the existing return allowlist, and that file was not part of this leaf.
