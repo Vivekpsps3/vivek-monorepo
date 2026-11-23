@@ -106,6 +106,12 @@
       "query": "on=2026-10-01"
     },
     {
+      "id": "town-memory",
+      "path": "town/memory",
+      "owner": "town",
+      "status": "mounted"
+    },
+    {
       "id": "town-home",
       "path": "town/home",
       "owner": "town",

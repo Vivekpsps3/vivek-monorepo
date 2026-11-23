@@ -1,0 +1,48 @@
+<app-town-place [crumbs]="crumbs" />
+<main
+  class="memory"
+  [attr.data-phase]="phase()"
+  [attr.data-motion]="reduced() ? 'reduce' : 'ok'"
+  [attr.data-sound]="soundOn() ? 'on' : 'off'"
+  [attr.data-seed]="seed"
+>
+  <h1>Memory Shelves</h1>
+  <p>Six symbol pairs. Turn two shelves. The score is the number of turns. This game is not timed.</p>
+  <p>Seed {{ seed }}.</p>
+  <p>This play does not award Stamps or save a life record.</p>
+  <p>{{ soundOn() ? 'Town sound is on. A match can play a short tone.' : 'Town sound is off. The game stays silent.' }}</p>
+  <p id="memory-status" role="status">{{ status() }}</p>
+  @if (board(); as board) {
+    <div class="board" role="group" aria-label="Shelves">
+      @for (tile of board.tiles; track tile.index) {
+        <button
+          type="button"
+          class="shelf"
+          [attr.data-face]="tile.face"
+          [attr.data-index]="tile.index"
+          [disabled]="board.phase !== 'playing' || tile.face === 'matched'"
+          [attr.tabindex]="shelfTab(tile.index)"
+          [attr.aria-label]="label(tile)"
+          (click)="flip(tile.index)"
+          (keydown)="onShelfKey($event, tile.index)"
+        >
+          <span class="shelf-lip" aria-hidden="true"></span>
+          <span class="shelf-face">{{ tile.face === 'down' ? tile.index + 1 : tile.symbol }}</span>
+        </button>
+      }
+    </div>
+    <div class="actions">
+      @if (board.phase === 'playing') {
+        <ui-button variant="secondary" (clicked)="pause()">Pause</ui-button>
+      }
+      @if (board.phase === 'paused') {
+        <ui-button variant="secondary" (clicked)="resume()">Resume</ui-button>
+      }
+      <ui-button variant="secondary" (clicked)="restart()">Restart</ui-button>
+      <ui-button variant="ghost" (clicked)="quit()">Quit</ui-button>
+    </div>
+  } @else {
+    <ui-button variant="primary" (clicked)="play()">Play Memory Shelves</ui-button>
+  }
+  <p class="keys">Keyboard: P plays, pauses, or resumes. R restarts. Q quits. Arrow keys move between shelves.</p>
+</main>
