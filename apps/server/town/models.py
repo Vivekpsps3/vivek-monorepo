@@ -1,4 +1,4 @@
-"""Town habits, check-ins, and cadence rows.
+"""Town habits, check-ins, cadence rows, and cosmetic room layouts.
 
 TownBase is its own registry, separate from Finance, Travel, and Media.
 Owner foreign keys to users.id are attached by apps.server.schema.OWNER_TABLES.
@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     SmallInteger,
     String,
+    Text,
     UniqueConstraint,
     text,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "Habit",
     "HabitCadence",
     "HabitCheckin",
+    "RoomLayout",
     "StampEntitlement",
     "StampReceipt",
     "StampWallet",
@@ -199,3 +201,28 @@ class StampEntitlement(TownBase):
         ForeignKey("town_stamp_receipts.id", name="fk_town_stamp_entitlements_refund"),
         nullable=True,
     )
+
+
+class RoomLayout(TownBase):
+    """One cosmetic layout per owner and room. Revision 0 means no row yet."""
+
+    __tablename__ = "town_room_layouts"
+    __table_args__ = (
+        Index("uq_town_room_layout_owner", "user_id", "room_id", unique=True),
+        CheckConstraint(
+            "room_id IN ('living', 'study', 'bedroom', 'courtyard', 'exterior')",
+            name="ck_town_room_layouts_room",
+        ),
+        CheckConstraint("revision >= 1", name="ck_town_room_layouts_revision"),
+        CheckConstraint(
+            "length(payload) BETWEEN 2 AND 16384",
+            name="ck_town_room_layouts_payload",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    room_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

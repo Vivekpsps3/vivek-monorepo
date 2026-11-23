@@ -47,6 +47,18 @@ describe('TownApiService', () => {
     expect(refund.request.body).toEqual({ grant_key: 'market:refund:tile-fountain:4', catalog_id: 'tile-fountain' });
     refund.flush({ balance: 10, consumers: [], receipts: [], entitlements: [] });
   });
+  it('reads and saves a room layout without a life metric', () => {
+    api.getLayout('study').subscribe();
+    const read = http.expectOne(request => request.url === '/api/town/layouts/study');
+    expect(read.request.method).toBe('GET');
+    read.flush({ room_id: 'study', revision: 0, items: [] });
+    api.saveLayout('study', { expected_revision: 0, items: [] }).subscribe();
+    const save = http.expectOne(request => request.url === '/api/town/layouts/study');
+    expect(save.request.method).toBe('PUT');
+    expect(save.request.body).toEqual({ expected_revision: 0, items: [] });
+    expect(JSON.stringify(save.request.body)).not.toContain('note');
+    save.flush({ room_id: 'study', revision: 1, items: [] });
+  });
   it('preserves authentication errors for the expired state', () => {
     const error = jasmine.createSpy('error');
     api.getTown().subscribe({ error });

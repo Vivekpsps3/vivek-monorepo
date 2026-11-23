@@ -123,6 +123,16 @@
             }
           </section>
         }
+        <section class="layout-save" aria-label="Room layout">
+          <p data-layout-status role="status" [attr.data-layout-revision]="layoutRevision()">{{ layoutStatus() }}</p>
+          <div role="group" aria-label="Palette">
+            @for (swatch of palettes; track swatch) {
+              <button type="button" class="action" [attr.aria-pressed]="palette() === swatch" [disabled]="!signedIn()" (click)="choosePalette(swatch)">Palette {{ swatch }}</button>
+            }
+          </div>
+          <button type="button" class="action" [disabled]="saveDisabled()" (click)="saveCurrent()">Save layout</button>
+          <button type="button" class="action" [disabled]="saveDisabled() || layoutRevision() < 1" (click)="saveOlder()">Save the older revision</button>
+        </section>
         <p class="credit">{{ room.label }} artwork: Original artwork for Terraria-on-Sea.</p>
       </aside>
     </div>

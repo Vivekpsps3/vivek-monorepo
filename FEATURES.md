@@ -264,6 +264,8 @@ Current Town tuning awards 10 XP for a manual check-in, 5 per eligible Media epi
 
 Stamps are a game-only balance that starts at zero. Each receipt belongs to one owner and one grant identity. The named consumers are the workshop market, chapter quests, and minigames. A repeated grant returns the same receipt. A spend cannot make the balance negative, and a refund returns the full recorded price of an unlock the owner still holds. The wallet does not read health, finance, travel, or identity measurements.
 
+A home layout stores a catalog id, a cell or anchor, a quarter turn, and a palette for one room. A save checks the owner, the expected revision, the room caps, and an active Stamp unlock for a priced or unknown item. Private notes and measurements are not fields in that record.
+
 The Library and Inn reflect eligible Media/Travel activity. Treasury uses Finance's approved weekly budget-kept projection, with a visible locked state and no raw monetary evidence in server Town payloads. Habit streak completion and budget-kept completion use their own distinct week rules. Workspace has a Town summary card; the page links to World. Loading, first-run, unavailable, and expired-session behavior is explicit.
 
 ### Encrypted Health groundwork

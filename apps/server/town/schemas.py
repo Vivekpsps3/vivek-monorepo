@@ -298,3 +298,20 @@ class StampWalletView(_Shape):
     consumers: list[StampConsumer]
     receipts: list[StampReceiptView]
     entitlements: list[StampEntitlementView]
+
+
+class RoomLayoutItem(_Shape):
+    instance_id: str
+    catalog_id: str
+    anchor: str
+    column: int | None
+    row: int | None
+    slot: str | None
+    orientation: Literal[0, 1, 2, 3]
+    palette: Literal[0, 1, 2, 3]
+
+
+class RoomLayoutView(_Shape):
+    room_id: str
+    revision: int
+    items: list[RoomLayoutItem]

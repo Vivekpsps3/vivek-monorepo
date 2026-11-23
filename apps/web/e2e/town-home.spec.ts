@@ -156,6 +156,75 @@ test.describe('Home rooms', () => {
     await expect(note).toHaveValue('Harbor draft stays');
   });
 
+  for (const [width, theme] of [[390, 'light'], [390, 'dark'], [1280, 'light'], [1280, 'dark']] as const) {
+    test(`saves a layout and rejects an older revision at ${width} ${theme}`, async ({ page }, info) => {
+      test.setTimeout(120_000);
+      await prepare(page, width, theme);
+      let failed = false;
+      const saved: string[] = [];
+      await page.route('**/api/town/layouts/**', async route => {
+        const request = route.request();
+        if (request.method() === 'PUT' && !failed) {
+          failed = true;
+          await route.fulfill({
+            status: 503,
+            contentType: 'application/json',
+            body: JSON.stringify({ message: 'The layout service is down.' }),
+          });
+          return;
+        }
+        if (request.method() === 'PUT') saved.push(request.postData() ?? '');
+        await route.continue();
+      });
+      await page.goto('/town/home/study?object=study-desk');
+      const home = page.locator('app-town-home');
+      const status = home.locator('[data-layout-status]');
+      await expect(status).toHaveText('Nothing is saved yet. Revision 0.');
+      const note = home.locator('#home-note');
+      await note.fill('Harbor draft stays');
+      const touch = width === 390;
+      await activate(page, home.getByRole('button', { name: 'Palette 2' }), touch);
+      await expect(home.getByRole('button', { name: 'Palette 2' })).toHaveAttribute('aria-pressed', 'true');
+      const save = home.getByRole('button', { name: 'Save layout', exact: true });
+      const saveBox = await save.boundingBox();
+      expect(saveBox?.width).toBeGreaterThanOrEqual(44);
+      expect(saveBox?.height).toBeGreaterThanOrEqual(44);
+      await activate(page, save, touch);
+      await expect(status).toHaveText('The layout was not saved. Your palette choice is still here.');
+      await expect(home).not.toContainText('layout service');
+      await expect(note).toHaveValue('Harbor draft stays');
+      await expect(home.getByRole('button', { name: 'Palette 2' })).toHaveAttribute('aria-pressed', 'true');
+      await activate(page, save, touch);
+      await expect(status).toHaveText('Saved. Revision 1.');
+      expect(saved[0]).toContain('"catalog_id":"desk"');
+      expect(saved[0]).toContain('"palette":2');
+      expect(saved[0]).not.toContain('Harbor');
+      expect(saved[0]).not.toContain('note');
+      const older = home.getByRole('button', { name: 'Save the older revision' });
+      const olderBox = await older.boundingBox();
+      expect(olderBox?.width).toBeGreaterThanOrEqual(44);
+      expect(olderBox?.height).toBeGreaterThanOrEqual(44);
+      await activate(page, older, touch);
+      await expect(status).toHaveText('This room was saved at revision 1. The older revision was not written.');
+      await expect(note).toHaveValue('Harbor draft stays');
+      await expect(home.getByRole('button', { name: 'Palette 2' })).toHaveAttribute('aria-pressed', 'true');
+      const read = await page.request.get('/api/town/layouts/study');
+      expect(read.ok()).toBeTruthy();
+      const body = await read.json() as { revision: number; items: { catalog_id: string; palette: number }[] };
+      expect(body.revision).toBe(1);
+      expect(body.items.map(item => item.catalog_id)).toEqual(['desk', 'desk-lamp', 'bookshelf']);
+      expect(body.items.every(item => item.palette === 2)).toBeTruthy();
+      expect(JSON.stringify(body)).not.toContain('Harbor');
+      await expect(home).not.toContainText('Stamps');
+      await expect(home).not.toContainText('Buy');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+      expect(await home.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+      const scan = await new AxeBuilder({ page }).include('app-town-home').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+      await info.attach(`layout-${width}-${theme}`, { body: await home.screenshot(), contentType: 'image/png' });
+    });
+  }
+
   test('returns focus to Visit Home', async ({ page }) => {
     await prepare(page, 1280, 'light');
     await page.goto('/town');
