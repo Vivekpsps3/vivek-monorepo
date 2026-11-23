@@ -9,6 +9,7 @@ const destinations = [
   { id: 'health', label: 'Health', path: null, icon: 'trending' },
   { id: 'pixels', label: 'Pixels', path: '/pixels', icon: 'grid' },
   { id: 'town', label: 'Town', path: '/town', icon: 'building' },
+  { id: 'review', label: 'Weekly review', path: '/town/review', icon: 'document' },
 ] as const satisfies readonly { id: string; label: string; path: string | null; icon: UiIconName }[];
 type DestinationId = typeof destinations[number]['id'];
 

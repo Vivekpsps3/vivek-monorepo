@@ -52,6 +52,9 @@ describe('return context', () => {
     expect(returnPath('/town/home/living?object=living-frame&note=secret&scale=1.5')).toBe('/town/home/living?object=living-frame');
     expect(returnPath('/town/home/study?object=living-frame')).toBe('/town/home/study');
     expect(returnPath('/town/hall?object=rules&edit=15&history=15&balance=10')).toBe('/town/hall?object=rules');
+    expect(returnPath('/town/review?week=2026-12-28')).toBe('/town/review?week=2026-12-28');
+    expect(returnPath('/town/review?week=2027-01-04')).toBe('/town/review?week=2027-01-04');
+    expect(returnPath('/town/review?week=2027-01-03&note=secret')).toBe('/town/review');
     expect(returnPath('/town/hall?object=treasury&weeks=8')).toBe('/town/hall');
     expect(returnPath('/town/cosmetics?item=oak-seat&part=dusk&note=private')).toBe('/town/cosmetics?item=oak-seat');
     expect(returnPath('/travel/terminal?object=ferry&trip=0&leg=9&day=2026-02-31&note=private'))

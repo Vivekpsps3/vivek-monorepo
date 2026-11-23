@@ -8,6 +8,11 @@ const spendingTabs = ['activity', 'calendar', 'review', 'imports', 'spend', 'pay
 const flag = ['1'];
 const month = (value: string) => /^(?!0000)\d{4}-(?:0[1-9]|1[0-2])$/.test(value);
 
+function isIsoMondayDate(value: string): boolean {
+  if (!isReturnDate(value)) return false;
+  return new Date(`${value}T00:00:00Z`).getUTCDay() === 1;
+}
+
 export function isReturnDate(value: string): boolean {
   if (!/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(value + 'T00:00:00Z');
@@ -63,6 +68,7 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
     item: (value: string) => /^[a-z][a-z0-9-]{0,39}$/.test(value),
     part: ['day', 'night'],
   },
+  '/town/review': { week: isIsoMondayDate },
   '/town/clinic': { entry: isHealthEntryId },
   '/town/gym': { entry: isHealthEntryId },
   '/town/world': { day: isReturnDate, week: isReturnDate },

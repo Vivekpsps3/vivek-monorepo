@@ -100,7 +100,9 @@ def test_local2_owner_subsets_differ_and_allowed_records_stay():
     assert COLLECTION_POLICY.finance.isdisjoint(COLLECTION_POLICY.health)
     assert COLLECTION_POLICY.finance != COLLECTION_POLICY.health
     assert COLLECTION_POLICY.recovery == ALLOWED_COLLECTIONS
-    assert COLLECTION_POLICY.health == frozenset({"health_stats", "health_prs", "health_workouts"})
+    assert COLLECTION_POLICY.health == frozenset(
+        {"health_stats", "health_prs", "health_workouts", "town_reviews"}
+    )
 
     client = authenticated_client(app, email="con03-owners@example.com")
     _setup(client)
