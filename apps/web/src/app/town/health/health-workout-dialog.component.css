@@ -75,6 +75,26 @@ textarea {
   max-width: 100%;
 }
 
+.set-count {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  max-width: 100%;
+}
+
+.set-count input {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
+}
+
+.set-count span {
+  overflow-wrap: anywhere;
+}
+
 .set-role select,
 .role-name {
   min-height: 44px;

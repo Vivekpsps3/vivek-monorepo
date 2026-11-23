@@ -26,6 +26,38 @@
           [value]="local().reps" (input)="onReps($event)" />
       </ui-field>
     }
+    @if (kind() === 'run') {
+      <ui-field [label]="distanceLabel()" [required]="true" [error]="message(errors()['distance_m'])">
+        <input uiFieldControl id="health-distance" name="distance" type="text" inputmode="decimal" required autocomplete="off"
+          [value]="local().distance" (input)="onDistance($event)" />
+      </ui-field>
+      <ui-field label="Time (seconds)" [required]="true" [error]="message(errors()['seconds'])">
+        <input uiFieldControl id="health-seconds" name="seconds" type="text" inputmode="decimal" required autocomplete="off"
+          [value]="local().seconds" (input)="onSeconds($event)" />
+      </ui-field>
+    }
+    @if (kind() === 'other') {
+      <ui-field label="Name" [required]="true" [error]="message(errors()['name'])">
+        <input uiFieldControl id="health-other-name" name="name" type="text" required autocomplete="off"
+          [value]="local().otherName" (input)="onOtherName($event)" />
+      </ui-field>
+      <ui-field label="Value" [required]="true" [error]="message(errors()['value'])">
+        <input uiFieldControl id="health-other-value" name="value" type="text" inputmode="decimal" required autocomplete="off"
+          [value]="local().otherValue" (input)="onOtherValue($event)" />
+      </ui-field>
+      <ui-field label="Unit" [optional]="true" [error]="message(errors()['unit'])">
+        <input uiFieldControl id="health-other-unit" name="unit" type="text" autocomplete="off"
+          [value]="local().otherUnit" (input)="onOtherUnit($event)" />
+      </ui-field>
+      <ui-field label="Direction" [required]="true" [error]="message(errors()['direction'])">
+        <select uiFieldControl id="health-direction" name="direction" required
+          [value]="local().direction" (change)="onDirection($event)">
+          <option value="">Choose</option>
+          <option value="higher">Higher is better</option>
+          <option value="lower">Lower is better</option>
+        </select>
+      </ui-field>
+    }
     @if (kind() === 'rhr') {
       <ui-field label="Resting heart rate (bpm)" [required]="true" hint="Whole number from 25 to 220." [error]="message(errors()['bpm'])">
         <input uiFieldControl id="health-bpm" name="bpm" type="text" inputmode="numeric" required autocomplete="off"

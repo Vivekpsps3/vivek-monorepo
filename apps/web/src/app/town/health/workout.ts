@@ -74,6 +74,8 @@ export interface WorkoutDraftSet {
   reps?: number;
   seconds?: number;
   metres?: number;
+  /** False only when a completed session's set is explicitly left out of progress. */
+  count?: boolean;
 }
 
 /** One exercise already placed on the session floor. */
@@ -424,6 +426,30 @@ export function removeDraftSet(draft: WorkoutDraft, setId: string): WorkoutDraft
   return { ...draft, sets, floorBefore, floorAfter };
 }
 
+/**
+ * Include or leave out one entered set when the session is completed.
+ * Draft sessions stay unchanged: every stored set is uncompleted with the session.
+ */
+export function markSetCounted(draft: WorkoutDraft, setId: string, count: boolean): WorkoutDraft {
+  if (draft.kind !== 'session' || draft.state !== 'completed') return draft;
+  const apply = (set: WorkoutDraftSet): WorkoutDraftSet => {
+    if (set.id !== setId) return set;
+    if (count) {
+      if (set.count === undefined) return set;
+      const next = { ...set };
+      delete next.count;
+      return next;
+    }
+    return set.count === false ? set : { ...set, count: false };
+  };
+  return {
+    ...draft,
+    sets: draft.sets.map(apply),
+    floorBefore: draft.floorBefore.map(line => ({ ...line, sets: line.sets.map(apply) })),
+    floorAfter: draft.floorAfter.map(line => ({ ...line, sets: line.sets.map(apply) })),
+  };
+}
+
 /** Change the role of one entered set. The measured numbers stay put. */
 export function retagDraftSet(draft: WorkoutDraft, setId: string, setType: SetType): WorkoutDraft {
   if (draft.kind === 'exercise') return draft;
@@ -521,7 +547,8 @@ export function activateDraftLine(
 export function draftFromSession(
   entry: { clientId: string; revision: number; value: WorkoutSession },
 ): WorkoutDraft {
-  const lines = entry.value.exercises.map(floorLineFromStored);
+  const keepUncomplete = entry.value.state === 'completed';
+  const lines = entry.value.exercises.map(line => floorLineFromStored(line, keepUncomplete));
   const active = lines[lines.length - 1];
   const fresh = emptyWorkoutDraft('session', entry.value.measured_on);
   return {
@@ -567,7 +594,7 @@ export function draftFromExercise(
 export function draftFromRoutine(
   entry: { clientId: string; revision: number; value: WorkoutRoutine },
 ): WorkoutDraft {
-  const lines = entry.value.exercises.map(floorLineFromStored);
+  const lines = entry.value.exercises.map(line => floorLineFromStored(line));
   const active = lines[lines.length - 1];
   const fresh = emptyWorkoutDraft('routine', '');
   return {
@@ -706,7 +733,7 @@ function progressField(type: ExerciseType): string {
   return 'kg';
 }
 
-function draftSetFromStored(set: WorkoutSet): WorkoutDraftSet {
+function draftSetFromStored(set: WorkoutSet, keepUncomplete = false): WorkoutDraftSet {
   return {
     id: set.id,
     setType: set.set_type,
@@ -714,6 +741,7 @@ function draftSetFromStored(set: WorkoutSet): WorkoutDraftSet {
     ...(set.reps !== undefined ? { reps: set.reps } : {}),
     ...(set.seconds !== undefined ? { seconds: set.seconds } : {}),
     ...(set.metres !== undefined ? { metres: set.metres } : {}),
+    ...(keepUncomplete && set.completed === false ? { count: false } : {}),
   };
 }
 
@@ -782,13 +810,13 @@ function sessionSequence(draft: WorkoutDraft): WorkoutFloorLine[] {
   ];
 }
 
-function floorLineFromStored(line: WorkoutExerciseLine): WorkoutFloorLine {
+function floorLineFromStored(line: WorkoutExerciseLine, keepUncomplete = false): WorkoutFloorLine {
   return {
     id: line.id && PART_ID.test(line.id) ? line.id : newWorkoutPartId('wex'),
     exerciseId: line.exercise_id,
     name: line.name,
     exerciseType: isExerciseType(line.exercise_type) ? line.exercise_type : 'load-reps',
-    sets: line.sets.map(draftSetFromStored),
+    sets: line.sets.map(set => draftSetFromStored(set, keepUncomplete)),
   };
 }
 
@@ -819,7 +847,11 @@ function retarget(
 }
 
 function storedSet(set: WorkoutDraftSet, completed: boolean): WorkoutSet {
-  const value: WorkoutSet = { id: set.id, set_type: set.setType, completed };
+  const value: WorkoutSet = {
+    id: set.id,
+    set_type: set.setType,
+    completed: completed && set.count !== false,
+  };
   if (set.kg !== undefined) value.kg = set.kg;
   if (set.reps !== undefined) value.reps = set.reps;
   if (set.seconds !== undefined) value.seconds = set.seconds;
