@@ -2,8 +2,8 @@
 
 - Leaf issue and parent(s): [#460](https://github.com/Vivekpsps3/vivek-monorepo/issues/460) ROOM-10. Parents [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304) and [#314](https://github.com/Vivekpsps3/vivek-monorepo/issues/314) stay open. Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. #277 stays open and was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/room-10`; `/tmp/vivek-room-10`. The shared checkout was not edited. `apps/web`, `apps/server`, Finance, and Travel were not edited. Pixel scores were not changed.
-- Base main SHA, current tested SHA: implementation base `b4975ffffabde7e693c7af5de99a0fd78b652faa` (ROOM-09, pull request #564). Tested product `811267741ae28f6d2daeba4ee47fac7007882fe0`. `origin/main` was still that base at commit time.
-- Fresh-main/prerequisite/active-PR checks: SCENE-03 (#441, pull request #555, merge `57b69462126defe6bf3b8853237a8b18c1c9abcf`) and MUX-06 (#402, pull request #515, merge `7f55790a3d6c3ac92e4dc3c77cbcc581be86c35c`) are ancestors of `origin/main`. The game cabinet from MUX-06 is the collection this leaf extends. [Claim](https://github.com/Vivekpsps3/vivek-monorepo/issues/460#issuecomment-7095452843). SCENE-08 (pull request #563) and FIT-06 own Town scene, Town health, and Finance `public-api.ts`. Those trees were not edited.
+- Base main SHA, current tested SHA: implementation base `b4975ffffabde7e693c7af5de99a0fd78b652faa` (ROOM-09, pull request #564). Product `811267741ae28f6d2daeba4ee47fac7007882fe0`. `origin/main` then moved to `85adb8f1e8892a3963a10dd4992100546b610c35` (FIT-06, pull request #565). That tip was merged as `e2d6b609f363587f7064a523b6ca893c2610f720`. It changes Town health, not Media. The verification table was rerun on that merge.
+- Fresh-main/prerequisite/active-PR checks: SCENE-03 (#441, pull request #555, merge `57b69462126defe6bf3b8853237a8b18c1c9abcf`) and MUX-06 (#402, pull request #515, merge `7f55790a3d6c3ac92e4dc3c77cbcc581be86c35c`) are ancestors of `origin/main`. The game cabinet from MUX-06 is the collection this leaf extends. [Claim](https://github.com/Vivekpsps3/vivek-monorepo/issues/460#issuecomment-7095452843). FIT-06 is the merged tip and does not overlap these files. SCENE-08 (pull request #563) owns Town scene files outside health and was not edited.
 
 ## Acceptance
 
@@ -29,31 +29,31 @@ Fixtures are synthetic. Paper Cartridge, Lantern Kart, Untouched Quest, Quiet Ar
 - State/cache owners and public entry points before/after: saved games stay on the media library and entry routes. Play stays in `sessionStorage` for that owner and is not `media-item-draft:`. A late library response is dropped by the existing kind and epoch guard. Public entry remains `/media/library?kind=game`. Item links remain `/media/item/:id`.
 - Remaining old symbol/path search, including config and discovery: `media-game-cabinet` remains the box owner. `media-arcade-tables` is new. No Town file, Pixel score, or discovery allowlist was edited. Media e2e discovery lists the new spec because it globs the directory.
 - Follow-up change: which production files and independent policy owners now need editing: none inside this leaf. No queue or parent ledger was edited. GAME-10 and GAME-11 still own the full Town minigames.
-- Tests/docs/generated changes separately: tests +479/−0 (`arcade.spec.ts` 293, `arcade.test.mjs` 150, `test_game_cabinet.py` +18, `games.test.mjs` +16, `library-filters.test.mjs` +2). Docs are Media guidance, Media `AGENTS.md`, and this evidence file. No generated bundle is committed. `make build-frontends` exited 0. Release `85545d0415163da243a141eca55795dbe92e9b8d7fad4b3444d919815559ad44`. The initial-bundle warning is 680.17 kB against the 650 kB warning budget. The budget was not raised. Existing Finance unused-import warnings remain.
+- Tests/docs/generated changes separately: tests +479/−0 (`arcade.spec.ts` 293, `arcade.test.mjs` 150, `test_game_cabinet.py` +18, `games.test.mjs` +16, `library-filters.test.mjs` +2). Docs are Media guidance, Media `AGENTS.md`, and this evidence file. No generated bundle is committed. `make build-frontends` exited 0. The post-merge release is `201c729c3e48c76c2543c18aaa9eaebf123b07a442a404dc7e8240199a0e686f`. The initial-bundle warning is 680.17 kB against the 650 kB warning budget. The budget was not raised. Existing Finance unused-import warnings remain.
 - Net production delta and specific reviewed safety/compatibility exception if positive: +848 production lines. This is the feature: two play tables, the Unopened mark, and owner-scoped session play. The positive delta is the implementation, not a simplification claim. No Reviewed boundary exception was added.
 - No behavior/data/meaningful assertion silently removed: confirmed. Cabinet bays, empty copy, missing box image, and the Town boundary sentence remain. Media Playwright is 194 passed.
 
 ## Verification
 
-Commands ran in `/tmp/vivek-room-10` on product `811267741ae28f6d2daeba4ee47fac7007882fe0`. `make test-fast` and the Python gates used `PATH="/tmp/vivek-room-10/.venv/bin:$PATH"` because the system interpreter does not have alembic. Karma used `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`. Playwright found its Chromium without `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. `node_modules` and `.venv` are symlinks to the shared checkout. Neither symlink is committed. Playwright ran against the production bundle of this source. `python3 planning/implementation/plan.py launch ROOM-10` selects `docs` and `media_front`. The records change also ran the Python gates below. The coverage notice suggested a higher floor. The floor stayed 68.7%.
+Commands ran in `/tmp/vivek-room-10` on product `811267741ae28f6d2daeba4ee47fac7007882fe0`, then again after merging FIT-06 as `e2d6b609f363587f7064a523b6ca893c2610f720`. `make test-fast` and the Python gates used `PATH="/tmp/vivek-room-10/.venv/bin:$PATH"` because the system interpreter does not have alembic. Karma used `CHROME_BIN=/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`. Playwright found its Chromium without `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. `node_modules` and `.venv` are symlinks to the shared checkout. Neither symlink is committed. Playwright ran against the production bundle of this source. `python3 planning/implementation/plan.py launch ROOM-10` selects `docs` and `media_front`. The records change also ran the Python gates below. The coverage notice suggested a higher floor. The floor stayed 68.7%.
 
 | Command | Result |
 | --- | --- |
-| make test-fast | PASS. Planning/docs, boundaries, 135 Python tests, and 21 Node script tests. Media e2e files are listed (31) and not executed by this gate. Town files stayed 15. |
+| make test-fast | PASS. Planning/docs, boundaries, 135 Python tests, and 21 Node script tests. Media e2e files are listed (31) and not executed by this gate. Repeated PASS after merging FIT-06. Town files stayed 15. |
 | make lint-web | PASS. eslint-finance 344 findings match the baseline. eslint-site 9, eslint-packages 1, eslint-world-engine 0. |
 | make typecheck-web | PASS. Web app and spec, Finance, packages, and site. |
-| npm run test:web -- --watch=false --browsers=ChromeHeadlessCI | PASS. 573 SUCCESS. Statements 77.13% (8865/11493), branches 64.57% (3948/6114), functions 78.84% (1837/2330), lines 82.21% (7698/9363). |
+| npm run test:web -- --watch=false --browsers=ChromeHeadlessCI | PASS. 579 SUCCESS after the FIT-06 merge. Statements 77.23% (8894/11516), branches 64.76% (3967/6125), functions 78.85% (1839/2332), lines 82.31% (7723/9382). |
 | node --test apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs | PASS. 62 pass, 0 fail. |
-| make build-frontends | PASS. Production build and release manifest. Warning budget and Finance import warnings as above. Exit 0. Release `85545d0415163da243a141eca55795dbe92e9b8d7fad4b3444d919815559ad44`. |
-| npx playwright test --config apps/media/e2e/playwright.config.ts | PASS. 194 passed (2.3m), including four Arcade viewport journeys, the empty and locked collection, the held read, sign-out, and the 320px cabinet page. |
+| make build-frontends | PASS. Production build and release manifest. Warning budget and Finance import warnings as above. Exit 0. Post-merge release `201c729c3e48c76c2543c18aaa9eaebf123b07a442a404dc7e8240199a0e686f`. |
+| npx playwright test --config apps/media/e2e/playwright.config.ts | PASS. 194 passed (2.3m) after the FIT-06 merge, including four Arcade viewport journeys, the empty and locked collection, the held read, sign-out, and the 320px cabinet page. |
 | make lint-python | PASS. 262 files already formatted. ruff 90 findings match the baseline. suppressions 6. |
 | make typecheck-python | PASS. mypy 79 findings match the baseline. |
 | ./scripts/coverage-gate.sh media | PASS. 112 passed. Total coverage 75.41%. `records.py` 85.77%. Required floor 68.7% was not changed. |
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/566. The body says `Closes #460` only.
 - Roadmap #134 append-only status-note URL: not posted. The issue body was not edited.
-- Merged/activation status (actual evidence, not assumption): not merged. The branch is local at product `811267741ae28f6d2daeba4ee47fac7007882fe0`.
+- Merged/activation status (actual evidence, not assumption): pull request #566 is open and not merged. `origin/main` is `85adb8f1e8892a3963a10dd4992100546b610c35`. The branch is pushed and includes the FIT-06 merge `e2d6b609f363587f7064a523b6ca893c2610f720`.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate. GAME-10 and GAME-11 still own the Town minigames.
-- Next actor: this implementer opens the pull request, waits for the required checks, then merges with a merge commit.
+- Next actor: this implementer waits for the required checks, then merges with a merge commit.
