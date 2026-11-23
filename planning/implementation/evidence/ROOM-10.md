@@ -45,7 +45,7 @@ Commands ran in `/tmp/vivek-room-10` on product `811267741ae28f6d2daeba4ee47fac7
 | npm run test:web -- --watch=false --browsers=ChromeHeadlessCI | PASS. 579 SUCCESS after the FIT-06 merge. Statements 77.23% (8894/11516), branches 64.76% (3967/6125), functions 78.85% (1839/2332), lines 82.31% (7723/9382). |
 | node --test apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs | PASS. 62 pass, 0 fail. |
 | make build-frontends | PASS. Production build and release manifest. Warning budget and Finance import warnings as above. Exit 0. Post-merge release `201c729c3e48c76c2543c18aaa9eaebf123b07a442a404dc7e8240199a0e686f`. |
-| npx playwright test --config apps/media/e2e/playwright.config.ts | PASS. 194 passed (2.3m) after the FIT-06 merge, including four Arcade viewport journeys, the empty and locked collection, the held read, sign-out, and the 320px cabinet page. |
+| npx playwright test --config apps/media/e2e/playwright.config.ts | PASS. 194 passed (2.3m) after the FIT-06 merge, including four Arcade viewport journeys, the empty and locked collection, the held read, sign-out, and the 320px cabinet page. GitHub Playwright on `437110c2` (run 45145351769) failed the held-read shelf check because the label was read once before change detection painted the flip. The spec now waits until Shelf 1's aria-label changes, then keeps that label. `npx playwright test --config apps/media/e2e/playwright.config.ts arcade.spec.ts` then passed 6 tests (390 and 1280, light and night, empty, locked, held read, and sign-out). The other gates were not rerun for that wait. |
 | make lint-python | PASS. 262 files already formatted. ruff 90 findings match the baseline. suppressions 6. |
 | make typecheck-python | PASS. mypy 79 findings match the baseline. |
 | ./scripts/coverage-gate.sh media | PASS. 112 passed. Total coverage 75.41%. `records.py` 85.77%. Required floor 68.7% was not changed. |
@@ -56,4 +56,4 @@ Commands ran in `/tmp/vivek-room-10` on product `811267741ae28f6d2daeba4ee47fac7
 - Roadmap #134 append-only status-note URL: not posted. The issue body was not edited.
 - Merged/activation status (actual evidence, not assumption): pull request #566 is open and not merged. The branch includes the FIT-06 merge `e2d6b609f363587f7064a523b6ca893c2610f720` and the SCENE-08 merge `58b3182797d688ef345d581049d9b2a6bdd01ee7`.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate. GAME-10 and GAME-11 still own the Town minigames.
-- Next actor: this implementer waits for the required checks, then merges with a merge commit.
+- Next actor: this implementer waits for the required checks on the shelf-label wait, then merges with a merge commit. Pull request #566 stays open until those checks pass.

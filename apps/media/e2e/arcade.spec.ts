@@ -225,10 +225,13 @@ test('a held library read does not replace play, and sign-out clears it', async 
     progress_unit: 'hour',
   });
   await page.goto('/media/library?kind=game&sort=title');
+  await expectSectionHeading(page, 'Games');
   await page.getByRole('button', { name: 'Play Memory Shelves', exact: true }).click();
+  const shelf = page.getByRole('button', { name: /^Shelf 1, / });
   await page.getByRole('button', { name: 'Shelf 1, face down', exact: true }).click();
-  const openLabel = await page.getByRole('button', { name: /^Shelf 1, / }).getAttribute('aria-label');
-  expect(openLabel).not.toBe('Shelf 1, face down');
+  await expect(shelf).not.toHaveAttribute('aria-label', 'Shelf 1, face down');
+  const openLabel = await shelf.getAttribute('aria-label');
+  expect(openLabel).toBeTruthy();
   let release: () => void = () => undefined;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
