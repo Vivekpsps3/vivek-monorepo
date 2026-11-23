@@ -61,7 +61,7 @@ export function collectionSummary(kind) {
     case "movie":
       return "Movies. Films you want to watch, are watching, or have watched. A date is shown only when you recorded one. The Theater lobby, poster corridor, auditorium, and ticket desk open those saved films and do not play them.";
     case "tv":
-      return "Series. Shows and the episodes you are watching. Caught up and ended stay different facts.";
+      return "Series. Shows and the episodes you are watching. Caught up and ended stay different facts. The episode lounge continues the next aired episode and does not play the series.";
     case "book":
       return "Books. Current, read, and to-read shelves, as covers and spines or as a text list. A page or percent appears only when you record one.";
     case "artist":

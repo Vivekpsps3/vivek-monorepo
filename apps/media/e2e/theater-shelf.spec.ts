@@ -97,7 +97,7 @@ async function seedShelf(request: APIRequestContext) {
 }
 
 function card(page: Page, title: string) {
-  return page.locator('media-card, .theater-poster').filter({
+  return page.locator('media-card, .theater-poster, .lounge-row').filter({
     has: page.getByRole('link', { name: title, exact: true }),
   });
 }
@@ -109,7 +109,8 @@ async function openCollection(page: Page, kind: 'movie' | 'tv') {
     await expect(page.locator('media-theater')).toBeVisible();
     await expect(page.getByRole('region', { name: 'Lobby' })).toBeVisible();
   } else {
-    await expect(page.locator('.theater-shelf')).toBeVisible();
+    await expect(page.locator('media-episode-lounge')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Episode lounge' })).toBeVisible();
   }
 }
 
@@ -228,6 +229,23 @@ for (const [width, height, theme, pointer] of [
       await expect(lantern.getByRole('button', { name: /Watched S1E3/ })).toBeVisible();
       await expect(title).toBeFocused();
       expect(await episodeWatched(request, shelf.lantern.id, 1, 3)).toBe(false);
+
+      const openSeating = lantern.getByRole('button', { name: 'Open seating for Lantern Hour' });
+      await expectTarget(openSeating);
+      await activate(openSeating, pointer);
+      await expect(page.locator('#seating-diagram-heading')).toBeFocused();
+      const hall = page.locator('#seating-diagram');
+      await expect(hall.locator('[data-seat="watched"][data-code="S1E1"]')).toBeVisible();
+      await expect(hall.locator('[data-seat="future"][data-code="S1E2"]')).toContainText('2099');
+      await expect(hall.locator('[data-seat="next"][data-code="S1E3"]')).toBeVisible();
+      await expect(hall.locator('.poster-lifecycle')).toHaveText('Ongoing');
+      await expect(hall.locator('.poster-fact')).toHaveText('Next S1E3');
+      await expect(page.locator('video')).toHaveCount(0);
+      await expectTarget(page.getByRole('link', { name: 'See where these dates sit' }));
+      const closeSeating = hall.getByRole('button', { name: 'Close seating' });
+      await expectTarget(closeSeating);
+      await activate(closeSeating, pointer);
+      await expect(openSeating).toBeFocused();
 
       await page.route('**/media/api/entries/*/episodes/next', route =>
         route.fulfill({ status: 502, json: { detail: 'Bad gateway' } }),
