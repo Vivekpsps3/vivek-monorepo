@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#455](https://github.com/Vivekpsps3/vivek-monorepo/issues/455) ROOM-05. Parents [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304) and [#315](https://github.com/Vivekpsps3/vivek-monorepo/issues/315) stay open. Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. #277 stays open and was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/room-05`; `/tmp/vivek-room-05`. The shared checkout was not edited. Health, Finance, Media, Town, and pixels were not edited.
-- Base main SHA, current tested SHA: fetched `origin/main` moved from `45ef8ae69939f0cdc4bf2f5820c0b1e5a64c7515` to `73a289b481dc5227df62a0b2ff07270681ac1bad` (ROOM-13, pull request #574). That fast-forward is the parent of product `1a01e5157e44390ed6e0dec07a4c50df402da610`. The gates below ran on that product tree. This note only records that SHA.
+- Base main SHA, current tested SHA: fetched `origin/main` moved from `45ef8ae69939f0cdc4bf2f5820c0b1e5a64c7515` to `73a289b481dc5227df62a0b2ff07270681ac1bad` (ROOM-13, pull request #574). That fast-forward is the parent of product `1a01e5157e44390ed6e0dec07a4c50df402da610`. The gates below ran on that product tree. After those gates, `origin/main` moved to `6244f204fe7c5580dc8945eb91f345cbf7db89dd` (ROOM-06, pull request #575) and was merged. That merge does not change Travel files.
 - Fresh-main/prerequisite/active-PR checks: SCENE-03 (#441), TUX-07 (#412), TUX-08 (#413), TUX-09 (#414), and SCENE-09 (#447) are merged ancestors. Rooms stay on `/travel/terminal?room=map|gallery`. No new route, store, or crypto. `object=ferry` stays an invalid hall object. The model ferry copies status and the saved end date and does not write.
 
 ## Acceptance
