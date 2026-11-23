@@ -58,8 +58,8 @@ Commands ran in `/tmp/vivek-fit-05` on `9d6b74eb2ea1b002d669fa586878da602ce0e607
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): after the pull request is opened. The body is only `Closes #435`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/561 (`Closes #435` only).
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #257, #90, #134, and #277 stay open. This leaf does not deploy.
-- Next actor: push `agent/fit-05`, open the pull request, wait for green required checks, then merge with a merge commit. The tested implementation commit is `da977d37ca602f22f556a66d5fc5d51977c016e8`.
+- Next actor: wait for green required checks on pull request #561, then merge with a merge commit. The tested implementation commit is `da977d37ca602f22f556a66d5fc5d51977c016e8`.
