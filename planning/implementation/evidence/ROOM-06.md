@@ -52,7 +52,7 @@ Commands ran in `/tmp/vivek-room-06` on the source that became `2296dab7879583bb
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled in the follow-up commit after the pull request exists. The body is only the leaf closure keyword for #456.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/575. The body is `Closes #456` only.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
 - Merged/activation status (actual evidence, not assumption): not merged. This branch contains `origin/main` `73a289b481dc5227df62a0b2ff07270681ac1bad`.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate.
