@@ -109,7 +109,7 @@ describe('Reading Hall load ownership', () => {
     pointer('pointerdown', rect.left + screen.x, rect.top + screen.y);
     pointer('pointerup', rect.left + screen.x, rect.top + screen.y);
     expect(navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
-      queryParams: { object: 'desk' }, replaceUrl: true,
+      queryParams: { object: 'desk' }, replaceUrl: true, scroll: 'manual',
     }));
     navigate.calls.reset();
 
@@ -122,6 +122,7 @@ describe('Reading Hall load ownership', () => {
     expect(navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
       queryParams: jasmine.objectContaining({ object: null, scale: '1.5' }),
       replaceUrl: true,
+      scroll: 'manual',
     }));
     navigate.calls.reset();
     progress.error(new Error('unavailable'));

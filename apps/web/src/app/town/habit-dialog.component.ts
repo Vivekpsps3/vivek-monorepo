@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ConfirmService, ToastService, UiButtonComponent, UiDialogComponent } from '@vivek/ui';
 import { TownApiService, type PatchHabit } from './town.api';
@@ -21,6 +21,7 @@ export class HabitDialogComponent {
   private readonly confirm = inject(ConfirmService);
   private readonly toast = inject(ToastService);
   private readonly destroy = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly data = input.required<TownResponse>();
   readonly slot = input<number | null>(null);
   readonly habitId = input<number | null>(null);
@@ -40,6 +41,8 @@ export class HabitDialogComponent {
   private seeded = false;
   /** Cadence shown when the dialog opened. Edit saves omit per_week until the user moves off it. */
   private seededPerWeek = 7;
+  /** Bumped when the dialog is invalidated so a late save cannot close or replace the draft. */
+  private saveEpoch = 0;
 
   readonly habit = computed(() => this.data().habits.find(item => item.id === this.habitId()) ?? null);
   readonly editing = computed(() => this.habit() != null);
@@ -64,6 +67,7 @@ export class HabitDialogComponent {
       this.chosenSlot.set(preset != null && (slots.includes(preset) || slots.length === 0) ? preset : slots[0] ?? preset ?? 0);
       this.seeded = true;
     });
+    this.destroy.onDestroy(() => { this.saveEpoch += 1; });
   }
 
   slotChoices(): number[] {
@@ -92,21 +96,38 @@ export class HabitDialogComponent {
     this.nameError.set(nameError ?? '');
     this.formError.set('');
     this.fieldErrors.set({});
+    if (nameError) this.focusProblem();
     if (nameError || this.busy()) return;
     const name = normalizedHabitName(this.name());
     const habit = this.habit();
-    const request = habit
-      ? this.api.patchHabit(habit.id, this.editPatch(habit, name))
-      : this.api.createHabit({ name, slot: this.chosenSlot(), per_week: this.perWeek(), building_style: this.buildingStyle() });
+    let request;
+    if (habit) {
+      const patch = this.editPatch(habit, name);
+      // An unchanged edit must not PATCH. Sending the current per_week would delete a pending Monday row.
+      if (Object.keys(patch).length === 0) {
+        this.closed.emit(false);
+        return;
+      }
+      request = this.api.patchHabit(habit.id, patch);
+    } else {
+      request = this.api.createHabit({ name, slot: this.chosenSlot(), per_week: this.perWeek(), building_style: this.buildingStyle() });
+    }
+    const epoch = this.saveEpoch;
     this.busy.set(true);
     request.pipe(takeUntilDestroyed(this.destroy)).subscribe({
-      next: () => { this.busy.set(false); this.closed.emit(true); },
+      next: () => {
+        if (epoch !== this.saveEpoch) return;
+        this.busy.set(false);
+        this.closed.emit(true);
+      },
       error: (error: unknown) => {
+        if (epoch !== this.saveEpoch) return;
         this.busy.set(false);
         const problem = apiProblem(error);
         this.fieldErrors.set(problem.fields);
         this.formError.set(problem.message);
         this.toast.error(problem.message);
+        this.focusProblem();
       },
     });
   }
@@ -123,17 +144,27 @@ export class HabitDialogComponent {
   archive(): void {
     const habit = this.habit();
     if (!habit || this.busy()) return;
+    const epoch = this.saveEpoch;
+    this.busy.set(true);
     void this.confirm.ask(
       'Archive habit',
       `Archive '${habit.name}'? It leaves the town, frees its lot and keeps its ${habit.xp} XP. You can't undo this.`,
       'Archive',
       'Cancel',
     ).then(ok => {
-      if (!ok) return;
-      this.busy.set(true);
+      if (epoch !== this.saveEpoch) return;
+      if (!ok) {
+        this.busy.set(false);
+        return;
+      }
       this.api.patchHabit(habit.id, { archived: true }).pipe(takeUntilDestroyed(this.destroy)).subscribe({
-        next: () => { this.busy.set(false); this.closed.emit(true); },
+        next: () => {
+          if (epoch !== this.saveEpoch) return;
+          this.busy.set(false);
+          this.closed.emit(true);
+        },
         error: (error: unknown) => {
+          if (epoch !== this.saveEpoch) return;
           this.busy.set(false);
           const problem = apiProblem(error);
           this.formError.set(problem.message);
@@ -145,5 +176,22 @@ export class HabitDialogComponent {
 
   dismiss(): void {
     if (!this.busy()) this.closed.emit(false);
+  }
+
+  private focusProblem(): void {
+    queueMicrotask(() => {
+      const root = this.host.nativeElement;
+      const fields = this.fieldErrors();
+      const target = this.nameError() || fields['name']
+        ? root.querySelector<HTMLElement>('#habit-name')
+        : fields['per_week']
+          ? root.querySelector<HTMLElement>('#habit-cadence')
+          : fields['slot']
+            ? root.querySelector<HTMLElement>('#habit-lot')
+            : fields['building_style']
+              ? root.querySelector<HTMLElement>('input[name="building"]')
+              : root.querySelector<HTMLElement>('[role="alert"]');
+      target?.focus();
+    });
   }
 }

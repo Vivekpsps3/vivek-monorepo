@@ -4,7 +4,7 @@ import { BehaviorSubject,Subject } from 'rxjs';
 import { ToastService } from '@vivek/ui';
 import { VAULT_PRESENCE } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
-import { TownApiService } from './town.api';
+import { TownApiService, type CheckinResult } from './town.api';
 import { TOWN_BUDGET_KEPT, TOWN_HEALTH_STAGES, TownComponent } from './town.component';
 import { LOT_UNLOCK_LV } from './town.constants';
 import type { TownResponse } from './town.types';
@@ -48,7 +48,8 @@ function snapshot(): TownResponse {
 }
 describe('Town page', () => {
   let response: Subject<TownResponse>;
-  let api: { getTown: jasmine.Spy; checkin: jasmine.Spy };
+  let created: Subject<unknown>;
+  let api: { getTown: jasmine.Spy; checkin: jasmine.Spy; createHabit: jasmine.Spy };
   let budget: jasmine.Spy;
   let health: jasmine.Spy;
   let user: BehaviorSubject<{ id: number } | null>;
@@ -62,6 +63,7 @@ describe('Town page', () => {
   beforeEach(() => {
     localStorage.clear();
     response = new Subject();
+    created = new Subject();
     user = new BehaviorSubject<{ id: number } | null>({ id: 7 });
     cleared = new Subject<void>();
     session.user = { id: 7 };
@@ -69,7 +71,11 @@ describe('Town page', () => {
     session.cleared$ = cleared;
     budget = jasmine.createSpy('loadFinanceBudgetKept').and.resolveTo({ status: 'locked' });
     health = jasmine.createSpy('loadTownHealthStages').and.resolveTo({ state: 'locked' });
-    api = { getTown: jasmine.createSpy().and.callFake(() => response), checkin: jasmine.createSpy() };
+    api = {
+      getTown: jasmine.createSpy().and.callFake(() => response),
+      checkin: jasmine.createSpy(),
+      createHabit: jasmine.createSpy().and.callFake(() => created),
+    };
     TestBed.configureTestingModule({
       imports: [TownComponent],
       providers: [
@@ -299,6 +305,50 @@ describe('Town page', () => {
     fixture.detectChanges();
     expect(el.querySelector('app-habit-dialog')).toBeNull();
     expect(treasuryTile(el).textContent).toContain('Finance vault locked');
+  });
+
+  it('announces undo, repeats an identical announcement, and drops a late create after the owner changes', () => {
+    const { fixture, el } = render(snapshot());
+    const live = () => el.querySelector('app-town-today [aria-live="polite"]')?.textContent ?? '';
+    const result = {
+      day: '2026-10-29',
+      checked: false,
+      habit: {
+        id: 12, name: 'Read 20 pages', slot: 0, building_style: 'forge',
+        cadence: { per_week: 7, kind: 'daily', pending: null },
+        created_on: '2026-10-05', archived_on: null, xp: 80, level: 2, stage: 2, level_xp_start: 50, next_level_xp: 150,
+        streak: { unit: 'days', current: 3, best: 3, best_days: 3, best_weeks: 0, rest_day_available: true, rest_used_on: null },
+        week: null, checked_today: false, checked_yesterday: false, can_check_yesterday: true, last7: [],
+      },
+      town: { xp: 340, level: 3, level_xp_start: 250, next_level_xp: 500 },
+    } as CheckinResult;
+    fixture.componentInstance.onSettled(result);
+    response.next(snapshot());
+    fixture.detectChanges();
+    expect(live()).toBe('Read 20 pages undone.');
+    fixture.componentInstance.onSettled(result);
+    response.next(snapshot());
+    fixture.detectChanges();
+    expect(live()).toBe('Read 20 pages undone.\u200b');
+
+    fixture.componentInstance.openHabitDialog(0, null);
+    fixture.detectChanges();
+    const input = el.querySelector<HTMLInputElement>('#habit-name')!;
+    input.value = 'Walk 30 minutes';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    expect(api.createHabit).toHaveBeenCalledWith(jasmine.objectContaining({ name: 'Walk 30 minutes' }));
+    const loads = api.getTown.calls.count();
+    session.user = { id: 8 };
+    user.next({ id: 8 });
+    fixture.detectChanges();
+    expect(el.querySelector('app-habit-dialog')).toBeNull();
+    created.next({});
+    fixture.detectChanges();
+    expect(el.querySelector('app-habit-dialog')).toBeNull();
+    expect(api.getTown.calls.count()).toBe(loads);
+    expect(live()).not.toContain('checked');
   });
 
   it('shows a ready Clinic and Gym without measurement digits', async () => {
