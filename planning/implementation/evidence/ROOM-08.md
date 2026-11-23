@@ -52,8 +52,8 @@ Commands ran in `/tmp/vivek-room-08` on product `3498b932fe2f734acfe2077cda2bfea
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this file. The body is `Closes #458` only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/562. The body says `Closes #458` only.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
-- Merged/activation status (actual evidence, not assumption): the branch includes the SCENE-04 merge and is not yet pushed. `origin/main` is `1745b9c0e2ecece93122544570e3c72edef6654a`.
+- Merged/activation status (actual evidence, not assumption): pull request #562 is open and not merged. `origin/main` is `1745b9c0e2ecece93122544570e3c72edef6654a`. The branch is pushed and includes the SCENE-04 merge.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate.
-- Next actor: this implementer pushes, opens the pull request, waits for the required checks, then merges with a merge commit.
+- Next actor: this implementer waits for the required checks, then merges with a merge commit.
