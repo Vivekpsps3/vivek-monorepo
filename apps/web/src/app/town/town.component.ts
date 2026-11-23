@@ -110,8 +110,13 @@ export class TownComponent {
   readonly exploreWorld = WORLD_COPY.explore;
   private readonly document = inject(DOCUMENT);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private returnToLibrary = inject(Router).currentNavigation()?.previousNavigation?.finalUrl?.root
-    .children['primary']?.segments.map(segment => segment.path).join('/') === 'town/library';
+  private returnHref = (() => {
+    const path = inject(Router).currentNavigation()?.previousNavigation?.finalUrl?.root
+      .children['primary']?.segments.map(segment => segment.path).join('/');
+    if (path === 'town/library') return '/town/library';
+    if (path === 'town/hall') return '/town/hall';
+    return null;
+  })();
   constructor() {
     this.session.user$.pipe(takeUntilDestroyed(this.destroy)).subscribe(user => this.noteOwner(user?.id ?? null));
     this.session.cleared$.pipe(takeUntilDestroyed(this.destroy)).subscribe(() => this.invalidateOwner());
@@ -183,13 +188,15 @@ export class TownComponent {
     if (previousDay && previousDay !== sorted.town.today) this.habitFeedback.set(EMPTY_FEEDBACK);
     this.data.set(sorted);
     this.state.set('ready');
-    if (this.returnToLibrary) {
-      this.returnToLibrary = false;
+    if (this.returnHref) {
+      const href = this.returnHref;
+      this.returnHref = null;
       afterNextRender(() => {
         const active = this.document.activeElement;
         const town = this.host.nativeElement;
         if (active === this.document.body || active === town.querySelector('h1')) {
-          town.querySelector<HTMLAnchorElement>('a[href="/town/library"]')?.focus();
+          const selector = href === '/town/hall' ? 'a.explore-world[href="/town/hall"]' : `a[href="${href}"]`;
+          town.querySelector<HTMLAnchorElement>(selector)?.focus();
         }
       }, { injector: this.injector });
     }

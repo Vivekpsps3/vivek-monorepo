@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="156" height="161" viewBox="0 0 156 161">
+  <style>
+    :root { --board:#f4e7c4; --edge:#8d6848; --ink:#3c4650; --seal:#b5574c; }
+    @media (prefers-color-scheme: dark) {
+      :root { --board:#d9c7a0; --edge:#5c4034; --ink:#243038; --seal:#c45a4e; }
+    }
+  </style>
+  <path fill="var(--edge)" d="M18 20h120v118H18z"/>
+  <path fill="var(--board)" d="M26 28h104v102H26z"/>
+  <path stroke="var(--ink)" stroke-width="4" d="M40 52h76M40 72h76M40 92h60"/>
+  <circle cx="78" cy="112" r="8" fill="var(--seal)"/>
+</svg>

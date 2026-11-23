@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="172" height="130" viewBox="0 0 172 130">
+  <style>
+    :root { --stone:#d7c4a2; --shade:#8d6848; --face:#f7edd4; --hand:#3c4650; --mark:#b5864c; }
+    @media (prefers-color-scheme: dark) {
+      :root { --stone:#b7a384; --shade:#5a4034; --face:#efe0bf; --hand:#243038; --mark:#e0b15a; }
+    }
+  </style>
+  <ellipse cx="86" cy="108" rx="62" ry="14" fill="var(--shade)" opacity=".35"/>
+  <rect x="74" y="70" width="24" height="40" fill="var(--stone)"/>
+  <circle cx="86" cy="52" r="40" fill="var(--stone)"/>
+  <circle cx="86" cy="52" r="30" fill="var(--face)"/>
+  <path stroke="var(--mark)" stroke-width="4" d="M86 28v8M110 52h-8M86 76v-8M62 52h8"/>
+  <path stroke="var(--hand)" stroke-width="4" stroke-linecap="round" d="M86 52 98 40"/>
+</svg>

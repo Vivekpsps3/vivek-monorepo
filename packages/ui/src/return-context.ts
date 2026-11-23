@@ -53,6 +53,7 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/finance/planning/research': {},
   '/town': {},
   '/town/library': {},
+  '/town/hall': { object: ['rules', 'progress', 'archive'] },
   '/town/clinic': { entry: isHealthEntryId },
   '/town/gym': { entry: isHealthEntryId },
   '/town/world': { day: isReturnDate, week: isReturnDate },

@@ -69,6 +69,7 @@ export class PrivateLayoutComponent {
     { label: 'Media', href: '/media', sections: mediaSections },
     { label: 'Town', href: '/town', sections: [
       { label: 'Reading Hall', link: '/town/library' },
+      { label: 'Hall', link: '/town/hall' },
       { label: 'World', link: '/town/world' },
     ] },
     { label: 'Pixels', href: '/pixels', sections: [{ label: 'Life', link: '/pixels/life' }] },

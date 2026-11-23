@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="134" height="108" viewBox="0 0 134 108">
+  <style>
+    :root { --cover:#6e8f86; --page:#f6edd6; --shade:#3f5c56; --ink:#3c4650; }
+    @media (prefers-color-scheme: dark) {
+      :root { --cover:#3e6460; --page:#e6d7b4; --shade:#243832; --ink:#243038; }
+    }
+  </style>
+  <path fill="var(--shade)" d="M18 28h98v64H18z"/>
+  <path fill="var(--cover)" d="M14 22h96v60H14z"/>
+  <path fill="var(--page)" d="M28 22h78v60H28z"/>
+  <path stroke="var(--ink)" stroke-width="3" d="M40 40h52M40 54h52M40 68h36"/>
+</svg>
