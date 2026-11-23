@@ -152,6 +152,7 @@ test.describe('Home rooms', () => {
     await home.getByRole('button', { name: 'Retry lots' }).tap();
     await expect(home.getByText('Town lots are unavailable right now.')).toBeVisible();
     await home.locator('[data-home-link="study"]').tap();
+    await home.locator('[data-object="study-desk"]').tap();
     await expect(note).toHaveValue('Harbor draft stays');
   });
 
