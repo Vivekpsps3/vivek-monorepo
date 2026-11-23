@@ -53,8 +53,8 @@ Commands ran in `/tmp/vivek-room-12` on `548bccbc8fa0267c18dedbd906f00e53dbf1faa
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened when this sentence is written. The body will be only the leaf keyword for #462.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/572. The body is only the leaf keyword for #462.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
 - Merged/activation status (actual evidence, not assumption): not merged when this sentence is written.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review of the wall stays separate from these passing checks.
-- Next actor: open the pull request, wait for required checks, then merge.
+- Next actor: wait for required checks, then merge.
