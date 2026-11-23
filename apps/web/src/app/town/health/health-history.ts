@@ -54,6 +54,8 @@ export interface HealthSeriesView {
   title: string;
   noun: string;
   latestLabel: string;
+  /** Measured date of the newest row. Display only; the row stays the record. */
+  latestMeasuredOn: string;
   sparkline: HealthSparklineView;
   /** Newest first. This is the store snapshot, not a second history. */
   rows: readonly HealthHistoryRow[];
@@ -205,6 +207,7 @@ export function buildClinicSeries(entries: readonly DatedEntry[], units: HealthU
       title: copy.title,
       noun: copy.noun,
       latestLabel: rows[0]?.label ?? '',
+      latestMeasuredOn: matching[0]?.value.measured_on ?? '',
       sparkline: kind === 'lab' ? EMPTY_SPARKLINE : sparklineFor(matching, units, kind !== 'checkup'),
       rows,
       folders: kind === 'lab' ? labFolders(matching, units) : [],

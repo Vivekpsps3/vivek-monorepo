@@ -200,6 +200,163 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(page).toHaveURL(url => url.pathname === '/finance/vault/setup' && url.searchParams.get('next') === CLINIC);
     });
 
+    test('corrects vitals from clinic stations without rewriting a display-unit change', async ({ page }) => {
+      test.setTimeout(180_000);
+      const touch = width === 390;
+      const older = '2026-10-01';
+      const olderId = historyId('W', 1);
+      const rhrId = historyId('R', 1);
+      const bpId = historyId('B', 1);
+      const sleepId = historyId('S', 1);
+      await syntheticVault(page, {
+        health_stats: [
+          ...SEED.health_stats,
+          { client_id: olderId, v: 1, kind: 'weight', measured_on: older, logged_on: older, kg: 75 },
+          { client_id: rhrId, v: 1, kind: 'rhr', measured_on: DAY, logged_on: DAY, bpm: 62 },
+          { client_id: bpId, v: 1, kind: 'bp', measured_on: DAY, logged_on: DAY, sys: 118, dia: 76 },
+          { client_id: sleepId, v: 1, kind: 'sleep', measured_on: DAY, logged_on: DAY, hours: 7.25 },
+          {
+            client_id: historyId('L', 1),
+            v: 1,
+            kind: 'lab',
+            measured_on: DAY,
+            logged_on: DAY,
+            lab: { name: 'Omega marker', value: 15, unit: 'u', ref_low: 10, ref_high: 20 },
+          },
+        ],
+        health_prs: SEED.health_prs,
+      });
+      await page.goto(CLINIC);
+      const room = page.locator('app-health-room');
+      await expect(room).toHaveAttribute('data-health-state', 'locked');
+      await expect(room.locator('app-clinic-room')).toHaveAttribute('data-clinic-room', 'locked');
+      const stations = ['Reception', 'Weight station', 'Heart rate station', 'Blood pressure station', 'Sleep station'];
+      for (const name of stations) {
+        const choice = room.locator('.clinic-objects').getByRole('button', { name, exact: true });
+        await target(choice);
+        await activate(page, choice, touch);
+        await expect(room.locator('#clinic-object-title')).toContainText(name);
+        const locked = await room.evaluate(node => ({
+          text: (node as HTMLElement).innerText,
+          inputs: [...node.querySelectorAll('input, textarea')].map(item => (item as HTMLInputElement).value),
+        }));
+        noMeasurementDigits(locked.text);
+        expect(locked.inputs.join('')).not.toMatch(/\d/);
+        await expect(room.locator('[data-clinic-history]')).toHaveCount(0);
+      }
+      await expect(page).toHaveURL(url => url.searchParams.get('object') === 'sleep');
+      expect(page.url()).not.toMatch(/scale=|[?&]x=|[?&]y=/);
+
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      const choose = async (name: string, objectId: string) => {
+        const choice = room.locator('.clinic-objects').getByRole('button', { name, exact: true });
+        await target(choice);
+        await activate(page, choice, touch);
+        await expect(room.locator('#clinic-object-title')).toContainText(name);
+        await expect(page).toHaveURL(url => url.searchParams.get('object') === objectId);
+      };
+      const snapshot = async (clientId: string) => page.evaluate(async id => {
+        const response = await fetch('/api/vault/records?collection=health_stats');
+        const rows = await response.json() as Array<{ client_id: string; ciphertext_b64: string; revision: number }>;
+        return rows.find(item => item.client_id === id) ?? null;
+      }, clientId);
+
+      await choose('Weight station', 'weight');
+      await expect(room.locator('[data-clinic-date="weight"]')).toHaveText(`Measured on ${DAY}`);
+      await expect(room.locator('[data-clinic-unit="weight"]')).toHaveText('Shown in pounds. Stored in kilograms.');
+      await expect(room.locator('[data-clinic-history="weight"] [data-health-latest="weight"]')).toContainText('176.4 lb');
+      await expect(room.locator('[data-clinic-history="weight"]')).toContainText(older);
+      await expect(room.locator('[data-health-group="health-group-measurements"] [data-health-series="weight"]')).toHaveCount(0);
+      await expect(room.locator('[data-health-sparkline="lab"]')).toContainText('in range');
+      const stored = await snapshot(WEIGHT_ID);
+      const olderStored = await snapshot(olderId);
+      expect(stored?.revision).toBe(1);
+      await activate(page, room.getByRole('radio', { name: 'Kilograms' }), touch);
+      await expect(room.locator('[data-clinic-history="weight"] [data-health-latest="weight"]')).toContainText('80.0 kg');
+      await expect(room.locator('[data-clinic-unit="weight"]')).toHaveText('Shown in kilograms. Stored in kilograms.');
+      await expect(room.locator('[data-clinic-date="weight"]')).toHaveText(`Measured on ${DAY}`);
+      expect(await snapshot(WEIGHT_ID)).toEqual(stored);
+      expect(await snapshot(olderId)).toEqual(olderStored);
+      await activate(page, room.getByRole('button', { name: 'Zoom in', exact: true }), touch);
+      await expect(page).toHaveURL(url => url.searchParams.get('object') === 'weight' && url.searchParams.get('scale') == null);
+
+      const edit = room.locator('[data-clinic-history="weight"]').getByRole('button', { name: 'Edit Weight · 80.0 kg · 2026-10-28' });
+      await target(edit);
+      await activate(page, edit, touch);
+      const editor = page.getByRole('dialog', { name: 'Edit weight' });
+      await expect(editor).toBeVisible();
+      await enter(page, editor.locator('#health-weight'), '70', touch);
+      if (touch) await editor.getByRole('button', { name: 'Save' }).tap();
+      else await editor.getByRole('button', { name: 'Save' }).click();
+      await expect(editor).toHaveCount(0);
+      await expect(room.locator('[data-clinic-history="weight"]')).toContainText(`Weight · 70.0 kg · ${DAY}`);
+      const corrected = await snapshot(WEIGHT_ID);
+      expect(corrected?.revision).toBe(2);
+      expect(corrected?.ciphertext_b64).not.toBe(stored?.ciphertext_b64);
+      expect(await snapshot(olderId)).toEqual(olderStored);
+      await activate(page, room.getByRole('radio', { name: 'Pounds' }), touch);
+      await expect(room.locator('[data-clinic-history="weight"]')).toContainText(`${displayWeight(70, 'lb')} lb`);
+      expect(await snapshot(WEIGHT_ID)).toEqual(corrected);
+      expect(await snapshot(olderId)).toEqual(olderStored);
+
+      await choose('Heart rate station', 'rhr');
+      await expect(room.locator('[data-clinic-unit="rhr"]')).toHaveText('Shown in beats per minute.');
+      await expect(room.locator('[data-clinic-date="rhr"]')).toHaveText(`Measured on ${DAY}`);
+      await expect(room.locator('[data-clinic-history="rhr"]')).toContainText('62 bpm');
+      const heart = room.locator('[data-clinic-history="rhr"]').getByRole('button', { name: `Edit Resting heart rate · 62 bpm · ${DAY}` });
+      await activate(page, heart, touch);
+      const heartDialog = page.getByRole('dialog', { name: 'Edit resting heart rate' });
+      await enter(page, heartDialog.locator('#health-bpm'), '64', touch);
+      if (touch) await heartDialog.getByRole('button', { name: 'Save' }).tap();
+      else await heartDialog.getByRole('button', { name: 'Save' }).click();
+      await expect(room.locator('[data-clinic-history="rhr"]')).toContainText(`Resting heart rate · 64 bpm · ${DAY}`);
+      expect((await snapshot(rhrId))?.revision).toBe(2);
+      expect(await snapshot(WEIGHT_ID)).toEqual(corrected);
+
+      await choose('Blood pressure station', 'bp');
+      await expect(room.locator('[data-clinic-unit="bp"]')).toContainText('millimetres of mercury');
+      await expect(room.locator('[data-clinic-history="bp"]')).toContainText('118/76');
+      const pressure = room.locator('[data-clinic-history="bp"]').getByRole('button', { name: `Edit Blood pressure · 118/76 · ${DAY}` });
+      await activate(page, pressure, touch);
+      const pressureDialog = page.getByRole('dialog', { name: 'Edit blood pressure' });
+      await enter(page, pressureDialog.locator('#health-systolic'), '120', touch);
+      await enter(page, pressureDialog.locator('#health-diastolic'), '80', touch);
+      if (touch) await pressureDialog.getByRole('button', { name: 'Save' }).tap();
+      else await pressureDialog.getByRole('button', { name: 'Save' }).click();
+      await expect(room.locator('[data-clinic-history="bp"]')).toContainText(`Blood pressure · 120/80 · ${DAY}`);
+      expect((await snapshot(bpId))?.revision).toBe(2);
+      expect(await snapshot(WEIGHT_ID)).toEqual(corrected);
+
+      await choose('Sleep station', 'sleep');
+      await expect(room.locator('[data-clinic-unit="sleep"]')).toHaveText('Shown in hours.');
+      await expect(room.locator('[data-clinic-history="sleep"]')).toContainText('7.25 h');
+      const sleep = room.locator('[data-clinic-history="sleep"]').getByRole('button', { name: `Edit Sleep · 7.25 h · ${DAY}` });
+      await activate(page, sleep, touch);
+      const sleepDialog = page.getByRole('dialog', { name: 'Edit sleep' });
+      await enter(page, sleepDialog.locator('#health-sleep'), '7.5', touch);
+      if (touch) await sleepDialog.getByRole('button', { name: 'Save' }).tap();
+      else await sleepDialog.getByRole('button', { name: 'Save' }).click();
+      await expect(room.locator('[data-clinic-history="sleep"]')).toContainText(`Sleep · 7.5 h · ${DAY}`);
+      expect((await snapshot(sleepId))?.revision).toBe(2);
+      expect(await snapshot(WEIGHT_ID)).toEqual(corrected);
+      expect(await snapshot(olderId)).toEqual(olderStored);
+
+      await choose('Reception', 'reception');
+      await expect(room.locator('[data-clinic-reception="weight"]')).toContainText(`${displayWeight(70, 'lb')} lb`);
+      await expect(room.locator('[data-clinic-reception="weight"]')).toContainText(`Measured on ${DAY}`);
+      await expect(room.locator('[data-clinic-reception="rhr"]')).toContainText('64 bpm');
+      await expect(room.locator('[data-clinic-reception="bp"]')).toContainText('120/80');
+      await expect(room.locator('[data-clinic-reception="sleep"]')).toContainText('7.5 h');
+      await expect(room.locator('[data-clinic-history]')).toHaveCount(0);
+      const motion = await room.locator('app-clinic-room').evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(motion).toBe('0s');
+      const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+    });
+
     test('saves, reopens, and deletes each vital in both units', async ({ page }) => {
       test.setTimeout(240_000);
       const touch = width === 390;

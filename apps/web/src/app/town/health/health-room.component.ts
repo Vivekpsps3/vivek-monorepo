@@ -28,6 +28,16 @@ import {
   projectHealthProgress,
   type GameMedalInput,
 } from './health-progress';
+import { ClinicRoomComponent } from './clinic-room.component';
+import {
+  CLINIC_VITALS,
+  clinicObjectId,
+  clinicUnitLine,
+  clinicVitalNoun,
+  clinicVitalTitle,
+  type ClinicObjectId,
+  type ClinicVitalId,
+} from './clinic-room';
 import { GymFloorComponent } from './gym-floor.component';
 import { gymFloorId, type GymFloorId, type GymGate } from './gym-floor';
 import { GymMezzanineComponent } from './gym-mezzanine.component';
@@ -205,6 +215,7 @@ function isStat(value: HealthStat | HealthPr): value is HealthStat {
 @Component({
   selector: 'app-health-room',
   imports: [
+    ClinicRoomComponent,
     GymFloorComponent,
     GymMezzanineComponent,
     HealthEntryDialogComponent,
@@ -267,6 +278,8 @@ export class HealthRoomComponent implements OnInit {
   protected readonly workoutBusy = signal(false);
   protected readonly floorObject = signal<GymFloorId | null>(null);
   protected readonly upObject = signal<GymUpId | null>(null);
+  protected readonly clinicObject = signal<ClinicObjectId | null>(null);
+  protected readonly vitalStations = CLINIC_VITALS;
   protected readonly wallExercise = signal('');
   protected readonly wallFrom = signal('');
   protected readonly wallTo = signal('');
@@ -318,6 +331,19 @@ export class HealthRoomComponent implements OnInit {
     this.entryId(),
   ));
   protected readonly measurementPages = computed(() => this.clinicPages().filter(page => isVitalKind(page.kind)));
+  protected readonly listedMeasurements = computed(() => {
+    const selected = this.clinicObject();
+    return this.measurementPages().filter(page => page.kind !== selected);
+  });
+  protected readonly selectedVitalId = computed((): ClinicVitalId | null => {
+    const id = this.clinicObject();
+    return id === 'weight' || id === 'rhr' || id === 'bp' || id === 'sleep' ? id : null;
+  });
+  protected readonly selectedVital = computed(() => {
+    const id = this.selectedVitalId();
+    if (!id) return null;
+    return this.measurementPages().find(page => page.kind === id) ?? null;
+  });
   protected readonly labPage = computed(() => this.clinicPages().find(page => page.kind === 'lab') ?? null);
   protected readonly checkupPage = computed(() => this.clinicPages().find(page => page.kind === 'checkup') ?? null);
   protected readonly rows = computed((): HealthListRow[] => {
@@ -448,13 +474,16 @@ export class HealthRoomComponent implements OnInit {
       if (this.phase() === 'ready') this.publish();
     });
     effect(() => {
-      if (this.room() !== 'gym') {
-        this.floorObject.set(null);
-        this.upObject.set(null);
+      const object = this.params().get('object');
+      if (this.room() === 'gym') {
+        this.clinicObject.set(null);
+        this.floorObject.set(gymFloorId(object));
+        this.upObject.set(gymUpId(this.params().get('up')));
         return;
       }
-      this.floorObject.set(gymFloorId(this.params().get('object')));
-      this.upObject.set(gymUpId(this.params().get('up')));
+      this.floorObject.set(null);
+      this.upObject.set(null);
+      this.clinicObject.set(clinicObjectId(object));
     });
     afterRenderEffect(() => {
       const tick = this.wallErrorTick();
@@ -637,6 +666,35 @@ export class HealthRoomComponent implements OnInit {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
+  }
+
+  /** The object id is the durable clinic URL. Zoom stays in this room. */
+  protected selectClinic(id: ClinicObjectId | null): void {
+    if (this.dead || this.room() !== 'clinic') return;
+    this.clinicObject.set(id);
+    if (!this.route.snapshot) return;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { object: id },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  protected vitalPage(kind: ClinicVitalId) {
+    return this.measurementPages().find(page => page.kind === kind) ?? null;
+  }
+
+  protected vitalTitle(kind: ClinicVitalId): string {
+    return clinicVitalTitle(kind);
+  }
+
+  protected vitalNoun(kind: ClinicVitalId): string {
+    return clinicVitalNoun(kind);
+  }
+
+  protected stationUnit(kind: ClinicVitalId): string {
+    return clinicUnitLine(kind, this.units());
   }
 
   /** The upstairs id is the durable `up` query. The floor object stays put. */

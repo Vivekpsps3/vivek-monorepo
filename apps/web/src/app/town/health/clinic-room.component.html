@@ -1,0 +1,46 @@
+<div class="room-layout">
+  <div class="composition">
+    <div #viewport class="viewport" role="group" aria-labelledby="clinic-room-hint"
+      [style.aspect-ratio]="room.width + ' / ' + room.height"
+      (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
+      (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
+      <div class="stage" [style.transform]="cameraTransform()">
+        <div class="scene">
+          <div class="room-art" [class.cutaway]="selected()" aria-hidden="true"></div>
+          @for (frame of frames; track frame.id) {
+            <button type="button" class="piece" tabindex="-1" [class.faded]="isFaded(frame.id)"
+              [attr.data-clinic-object]="frame.id" [attr.aria-label]="frame.label"
+              [attr.aria-current]="selected() === frame.id ? 'true' : null"
+              [style.left.%]="frame.left" [style.top.%]="frame.top"
+              [style.width.%]="frame.width" [style.height.%]="frame.height">
+              <span class="prop" [attr.data-clinic-prop]="frame.id" aria-hidden="true"></span>
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+    <p id="clinic-room-hint" class="scene-hint">Drag to look around. Choose reception or a vital station. Dragging does not open it.</p>
+    <div class="camera-controls" role="group" aria-label="Clinic view">
+      <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
+      <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
+      <button type="button" class="action" (click)="resetView()">Reset view</button>
+    </div>
+    <ul class="clinic-objects" aria-label="Clinic stations">
+      @for (frame of frames; track frame.id) {
+        <li>
+          <button type="button" class="action" [attr.data-clinic-object]="frame.id"
+            [attr.aria-current]="selected() === frame.id ? 'true' : null"
+            (click)="choose(frame.id)">{{ frame.label }}</button>
+        </li>
+      }
+    </ul>
+  </div>
+  <aside class="inspector" [class.sheet]="sheet()" aria-label="Clinic station details">
+    @if (sheet()) {
+      <button type="button" class="action" (click)="choose(null)">Close details</button>
+    }
+    <h2 id="clinic-object-title" tabindex="-1">{{ heading() }}</h2>
+    <p>{{ detail() }}</p>
+    <ng-content />
+  </aside>
+</div>
