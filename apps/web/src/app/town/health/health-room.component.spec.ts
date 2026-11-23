@@ -277,6 +277,12 @@ function upButton(el: HTMLElement, id: string): HTMLButtonElement {
   return found;
 }
 
+function clinicButton(el: HTMLElement, id: string): HTMLButtonElement {
+  const found = el.querySelector(`.clinic-objects [data-clinic-object="${id}"]`);
+  if (!(found instanceof HTMLButtonElement)) throw new Error(`missing clinic ${id}`);
+  return found;
+}
+
 function storageText(): string {
   const parts: string[] = [];
   for (const store of [localStorage, sessionStorage]) {
@@ -3165,6 +3171,7 @@ describe('Health room shell', () => {
     expect(gym.getAttribute('data-health-state')).toBe('locked');
     expect(gym.querySelector('[data-gym-floor="locked"]')).not.toBeNull();
     expect(gym.querySelector('[data-gym-up="locked"]')).not.toBeNull();
+    expect(gym.querySelector('app-clinic-room')).toBeNull();
     expect(gym.querySelector('[data-progress-chart]')).toBeNull();
     expect(gym.querySelector('[data-record-cabinet]')).toBeNull();
     expect(gym.querySelector('#gym-floor-object-title')?.textContent).toContain('Routine desk');
@@ -3184,10 +3191,23 @@ describe('Health room shell', () => {
     clinic.detectChanges();
     await clinic.whenStable();
     clinic.detectChanges();
-    expect(clinic.nativeElement.querySelector('app-gym-floor')).toBeNull();
-    expect(clinic.nativeElement.querySelector('app-gym-mezzanine')).toBeNull();
-    expect(clinic.nativeElement.textContent).not.toContain('Routine desk');
-    expect(clinic.nativeElement.textContent).not.toContain('Progress wall');
+    const clinicEl = clinic.nativeElement as HTMLElement;
+    expect(clinicEl.querySelector('app-gym-floor')).toBeNull();
+    expect(clinicEl.querySelector('app-gym-mezzanine')).toBeNull();
+    expect(clinicEl.querySelector('app-clinic-room')).not.toBeNull();
+    expect(clinicEl.querySelector('[data-clinic-room="locked"]')).not.toBeNull();
+    expect(clinicEl.querySelector('#clinic-object-title')?.textContent).toContain('Clinic');
+    expect(clinicEl.textContent).not.toContain('Routine desk');
+    expect(clinicEl.textContent).not.toContain('Progress wall');
+    expect(visible(clinicEl)).not.toMatch(/\d/);
+    clinicButton(clinicEl, 'sleep').click();
+    clinic.detectChanges();
+    expect(clinicEl.querySelector('#clinic-object-title')?.textContent).toContain('Sleep station');
+    expect(clinicEl.textContent).toContain('Digits stay hidden until Finance is unlocked.');
+    expect(clinicEl.querySelector('[data-clinic-date]')).toBeNull();
+    expect(clinicEl.querySelector('[data-clinic-history]')).toBeNull();
+    expect(visible(clinicEl)).not.toMatch(/\d/);
+    expect(clinicButton(clinicEl, 'weight').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     clinic.destroy();
 
     gate.exists = false;
@@ -3237,6 +3257,235 @@ describe('Health room shell', () => {
     fixture.detectChanges();
     expect(el.querySelector('#gym-floor-object-title')?.textContent).toContain('Routine desk');
     expect(floorButton(el, 'desk').getAttribute('aria-current')).toBe('true');
+  });
+
+  it('corrects each vital from its station and does not rewrite stored bytes when the display unit changes', async () => {
+    unlock();
+    const older = '2026-10-01';
+    const olderId = historyId('W', 0);
+    const rhrId = historyId('R', 1);
+    const bpId = historyId('B', 1);
+    const sleepId = historyId('S', 1);
+    const labId = historyId('L', 1);
+    fake.rows = [
+      row('health_stats', olderId, { v: 1, kind: 'weight', measured_on: older, logged_on: older, kg: 75 }),
+      row('health_stats', WEIGHT_ID, WEIGHT),
+      row('health_stats', rhrId, { v: 1, kind: 'rhr', measured_on: DAY, logged_on: DAY, bpm: 62 }),
+      row('health_stats', bpId, { v: 1, kind: 'bp', measured_on: DAY, logged_on: DAY, sys: 118, dia: 76 }),
+      row('health_stats', sleepId, { v: 1, kind: 'sleep', measured_on: DAY, logged_on: DAY, hours: 7.25 }),
+      row('health_stats', labId, {
+        v: 1, kind: 'lab', measured_on: DAY, logged_on: DAY,
+        lab: { name: 'Omega marker', value: 15, unit: 'u', ref_low: 10, ref_high: 20 },
+      }),
+    ];
+    route.routeData.next({ healthRoom: 'clinic' });
+    route.query.next(convertToParamMap({}));
+    const { fixture, el } = await show();
+    const before = {
+      weight: storedRow(WEIGHT_ID),
+      older: storedRow(olderId),
+      rhr: storedRow(rhrId),
+      bp: storedRow(bpId),
+      sleep: storedRow(sleepId),
+      lab: storedRow(labId),
+    };
+    expect(el.querySelector('#clinic-object-title')?.textContent).toContain('Clinic');
+    expect(el.querySelector('[data-health-series="weight"]')).not.toBeNull();
+
+    clinicButton(el, 'reception').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#clinic-object-title')?.textContent).toContain('Reception');
+    expect(el.querySelector('[data-clinic-reception="weight"]')?.textContent).toContain(`176.4 lb`);
+    expect(el.querySelector('[data-clinic-reception="weight"]')?.textContent).toContain(`Measured on ${DAY}`);
+    expect(el.querySelector('[data-clinic-reception="rhr"]')?.textContent).toContain('62 bpm');
+    expect(el.querySelector('[data-clinic-reception="bp"]')?.textContent).toContain('118/76');
+    expect(el.querySelector('[data-clinic-reception="sleep"]')?.textContent).toContain('7.25 h');
+    expect(storedRow(WEIGHT_ID)).toEqual(before.weight);
+
+    clinicButton(el, 'weight').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#clinic-object-title')?.textContent).toContain('Weight station');
+    expect(el.querySelector('[data-clinic-date="weight"]')?.textContent).toBe(`Measured on ${DAY}`);
+    expect(el.querySelector('[data-clinic-unit="weight"]')?.textContent).toBe('Shown in pounds. Stored in kilograms.');
+    const history = () => el.querySelector('[data-clinic-history="weight"]');
+    expect(history()?.querySelector('[data-health-latest="weight"]')?.textContent).toContain('176.4 lb');
+    expect(history()?.textContent).toContain(displayWeight(75, 'lb'));
+    expect(history()?.textContent).toContain(older);
+    expect(el.querySelector('[data-health-group="health-group-measurements"] [data-health-series="weight"]')).toBeNull();
+    expect(el.querySelector('[data-health-series="rhr"]')).not.toBeNull();
+    expect(el.textContent).toContain('in range');
+    expect(el.textContent).toContain('10 to 20 u');
+
+    const writes = fake.encryptCalls.length;
+    button(el, 'Kilograms').click();
+    fixture.detectChanges();
+    expect(history()?.querySelector('[data-health-latest="weight"]')?.textContent).toContain('80.0 kg');
+    expect(history()?.textContent).toContain('75.0 kg');
+    expect(el.querySelector('[data-clinic-unit="weight"]')?.textContent).toBe('Shown in kilograms. Stored in kilograms.');
+    expect(el.querySelector('[data-clinic-date="weight"]')?.textContent).toBe(`Measured on ${DAY}`);
+    expect(storedRow(WEIGHT_ID)).toEqual(before.weight);
+    expect(storedRow(olderId)).toEqual(before.older);
+    expect(storedRow(rhrId)).toEqual(before.rhr);
+    expect(storedRow(bpId)).toEqual(before.bp);
+    expect(storedRow(sleepId)).toEqual(before.sleep);
+    expect(storedRow(labId)).toEqual(before.lab);
+    expect(fake.encryptCalls.length).toBe(writes);
+    expect((decode(before.weight.ciphertext) as { kg: number }).kg).toBe(80);
+
+    const weightEdit = history()?.querySelector<HTMLButtonElement>(`#health-edit-${WEIGHT_ID} button`);
+    if (!weightEdit) throw new Error('missing weight edit');
+    weightEdit.click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Edit weight');
+    typeInto(el, '#health-weight', '70');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(history()?.querySelector('[data-health-latest="weight"]')?.textContent).toContain(`Weight · 70.0 kg · ${DAY}`);
+    expect(storedRow(WEIGHT_ID).revision).toBe(2);
+    expect((decode(storedRow(WEIGHT_ID).ciphertext) as { kg: number }).kg).toBe(70);
+    expect(storedRow(olderId)).toEqual(before.older);
+    expect(storedRow(rhrId)).toEqual(before.rhr);
+
+    clinicButton(el, 'rhr').click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-clinic-unit="rhr"]')?.textContent).toBe('Shown in beats per minute.');
+    expect(el.querySelector('[data-clinic-date="rhr"]')?.textContent).toBe(`Measured on ${DAY}`);
+    expect(el.querySelector('[data-clinic-history="rhr"]')?.textContent).toContain('62 bpm');
+    const heartEdit = el.querySelector<HTMLButtonElement>(`#health-edit-${rhrId} button`);
+    if (!heartEdit) throw new Error('missing heart edit');
+    heartEdit.click();
+    fixture.detectChanges();
+    typeInto(el, '#health-bpm', '64');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-clinic-history="rhr"]')?.textContent).toContain(`Resting heart rate · 64 bpm · ${DAY}`);
+    expect(el.querySelector('[data-clinic-history="rhr"]')?.textContent).not.toContain('62 bpm');
+    expect(storedRow(rhrId).revision).toBe(2);
+    expect((decode(storedRow(rhrId).ciphertext) as { bpm: number }).bpm).toBe(64);
+    expect(storedRow(WEIGHT_ID).revision).toBe(2);
+    expect((decode(storedRow(WEIGHT_ID).ciphertext) as { kg: number }).kg).toBe(70);
+
+    clinicButton(el, 'bp').click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-clinic-unit="bp"]')?.textContent).toContain('millimetres of mercury');
+    expect(el.querySelector('[data-clinic-history="bp"]')?.textContent).toContain('118/76');
+    const pressureEdit = el.querySelector<HTMLButtonElement>(`#health-edit-${bpId} button`);
+    if (!pressureEdit) throw new Error('missing pressure edit');
+    pressureEdit.click();
+    fixture.detectChanges();
+    typeInto(el, '#health-systolic', '120');
+    typeInto(el, '#health-diastolic', '80');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-clinic-history="bp"]')?.textContent).toContain(`Blood pressure · 120/80 · ${DAY}`);
+    expect(storedRow(bpId).revision).toBe(2);
+    expect(storedRow(sleepId)).toEqual(before.sleep);
+    expect(storedRow(labId)).toEqual(before.lab);
+
+    clinicButton(el, 'sleep').click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-clinic-unit="sleep"]')?.textContent).toBe('Shown in hours.');
+    expect(el.querySelector('[data-clinic-history="sleep"]')?.textContent).toContain('7.25 h');
+    const sleepEdit = el.querySelector<HTMLButtonElement>(`#health-edit-${sleepId} button`);
+    if (!sleepEdit) throw new Error('missing sleep edit');
+    sleepEdit.click();
+    fixture.detectChanges();
+    typeInto(el, '#health-sleep', '7.5');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-clinic-history="sleep"]')?.textContent).toContain(`Sleep · 7.5 h · ${DAY}`);
+    expect(storedRow(sleepId).revision).toBe(2);
+    expect((decode(storedRow(sleepId).ciphertext) as { hours: number }).hours).toBe(7.5);
+    expect((decode(storedRow(WEIGHT_ID).ciphertext) as { kg: number }).kg).toBe(70);
+    expect(storedRow(olderId)).toEqual(before.older);
+    expect(storedRow(labId)).toEqual(before.lab);
+    expect(el.textContent).toContain('in range');
+
+    clinicButton(el, 'reception').click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-clinic-history]')).toBeNull();
+    expect(el.querySelector('[data-clinic-reception="weight"]')?.textContent).toContain('70.0 kg');
+    expect(el.querySelector('[data-clinic-reception="rhr"]')?.textContent).toContain('64 bpm');
+    expect(el.querySelector('[data-clinic-reception="bp"]')?.textContent).toContain('120/80');
+    expect(el.querySelector('[data-clinic-reception="sleep"]')?.textContent).toContain('7.5 h');
+    expect(el.querySelector('[data-health-series="weight"]')).not.toBeNull();
+  });
+
+  it('opens the measurement editor from an empty station and drops a late correction', async () => {
+    unlock();
+    seed();
+    route.routeData.next({ healthRoom: 'clinic' });
+    route.query.next(convertToParamMap({ object: 'sleep' }));
+    const { fixture, el } = await show();
+    expect(el.querySelector('#clinic-object-title')?.textContent).toContain('Sleep station');
+    expect(el.querySelector('[data-clinic-empty="sleep"]')?.textContent).toContain('No sleep yet.');
+    expect(el.querySelector('[data-clinic-unit="sleep"]')?.textContent).toContain('Shown in hours.');
+    const record = el.querySelector<HTMLButtonElement>('#health-station-record-sleep button');
+    if (!record) throw new Error('missing record sleep');
+    expect(record.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    record.click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Add sleep');
+    typeInto(el, '#health-measured-on', localTodayIso());
+    typeInto(el, '#health-sleep', '7.25');
+    fixture.detectChanges();
+    fake.failUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#health-sleep')?.value).toBe('7.25');
+    expect(el.textContent).toContain('Could not save this entry. Try again.');
+    expect(el.querySelector('#clinic-object-title')?.textContent).toContain('Sleep station');
+    fake.failUpsert = false;
+    button(el, 'Cancel').click();
+    fixture.detectChanges();
+
+    clinicButton(el, 'weight').click();
+    fixture.detectChanges();
+    const edit = el.querySelector<HTMLButtonElement>(`#health-edit-${WEIGHT_ID} button`);
+    if (!edit) throw new Error('missing weight edit');
+    edit.click();
+    fixture.detectChanges();
+    typeInto(el, '#health-weight', '150');
+    fixture.detectChanges();
+    fake.holdUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await until(() => fake.upsertRelease.length === 1);
+    const store = TestBed.inject(HealthStoreService);
+    fake.holdList = true;
+    fake.rows = [row('health_stats', historyId('R', 2), { v: 1, kind: 'rhr', measured_on: DAY, logged_on: DAY, bpm: 55 })];
+    session.users.next({ id: 8 });
+    fixture.detectChanges();
+    await until(() => el.getAttribute('data-health-state') === 'loading');
+    expect(visible(el)).not.toContain('150');
+    expect(visible(el)).not.toContain('176.4');
+    expect(visible(el)).not.toContain(DAY);
+    expect(el.querySelector('[data-clinic-history]')).toBeNull();
+    expect(el.querySelector('#health-weight')).toBeNull();
+    fake.upsertRelease.shift()?.();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(store.statsSnapshot.some(item => item.value.kind === 'weight' && item.value.kg === lbToKg(150))).toBeFalse();
+    fake.listRelease.splice(0).forEach(release => release());
+    await settle(fixture);
+    expect(el.getAttribute('data-health-state')).toBe('ready');
+    expect(visible(el)).not.toContain('150');
+    expect(visible(el)).not.toContain('176.4');
+    expect(el.querySelector('#health-weight')).toBeNull();
   });
 });
 
