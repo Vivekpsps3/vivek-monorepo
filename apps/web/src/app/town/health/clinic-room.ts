@@ -8,8 +8,8 @@ import {
 } from '../library-room.scene';
 import type { HealthUnits } from './health-entry';
 
-/** Reception plus the four vital stations. Labs and checkups stay on the room list. */
-export const CLINIC_OBJECT_IDS = ['reception', 'weight', 'rhr', 'bp', 'sleep'] as const;
+/** Reception, vital stations, lab folders, and the checkup book. */
+export const CLINIC_OBJECT_IDS = ['reception', 'weight', 'rhr', 'bp', 'sleep', 'labs', 'checkups'] as const;
 export type ClinicObjectId = (typeof CLINIC_OBJECT_IDS)[number];
 export const CLINIC_VITALS = ['weight', 'rhr', 'bp', 'sleep'] as const;
 export type ClinicVitalId = (typeof CLINIC_VITALS)[number];
@@ -51,6 +51,7 @@ function piece(
 /**
  * Reception sits back. Weight overlaps it, heart rate overlaps weight,
  * blood pressure overlaps weight, and sleep overlaps blood pressure.
+ * The lab folders and checkup book sit clear of those stations.
  */
 export const CLINIC_PIECES: readonly ClinicPiece[] = [
   piece('reception', 1, 24, 20, 280, 140, 'Reception'),
@@ -58,16 +59,20 @@ export const CLINIC_PIECES: readonly ClinicPiece[] = [
   piece('rhr', 3, 360, 40, 200, 120, 'Heart rate station'),
   piece('bp', 4, 40, 180, 240, 130, 'Blood pressure station'),
   piece('sleep', 5, 240, 200, 260, 120, 'Sleep station'),
+  piece('labs', 6, 508, 168, 120, 100, 'Lab folders'),
+  piece('checkups', 7, 508, 276, 120, 72, 'Checkup book'),
 ];
 
 const DETAILS: Record<ClinicGate, Record<ClinicObjectId | 'room', string>> = {
   locked: {
-    room: 'Choose reception or a vital station. Unlock to see a measurement.',
+    room: 'Choose reception, a vital station, the lab folders, or the checkup book. Digits stay hidden until Finance is unlocked.',
     reception: 'Reception keeps the stations. Digits stay hidden until Finance is unlocked.',
     weight: 'The weight station shows the latest reading and its history. Digits stay hidden until Finance is unlocked.',
     rhr: 'The heart rate station shows the latest reading and its history. Digits stay hidden until Finance is unlocked.',
     bp: 'The blood pressure station shows the latest reading and its history. Digits stay hidden until Finance is unlocked.',
     sleep: 'The sleep station shows the latest reading and its history. Digits stay hidden until Finance is unlocked.',
+    labs: 'The lab folders keep each result with its date and unit. Digits stay hidden until Finance is unlocked.',
+    checkups: 'The checkup book keeps each visit with its date. Digits stay hidden until Finance is unlocked.',
   },
   setup: {
     room: 'Set up Finance before this clinic can open.',
@@ -76,6 +81,8 @@ const DETAILS: Record<ClinicGate, Record<ClinicObjectId | 'room', string>> = {
     rhr: 'The heart rate station is here. Set up Finance to record a heart rate.',
     bp: 'The blood pressure station is here. Set up Finance to record a blood pressure.',
     sleep: 'The sleep station is here. Set up Finance to record sleep.',
+    labs: 'The lab folders are here. Set up Finance to record a result.',
+    checkups: 'The checkup book is here. Set up Finance to record a visit.',
   },
   unavailable: {
     room: 'This clinic is here, and measurements are unavailable right now.',
@@ -84,14 +91,18 @@ const DETAILS: Record<ClinicGate, Record<ClinicObjectId | 'room', string>> = {
     rhr: 'The heart rate station is here. Measurements are unavailable right now.',
     bp: 'The blood pressure station is here. Measurements are unavailable right now.',
     sleep: 'The sleep station is here. Measurements are unavailable right now.',
+    labs: 'The lab folders are here. Results are unavailable right now.',
+    checkups: 'The checkup book is here. Visits are unavailable right now.',
   },
   ready: {
-    room: 'Reception and the vital stations open the same measurement editor.',
+    room: 'Reception, the vital stations, the lab folders, and the checkup book open the same records.',
     reception: 'Choose a station to see the latest reading, its date, and the history.',
     weight: 'The latest weight, its date, and the history are here. Correcting a reading uses the measurement editor.',
     rhr: 'The latest heart rate, its date, and the history are here. Correcting a reading uses the measurement editor.',
     bp: 'The latest blood pressure, its date, and the history are here. Correcting a reading uses the measurement editor.',
     sleep: 'The latest sleep, its date, and the history are here. Correcting a reading uses the measurement editor.',
+    labs: 'Open a folder to see each result with its value, unit, date, and range.',
+    checkups: 'The checkup book lists each visit with its measured date, including an older visit.',
   },
 };
 
