@@ -49,7 +49,7 @@ Commands ran in `/tmp/vivek-room-03`. `make test-fast` and `make e2e` used `PATH
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded when the pull request is opened. The body is only the leaf closure line for #453.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/603. The body is only `Closes #453`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: none. The job editor now marks itself for check when the study opens or closes it, matching the bill and subscription editors.
