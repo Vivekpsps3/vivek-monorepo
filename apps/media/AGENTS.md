@@ -14,7 +14,7 @@ notes, ratings, progress and Undo across owners. A film date is a recorded watch
 Album and song saves group by canonical artist id, without a follow, a copied rating, or a discography import. The Music bar is an artist wall, album racks, and a songbook; loose songs stay outside an unsaved album. Harbor Rhythm and an external link play no audio.
 Compilations, featured credits, unknown credits, and similar names stay distinct.
 A group read is this user's saved rows only.
-Games are a Media cabinet, not a Town minigame, and one update does not rewrite another.
+Arcade cabinets plus Memory Shelves and Harbor Rhythm. A tracked box opens Media detail. Unopened means no recorded start. Play writes no row. One update does not rewrite another.
 
 Reuse the shared pacing and client helpers. Do not add a provider plugin
 framework or merge transport and cache semantics. TMDB movie and series detail share
@@ -23,9 +23,7 @@ network, lifecycle, and episode fields stay in their adapters. API payloads with
 similar fields can represent different privacy/identity contracts; prove
 equivalence before combining serializers.
 
-[membership.py](backend/services/membership.py) contains migration SQL imported by
-applied revisions. It is not an orphan; preserve historical migration
-behavior and its imports when cleaning records code.
+[membership.py](backend/services/membership.py) holds migration SQL imported by applied revisions. Preserve that SQL and its imports.
 
 Use [MEDIA](../../docs/MEDIA.md) for affected behavior and root gates for changed
 frontend/backend/screens. Provider tests use offline fixtures; add request-count,

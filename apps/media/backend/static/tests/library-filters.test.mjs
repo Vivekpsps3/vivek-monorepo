@@ -166,6 +166,8 @@ test("an impossible status is a visible normalization, not a silent empty read",
   assert.match(emptyLibraryCopy("tv", false).message, /Caught up/);
   assert.match(collectionSummary("movie"), /^Movies\. Films you want to watch/);
   assert.match(collectionSummary("game"), /This cabinet is your Media library, not a Town minigame/);
+  assert.match(collectionSummary("game"), /Memory Shelves and Harbor Rhythm are play tables/);
+  assert.match(emptyLibraryCopy("game", false).message, /Memory Shelves and Harbor Rhythm stay available/);
   assert.equal(emptyLibraryCopy("game", false).title, "No games saved yet");
   assert.match(emptyLibraryCopy("game", false).message, /missing box image/);
   assert.match(collectionSummary("tv"), /^Series\. Shows and the episodes/);

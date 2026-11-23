@@ -40,6 +40,15 @@ export function gameProgressWords(card) {
   return label ? `${label} recorded` : "Progress not recorded";
 }
 
+/** Want or anticipating, with no recorded progress. A server flag wins when present. */
+export function unopenedCabinet(card) {
+  if (!card || card.kind !== "game") return false;
+  if (typeof card.unopened === "boolean") return card.unopened;
+  const value = card.progress_value;
+  if (typeof value === "number" && Number.isFinite(value)) return false;
+  return card.status === "want" || card.status === "anticipating";
+}
+
 /** Playing, Want to play, and Played stay visible. Other states appear only when a game is there. */
 export function visibleBays(items, status) {
   const games = Array.isArray(items) ? items.filter(Boolean) : [];
