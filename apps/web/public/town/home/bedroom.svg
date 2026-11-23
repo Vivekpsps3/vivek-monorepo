@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="288" height="360" viewBox="0 0 288 360">
+  <style>
+    :root { color-scheme: light dark; --sky:#f4efe2; --wall:#e7d3ac; --shade:#c4a57c; --floor:#a88878; --grid:#8d6848; --trim:#f3e2bc; --roof:#8aa4b5; --accent:#34506a; }
+    @media (prefers-color-scheme: dark) {
+      :root { --sky:#1a2b3d; --wall:#6d6454; --shade:#463f3c; --floor:#5c4636; --grid:#d0a45a; --trim:#b89a68; --roof:#243646; --accent:#34506a; }
+    }
+  </style>
+  <rect width="288" height="360" fill="var(--sky)"/>
+  <rect width="288" height="28" fill="var(--roof)"/>
+  <rect y="28" width="288" height="36" fill="var(--wall)"/>
+  <rect x="36" y="34" width="70" height="26" fill="var(--accent)" opacity="0.75"/>
+  <rect y="64" width="288" height="8" fill="var(--trim)"/>
+  <rect y="24" width="14" height="336" fill="var(--shade)"/>
+  <rect x="274" y="24" width="14" height="336" fill="var(--shade)"/>
+  <rect y="72" width="288" height="288" fill="var(--floor)"/>
+  <pattern id="cells" width="24" height="24" patternUnits="userSpaceOnUse" x="0" y="72">
+    <path d="M24 0H0V24" fill="none" stroke="var(--grid)" stroke-width="1"/>
+  </pattern>
+  <rect y="72" width="288" height="288" fill="url(#cells)"/>
+  <rect x="120" y="312" width="48" height="48" fill="var(--sky)" opacity="0.35"/>
+</svg>

@@ -52,6 +52,11 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/finance/planning/projection': {},
   '/finance/planning/research': {},
   '/town': {},
+  '/town/home': {},
+  '/town/home/living': { object: ['living-rug', 'living-table', 'living-seat', 'living-lantern', 'living-frame'] },
+  '/town/home/study': { object: ['study-desk', 'study-lamp', 'study-shelf'] },
+  '/town/home/bedroom': { object: ['bedroom-bed', 'bedroom-record', 'bedroom-frame'] },
+  '/town/home/courtyard': { object: ['courtyard-planter', 'courtyard-fern', 'courtyard-seat', 'courtyard-lantern'] },
   '/town/library': {},
   '/town/hall': { object: ['rules', 'progress', 'archive'] },
   '/town/cosmetics': {

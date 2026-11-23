@@ -49,6 +49,8 @@ describe('return context', () => {
     expect(returnPath('/town/clinic?entry=hlt_short&kg=80')).toBe('/town/clinic');
     expect(returnPath('/town/clinic?entry=hlt_SyntheticWeightEntryAB&entry=hlt_SyntheticLiftEntryABCD')).toBe('/town/clinic');
     expect(returnPath('/town/gym?entry=80&weight=176.4')).toBe('/town/gym');
+    expect(returnPath('/town/home/living?object=living-frame&note=secret&scale=1.5')).toBe('/town/home/living?object=living-frame');
+    expect(returnPath('/town/home/study?object=living-frame')).toBe('/town/home/study');
     expect(returnPath('/town/hall?object=rules&edit=15&history=15&balance=10')).toBe('/town/hall?object=rules');
     expect(returnPath('/town/hall?object=treasury&weeks=8')).toBe('/town/hall');
     expect(returnPath('/town/cosmetics?item=oak-seat&part=dusk&note=private')).toBe('/town/cosmetics?item=oak-seat');
