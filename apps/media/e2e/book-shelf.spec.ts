@@ -359,7 +359,8 @@ test('a late shelf move does not rewrite the movie shelf, and sign-out clears th
   expect((await savedItem(request, waiting.id)).status).toBe('want');
 
   await page.goto('/media/library?kind=tv&sort=title');
-  await expect(page.locator('.media-card--poster')).toHaveCount(1);
+  await expect(page.locator('.media-card--poster')).toHaveCount(0);
+  await expect(page.locator('media-episode-lounge')).toBeVisible();
   await expect(page.getByRole('button', { name: /Watched S1E1/ })).toBeVisible();
   await expect(page.getByText('Ongoing', { exact: true })).toBeVisible();
 

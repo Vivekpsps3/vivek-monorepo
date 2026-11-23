@@ -286,7 +286,7 @@ test('series shelf next episode and detail back still return to the collection',
   await theme(page, 'light');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/media/library?kind=tv&sort=title');
-  const card = page.locator('media-card').filter({ hasText: 'Harbor Signal' });
+  const card = page.locator('.lounge-row').filter({ hasText: 'Harbor Signal' });
   const next = card.getByRole('button', { name: /Watched S1E1/ });
   await expect(next).toBeVisible();
   await card.getByRole('link', { name: 'Harbor Signal', exact: true }).click();

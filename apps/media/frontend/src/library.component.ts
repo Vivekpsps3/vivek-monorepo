@@ -20,16 +20,15 @@ import {
   Subscription,
   tap,
 } from "rxjs";
-import { formatDay } from "@vivek/browser";
 import { BookShelfComponent } from "./book-shelf.component";
+import { EpisodeLoungeComponent } from "./episode-lounge.component";
 import { GameCabinetComponent } from "./game-cabinet.component";
 import { TheaterComponent } from "./theater.component";
 import { noteExcerpt } from "./books.mjs";
 import { MediaCardComponent } from "./media-card.component";
-import { NextEpisodeButtonComponent } from "./next-episode-button.component";
 import { NextResult } from "./next-episode.service";
 import { NextEpisodeUndoService } from "./next-episode-undo.service";
-import { continuationFromShow, seriesShelf, showContinuation } from "./theater.mjs";
+import { continuationFromShow } from "./theater.mjs";
 import {
   ReturnContext,
   SESSION_CONTEXT,
@@ -75,10 +74,10 @@ const LIBRARY = "/media/library";
     FormsModule,
     RouterLink,
     BookShelfComponent,
+    EpisodeLoungeComponent,
     GameCabinetComponent,
     TheaterComponent,
     MediaCardComponent,
-    NextEpisodeButtonComponent,
     UiButtonComponent,
     UiDialogComponent,
     UiFieldComponent,
@@ -426,32 +425,25 @@ const LIBRARY = "/media/library";
           (saved)="onFilmSaved($event)"
           (clearFilters)="clearAllFilters()"
         />
+      } @else if (collection === "tv") {
+        <media-episode-lounge
+          [items]="library.items"
+          [linkState]="source()"
+          [emptyTitle]="emptyTitle"
+          [emptyMessage]="emptyMessage"
+          [filtered]="filtered"
+          (advanced)="onShelfDone($event.result, $event.entryId)"
+          (failed)="onShelfFailed($event)"
+          (clearFilters)="clearAllFilters()"
+        />
       } @else {
       <div
         class="media-grid"
-        [class.theater-shelf]="shelfLayout() === 'poster'"
         [attr.aria-busy]="refreshing()"
       >
         @for (item of library.items; track item.id) {
           <section>
-            <media-card [item]="item" [source]="source()" [layout]="shelfLayout()">
-              @if (showShelfAction(item)) {
-                <div mediaCardActions class="theater-actions">
-                  @if (airLine(item); as air) {
-                    <p class="poster-air">{{ air }}</p>
-                  }
-                  <media-next-episode
-                    [entryId]="item.id"
-                    [episodeId]="shelfEpisodeId(item)"
-                    [season]="item.continuation?.season ?? 0"
-                    [episode]="item.continuation?.episode ?? 0"
-                    [showTitle]="item.title"
-                    (done)="onShelfDone($event, item.id)"
-                    (failed)="onShelfFailed($event)"
-                  />
-                </div>
-              }
-            </media-card>
+            <media-card [item]="item" [source]="source()" />
             @if (item.kind === "artist") {
               <ui-button
                 variant="ghost"
@@ -743,9 +735,6 @@ export class LibraryComponent {
   artistGroupParams(group: ArtistGroupSummary) {
     return { ...collectionQuery(this.currentFilters(), "artist"), group: group.catalog_id };
   }
-  shelfLayout(): "poster" | "row" {
-    return this.collection === "tv" ? "poster" : "row";
-  }
   onFilmSaved(detail: Detail): void {
     if (
       !this.active ||
@@ -772,27 +761,6 @@ export class LibraryComponent {
           : item,
       ),
     });
-  }
-  showShelfAction(item: MediaCard): boolean {
-    if (this.collection !== "tv" || item.kind !== "tv") return false;
-    const shelf = seriesShelf(item);
-    if (shelf.progress === "next" || shelf.progress === "upcoming") return true;
-    return (
-      shelf.progress === "caught-up" &&
-      shelf.lifecycle !== "ended" &&
-      shelf.lifecycle !== "canceled"
-    );
-  }
-  shelfEpisodeId(item: MediaCard): number | null {
-    const row = showContinuation(item);
-    return row && row.state === "next" ? row.episode_id : null;
-  }
-  airLine(item: MediaCard): string {
-    const row = showContinuation(item);
-    if (!row || row.state !== "upcoming") return "";
-    if (!row.air_date) return "Air date not announced";
-    const day = formatDay(row.air_date);
-    return day ? `Airs ${day}` : "Air date not announced";
   }
   onShelfDone(result: NextResult & { entry?: Detail }, entryId: number): void {
     if (!this.shelfCurrent()) return;
