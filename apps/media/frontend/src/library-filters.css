@@ -39,7 +39,6 @@
 }
 
 .music-views,
-.book-signs,
 .game-bays {
   display: flex;
   flex-wrap: wrap;
@@ -48,7 +47,6 @@
 }
 
 .music-views a,
-.book-signs a,
 .game-bays a {
   display: inline-flex;
   align-items: center;
@@ -66,14 +64,12 @@
 }
 
 .music-views a[aria-current="page"],
-.book-signs a[aria-current="page"],
 .game-bays a[aria-current="page"] {
   border-color: var(--data-edge);
   box-shadow: inset 0 -3px 0 var(--data-edge);
 }
 
 .music-views a:focus-visible,
-.book-signs a:focus-visible,
 .game-bays a:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;

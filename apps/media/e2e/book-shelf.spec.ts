@@ -191,6 +191,10 @@ for (const [width, height, theme, pointer] of [
       await expect(glass.getByText('p. 40', { exact: true })).toBeVisible();
       await expect(glass.getByText('A synthetic margin about the glass house.', { exact: false })).toBeVisible();
       await expect(glass.locator('img')).toBeVisible();
+      await expect(glass.locator('.spine-title')).toHaveText('Glass House');
+      await expect(page.getByRole('heading', { name: 'Reading hall', exact: true })).toBeVisible();
+      await expect(page.getByRole('navigation', { name: 'Shelf signs' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Reading desk', exact: true })).toBeVisible();
 
       const text = page.getByRole('link', { name: 'Text', exact: true });
       await expectTarget(text);
@@ -230,6 +234,12 @@ for (const [width, height, theme, pointer] of [
       expect(stored.progress_unit).toBe('page');
       expect(stored.review).toBe('A revised synthetic note.');
       expect(stored.completed_on).toBeUndefined();
+
+      const undo = page.getByRole('button', { name: 'Undo completion for Quiet Index' });
+      await expectTarget(undo);
+      const keepsake = page.locator('[data-keepsake]').filter({ has: page.getByRole('heading', { name: 'Quiet Index', exact: true }) });
+      await expect(keepsake).toContainText('Completed book on');
+      await expect(keepsake).toContainText('A watched episode is a separate record and is not this keepsake.');
 
       const scan = await new AxeBuilder({ page }).include('main').analyze();
       expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
@@ -405,4 +415,189 @@ test('an empty reading shelf says so, and all items stay rows', async ({ page, r
   await expect(page.locator('.media-card--poster')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Missing Cover Tale', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Paper Lantern', exact: true })).toBeVisible();
+});
+
+test('opening the read shelf, updating progress, and returning keeps that book', async ({ page, request }) => {
+  test.setTimeout(90_000);
+  await installCovers(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const atlas = await addItem(request, {
+    kind: 'book',
+    title: 'Paper Atlas',
+    status: 'completed',
+    progress_value: 12,
+    progress_unit: 'page',
+    review: 'A synthetic note that stays.',
+  });
+  await page.goto('/media/library?kind=book&sort=title');
+  const read = page.getByRole('link', { name: 'Read', exact: true });
+  await read.focus();
+  await read.press('Enter');
+  await expect(page).toHaveURL(/status=completed/);
+  await expect(page.getByRole('heading', { name: 'Current', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'To read', exact: true })).toHaveCount(0);
+  const link = volume(page, 'Paper Atlas').getByRole('link', { name: 'Paper Atlas', exact: true });
+  await link.scrollIntoViewIfNeeded();
+  const top = await page.evaluate(() => window.scrollY);
+  await link.click();
+  await expect(page).toHaveURL(/\/media\/item\//);
+  await expect(page.getByRole('heading', { level: 1, name: 'Paper Atlas', exact: true })).toBeVisible();
+  await page.getByLabel('Progress', { exact: true }).fill('18');
+  await page.getByLabel('Note (optional)').fill('Returned to the same shelf.');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByText('Changes saved.', { exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/kind=book/);
+  await expect(page).toHaveURL(/status=completed/);
+  await expect(page).toHaveURL(/sort=title/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(top - 80);
+  await expect(volume(page, 'Paper Atlas')).toBeVisible();
+  await expect(page.getByText('p. 18', { exact: true })).toBeVisible();
+  await expect(page.getByText('Returned to the same shelf.', { exact: false })).toBeVisible();
+  const stored = await savedItem(request, atlas.id);
+  expect(stored.progress_value).toBe(18);
+  expect(stored.review).toBe('Returned to the same shelf.');
+  expect(stored.status).toBe('completed');
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/media/library?kind=book&sort=title&status=completed');
+  await link.scrollIntoViewIfNeeded();
+  const wide = await page.evaluate(() => window.scrollY);
+  await link.click();
+  await expect(page).toHaveURL(/\/media\/item\//);
+  await page.goBack();
+  await expect(page).toHaveURL(/status=completed/);
+  await expect(volume(page, 'Paper Atlas')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(wide - 80);
+});
+
+test('undoing completion retracts the derived keepsake and keeps the book and note', async ({ page, request }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const atlas = await addItem(request, {
+    kind: 'book',
+    title: 'Paper Atlas',
+    status: 'completed',
+    progress_value: 12,
+    progress_unit: 'page',
+    review: 'A synthetic note that stays.',
+  });
+  await addItem(request, { kind: 'movie', title: 'Velvet Screening', status: 'completed' });
+  await page.goto('/media/library?kind=book&sort=title');
+  const keepsake = page.locator('[data-keepsake]').filter({ has: page.getByRole('heading', { name: 'Paper Atlas', exact: true }) });
+  await expect(keepsake).toBeVisible();
+  await expect(keepsake).toContainText('Completed book on');
+  await expect(keepsake).not.toContainText('A synthetic note that stays.');
+  await expect(volume(page, 'Paper Atlas')).toContainText('A synthetic note that stays.');
+  await expect(page.locator('[data-keepsake]').filter({ hasText: 'Velvet Screening' })).toHaveCount(0);
+  const undo = page.getByRole('button', { name: 'Undo completion for Paper Atlas' });
+  await undo.focus();
+  await undo.press('Enter');
+  await expect(page.getByText('Completion undone. The book and note stay saved.', { exact: true })).toBeVisible();
+  await expect(page.locator('[data-keepsake]').filter({ hasText: 'Paper Atlas' })).toHaveCount(0);
+  await expect(volume(page, 'Paper Atlas')).toContainText('A synthetic note that stays.');
+  await expect(volume(page, 'Paper Atlas')).toContainText('p. 12');
+  const stored = await savedItem(request, atlas.id);
+  expect(stored.status).toBe('in_progress');
+  expect(stored.review).toBe('A synthetic note that stays.');
+  expect(stored.progress_value).toBe(12);
+  expect(stored.completed_on).toBeUndefined();
+  const projected = await request.get('/api/town/keepsakes?tz=UTC');
+  expect(projected.ok()).toBeTruthy();
+  const body = await projected.json();
+  expect(body.keepsakes.some((item: { title: string }) => item.title === 'Paper Atlas')).toBe(false);
+  expect(body.keepsakes.some((item: { title: string }) => item.title === 'Velvet Screening')).toBe(true);
+});
+
+test('a late keepsake response and a failed undo leave the book and note', async ({ page, request }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const atlas = await addItem(request, {
+    kind: 'book',
+    title: 'Paper Atlas',
+    status: 'completed',
+    review: 'A synthetic note that stays.',
+  });
+  await addItem(request, { kind: 'movie', title: 'Paper Lantern', status: 'completed' });
+  const started = deferred();
+  const release = deferred();
+  await page.route('**/api/town/keepsakes**', async route => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    started.resolve();
+    await release.promise;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        on: null,
+        cap: 50,
+        media: { status: 'ok', included: 1, total: 1, truncated: false },
+        travel: {
+          status: 'ok',
+          souvenirs: { status: 'ok', included: 0, total: 0, truncated: false },
+          planned: { status: 'ok', included: 0, total: 0, truncated: false },
+          ineligible: { status: 'ok', included: 0, total: 0, truncated: false },
+        },
+        keepsakes: [{
+          id: 'finished:1:2026-11-23',
+          entry_id: atlas.id,
+          kind: 'book',
+          title: 'Late Atlas',
+          on: '2026-11-23',
+          route: `/media/item/${atlas.id}`,
+          note: 'Completed book on 2026-11-23.',
+          date_source: 'completed_on',
+        }],
+        souvenirs: [],
+        planned: [],
+        ineligible: [],
+        differences: [],
+      }),
+    });
+  });
+  await page.goto('/media/library?kind=book&sort=title');
+  await started.promise;
+  await page.goto('/media/library?kind=movie&sort=title');
+  release.resolve();
+  await expect(page.locator('.theater-poster')).toHaveCount(1);
+  await expect(page.locator('[data-keepsake]')).toHaveCount(0);
+  await expect(page.getByText('Late Atlas')).toHaveCount(0);
+  await page.unroute('**/api/town/keepsakes**');
+  expect((await savedItem(request, atlas.id)).review).toBe('A synthetic note that stays.');
+  expect((await savedItem(request, atlas.id)).status).toBe('completed');
+
+  await page.goto('/media/library?kind=book&sort=title&face=text');
+  const book = volume(page, 'Paper Atlas');
+  await book.getByRole('button', { name: 'Update progress for Paper Atlas' }).click();
+  const note = page.getByRole('textbox', { name: 'Note for Paper Atlas' });
+  await note.fill('Keep this through the failed undo.');
+  await page.route('**/media/api/entries/*', async route => {
+    if (route.request().method() === 'PATCH') {
+      await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ detail: 'Bad gateway' }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.getByRole('button', { name: 'Undo completion for Paper Atlas' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Bad gateway' })).toBeVisible();
+  await expect(note).toHaveValue('Keep this through the failed undo.');
+  await expect(page.locator('[data-keepsake]').filter({ hasText: 'Paper Atlas' })).toHaveCount(1);
+  const stored = await savedItem(request, atlas.id);
+  expect(stored.status).toBe('completed');
+  expect(stored.review).toBe('A synthetic note that stays.');
+  await page.unroute('**/media/api/entries/*');
+
+  const ended = await page.request.post('/api/auth/logout', {
+    headers: { 'X-CSRF-Token': 'synthetic-csrf', Origin: new URL(page.url()).origin },
+  });
+  expect(ended.ok(), await ended.text()).toBeTruthy();
+  await page.route('**/media/api/entries/' + atlas.id, route =>
+    route.fulfill({ status: 401, json: { detail: 'Session expired' } }),
+  );
+  await page.getByRole('button', { name: 'Save progress', exact: true }).click();
+  await expect(page).toHaveURL(/\/auth\/login/);
+  expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('media-item-draft:')))).toEqual([]);
 });

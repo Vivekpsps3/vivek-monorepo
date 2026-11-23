@@ -46,3 +46,27 @@ export function visibleShelves(
   items: BookCard[] | null | undefined,
   status?: string,
 ): BookShelfView[];
+
+export interface BookKeepsake {
+  id: string;
+  entryId: number;
+  title: string;
+  on: string;
+  note: string;
+  dateSource: "completed_on" | "finished_on";
+  route: string;
+}
+
+export interface BookKeepsakeView {
+  status: "ok" | "absent" | "unavailable" | "loading";
+  books: BookKeepsake[];
+  included: number;
+  total: number;
+  truncated: boolean;
+  cap: number;
+  episode: string;
+}
+
+export function bookKeepsakes(body: unknown): BookKeepsakeView;
+
+export function emptyBookKeepsakes(): BookKeepsakeView;

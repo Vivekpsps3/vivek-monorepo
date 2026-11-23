@@ -140,3 +140,63 @@ export function visibleShelves(items, status) {
       empty: shelf.empty || emptyFor(status),
     }));
 }
+
+const KEEPSAKE_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Books from the derived keepsake projection. Other kinds stay out of this hall. */
+export function bookKeepsakes(body) {
+  const media = body && typeof body === "object" ? body.media : null;
+  const status =
+    media && (media.status === "ok" || media.status === "absent" || media.status === "unavailable")
+      ? media.status
+      : "unavailable";
+  const rows = status === "ok" && Array.isArray(body.keepsakes) ? body.keepsakes : [];
+  const books = [];
+  for (const row of rows) {
+    if (!row || row.kind !== "book") continue;
+    const entryId = row.entry_id;
+    const on = typeof row.on === "string" ? row.on : "";
+    const title = typeof row.title === "string" ? row.title.trim() : "";
+    const id = typeof row.id === "string" ? row.id : "";
+    const note = typeof row.note === "string" ? row.note : "";
+    const dateSource =
+      row.date_source === "completed_on" || row.date_source === "finished_on" ? row.date_source : "";
+    const route = typeof row.route === "string" ? row.route : "";
+    if (!id || !Number.isInteger(entryId) || entryId <= 0 || !title || !KEEPSAKE_DAY.test(on) || !dateSource) {
+      continue;
+    }
+    const expected = `/media/item/${entryId}`;
+    books.push({
+      id,
+      entryId,
+      title,
+      on,
+      note,
+      dateSource,
+      route: route === expected ? route : "",
+    });
+  }
+  const differences = body && Array.isArray(body.differences) ? body.differences : [];
+  const episode = differences.find((item) => item && item.id === "episode-versus-completion");
+  return {
+    status,
+    books,
+    included: media && Number.isInteger(media.included) ? media.included : books.length,
+    total: media && Number.isInteger(media.total) ? media.total : books.length,
+    truncated: Boolean(media && media.truncated),
+    cap: body && Number.isInteger(body.cap) ? body.cap : 0,
+    episode: episode && typeof episode.text === "string" ? episode.text : "",
+  };
+}
+
+export function emptyBookKeepsakes() {
+  return {
+    status: "loading",
+    books: [],
+    included: 0,
+    total: 0,
+    truncated: false,
+    cap: 0,
+    episode: "",
+  };
+}

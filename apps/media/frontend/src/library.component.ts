@@ -261,55 +261,22 @@ const LIBRARY = "/media/library";
           (clearFilters)="clearAllFilters()"
         />
       } @else if (collection === "book") {
-        <nav class="book-signs" aria-label="Book shelves">
-          @for (sign of bookSigns; track sign.status) {
-            <a
-              [routerLink]="['/media/library']"
-              [queryParams]="shelfParams(sign.status)"
-              [attr.aria-current]="status === sign.status ? 'page' : null"
-              >{{ sign.label }}</a
-            >
-          }
-        </nav>
-        <nav class="book-signs" aria-label="Book presentation">
-          <a
-            [routerLink]="['/media/library']"
-            [queryParams]="faceParams('spine')"
-            [attr.aria-current]="face === 'spine' ? 'page' : null"
-            >Covers and spines</a
-          >
-          <a
-            [routerLink]="['/media/library']"
-            [queryParams]="faceParams('text')"
-            [attr.aria-current]="face === 'text' ? 'page' : null"
-            >Text</a
-          >
-        </nav>
-        @if (library.items.length) {
-          <media-book-shelf
-            [items]="library.items"
-            [status]="status"
-            [face]="face"
-            [linkState]="source()"
-            (saved)="onBookSaved($event)"
-          />
-        } @else {
-          <ui-empty-state [title]="emptyTitle" [message]="emptyMessage">
-            @if (filtered) {
-              <ui-button variant="ghost" (click)="clearAllFilters()">
-                Clear filters
-              </ui-button>
-            } @else if (kind) {
-              <ui-button variant="ghost" href="/media/library" label="All items" />
-            }
-            <ui-button
-              variant="primary"
-              href="/media/search"
-              [queryParams]="captureParams()"
-              label="Search Media"
-            />
-          </ui-empty-state>
-        }
+        <media-book-shelf
+          [items]="library.items"
+          [status]="status"
+          [face]="face"
+          [query]="q"
+          [sort]="sort"
+          [favorite]="favorite"
+          [tags]="tags"
+          [offset]="offset"
+          [emptyTitle]="emptyTitle"
+          [emptyMessage]="emptyMessage"
+          [filtered]="filtered"
+          [linkState]="source()"
+          (saved)="onBookSaved($event)"
+          (clearFilters)="clearAllFilters()"
+        />
       } @else if (collection === "game") {
         <nav class="game-bays" aria-label="Game cabinet">
           @for (sign of gameSigns; track sign.status) {
@@ -488,12 +455,6 @@ export class LibraryComponent {
   }
   readonly kinds = kinds;
   readonly musicViews = MUSIC_VIEWS;
-  readonly bookSigns = [
-    { status: "", label: "All shelves" },
-    { status: "in_progress", label: "Current" },
-    { status: "completed", label: "Read" },
-    { status: "want", label: "To read" },
-  ];
   readonly gameSigns = [
     { status: "", label: "All bays" },
     { status: "in_progress", label: "Playing" },
@@ -555,25 +516,10 @@ export class LibraryComponent {
   captureParams(): { kind?: string } {
     return this.kind ? { kind: this.kind } : {};
   }
-  shelfParams(status: string) {
-    return {
-      ...collectionQuery(this.currentFilters(), "book"),
-      status: status || null,
-      face: this.face === "text" ? "text" : null,
-    };
-  }
   bayParams(status: string) {
     return {
       ...collectionQuery(this.currentFilters(), "game"),
       status: status || null,
-    };
-  }
-  faceParams(face: "spine" | "text") {
-    return {
-      ...collectionQuery(this.currentFilters(), "book"),
-      status: this.status || null,
-      offset: this.offset || null,
-      face: face === "text" ? "text" : null,
     };
   }
   onBookSaved(detail: Detail): void {

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   bookAuthorLine,
+  bookKeepsakes,
   bookProgressFact,
   bookSeriesLine,
   bookShelfId,
+  emptyBookKeepsakes,
   noteExcerpt,
   visibleShelves,
 } from "../../../frontend/src/books.mjs";
@@ -139,4 +141,78 @@ test("authors and series group only on a canonical id", () => {
   assert.equal(visibleShelves(books, "anticipating")[0].label, "Anticipating");
   assert.equal(visibleShelves(books, "completed")[0].label, "Read");
   assert.equal(visibleShelves([], "").filter((shelf) => shelf.id !== "other").length, 3);
+});
+
+test("book keepsakes are the projection's books and nothing else", () => {
+  const episode = "A watched episode stays an episode.";
+  const view = bookKeepsakes({
+    cap: 50,
+    media: { status: "ok", included: 2, total: 4, truncated: true },
+    keepsakes: [
+      {
+        id: "finished:7:2026-11-23",
+        entry_id: 7,
+        kind: "book",
+        title: " Paper Atlas ",
+        on: "2026-11-23",
+        route: "/media/item/7",
+        note: "Completed book on 2026-11-23.",
+        date_source: "completed_on",
+      },
+      {
+        id: "finished:8:2026-11-01",
+        entry_id: 8,
+        kind: "book",
+        title: "Experience Margin",
+        on: "2026-11-01",
+        route: "/media/item/9",
+        note: "Experience finish for this book on 2026-11-01.",
+        date_source: "finished_on",
+      },
+      {
+        id: "finished:3:2026-11-23",
+        entry_id: 3,
+        kind: "movie",
+        title: "Velvet Screening",
+        on: "2026-11-23",
+        route: "/media/item/3",
+        note: "Completed movie on 2026-11-23.",
+        date_source: "completed_on",
+      },
+      { id: "bad", entry_id: 0, kind: "book", title: "Nope", on: "yesterday", date_source: "completed_on" },
+    ],
+    souvenirs: [{ id: "trip:1", title: "Shelf Harbor" }],
+    differences: [{ id: "episode-versus-completion", text: episode }],
+  });
+  assert.deepEqual(
+    view.books.map((book) => [book.title, book.dateSource, book.route]),
+    [
+      ["Paper Atlas", "completed_on", "/media/item/7"],
+      ["Experience Margin", "finished_on", ""],
+    ],
+  );
+  assert.equal(view.truncated, true);
+  assert.equal(view.included, 2);
+  assert.equal(view.total, 4);
+  assert.equal(view.episode, episode);
+  assert.equal(view.books.some((book) => book.title === "Velvet Screening"), false);
+  const hidden = bookKeepsakes({
+    media: { status: "unavailable", included: 0, total: 0, truncated: false },
+    keepsakes: [
+      {
+        id: "finished:7:2026-11-23",
+        entry_id: 7,
+        kind: "book",
+        title: "Paper Atlas",
+        on: "2026-11-23",
+        route: "/media/item/7",
+        note: "Completed book on 2026-11-23.",
+        date_source: "completed_on",
+      },
+    ],
+  });
+  assert.equal(hidden.status, "unavailable");
+  assert.deepEqual(hidden.books, []);
+  assert.equal(emptyBookKeepsakes().status, "loading");
+  assert.deepEqual(bookKeepsakes(null).books, []);
 });

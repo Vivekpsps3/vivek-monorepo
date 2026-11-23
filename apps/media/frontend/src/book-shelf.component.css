@@ -9,6 +9,128 @@
   min-width: 0;
 }
 
+.reading-lobby,
+.book-stacks,
+.reading-desk-room,
+.completion-keepsakes {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+}
+
+.reading-lobby,
+.book-stacks,
+.completion-keepsakes {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-block-end: 12px solid var(--wood);
+  border-radius: var(--radius-lg) var(--radius-lg) 0.2rem 0.2rem;
+  background: color-mix(in srgb, var(--brass) 8%, var(--surface-2));
+}
+
+.reading-desk-room {
+  padding: var(--space-3);
+  border: 1px dashed var(--border);
+  border-block-start: 8px solid var(--brass);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+}
+
+.reading-lobby h2,
+.reading-lobby h3,
+.reading-lobby p,
+.book-stacks > h2,
+.reading-desk-room h2,
+.reading-desk-room p,
+.completion-keepsakes h2,
+.completion-keepsakes p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hall-boundary {
+  padding: var(--space-3);
+  border-inline-start: 4px solid var(--wood);
+  background: var(--card-bg);
+}
+
+.hall-objects {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.hall-object {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+}
+
+.book-signs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.book-signs a,
+.book-entry-link,
+.book-keepsake a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  max-width: 100%;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  color: var(--text);
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-decoration: none;
+}
+
+.book-signs a[aria-current="page"] {
+  border-color: var(--data-edge);
+  box-shadow: inset 0 -3px 0 var(--data-edge);
+}
+
+.book-signs a:focus-visible,
+.book-entry-link:focus-visible,
+.book-keepsake a:focus-visible,
+.reading-lobby h2:focus-visible,
+.book-stacks > h2:focus-visible,
+.reading-desk-room h2:focus-visible,
+.completion-keepsakes h2:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.book-keepsake {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+}
+
+.book-keepsake h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .book-stack {
   display: grid;
   gap: var(--space-3);
@@ -59,7 +181,7 @@
 
 .book-volume {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   padding: var(--space-3);
   border: 1px solid var(--border);
@@ -73,10 +195,12 @@
 
 .book-cover {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 4.75rem;
+  width: 6.5rem;
+  max-width: 100%;
   min-height: 7.5rem;
   padding: var(--space-2);
   border: 1px solid var(--border);
@@ -89,7 +213,7 @@
 
 .book-cover img {
   width: 100%;
-  height: 7.5rem;
+  height: 4.5rem;
   object-fit: cover;
 }
 
@@ -218,7 +342,8 @@
 
 @media (max-width: 700px) {
   .book-volume,
-  .book-desk-progress {
+  .book-desk-progress,
+  .hall-objects {
     grid-template-columns: 1fr;
   }
 }
