@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#435](https://github.com/Vivekpsps3/vivek-monorepo/issues/435) FIT-05. Parents [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304), [#257](https://github.com/Vivekpsps3/vivek-monorepo/issues/257), [#90](https://github.com/Vivekpsps3/vivek-monorepo/issues/90), and roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stay open. #277 stays open and was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/fit-05`; `/tmp/vivek-fit-05`. The shared checkout was not used for source edits. Travel, Media, pixels, server, and Town files outside `apps/web/src/app/town/health/` were not edited by this leaf. Town guidance and `FEATURES.md` record the progress contract.
-- Base main SHA, current tested SHA: fetched `origin/main` at `e7a5e16b3e2165fae856bc2e7820e18084022a09` (FIT-04, pull request #559). While the gates were running, `origin/main` moved to `9d6b74eb2ea1b002d669fa586878da602ce0e607` (ROOM-07, pull request #560). This branch fast-forwarded to that SHA. The FIT-05 diff stayed uncommitted. The commands below ran again on `9d6b74eb` plus the FIT-05 diff. The implementation commit is recorded after this file lands.
+- Base main SHA, current tested SHA: fetched `origin/main` at `e7a5e16b3e2165fae856bc2e7820e18084022a09` (FIT-04, pull request #559). While the gates were running, `origin/main` moved to `9d6b74eb2ea1b002d669fa586878da602ce0e607` (ROOM-07, pull request #560). This branch fast-forwarded to that SHA. The FIT-05 diff stayed uncommitted. The commands below ran again on `9d6b74eb` plus the FIT-05 diff. The implementation and these command results are `da977d37ca602f22f556a66d5fc5d51977c016e8`. This sentence names that commit.
 - Fresh-main/prerequisite/active-PR checks: FIT-03 is pull request #556 and STYLE-03 is pull request #384. Both are ancestors of `9d6b74eb`. Issues #433 and #384 are closed. Issue #435 is open. ROOM-07 changed Media theater files only. Those files do not overlap `apps/web/src/app/town/health/` or `apps/finance/frontend/src/public-api.ts`. The post-merge gates below include that Media code because the web bundle compiles it.
 
 ## Acceptance
@@ -62,4 +62,4 @@ Commands ran in `/tmp/vivek-fit-05` on `9d6b74eb2ea1b002d669fa586878da602ce0e607
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #257, #90, #134, and #277 stay open. This leaf does not deploy.
-- Next actor: finish `make e2e`, commit `agent/fit-05`, open the pull request, wait for green required checks, then merge with a merge commit.
+- Next actor: push `agent/fit-05`, open the pull request, wait for green required checks, then merge with a merge commit. The tested implementation commit is `da977d37ca602f22f556a66d5fc5d51977c016e8`.
