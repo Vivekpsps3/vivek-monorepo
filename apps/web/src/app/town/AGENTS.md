@@ -21,7 +21,5 @@ Town reset fixtures and worker clock stay deterministic.
 See [scene-appearance](../platform/scene-appearance.ts). Gym objects open that dialog.
 
 The Town exterior, Reading Hall, Hall, and [cosmetic catalog](cosmetic-catalog.ts) share the y-down [frame](library-room.scene.ts).
-Higher layer wins. Pan, zoom, tap, drag, cancel use it. `/town/hall` shows rules,
-progress, and history. `/town/cosmetics` lists twelve free starters and twelve shop items.
-Milestone ornaments stay separate. Keyboard and the URL share cutaway. Locked,
-empty, and archived lots. Check-in marks clear on Undo, owner or day change. The keepsake shelf stores nothing. Clinic and Gym read [loadTownHealthStages](health/index.ts).
+Higher layer wins. `/town/home` opens living room, study, bedroom, and courtyard with cutaway floors, wall slots, and no habit or Stamp gate. `/town/hall` shows rules and history. `/town/cosmetics` lists twelve starters and twelve shop items.
+Locked, empty, and archived lots clear check-in marks on Undo, owner, or day change. The keepsake shelf stores nothing. Clinic and Gym read [loadTownHealthStages](health/index.ts).

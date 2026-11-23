@@ -19,6 +19,8 @@ export const routes: Routes = [
   ] },
     { path: 'town', title: 'Town', children: [
       { path: '', loadComponent: () => import('./town/town.component').then(m => m.TownComponent) },
+      { path: 'home', pathMatch: 'full', redirectTo: '/town/home/living' },
+      { path: 'home/:room', title: 'Town · Home', loadComponent: () => import('./town/home-room.component').then(m => m.HomeRoomComponent) },
       { path: 'library', title: 'Town · Reading Hall', loadComponent: () => import('./town/library-room.component').then(m => m.LibraryRoomComponent) },
       { path: 'hall', title: 'Town · Hall', loadComponent: () => import('./town/hall-room.component').then(m => m.HallRoomComponent) },
       { path: 'cosmetics', title: 'Town · Cosmetic catalog', loadComponent: () => import('./town/cosmetic-catalog.component').then(m => m.CosmeticCatalogComponent) },
