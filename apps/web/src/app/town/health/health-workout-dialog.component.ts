@@ -14,6 +14,7 @@ import {
   firstWorkoutField,
   formatEnteredSet,
   isCustomExerciseId,
+  markSetCounted,
   moveDraftSet,
   openCanonicalPreview,
   removeDraftSet,
@@ -292,6 +293,12 @@ export class HealthWorkoutDialogComponent {
     const value = this.text(event);
     if (!(SET_TYPES as readonly string[]).includes(value)) return;
     this.publish(retagDraftSet(this.local(), setId, value as SetType));
+  }
+
+  protected onCount(setId: string, event: Event): void {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    this.publish(markSetCounted(this.local(), setId, target.checked));
   }
 
   protected onSubmit(event: Event): void {

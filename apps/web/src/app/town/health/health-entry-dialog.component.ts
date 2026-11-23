@@ -5,13 +5,14 @@ import {
   firstHealthField,
   healthFieldId,
   healthFieldMessage,
-  parseHealthNumber,
+  isPrKind,
+  prFromDraft,
   vitalStatFromDraft,
   type HealthDraft,
   type HealthEditorKind,
 } from './health-entry';
 import type { HealthPr, HealthStat } from './health.types';
-import { validateHealthPr, type FieldErrors } from './health-validate';
+import type { FieldErrors } from './health-validate';
 
 export type HealthEntryValue = HealthStat | HealthPr;
 
@@ -28,6 +29,7 @@ export class HealthEntryDialogComponent {
   readonly kind = input<HealthEditorKind>('weight');
   readonly today = input.required<string>();
   readonly weightUnit = input<'kg' | 'lb'>('lb');
+  readonly distanceUnit = input<'km' | 'mi'>('mi');
   readonly draft = input<HealthDraft>(EMPTY_HEALTH_DRAFT);
   readonly formError = input('');
   readonly busy = input(false);
@@ -73,7 +75,9 @@ export class HealthEntryDialogComponent {
       case 'sleep': return editing ? 'Edit sleep' : 'Add sleep';
       case 'lab': return editing ? 'Edit lab result' : 'Add lab result';
       case 'checkup': return editing ? 'Edit checkup' : 'Add checkup';
-      case 'lift': return 'Add lift';
+      case 'lift': return editing ? 'Edit lift' : 'Add lift';
+      case 'run': return editing ? 'Edit run' : 'Add run';
+      case 'other': return editing ? 'Edit record' : 'Add record';
     }
   }
 
@@ -93,6 +97,10 @@ export class HealthEntryDialogComponent {
     return `Weight (${this.weightUnit()})`;
   }
 
+  protected distanceLabel(): string {
+    return `Distance (${this.distanceUnit()})`;
+  }
+
   protected onMeasured(event: Event): void {
     this.patch({ measuredOn: this.text(event) });
   }
@@ -107,6 +115,31 @@ export class HealthEntryDialogComponent {
 
   protected onReps(event: Event): void {
     this.patch({ reps: this.text(event) });
+  }
+
+  protected onDistance(event: Event): void {
+    this.patch({ distance: this.text(event) });
+  }
+
+  protected onSeconds(event: Event): void {
+    this.patch({ seconds: this.text(event) });
+  }
+
+  protected onOtherName(event: Event): void {
+    this.patch({ otherName: this.text(event) });
+  }
+
+  protected onOtherValue(event: Event): void {
+    this.patch({ otherValue: this.text(event) });
+  }
+
+  protected onOtherUnit(event: Event): void {
+    this.patch({ otherUnit: this.text(event) });
+  }
+
+  protected onDirection(event: Event): void {
+    const value = this.text(event);
+    this.patch({ direction: value === 'higher' || value === 'lower' ? value : '' });
   }
 
   protected onBpm(event: Event): void {
@@ -152,19 +185,11 @@ export class HealthEntryDialogComponent {
   protected onSubmit(event: Event): void {
     event.preventDefault();
     if (this.busy()) return;
-    const draft = this.local();
+    const draft = { ...this.local(), kind: this.kind() };
     const today = this.today();
-    const result = this.kind() === 'lift'
-      ? validateHealthPr({
-        v: 1,
-        kind: 'lift',
-        measured_on: draft.measuredOn,
-        logged_on: draft.loggedOn || today,
-        exercise: draft.exercise,
-        kg: parseHealthNumber(draft.weight),
-        reps: parseHealthNumber(draft.reps),
-      }, today, this.weightUnit())
-      : vitalStatFromDraft({ ...draft, kind: this.kind() }, today, this.weightUnit());
+    const result = isPrKind(draft.kind)
+      ? prFromDraft(draft, today, { weight: this.weightUnit(), distance: this.distanceUnit() })
+      : vitalStatFromDraft(draft, today, this.weightUnit());
     this.errors.set(result.fieldErrors);
     if (Object.keys(result.fieldErrors).length > 0) {
       this.draftChange.emit(draft);
@@ -186,6 +211,8 @@ export class HealthEntryDialogComponent {
 
   private text(event: Event): string {
     const target = event.target;
-    return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ? target.value : '';
+    return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
+      ? target.value
+      : '';
   }
 }

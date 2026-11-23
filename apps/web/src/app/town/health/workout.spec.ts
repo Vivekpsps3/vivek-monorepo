@@ -14,6 +14,7 @@ import {
   draftFromSession,
   emptyWorkoutDraft,
   formatWorkout,
+  markSetCounted,
   moveDraftSet,
   openCanonicalPreview,
   removeDraftSet,
@@ -470,6 +471,44 @@ describe('workout records', () => {
     }, TODAY, LB);
     expect(validateWorkoutRecord(active, 200, TODAY).fieldErrors['definitions']).toBe('limit');
     expect(validateWorkoutRecord(active, 199, TODAY).fieldErrors).toEqual({});
+  });
+
+  it('leaves a completed set out of progress only when that set is unchecked', () => {
+    const saved: WorkoutSession = {
+      v: 1,
+      kind: 'session',
+      measured_on: TODAY,
+      logged_on: TODAY,
+      state: 'completed',
+      exercises: [{
+        id: 'wex_count0001',
+        exercise_id: 'static:squat',
+        exercise_type: 'load-reps',
+        name: 'Squat',
+        sets: [
+          { id: 'wst_count0001', set_type: 'work', completed: false, kg: 90, reps: 5 },
+          { id: 'wst_count0002', set_type: 'work', completed: true, kg: 100, reps: 5 },
+        ],
+      }],
+    };
+    const opened = draftFromSession({ clientId: 'hlt_sessioncount0000000001', revision: 2, value: saved });
+    expect(opened.sets.find(item => item.id === 'wst_count0001')?.count).toBeFalse();
+    expect(opened.sets.find(item => item.id === 'wst_count0002')?.count).toBeUndefined();
+    const marked = markSetCounted(opened, 'wst_count0002', false);
+    const stored = workoutFromDraft(marked, '2026-11-20', LB);
+    if (stored.kind !== 'session') return;
+    expect(stored.logged_on).toBe(TODAY);
+    expect(stored.exercises[0].sets.map(item => item.completed)).toEqual([false, false]);
+    const restored = workoutFromDraft(markSetCounted(marked, 'wst_count0002', true), '2026-11-20', LB);
+    if (restored.kind !== 'session') return;
+    expect(restored.exercises[0].sets.map(item => item.completed)).toEqual([false, true]);
+    const draft = draftFromSession({
+      clientId: 'hlt_sessiondraft00000001',
+      revision: 1,
+      value: { ...saved, state: 'draft' },
+    });
+    expect(draft.sets.every(item => item.count === undefined)).toBeTrue();
+    expect(markSetCounted(draft, 'wst_count0002', false)).toBe(draft);
   });
 });
 
