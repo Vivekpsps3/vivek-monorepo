@@ -141,6 +141,13 @@
       "status": "mounted"
     },
     {
+      "id": "town-review",
+      "path": "town/review",
+      "owner": "town",
+      "status": "mounted",
+      "query": "week=2026-12-28"
+    },
+    {
       "id": "public-root",
       "path": "",
       "owner": "site",

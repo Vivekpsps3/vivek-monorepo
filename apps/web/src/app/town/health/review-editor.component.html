@@ -1,0 +1,85 @@
+<main class="review">
+  <ui-page-header title="Weekly review" eyebrow="Town" backLabel="Hall" backLink="/town/hall" titleId="review-title" />
+
+  @if (phase() === 'loading') {
+    <div role="status" aria-label="Loading the weekly review">
+      <ui-skeleton variant="lines" [lines]="3" />
+    </div>
+  } @else if (phase() === 'locked') {
+    <div class="gate" role="status">
+      <p>Finance is locked. The review stays encrypted.</p>
+      <ui-button href="/finance/vault/unlock" [queryParams]="returnQuery()" label="Unlock" />
+    </div>
+  } @else if (phase() === 'setup') {
+    <div class="gate" role="status">
+      <p>Set up Finance before this review can open.</p>
+      <ui-button href="/finance/vault/setup" [queryParams]="returnQuery()" label="Set up Finance" />
+    </div>
+  } @else if (phase() === 'unavailable') {
+    <div class="gate" role="status">
+      <p>This review is unavailable right now.</p>
+      <ui-button variant="secondary" (clicked)="retry()">Retry</ui-button>
+    </div>
+  } @else {
+    <p class="week-label">Week of {{ week() }}</p>
+    @if (showSunday()) {
+      <p class="prompt" role="status">This week ends today. Saving is optional and does not change Town.</p>
+    }
+    @if (unreadable() > 0) {
+      <p role="status">{{ unreadableText() }}</p>
+    }
+
+    <div class="weeks">
+      <ui-button variant="secondary" [disabled]="!canShift(-1) || busy()" (clicked)="shift(-1)">Earlier</ui-button>
+      <ui-button variant="secondary" [disabled]="!canShift(1) || busy()" (clicked)="shift(1)">Later</ui-button>
+    </div>
+
+    @if (savedWeeks().length) {
+      <nav class="saved-weeks" aria-label="Saved weeks">
+        @for (day of savedWeeks(); track day) {
+          <ui-button variant="secondary" [pressed]="day === week()" [disabled]="busy()" (clicked)="openSaved(day)">{{ day }}</ui-button>
+        }
+      </nav>
+    }
+
+    <form class="fields" (submit)="$event.preventDefault()">
+      <label for="review-focus-1">Focus 1</label>
+      <input id="review-focus-1" data-review-marker="focus-1" autocomplete="off" [value]="draft().focus[0]" (input)="setFocus(0, $event)" />
+      <label for="review-focus-2">Focus 2</label>
+      <input id="review-focus-2" data-review-marker="focus-2" autocomplete="off" [value]="draft().focus[1]" (input)="setFocus(1, $event)" />
+      <label for="review-focus-3">Focus 3</label>
+      <input id="review-focus-3" data-review-marker="focus-3" autocomplete="off" [value]="draft().focus[2]" (input)="setFocus(2, $event)" />
+      <label for="review-note">Note</label>
+      <textarea id="review-note" data-review-marker="note" autocomplete="off" [value]="draft().note" (input)="setNote($event)"></textarea>
+      <label for="review-obsidian">Obsidian link</label>
+      <input id="review-obsidian" data-review-marker="obsidian" autocomplete="off" aria-describedby="review-link-help" [value]="draft().obsidian" (input)="setLink($event)" />
+      <p id="review-link-help">Optional. This stays a link and is not copied into the note.</p>
+      @if (linkHref(); as href) {
+        <a class="reference" [href]="href" rel="noreferrer">{{ href }}</a>
+      }
+    </form>
+
+    @if (message()) {
+      <p class="form-error" id="review-message" role="alert" tabindex="-1">{{ message() }}</p>
+    }
+
+    <div class="actions">
+      <ui-button [disabled]="busy()" [busy]="busy()" (clicked)="save()">Save</ui-button>
+      @if (dirty()) {
+        <ui-button variant="secondary" [disabled]="busy()" (clicked)="discard()">Discard changes</ui-button>
+      }
+      @if (saved()) {
+        <ui-button variant="danger" [disabled]="busy()" (clicked)="askDelete()">Delete</ui-button>
+      }
+    </div>
+  }
+
+  <ui-dialog [open]="confirmDelete()" labelledBy="review-delete-title" (closed)="confirmDelete.set(false)">
+    <h2 id="review-delete-title">Delete this week</h2>
+    <p>This removes the saved review for {{ week() }}.</p>
+    <div class="actions">
+      <ui-button variant="secondary" (clicked)="confirmDelete.set(false)">Cancel</ui-button>
+      <ui-button variant="danger" (clicked)="confirmRemove()">Delete</ui-button>
+    </div>
+  </ui-dialog>
+</main>

@@ -25,13 +25,15 @@ import {
  * is always 2 on write, and rows that are not version 2 are refused on read
  * (Security, 2026-10-30): skipped and counted like undecryptable rows, never
  * deleted. Workout kinds stay in the one health_workouts collection.
+ * town_reviews is the same vault and is not loaded with measurements.
  */
 
 /** Health-owned collections. Finance bags are a different subset. */
-export const HEALTH_OWNER_COLLECTIONS = ['health_stats', 'health_prs', 'health_workouts'] as const;
+export const HEALTH_OWNER_COLLECTIONS = ['health_stats', 'health_prs', 'health_workouts', 'town_reviews'] as const;
 export const HEALTH_STATS_COLLECTION = HEALTH_OWNER_COLLECTIONS[0];
 export const HEALTH_PRS_COLLECTION = HEALTH_OWNER_COLLECTIONS[1];
 export const HEALTH_WORKOUTS_COLLECTION = HEALTH_OWNER_COLLECTIONS[2];
+export const TOWN_REVIEWS_COLLECTION = HEALTH_OWNER_COLLECTIONS[3];
 export const HEALTH_SCHEMA_VERSION = 2;
 export const HEALTH_LOAD_DEADLINE_MS = 8_000;
 export const HEALTH_CONFLICT_MESSAGE =
