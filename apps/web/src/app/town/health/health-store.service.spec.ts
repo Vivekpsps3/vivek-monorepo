@@ -27,7 +27,16 @@ type EncryptedRecordDto = VaultRecordEnvelope;
 const MARKER = 'PLAINTEXT_MARKER_719';
 
 function encode(value: unknown): string {
-  return `ct:${btoa(JSON.stringify(value))}`;
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `ct:${btoa(binary)}`;
+}
+
+function decode(ciphertext: string): unknown {
+  const binary = atob(ciphertext.slice(3));
+  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 function row(
@@ -58,6 +67,7 @@ class FakeVault implements VaultRecordCapability {
   hangLists = false;
   holdList = false;
   holdDecrypt = false;
+  strictEnvelope = false;
   holdEncrypt = false;
   holdUpsert = false;
   holdDelete = false;
@@ -102,15 +112,21 @@ class FakeVault implements VaultRecordCapability {
 
   async decryptPayload<T>(
     ciphertextB64: string,
-    _collection: string,
+    collection: string,
     clientId: string,
-    _schemaVersion: number,
-    _keyVersion: number,
+    schemaVersion: number,
+    keyVersion: number,
   ): Promise<T> {
     this.decryptCalls.push(clientId);
     if (this.holdDecrypt) await new Promise<void>(resolve => { this.decryptRelease.push(resolve); });
+    if (this.strictEnvelope) {
+      const match = this.rows.find(item => item.collection === collection && item.client_id === clientId);
+      if (!match || match.schema_version !== schemaVersion || match.key_version !== keyVersion) {
+        throw new Error('envelope mismatch');
+      }
+    }
     if (!ciphertextB64.startsWith('ct:')) throw new Error('undecryptable');
-    return JSON.parse(atob(ciphertextB64.slice(3))) as T;
+    return decode(ciphertextB64) as T;
   }
 
   upsertRecords(records: readonly VaultRecordUpsert[], _options?: { silent?: boolean }): Observable<EncryptedRecordDto[]> {
@@ -532,6 +548,49 @@ describe('HealthStoreService', () => {
     expect(store.unreadableCount).toBe(0);
     expect(textOf(result)).not.toContain(MARKER);
     expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
+  });
+
+  it('returns no lab or session marker when a held read resolves after lock or an owner switch', async () => {
+    const lab = {
+      v: 1, kind: 'lab', measured_on: '2026-10-28', logged_on: '2026-10-28',
+      lab: { name: 'Ω-marker', value: 9, unit: 'u', ref_low: 10, ref_high: 20 },
+    };
+    const sessionRecord = workoutRecord('Ω-session');
+    for (const change of ['lock', 'owner'] as const) {
+      unlockVault();
+      fake.holdDecrypt = true;
+      fake.decryptRelease.splice(0);
+      fake.rows = [
+        row('health_stats', 'hlt_SyntheticLabEntryABCD', lab),
+        row('health_workouts', 'hlt_SyntheticSessionABCD', sessionRecord),
+      ];
+      const pending = store.load();
+      await until(() => fake.decryptRelease.length >= 2);
+      if (change === 'lock') {
+        const locking = lockFinance(TestBed.inject(Injector)).catch(() => undefined);
+        fake.decryptRelease.splice(0).forEach(release => release());
+        const result = await pending;
+        await locking;
+        expect(result.state).not.toBe('ready');
+        expect(textOf(result)).not.toContain('Ω-marker');
+        expect(textOf(result)).not.toContain('Ω-session');
+      } else {
+        localStorage.removeItem('finance-dek');
+        session.become(8);
+        unlockVault();
+        fake.decryptRelease.splice(0).forEach(release => release());
+        const result = await pending;
+        expect(result.state).not.toBe('ready');
+        expect(textOf(result)).not.toContain('Ω-marker');
+        expect(textOf(result)).not.toContain('Ω-session');
+      }
+      expect(store.statsSnapshot).toEqual([]);
+      expect(store.workoutsSnapshot).toEqual([]);
+      expect(textOf(store.statsSnapshot)).not.toContain('Ω-marker');
+      expect(textOf(store.workoutsSnapshot)).not.toContain('Ω-session');
+      fake.holdDecrypt = false;
+      fake.decryptRelease.splice(0);
+    }
   });
 
   it('does not let the stage read model publish a held row after lock (LOCAL1)', async () => {
@@ -1100,6 +1159,96 @@ describe('Health workout collection', () => {
     const planned = await store.createWorkout(routine, WORKOUT_TODAY);
     expect(planned.value.kind).toBe('routine');
     expect(store.workoutsSnapshot.filter(item => item.value.kind === 'exercise' && !item.value.archived)).toHaveSize(200);
+  });
+
+  it('restores every supported record under a new account and still reads schema 2', async () => {
+    const day = '2026-10-28';
+    const stats: HealthStat[] = [
+      { v: 1, kind: 'weight', measured_on: day, logged_on: day, kg: 80 },
+      { v: 1, kind: 'rhr', measured_on: day, logged_on: day, bpm: 62 },
+      { v: 1, kind: 'bp', measured_on: day, logged_on: day, sys: 118, dia: 76 },
+      { v: 1, kind: 'sleep', measured_on: day, logged_on: day, hours: 7.25 },
+      {
+        v: 1, kind: 'lab', measured_on: day, logged_on: day,
+        lab: { name: 'Ω-marker', value: 9, unit: 'u', ref_low: 10, ref_high: 20 },
+      },
+      { v: 1, kind: 'checkup', measured_on: day, logged_on: day, note: 'Synthetic visit note' },
+    ];
+    const prs: HealthPr[] = [
+      { v: 1, kind: 'lift', measured_on: day, logged_on: day, exercise: 'Squat', kg: 100, reps: 5 },
+      { v: 1, kind: 'run', measured_on: day, logged_on: day, distance_m: 5000, seconds: 1500 },
+      { v: 1, kind: 'other', measured_on: day, logged_on: day, name: 'Ω-other', value: 12, unit: 'u', direction: 'higher' },
+    ];
+    const savedStats: Awaited<ReturnType<HealthStoreService['createStat']>>[] = [];
+    for (const value of stats) savedStats.push(await store.createStat(value));
+    const savedPrs: Awaited<ReturnType<HealthStoreService['createPr']>>[] = [];
+    for (const value of prs) savedPrs.push(await store.createPr(value));
+    const savedExercise = await store.createWorkout(workoutFromDraft({
+      ...emptyWorkoutDraft('exercise', WORKOUT_TODAY),
+      name: 'Synthetic press',
+    }, WORKOUT_TODAY, { weight: 'kg', distance: 'km' }), WORKOUT_TODAY);
+    const savedRoutine = await store.createWorkout(workoutFromDraft({
+      ...emptyWorkoutDraft('routine', WORKOUT_TODAY),
+      templateName: 'Synthetic plan',
+      name: 'Synthetic press',
+      exerciseId: savedExercise.clientId,
+      load: '40',
+      reps: '5',
+    }, WORKOUT_TODAY, { weight: 'kg', distance: 'km' }), WORKOUT_TODAY);
+    const savedSession = await store.createWorkout(workoutRecord('Ω-session'), WORKOUT_TODAY);
+    const exported = fake.rows.map(item => ({ ...item }));
+    expect(exported.map(item => item.collection)).toEqual([
+      ...Array.from({ length: 6 }, () => 'health_stats'),
+      ...Array.from({ length: 3 }, () => 'health_prs'),
+      ...Array.from({ length: 3 }, () => 'health_workouts'),
+    ]);
+    expect(exported.every(item => item.schema_version === 2 && item.key_version === 1)).toBeTrue();
+    const sourceCipher = exported.map(item => item.ciphertext_b64);
+
+    localStorage.removeItem('finance-dek');
+    session.become(8);
+    unlockVault();
+    fake.rows = exported.map((item, index) => ({ ...item, key_version: index % 2 === 0 ? 1 : 2, revision: 1 }));
+    fake.rows.push(row('health_stats', 'hlt_LegacyLabMarkerABCD', {
+      v: 1, kind: 'lab', measured_on: day, logged_on: day,
+      lab: { name: 'Ω-legacy', value: 4, unit: 'u' },
+    }, { schema_version: 1, ciphertext_b64: 'legacy-ciphertext' }));
+    fake.strictEnvelope = true;
+    const loaded = await store.load();
+    expect(loaded.state).toBe('ready');
+    if (loaded.state !== 'ready') return;
+    expect(loaded.unreadable).toBe(1);
+    expect(loaded.stats.map(item => item.value)).toEqual(savedStats.map(item => item.value));
+    expect(loaded.prs.map(item => item.value)).toEqual(savedPrs.map(item => item.value));
+    expect(loaded.workouts.map(item => item.value)).toEqual([
+      savedExercise.value, savedRoutine.value, savedSession.value,
+    ]);
+    const readable = (collection: string) => fake.rows.filter(item => item.collection === collection && item.schema_version === 2);
+    expect(loaded.stats.map(item => item.keyVersion)).toEqual(readable('health_stats').map(item => item.key_version));
+    expect(loaded.prs.map(item => item.keyVersion)).toEqual(readable('health_prs').map(item => item.key_version));
+    expect(loaded.workouts.map(item => item.keyVersion)).toEqual(readable('health_workouts').map(item => item.key_version));
+    expect(readable('health_stats').map(item => item.ciphertext_b64)).toEqual(sourceCipher.slice(0, 6));
+    expect(textOf(loaded)).not.toContain('Ω-legacy');
+    expect(textOf(loaded)).toContain('Ω-marker');
+    expect(textOf(loaded)).toContain('Ω-session');
+    expect(fake.deleted).toEqual([]);
+    expect(fake.rows.some(item => item.client_id === 'hlt_LegacyLabMarkerABCD' && item.schema_version === 1)).toBeTrue();
+    expect(fake.encryptCalls.every(item => item.schemaVersion === 2)).toBeTrue();
+
+    fake.holdDecrypt = true;
+    const pending = store.load();
+    await until(() => fake.decryptRelease.length >= 1);
+    const locking = lockFinance(TestBed.inject(Injector)).catch(() => undefined);
+    fake.decryptRelease.splice(0).forEach(release => release());
+    const dropped = await pending;
+    await locking;
+    expect(dropped.state).not.toBe('ready');
+    expect(textOf(dropped)).not.toContain('Ω-marker');
+    expect(textOf(dropped)).not.toContain('Ω-session');
+    expect(textOf(dropped)).not.toContain('Ω-other');
+    expect(store.statsSnapshot).toEqual([]);
+    expect(store.prsSnapshot).toEqual([]);
+    expect(store.workoutsSnapshot).toEqual([]);
   });
 });
 
