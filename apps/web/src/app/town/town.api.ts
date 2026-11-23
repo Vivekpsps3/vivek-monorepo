@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { timeout } from 'rxjs';
 import { silentErrorToast } from '@vivek/ui';
 import { HUB_SUMMARY_DEADLINE_MS } from '../hub/hub-load';
+import type { KeepsakeShelf } from './keepsake.types';
 import type { Habit, TownResponse } from './town.types';
 
 export interface CreateHabit {
@@ -27,6 +28,11 @@ export class TownApiService {
   }
   getTown() {
     return this.http.get<TownResponse>('/api/town', this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
+  getKeepsakes(on: string | null) {
+    const extra: Record<string, string> = {};
+    if (on) extra['on'] = on;
+    return this.http.get<KeepsakeShelf>('/api/town/keepsakes', this.options(extra)).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
   }
   getHabits(includeArchived = false) {
     return this.http.get<{ items: Habit[] }>('/api/town/habits', this.options({ include_archived: includeArchived ? '1' : '0' }));

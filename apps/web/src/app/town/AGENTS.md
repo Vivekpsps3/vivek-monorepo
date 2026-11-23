@@ -24,4 +24,4 @@ The Town exterior, Reading Hall, and Hall share the y-down [frame](library-room.
 Higher layer wins. Pan, zoom, tap, drag, cancel use it. `/town/hall` shows rules,
 progress, and history. Keyboard, list, and the URL share cutaway and fade. Locked,
 empty, and archived lots. Check-in marks clear on Undo, owner, or
-day change. Room art loads per route. Clinic and Gym read [loadTownHealthStages](health/index.ts).
+day change. The keepsake shelf stores nothing. Clinic and Gym read [loadTownHealthStages](health/index.ts).

@@ -92,6 +92,13 @@
       "query": "object=rules"
     },
     {
+      "id": "town-keepsakes",
+      "path": "town/keepsakes",
+      "owner": "town",
+      "status": "mounted",
+      "query": "on=2026-10-01"
+    },
+    {
       "id": "have-alias",
       "path": "have",
       "owner": "finance",

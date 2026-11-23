@@ -2,7 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { todayIsoDate } from '@vivek/browser';
-import { Subject } from 'rxjs';
+import { Subject, of } from 'rxjs';
+import { SessionService } from '../platform/session.service';
+import { TownApiService } from '../town/town.api';
 import { DayPageComponent } from './day-page.component';
 import { PixelsDataService } from './pixels-data.service';
 import { composeSnapshot } from './pixels-model';
@@ -79,6 +81,18 @@ describe('Day page', () => {
           { path: 'pixels', component: DayPageComponent },
         ]),
         { provide: PixelsDataService, useValue: { load, loadDay, changeAnnotation, financeCleared$, userChanged$ } },
+        { provide: SessionService, useValue: { user$: of({ id: 1 }), cleared$: new Subject() } },
+        { provide: TownApiService, useValue: { getKeepsakes: () => of({
+          on: '2024-02-29', cap: 50,
+          media: { status: 'ok', included: 0, total: 0, truncated: false },
+          travel: {
+            status: 'ok',
+            souvenirs: { status: 'ok', included: 0, total: 0, truncated: false },
+            planned: { status: 'ok', included: 0, total: 0, truncated: false },
+            ineligible: { status: 'ok', included: 0, total: 0, truncated: false },
+          },
+          keepsakes: [], souvenirs: [], planned: [], ineligible: [], differences: [],
+        }) } },
       ],
     });
   });
