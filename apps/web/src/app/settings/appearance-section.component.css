@@ -51,6 +51,34 @@
   background: var(--accent);
 }
 
+.season-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.season-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 12px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+}
+
+button.season-action { cursor: pointer; }
+.season-action:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+#town-season-help, #town-sound-help, [data-season-preview] { color: var(--text-secondary); }
+
 @media (max-width: 640px) {
   .theme-choice input {
     width: 44px;
