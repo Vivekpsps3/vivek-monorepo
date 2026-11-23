@@ -115,6 +115,7 @@ export class TownComponent {
       .children['primary']?.segments.map(segment => segment.path).join('/');
     if (path === 'town/library') return '/town/library';
     if (path === 'town/hall') return '/town/hall';
+    if (path === 'town/cosmetics') return '/town/cosmetics';
     return null;
   })();
   constructor() {

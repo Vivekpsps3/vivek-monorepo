@@ -92,6 +92,13 @@
       "query": "object=rules"
     },
     {
+      "id": "town-cosmetics",
+      "path": "town/cosmetics",
+      "owner": "town",
+      "status": "mounted",
+      "query": "item=oak-seat&part=night"
+    },
+    {
       "id": "town-keepsakes",
       "path": "town/keepsakes",
       "owner": "town",
