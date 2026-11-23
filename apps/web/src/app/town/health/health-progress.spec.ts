@@ -1,7 +1,13 @@
-import { e1RM } from './health-math';
-import { projectHealthProgress, type ProgressSeries } from './health-progress';
+import {
+  HEALTH_BADGES, HEALTH_BADGE_EXPLANATIONS, LOGGED_WEEK_THRESHOLDS, PLATE_THRESHOLDS,
+  PR_BEATEN_THRESHOLDS, RUN_DISTANCES,
+} from './health.constants';
+import { computePrEvents, e1RM, healthBadges } from './health-math';
+import {
+  GAME_MEDAL_EXPLANATION, presentGameMedals, projectHealthProgress, type ProgressSeries,
+} from './health-progress';
 import { displayWeight, pace } from './health-units';
-import type { HealthPr } from './health.types';
+import type { HealthPr, HealthStat } from './health.types';
 import type { WorkoutSession, WorkoutSet } from './workout';
 
 const TODAY = '2026-11-23';
@@ -115,6 +121,7 @@ describe('health progress projection', () => {
     const plates = projectHealthProgress([], [{ clientId: 'plates', value: heavy }], LB, TODAY);
     expect(lifts(plates)).toEqual([]);
     expect(plates.trophies.map(trophy => trophy.name)).toContain('Two plates');
+    expect(plates.trophies.find(trophy => trophy.id === 'plate_225')?.explanation).toBe(HEALTH_BADGE_EXPLANATIONS.plate_225);
     expect(plates.trophies.map(trophy => trophy.id)).not.toContain('first_pr_lift');
     expect(e1RM(100, 5)).toBeCloseTo(116.666, 2);
     expect(displayWeight(e1RM(100, 5), 'lb')).toBe('257.2');
@@ -168,5 +175,132 @@ describe('health progress projection', () => {
     expect(exercises.find(series => series.title === 'Short')?.current.summary).toContain('20');
     expect(exercises.every(series => series.recent === false)).toBeTrue();
     expect(projectHealthProgress([], [], LB, TODAY).empty).toBeTrue();
+    expect(projectHealthProgress([], [], LB, TODAY).medals).toEqual([]);
+  });
+
+  it('renders each approved badge name at its own threshold', () => {
+    const rendered = (records: HealthPr[], stats: HealthStat[] = []) => projectHealthProgress(
+      records.map((value, index) => ({ clientId: `hlt_${String(index).padStart(22, '0')}`, value })),
+      [],
+      LB,
+      TODAY,
+      stats,
+    );
+    const expectBadge = (id: keyof typeof HEALTH_BADGES, records: HealthPr[], stats: HealthStat[] = []) => {
+      const events = computePrEvents(records);
+      expect(healthBadges(stats, records, events, TODAY)).toContain(id);
+      const trophy = rendered(records, stats).trophies.find(item => item.id === id);
+      expect(trophy?.name).toBe(HEALTH_BADGES[id]);
+      expect(trophy?.explanation).toBe(HEALTH_BADGE_EXPLANATIONS[id]);
+    };
+    const deny = (id: keyof typeof HEALTH_BADGES, records: HealthPr[], stats: HealthStat[] = []) => {
+      expect(healthBadges(stats, records, computePrEvents(records), TODAY)).not.toContain(id);
+      expect(rendered(records, stats).trophies.map(item => item.id)).not.toContain(id);
+    };
+
+    expectBadge('first_pr_lift', [liftPr(40, 12)]);
+    deny('first_pr_lift', [liftPr(40, 13)]);
+    expectBadge('first_pr_run', [runPr(100, 30)]);
+    deny('first_pr_run', []);
+    expectBadge('first_pr_other', [otherPr(1)]);
+    deny('first_pr_other', []);
+
+    for (const count of PR_BEATEN_THRESHOLDS) {
+      expectBadge(`pr_beaten_${count}`, beaten(count + 1));
+      deny(`pr_beaten_${count}`, beaten(count));
+    }
+    const plates = [135, 225, 315, 405] as const;
+    for (const plate of plates) {
+      const cut = PLATE_THRESHOLDS[plate];
+      expectBadge(`plate_${plate}`, [liftPr(cut, 1)]);
+      deny(`plate_${plate}`, [liftPr(cut - 0.01, 1)]);
+    }
+    const runs = [
+      ['5k', '10k'],
+      ['10k', 'half'],
+      ['half', 'full'],
+      ['full', ''],
+    ] as const;
+    for (const [id, next] of runs) {
+      expectBadge(`run_${id}`, [runPr(RUN_DISTANCES[id], 1200)]);
+      if (next) deny(`run_${next}`, [runPr(RUN_DISTANCES[id], 1200)]);
+      deny(`run_${id}`, [runPr(RUN_DISTANCES[id] - 1, 1200)]);
+    }
+    const weekCuts = [4, 12, 26, 52] as const;
+    for (const count of weekCuts) {
+      expect(LOGGED_WEEK_THRESHOLDS).toContain(count);
+      expectBadge(`logged_weeks_${count}`, [], logged(count));
+      deny(`logged_weeks_${count}`, [], logged(count - 1));
+    }
+  });
+
+  it('shows a recent personal record beside the trophy explanation', () => {
+    const view = projectHealthProgress([
+      lift('recent', TODAY, 61.23, 1),
+      lift('older', '2026-11-01', 40, 1),
+    ], [], LB, TODAY);
+    expect(view.recent.map(series => series.title)).toContain('Squat');
+    expect(view.recent[0].current.measuredOn).toBe(TODAY);
+    const trophy = view.trophies.find(item => item.id === 'plate_135');
+    expect(trophy).toEqual({
+      id: 'plate_135',
+      name: 'One plate',
+      explanation: 'A lift estimated max reached 61.23 kg.',
+    });
+  });
+
+  it('keeps a minigame medal from claiming a lift, run, or medical result', () => {
+    const medals = presentGameMedals([
+      { id: 'memory_shelves', name: 'Memory Shelves' },
+      { id: 'harbor_rhythm', name: 'Harbor Rhythm' },
+      { id: 'plate_225', name: 'Memory Shelves' },
+      { id: 'harbor_copy', name: 'Two plates' },
+      { id: 'fast_run', name: 'Fastest run' },
+      { id: 'clinic_star', name: 'Clinic star' },
+      { id: 'marathon_pin', name: 'Marathon finisher' },
+    ]);
+    expect(medals).toEqual([
+      { id: 'memory_shelves', name: 'Memory Shelves', explanation: GAME_MEDAL_EXPLANATION },
+      { id: 'harbor_rhythm', name: 'Harbor Rhythm', explanation: GAME_MEDAL_EXPLANATION },
+    ]);
+    const view = projectHealthProgress([lift('one', TODAY, 100, 1)], [], LB, TODAY, [], medals);
+    expect(view.medals.map(medal => medal.id)).toEqual(['memory_shelves', 'harbor_rhythm']);
+    expect(view.trophies.map(trophy => trophy.id)).not.toContain('memory_shelves');
+    expect(view.trophies.map(trophy => trophy.name)).not.toContain('Memory Shelves');
+    for (const medal of view.medals) {
+      expect(medal.explanation).toBe(GAME_MEDAL_EXPLANATION);
+      expect(Object.values(HEALTH_BADGES)).not.toContain(medal.name as typeof HEALTH_BADGES[keyof typeof HEALTH_BADGES]);
+      expect(medal.explanation).not.toContain('Two plates');
+      expect(medal.explanation).not.toContain('Marathon finisher');
+    }
   });
 });
+
+function liftPr(kg: number, reps: number): HealthPr {
+  return { v: 1, kind: 'lift', measured_on: TODAY, logged_on: TODAY, exercise: 'Squat', kg, reps };
+}
+
+function runPr(distance: number, seconds: number): HealthPr {
+  return { v: 1, kind: 'run', measured_on: TODAY, logged_on: TODAY, distance_m: distance, seconds };
+}
+
+function otherPr(value: number): HealthPr {
+  return { v: 1, kind: 'other', measured_on: TODAY, logged_on: TODAY, name: 'Count', value, unit: 'count', direction: 'higher' };
+}
+
+function beaten(count: number): HealthPr[] {
+  return Array.from({ length: count }, (_, index) => {
+    const day = new Date(Date.parse('2026-01-01T00:00:00Z') + index * 86_400_000).toISOString().slice(0, 10);
+    return { v: 1, kind: 'lift', measured_on: day, logged_on: day, exercise: 'Squat', kg: 20 + index, reps: 1 };
+  });
+}
+
+function logged(count: number): HealthStat[] {
+  const time = Date.parse(`${TODAY}T00:00:00Z`);
+  const weekday = new Date(time).getUTCDay();
+  const end = time - ((weekday + 6) % 7) * 86_400_000;
+  return Array.from({ length: count }, (_, index) => {
+    const loggedOn = new Date(end - index * 7 * 86_400_000).toISOString().slice(0, 10);
+    return { v: 1, kind: 'weight', measured_on: loggedOn, logged_on: loggedOn, kg: 70 };
+  });
+}
