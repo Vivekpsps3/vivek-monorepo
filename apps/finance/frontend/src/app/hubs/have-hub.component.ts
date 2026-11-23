@@ -4,12 +4,13 @@ import { ActivatedRoute } from '@angular/router';
 import { AccountsHallComponent } from '../accounts-hall/accounts-hall.component';
 import { AssetsLiabilitiesComponent } from '../assets-liabilities/assets-liabilities.component';
 import { PortfolioComponent } from '../portfolio/portfolio.component';
+import { TreasuryGalleryComponent } from '../treasury-gallery/treasury-gallery.component';
 import { UiPageHeaderComponent } from '@vivek/ui';
 
 @Component({
   selector: 'app-have-hub',
   standalone: true,
-  imports: [AssetsLiabilitiesComponent, AccountsHallComponent, PortfolioComponent, UiPageHeaderComponent],
+  imports: [AssetsLiabilitiesComponent, AccountsHallComponent, PortfolioComponent, TreasuryGalleryComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
       @if (tab === 'holdings') {
@@ -17,6 +18,8 @@ import { UiPageHeaderComponent } from '@vivek/ui';
         <app-portfolio [embedded]="true" />
       } @else if (tab === 'hall') {
         <app-accounts-hall />
+      } @else if (tab === 'gallery') {
+        <app-treasury-gallery />
       } @else {
         <app-assets-liabilities />
       }
@@ -35,7 +38,8 @@ import { UiPageHeaderComponent } from '@vivek/ui';
 
     app-assets-liabilities,
     app-accounts-hall,
-    app-portfolio {
+    app-portfolio,
+    app-treasury-gallery {
       display: block;
       min-width: 0;
       max-width: 100%;
@@ -52,7 +56,8 @@ export class HaveHubComponent implements OnInit {
   ngOnInit(): void {
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroy)).subscribe(params => {
       const requested = params.get('t');
-      this.tab = requested === 'holdings' ? 'holdings' : requested === 'hall' ? 'hall' : 'assets';
+      const tab = requested === 'holdings' || requested === 'hall' || requested === 'gallery' ? requested : 'assets';
+      this.tab = tab;
       this.cdr.markForCheck();
     });
   }

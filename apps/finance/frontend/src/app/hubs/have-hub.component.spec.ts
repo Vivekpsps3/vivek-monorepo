@@ -17,7 +17,9 @@ describe('canonical tab links', () => {
         provideRouter([{ path: 'finance/have', component: HaveHubComponent }]),
         { provide: FinanceService, useValue: {
           sessionToken: 1, assets$: of([]), liabilities$: of([]), netWorth$: of(null),
+          holdings$: of([]), transactions$: of([]),
           getAssets: () => of([]), getLiabilities: () => of([]), getNetWorth: () => of(null),
+          getHoldings: () => of([]), getTransactions: () => of([]),
         } },
         { provide: VaultService, useValue: { isUnlocked: true, unlocked$: of(true) } },
       ],
@@ -36,6 +38,7 @@ describe('canonical tab links', () => {
       ['?t=assets', 'Accounts', 'app-assets-liabilities'],
       ['?t=holdings', 'Holdings', 'app-portfolio'],
       ['?t=hall', 'Accounts hall', 'app-accounts-hall'],
+      ['?t=gallery', 'Treasury gallery', 'app-treasury-gallery'],
     ]) {
       await harness.navigateByUrl('/finance/have' + suffix, HaveHubComponent);
       harness.detectChanges();

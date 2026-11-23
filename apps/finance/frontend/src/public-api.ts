@@ -13,6 +13,8 @@ export { FinanceLockService, type AutoLockSetting } from './app/core/finance-loc
 export type { NetWorth } from './app/models/transaction.model';
 export { projectAccountHall, accountHallKey } from './app/accounts-hall/account-hall';
 export type { AccountHallDrawer, AccountHallProjection, AccountHallRecord } from './app/accounts-hall/account-hall';
+export { projectTreasuryGallery, galleryGain } from './app/treasury-gallery/treasury-gallery';
+export type { TreasuryGalleryProjection, TreasuryPlaque, TreasuryLedgerLine } from './app/treasury-gallery/treasury-gallery';
 export type { PortfolioAccount, PositionHighlight } from './app/hub/finance-hub-snapshot';
 export async function loadFinanceRoutes(): Promise<Routes> { return (await import('./app/app.routes')).routes; }
 export async function createFinanceVaultMaterial(passphrase: string) { return (await import('./app/crypto/vault-crypto')).createVaultMaterial(passphrase); }

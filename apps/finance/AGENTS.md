@@ -26,8 +26,7 @@ Start with the existing owner:
 Decrypted financial data stays in the browser. Preserve owner/session/collection
 eligibility at publication, immediate lock clearing, expected revisions and encrypted
 format/AAD compatibility. A timeout or an entry-time unlock check alone is insufficient.
-Keep one authoritative record store and calculation/import engine. Name search and the accounts hall read published views and do not rebuild
-the dashboard.
+Keep one authoritative record store and calculation/import engine. Name search, the accounts hall, and the treasury gallery read published views and do not rebuild the dashboard or price a quote.
 
 Before extracting a service, identify duplicated decisions and actual consumers.
 Delete replaced paths in the same change. Distinct filtered/dashboard views and
