@@ -21,7 +21,7 @@ Reuse shared controls. Town reset fixtures and worker clock stay deterministic.
 See [scene-appearance](../platform/scene-appearance.ts). Idle if hidden or reduced-motion.
 
 The Town exterior and the Reading Hall share the y-down [frame](library-room.scene.ts).
-One rectangle paints and picks; the higher layer wins. Pan, zoom, tap, drag, and
-cancel use it. Keyboard and list share cutaway, fade, and the sheet. The URL keeps
-both without scrolling. Locked, empty, and archived lots too. Room art loads only
-on that route. Clinic and Gym read [loadTownHealthStages](health/index.ts).
+Higher layer wins. Pan, zoom, tap, drag, cancel use it. Keyboard, list, and
+the URL share cutaway, fade, and the sheet. Locked, empty, and archived lots.
+Check-in flower, window, or smoke follows success and clears on Undo, owner, or
+day change. Room art loads per route. Clinic and Gym read [loadTownHealthStages](health/index.ts).

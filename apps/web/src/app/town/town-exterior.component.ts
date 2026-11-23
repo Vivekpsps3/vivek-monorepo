@@ -30,6 +30,15 @@ import type { TreasuryView } from './weeks-kept';
 import { sceneAudio } from './scene-audio';
 import { SceneAppearanceService } from '../platform/scene-appearance.service';
 import { TownPlaceComponent, type PlaceCrumb } from './town-place.component';
+import {
+  EMPTY_FEEDBACK,
+  feedbackAttr,
+  feedbackLabel,
+  responseKind,
+  visibleMark,
+  type FeedbackBook,
+  type FeedbackMark,
+} from './habit-feedback';
 
 const QUIET_SOUND = 'Town sound stays quiet while the scene is hidden, offscreen, or motion is reduced.';
 
@@ -68,6 +77,7 @@ export class TownExteriorComponent {
   readonly vaultPresent = input(false);
   readonly health = input<ExteriorHealth>({ state: 'locked' });
   readonly swaps = input<Readonly<Record<string, 1 | 2 | 3>>>({});
+  readonly feedback = input<FeedbackBook>(EMPTY_FEEDBACK);
   readonly openHabit = output<{ slot: number | null; habitId: number | null }>();
   readonly openHistory = output<void>();
 
@@ -103,6 +113,9 @@ export class TownExteriorComponent {
   private readonly soundOutcome = signal<string | null>(null);
   protected readonly presentation = this.scene.presentation;
   protected readonly seasonDirty = this.scene.dirty;
+  protected readonly feedbackLabel = feedbackLabel;
+  protected readonly feedbackAttr = feedbackAttr;
+  protected readonly responseKind = responseKind;
   protected readonly soundStatus = computed(() => {
     if (!this.scene.effective().sound) return 'Town sound is off until you turn it on in Appearance.';
     return this.soundOutcome() ?? 'Town sound is on. Nothing plays until you choose Play Town sound.';
@@ -137,6 +150,11 @@ export class TownExteriorComponent {
       this.dropUncommittedGesture();
       if (previous !== null && previous !== owner) this.clearInspect();
     });
+  }
+
+  protected habitMark(habitId: number | null): FeedbackMark | null {
+    if (habitId == null || this.owner == null) return null;
+    return visibleMark(this.feedback(), habitId, this.owner, this.data().town.today);
   }
 
   protected atMaxZoom(): boolean {

@@ -49,7 +49,7 @@ function snapshot(): TownResponse {
 describe('Town page', () => {
   let response: Subject<TownResponse>;
   let created: Subject<unknown>;
-  let api: { getTown: jasmine.Spy; checkin: jasmine.Spy; createHabit: jasmine.Spy };
+  let api: { getTown: jasmine.Spy; checkin: jasmine.Spy; undoCheckin: jasmine.Spy; createHabit: jasmine.Spy };
   let budget: jasmine.Spy;
   let health: jasmine.Spy;
   let user: BehaviorSubject<{ id: number } | null>;
@@ -74,6 +74,7 @@ describe('Town page', () => {
     api = {
       getTown: jasmine.createSpy().and.callFake(() => response),
       checkin: jasmine.createSpy(),
+      undoCheckin: jasmine.createSpy().and.callFake(() => new Subject()),
       createHabit: jasmine.createSpy().and.callFake(() => created),
     };
     TestBed.configureTestingModule({
@@ -365,6 +366,102 @@ describe('Town page', () => {
     expect(gym.querySelector('img')?.getAttribute('src')).toBe('/town/gym-1.svg');
     expect(gym.getAttribute('href')).toBe('/town/gym');
     expect(gym.textContent).toContain('Open');
+  });
+
+  it('celebrates one lot only after the check-in succeeds and does not replay it', () => {
+    const read = {
+      id: 12, name: 'Read 20 pages', slot: 0, building_style: 'cottage' as const,
+      cadence: { per_week: 7, kind: 'daily' as const, pending: null },
+      created_on: '2026-10-05', archived_on: null, xp: 80, level: 2, stage: 2 as const, level_xp_start: 50, next_level_xp: 150,
+      streak: { unit: 'days' as const, current: 3, best: 3, best_days: 3, best_weeks: 0, rest_day_available: true, rest_used_on: null },
+      week: null, checked_today: false, checked_yesterday: false, can_check_yesterday: true, last7: [],
+    };
+    const walk = { ...read, id: 15, name: 'Walk 30 minutes', slot: 1, building_style: 'garden' as const };
+    const data = snapshot();
+    data.lots = data.lots.map(lot => {
+      if (lot.slot === 0) return { ...lot, state: 'occupied' as const, habit_id: 12 };
+      if (lot.slot === 1) return { ...lot, state: 'occupied' as const, habit_id: 15 };
+      return lot;
+    });
+    data.habits = [read, walk];
+    const checkin = new Subject<CheckinResult>();
+    const undo = new Subject<CheckinResult>();
+    api.checkin.and.returnValue(checkin);
+    api.undoCheckin.and.returnValue(undo);
+    const { fixture, el } = render(data);
+    const xp = () => el.querySelector('header p')?.textContent ?? '';
+    const before = xp();
+    expect(before).toContain('340 / 500');
+    const readButton = el.querySelector<HTMLButtonElement>('[data-check="12"] button')!;
+    const walkButton = el.querySelector<HTMLButtonElement>('[data-check="15"] button')!;
+    readButton.click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-scene-object="slot-0"] [data-habit-feedback="pending"]')).not.toBeNull();
+    expect(el.querySelector('[data-scene-object="slot-0"] [data-habit-feedback="light"]')).toBeNull();
+    expect(el.querySelector('[data-building="slot-0"]')?.textContent).toContain('Saving check');
+    expect(el.querySelector('[data-scene-object="slot-1"] [data-habit-feedback]')).toBeNull();
+    expect(xp()).toBe(before);
+    expect(walkButton.getAttribute('aria-disabled')).toBeNull();
+    checkin.error({ error: { message: 'Check not saved. Try again.' } });
+    fixture.detectChanges();
+    expect(el.querySelector('[data-habit-feedback="light"]')).toBeNull();
+    expect(el.querySelector('[data-habit-feedback="pending"]')).toBeNull();
+    expect(xp()).toBe(before);
+    expect(el.querySelector('app-town-today [aria-live="polite"]')?.textContent).not.toContain('checked');
+
+    const again = new Subject<CheckinResult>();
+    api.checkin.and.returnValue(again);
+    readButton.click();
+    fixture.detectChanges();
+    again.next({
+      day: '2026-10-29', checked: true,
+      habit: { ...read, checked_today: true },
+      town: { xp: 350, level: 3, level_xp_start: 250, next_level_xp: 500 },
+    });
+    fixture.detectChanges();
+    expect(xp()).toContain('350 / 500');
+    expect(el.querySelectorAll('[data-scene-object="slot-0"] [data-habit-feedback="light"]').length).toBe(1);
+    expect(el.querySelector('[data-scene-object="slot-0"] [data-celebration="1"]')).not.toBeNull();
+    expect(el.querySelector('[data-scene-object="slot-1"] [data-habit-feedback]')).toBeNull();
+    expect(el.querySelector('[data-building="slot-0"]')?.textContent).toContain('Window lit');
+    el.querySelector<HTMLButtonElement>('[data-building="slot-0"]')!.click();
+    fixture.detectChanges();
+    expect(el.querySelector('.inspector')?.textContent).toContain('Window lit');
+    const checked = snapshot();
+    checked.lots = data.lots;
+    checked.habits = [{ ...read, checked_today: true }, walk];
+    checked.town = { ...checked.town, xp: 350 };
+    response.next(checked);
+    fixture.detectChanges();
+    expect(el.querySelectorAll('[data-scene-object="slot-0"] [data-celebration]').length).toBe(1);
+    expect(el.querySelector('app-town-today [aria-live="polite"]')?.textContent).toContain('Read 20 pages checked.');
+
+    const undoing = new Subject<CheckinResult>();
+    api.undoCheckin.and.returnValue(undoing);
+    readButton.click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-scene-object="slot-0"] [data-celebration="1"]')).not.toBeNull();
+    expect(el.querySelector('[data-building="slot-0"]')?.textContent).toContain('Undoing check');
+    undoing.next({
+      day: '2026-10-29', checked: false,
+      habit: read,
+      town: { xp: 340, level: 3, level_xp_start: 250, next_level_xp: 500 },
+    });
+    fixture.detectChanges();
+    expect(el.querySelector('[data-scene-object="slot-0"] [data-habit-feedback]')).toBeNull();
+    expect(el.textContent).not.toContain('Window lit');
+    response.next(data);
+    fixture.detectChanges();
+    expect(el.querySelectorAll('[data-celebration]').length).toBe(0);
+
+    fixture.destroy();
+    const reloaded = snapshot();
+    reloaded.lots = data.lots;
+    reloaded.habits = [{ ...read, checked_today: true }, walk];
+    const next = render(reloaded);
+    expect(next.el.querySelector('[data-habit-feedback="light"]')).toBeNull();
+    expect(next.el.querySelector('[data-celebration]')).toBeNull();
+    expect(next.el.querySelector('[data-check="12"] button')?.getAttribute('aria-pressed')).toBe('true');
   });
 
 });
