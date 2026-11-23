@@ -65,11 +65,11 @@ export function collectionSummary(kind) {
     case "book":
       return "Books. Current, read, and to-read shelves, as covers and spines or as a text list. A page or percent appears only when you record one.";
     case "artist":
-      return "Music. Artists you have saved, with their albums and then their songs. Saving music does not follow the artist.";
+      return "Music. Artists you have saved, with their albums and then their songs. Saving music does not follow the artist. The artist wall, album racks, and songbook use that grouping. Harbor Rhythm stays separate from a music link, and this bar does not play audio.";
     case "album":
-      return "Music. Saved albums, without marking the artist followed.";
+      return "Music. Saved albums, without marking the artist followed. Album racks open those records, and a rating stays on the album.";
     case "track":
-      return "Music. Saved songs, without saving the rest of an album.";
+      return "Music. Saved songs, without saving the rest of an album. The songbook lists them and does not play them.";
     case "game":
       return "Games. This cabinet is your Media library, not a Town minigame. Playing in Town does not add a box here. A box shows the state you saved, and hours or a percent only when you recorded them.";
     default:

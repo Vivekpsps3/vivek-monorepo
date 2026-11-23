@@ -1,0 +1,183 @@
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+:host * {
+  box-sizing: border-box;
+}
+
+.music-stage,
+.artist-wall,
+.album-racks,
+.songbook {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-block-end: 12px solid var(--wood);
+  border-radius: var(--radius-lg) var(--radius-lg) 0.2rem 0.2rem;
+  background: color-mix(in srgb, var(--chart-4) 8%, var(--surface-2));
+  box-shadow: 0 6px 0 color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+}
+
+.music-stage h2,
+.music-stage h3,
+.music-stage h4,
+.music-stage p,
+.artist-wall h2,
+.album-racks h2,
+.songbook h2,
+.music-note,
+.music-boundary {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.music-boundary,
+.music-note {
+  padding: var(--space-3);
+  border-inline-start: 4px solid var(--wood);
+  background: var(--card-bg);
+}
+
+.stage-objects {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.stage-object {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--wood) 35%, transparent);
+}
+
+.stage-object input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.rhythm-panel {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--border);
+  border-block-start: 8px solid var(--brass);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.artist-wall .media-grid,
+.album-racks .media-grid,
+.songbook .media-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  min-width: 0;
+}
+
+.artist-portrait {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  min-width: 44px;
+  min-height: 7.5rem;
+  aspect-ratio: 1;
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-block-end: 8px solid var(--wood);
+  border-radius: var(--radius-lg) var(--radius-lg) 0.2rem 0.2rem;
+  background: color-mix(in srgb, var(--chart-4) 18%, var(--card-bg));
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--wood) 28%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.artist-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.artist-group,
+.record,
+.song-row {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.artist-group h2 {
+  margin: 0;
+}
+
+.artist-group h2 a,
+.group-link,
+.discography-link {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  color: var(--text);
+}
+
+.saved-album,
+.saved-songs {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.saved-songs {
+  margin-inline-start: var(--space-4);
+}
+
+.loose-songs {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+}
+
+.artist-portrait:focus-visible,
+.stage-object input:focus-visible,
+.music-stage h2:focus-visible,
+.artist-wall h2:focus-visible,
+.album-racks h2:focus-visible,
+.songbook h2:focus-visible,
+.rhythm-panel h4:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (min-width: 800px) {
+  .stage-objects {
+    grid-template-columns: 1fr 1fr;
+  }
+}

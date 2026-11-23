@@ -40,6 +40,8 @@ export interface NestedAlbum extends MediaCard {
 export interface ArtistGroup extends ArtistGroupSummary {
   source?: string;
   rating?: number | null;
+  /** This artist's portrait or catalog image. An album cover is not copied here. */
+  artwork_url?: string | null;
   saved_children: MediaCard[];
   albums?: NestedAlbum[];
   songs?: MediaCard[];
