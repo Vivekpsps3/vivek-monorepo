@@ -87,20 +87,27 @@ def test_game_update_changes_only_that_membership(client):
     assert current["note"] == note
     assert current["rating"] == 7
     assert current["artwork_url"] == "https://synthetic.example/box.png"
+    assert current["unopened"] is False
     assert planned_copy["id"] == same_title["id"]
     assert planned_copy["progress_value"] is None
     assert planned_copy["progress_label"] is None
     assert planned_copy["note"] is None
+    assert planned_copy["unopened"] is True
     assert by_title["Untouched Quest"][0]["progress_label"] == "3 h"
+    assert by_title["Untouched Quest"][0]["unopened"] is False
     assert by_title["Quiet Arcade"][0]["progress_value"] is None
     assert by_title["Quiet Arcade"][0]["progress_label"] is None
     assert by_title["Quiet Arcade"][0]["status"] == "completed"
+    assert by_title["Quiet Arcade"][0]["unopened"] is False
     assert by_title["Paper Cartridge"][0]["id"] == planned["id"]
     assert by_title["Paper Cartridge"][0]["artwork_url"] is None
+    assert by_title["Paper Cartridge"][0]["unopened"] is True
     assert by_title["Anticipated Port"][0]["id"] == waiting["id"]
     assert by_title["Anticipated Port"][0]["status"] == "anticipating"
+    assert by_title["Anticipated Port"][0]["unopened"] is True
     assert by_title["Paused Relay"][0]["id"] == paused["id"]
     assert by_title["Paused Relay"][0]["status"] == "paused"
+    assert by_title["Paused Relay"][0]["unopened"] is False
     margin = by_title["Long Margin"][0]
     assert margin["note"] != long_note
     assert margin["note"].endswith("…")
@@ -147,12 +154,23 @@ def test_game_update_changes_only_that_membership(client):
         json={"progress_value": 1, "progress_unit": "hour"},
     )
     assert denied.status_code == 404
+    foreign = client.get("/api/library", params={"kind": "game", "limit": 24})
+    assert foreign.status_code == 200
+    assert foreign.json()["total"] == 0
+    hidden = client.get(f"/api/entries/{planned['id']}")
+    assert hidden.status_code == 404
     client.app.dependency_overrides[require_principal] = lambda: Principal(1, "tester", "Tester")
     owned = client.get(f"/api/entries/{playing['id']}").json()
     assert owned["progress_value"] == 13
+    still_closed = client.get("/api/library", params={"kind": "game", "limit": 24}).json()
+    paper = next(item for item in still_closed["items"] if item["id"] == planned["id"])
+    assert paper["unopened"] is True
+    assert paper["progress_value"] is None
+    assert paper["status"] == "want"
 
     mixed = client.get("/api/library", params={"sort": "title"}).json()["items"]
     movie = next(item for item in mixed if item["title"] == "Paper Lantern")
     assert movie["kind"] == "movie"
     assert "note" not in movie
+    assert "unopened" not in movie
     assert "score" not in movie

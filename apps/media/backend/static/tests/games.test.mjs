@@ -4,6 +4,7 @@ import {
   gameProgressWords,
   gameStateOptions,
   gameStatusWords,
+  unopenedCabinet,
   visibleBays,
 } from "../../../frontend/src/games.mjs";
 
@@ -30,6 +31,21 @@ test("progress words use only a recorded hour or percent", () => {
   );
   assert.equal(gameProgressWords({ progress_value: 4, progress_unit: "page", progress_label: "p. 4" }), "p. 4 recorded");
   assert.equal(gameStateOptions().some((item) => item.value === "in_progress" && item.label === "Playing"), true);
+});
+
+test("an unopened cabinet is only a game with no recorded start", () => {
+  assert.equal(unopenedCabinet({ kind: "game", status: "want" }), true);
+  assert.equal(unopenedCabinet({ kind: "game", status: "anticipating" }), true);
+  assert.equal(unopenedCabinet({ kind: "game", status: "want", progress_value: 0 }), false);
+  assert.equal(unopenedCabinet({ kind: "game", status: "want", progress_value: 3 }), false);
+  assert.equal(unopenedCabinet({ kind: "game", status: "in_progress" }), false);
+  assert.equal(unopenedCabinet({ kind: "game", status: "completed" }), false);
+  assert.equal(unopenedCabinet({ kind: "game", status: "paused" }), false);
+  assert.equal(unopenedCabinet({ kind: "game", status: "dropped" }), false);
+  assert.equal(unopenedCabinet({ kind: "game", status: "want", unopened: false }), false);
+  assert.equal(unopenedCabinet({ kind: "game", status: "in_progress", unopened: true }), true);
+  assert.equal(unopenedCabinet({ kind: "movie", status: "want", unopened: true }), false);
+  assert.equal(unopenedCabinet(null), false);
 });
 
 test("bays keep every game and do not merge the same title", () => {

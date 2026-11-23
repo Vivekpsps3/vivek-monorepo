@@ -2,7 +2,7 @@ import { Component, input, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { formatDay } from "@vivek/browser";
 import { UiBadgeComponent } from "@vivek/ui";
-import { gameProgressWords, gameStatusWords } from "./games.mjs";
+import { gameProgressWords, gameStatusWords, unopenedCabinet } from "./games.mjs";
 import { MediaCard, statusLabel } from "./media.models";
 import { filmShelf, seriesShelf } from "./theater.mjs";
 @Component({
@@ -22,6 +22,7 @@ import { filmShelf, seriesShelf } from "./theater.mjs";
       [attr.data-game]="box() ? item().id : null"
       [attr.data-art]="box() ? (shownArt() ? 'present' : 'missing') : null"
       [attr.data-status]="box() ? item().status : null"
+      [attr.data-opened]="box() ? (unopened() ? 'false' : 'true') : null"
       [attr.aria-busy]="busy() ? 'true' : null"
     >
       @if (poster()) {
@@ -90,6 +91,9 @@ import { filmShelf, seriesShelf } from "./theater.mjs";
           </h3>
           <p class="box-status">{{ gameStatus() }}</p>
           <p class="box-progress">{{ gameProgress() }}</p>
+          @if (unopened()) {
+            <p class="box-unopened">Unopened</p>
+          }
           @if (item().favorite || (item().rating !== null && item().rating !== undefined)) {
             <p class="box-marks">
               @if (item().favorite) {
@@ -197,6 +201,9 @@ export class MediaCardComponent {
   }
   protected gameProgress(): string {
     return gameProgressWords(this.item());
+  }
+  protected unopened(): boolean {
+    return unopenedCabinet(this.item());
   }
   protected film() {
     return filmShelf(this.item().status, this.item().viewed_on);
