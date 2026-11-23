@@ -45,9 +45,18 @@ export function mondayOn(iso: string): string {
 }
 
 export interface HistoryCell {
-  text: '' | 'done' | 'rest' | 'missed';
+  text: '' | 'done' | 'rest' | 'missed' | 'pending';
   kind: 'done' | 'rest' | 'miss' | 'pending' | 'empty';
 }
+
+/** Visible words for the history marks. The spoken cell text is the lowercase form, except an empty cell. */
+export const HISTORY_LEGEND = [
+  { kind: 'done', label: 'Done', text: 'done' },
+  { kind: 'rest', label: 'Rest', text: 'rest' },
+  { kind: 'miss', label: 'Missed', text: 'missed' },
+  { kind: 'pending', label: 'Pending', text: 'pending' },
+  { kind: 'empty', label: 'No check', text: '' },
+] as const;
 
 const DATE_TEXT = /^\d{4}-\d{2}-\d{2}$/;
 /** The fetched window is at most ~120 days. The cap is a backstop so a bad range can never walk forever. */
@@ -77,7 +86,8 @@ export function labelRange(args: {
       continue;
     }
     if (!args.daily || day === args.today) {
-      out.set(day, { text: '', kind: day === args.today ? 'pending' : 'empty' });
+      const pending = day === args.today;
+      out.set(day, { text: pending ? 'pending' : '', kind: pending ? 'pending' : 'empty' });
       continue;
     }
     if (streak > 0 && !rests.has(mondayOn(day))) {

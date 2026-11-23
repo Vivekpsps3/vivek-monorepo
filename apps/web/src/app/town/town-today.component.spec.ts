@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { ToastService } from '@vivek/ui';
-import { Subject } from 'rxjs';
-import { TownTodayComponent,liveCheck } from './town-today.component';
+import { BehaviorSubject, Subject } from 'rxjs';
+import { SessionService } from '../platform/session.service';
+import { TownTodayComponent, liveAgain, liveCheck, liveUndo } from './town-today.component';
 import { TownApiService,type CheckinResult } from './town.api';
 import { LOT_UNLOCK_LV } from './town.constants';
 import type { Habit,TownResponse } from './town.types';
@@ -32,16 +33,24 @@ describe('Today panel', () => {
   let undo!: Subject<CheckinResult>;
   let api: { checkin: jasmine.Spy; undoCheckin: jasmine.Spy };
   let toast: ToastService;
+  let user: BehaviorSubject<{ id: number } | null>;
+  let cleared: Subject<void>;
 
   beforeEach(() => {
     checkin = new Subject();
+    user = new BehaviorSubject<{ id: number } | null>({ id: 7 });
+    cleared = new Subject<void>();
     api = {
       checkin: jasmine.createSpy().and.callFake(() => checkin),
       undoCheckin: jasmine.createSpy().and.callFake(() => (undo = new Subject<CheckinResult>())),
     };
     TestBed.configureTestingModule({
       imports: [TownTodayComponent],
-      providers: [provideRouter([]), { provide: TownApiService, useValue: api }],
+      providers: [
+        provideRouter([]),
+        { provide: TownApiService, useValue: api },
+        { provide: SessionService, useValue: { user$: user, currentUser: { id: 7 }, cleared$: cleared } },
+      ],
     });
     toast = TestBed.inject(ToastService);
   });
@@ -139,6 +148,42 @@ describe('Today panel', () => {
     undo.error({ error: { code: 'day_out_of_window', message: 'You can only check in for today or yesterday.' } });
     expect(toast.error).toHaveBeenCalledWith('The day changed. Try again.');
     expect(dayChanged).toHaveBeenCalledTimes(1);
+    expect(liveUndo('Read 20 pages')).toBe('Read 20 pages undone.');
+    expect(liveAgain('Read 20 pages undone.', 'Read 20 pages undone.')).toBe('Read 20 pages undone.\u200b');
+  });
+
+  it('ignores a second check while the first post is held and a late result after the owner changes', () => {
+    const read = habit({ id: 12, name: 'Read 20 pages' });
+    const { fixture, el } = render(snapshot([read]));
+    const settled = jasmine.createSpy();
+    fixture.componentInstance.settled.subscribe(settled);
+    const button = el.querySelector<HTMLButtonElement>('button')!;
+    button.click();
+    button.click();
+    fixture.detectChanges();
+    expect(api.checkin).toHaveBeenCalledTimes(1);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    user.next({ id: 8 });
+    fixture.detectChanges();
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(button.getAttribute('aria-disabled')).toBeNull();
+    checkin.next({
+      day: '2026-10-29', checked: true, habit: read,
+      town: { xp: 350, level: 3, level_xp_start: 250, next_level_xp: 500 },
+    });
+    fixture.detectChanges();
+    expect(settled).not.toHaveBeenCalled();
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    cleared.next();
+    button.click();
+    expect(api.checkin).toHaveBeenCalledTimes(2);
+    cleared.next();
+    checkin.next({
+      day: '2026-10-29', checked: true, habit: read,
+      town: { xp: 360, level: 3, level_xp_start: 250, next_level_xp: 500 },
+    });
+    expect(settled).not.toHaveBeenCalled();
   });
 
 });

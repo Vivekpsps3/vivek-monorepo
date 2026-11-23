@@ -14,7 +14,7 @@
             <span class="muted">{{ habit.week.done }}/{{ habit.week.target }} this week</span>
           }
         </div>
-        <ui-button class="check" [attr.data-check]="habit.id" [pressed]="pressed(habit)" [ariaLabel]="checkLabel(habit)" (clicked)="toggle(habit)">✓</ui-button>
+        <ui-button class="check" [attr.data-check]="habit.id" [pressed]="pressed(habit)" [ariaLabel]="checkLabel(habit)" [ariaDisabled]="busyCheck(habit)" [busy]="busyCheck(habit)" (clicked)="toggle(habit)">✓</ui-button>
       </li>
     }
   </ul>
