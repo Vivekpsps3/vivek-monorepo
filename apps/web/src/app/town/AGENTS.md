@@ -23,5 +23,5 @@ deterministic. Root gates still apply.
 The Town exterior and the Reading Hall share the y-down [frame](library-room.scene.ts).
 One rectangle paints and picks; the higher layer wins. Pan, zoom, tap, drag, and
 cancel use it. Keyboard and list share cutaway, fade, and the sheet. The URL keeps
-both, including locked, empty, and archived lots. Room art loads only on the Reading
-Hall route. Clinic and Gym read [loadTownHealthStages](health/index.ts).
+both without scrolling. Locked, empty, and archived lots too. Room art loads only
+on that route. Clinic and Gym read [loadTownHealthStages](health/index.ts).
