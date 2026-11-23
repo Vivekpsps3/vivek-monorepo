@@ -51,8 +51,8 @@ Commands ran in `/tmp/vivek-home-02`. `make test-fast` used `PATH="/tmp/vivek-ho
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded after the pull request opens.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/577
 - Roadmap #134 append-only status-note URL: recorded after merge.
-- Merged/activation status (actual evidence, not assumption): not merged yet.
+- Merged/activation status (actual evidence, not assumption): not merged yet. Pull request #577 is open.
 - Remaining external prerequisites or approved scope decisions: HOME-01 owns saved layout persistence. HOME-03 owns the four rooms. HOME-04 owns place, rotate, and recolor. GAME-02 owns buy and refund. No deployment.
 - Next actor: review and merge this leaf only.
