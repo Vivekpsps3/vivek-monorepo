@@ -83,6 +83,7 @@ describe('Clinic history projection', () => {
     const weight = series.find(item => item.kind === 'weight');
     if (!weight) throw new Error('missing weight');
     expect(weight.latestLabel).toBe(`Weight · ${day(200)}`);
+    expect(weight.latestMeasuredOn).toBe(day(200));
     expect(weight.sparkline.points.some(point => point.clientId === id('W', 200))).toBeFalse();
     expect(weight.sparkline.points.length).toBe(12);
     expect(weight.sparkline.points[0]?.clientId).toBe(id('W', 89));

@@ -47,6 +47,34 @@
         }
       </app-gym-mezzanine>
     }
+    @if (room() === 'clinic') {
+      <app-clinic-room [selected]="clinicObject()" [gate]="floorGate()" (chosen)="selectClinic($event)">
+        @if (phase() === 'ready' && clinicObject() === 'reception') {
+          @for (kind of vitalStations; track kind) {
+            @if (vitalPage(kind); as page) {
+              <p class="station-fact" [attr.data-clinic-reception]="kind">
+                <span>{{ page.title }}</span>
+                <span>Latest {{ page.latestLabel }}</span>
+                <span>Measured on {{ page.latestMeasuredOn }}</span>
+              </p>
+            } @else {
+              <p class="station-fact" [attr.data-clinic-reception]="kind">{{ vitalTitle(kind) }}. No reading yet.</p>
+            }
+          }
+        } @else if (phase() === 'ready' && selectedVitalId(); as kind) {
+          <p class="station-fact" [attr.data-clinic-unit]="kind">{{ stationUnit(kind) }}</p>
+          @if (selectedVital(); as page) {
+            <p class="station-fact" [attr.data-clinic-date]="kind">Measured on {{ page.latestMeasuredOn }}</p>
+            <div [attr.data-clinic-history]="kind">
+              <ng-container *ngTemplateOutlet="vitalArticle; context: { $implicit: page }" />
+            </div>
+          } @else {
+            <p class="station-fact" [attr.data-clinic-empty]="kind">No {{ vitalNoun(kind) }} yet.</p>
+            <ui-button [attr.id]="'health-station-record-' + kind" (clicked)="openCreate(kind)">Record {{ vitalNoun(kind) }}</ui-button>
+          }
+        }
+      </app-clinic-room>
+    }
     @if (phase() === 'locked') {
     <div class="gate" role="status">
       <p>Finance is locked. Unlock to see measurements.</p>
@@ -221,23 +249,11 @@
       } @else if (rows().length === 0) {
         <p>No entries yet.</p>
       } @else {
-        @if (measurementPages().length > 0) {
+        @if (listedMeasurements().length > 0) {
           <section class="result-group" aria-labelledby="health-group-measurements" data-health-group="health-group-measurements">
             <h2 id="health-group-measurements">Measurements</h2>
-            @for (page of measurementPages(); track page.kind) {
-              <article class="series" [attr.data-health-series]="page.kind" [attr.data-health-shown]="page.shown" [attr.data-health-total]="page.total">
-                <h3 [id]="'health-series-' + page.kind">{{ page.title }}</h3>
-                <p class="latest" [attr.data-health-latest]="page.kind">Latest · {{ page.latestLabel }}</p>
-                <app-health-sparkline [seriesId]="page.kind" [caption]="page.title + ' history'" [view]="page.sparkline" />
-                <ul class="entries" [attr.aria-label]="page.title">
-                  @for (row of page.visibleRows; track row.clientId) {
-                    <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: row }" />
-                  }
-                </ul>
-                @if (page.more) {
-                  <ui-button variant="secondary" [attr.id]="'health-more-' + page.kind" (clicked)="showMore(page.kind)">Show more {{ page.noun }}</ui-button>
-                }
-              </article>
+            @for (page of listedMeasurements(); track page.kind) {
+              <ng-container *ngTemplateOutlet="vitalArticle; context: { $implicit: page }" />
             }
           </section>
         }
@@ -280,15 +296,6 @@
             </article>
           </section>
         }
-        <ng-template #entryRow let-row>
-          <li [attr.data-health-kind]="row.kind">
-            <span class="entry-label" [id]="'health-entry-' + row.clientId" tabindex="-1" [appHealthLinkedFocus]="!dialogOpen() && (row.clientId === entryId() || row.clientId === revealFocusId())" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.label }}</span>
-            <span class="entry-actions">
-              <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="openEdit(row.clientId)">Edit</ui-button>
-              <ui-button variant="danger" [attr.id]="'health-delete-' + row.clientId" [ariaLabel]="'Delete ' + row.label" (clicked)="removeEntry(row.clientId)">Delete</ui-button>
-            </span>
-          </li>
-        </ng-template>
       }
       @if (room() === 'clinic') {
         <div class="add-actions">
@@ -348,6 +355,30 @@
   }
   }
 </main>
+<ng-template #vitalArticle let-page>
+  <article class="series" [attr.data-health-series]="page.kind" [attr.data-health-shown]="page.shown" [attr.data-health-total]="page.total">
+    <h3 [id]="'health-series-' + page.kind">{{ page.title }}</h3>
+    <p class="latest" [attr.data-health-latest]="page.kind">Latest · {{ page.latestLabel }}</p>
+    <app-health-sparkline [seriesId]="page.kind" [caption]="page.title + ' history'" [view]="page.sparkline" />
+    <ul class="entries" [attr.aria-label]="page.title">
+      @for (row of page.visibleRows; track row.clientId) {
+        <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: row }" />
+      }
+    </ul>
+    @if (page.more) {
+      <ui-button variant="secondary" [attr.id]="'health-more-' + page.kind" (clicked)="showMore(page.kind)">Show more {{ page.noun }}</ui-button>
+    }
+  </article>
+</ng-template>
+<ng-template #entryRow let-row>
+  <li [attr.data-health-kind]="row.kind">
+    <span class="entry-label" [id]="'health-entry-' + row.clientId" tabindex="-1" [appHealthLinkedFocus]="!dialogOpen() && (row.clientId === entryId() || row.clientId === revealFocusId())" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.label }}</span>
+    <span class="entry-actions">
+      <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="openEdit(row.clientId)">Edit</ui-button>
+      <ui-button variant="danger" [attr.id]="'health-delete-' + row.clientId" [ariaLabel]="'Delete ' + row.label" (clicked)="removeEntry(row.clientId)">Delete</ui-button>
+    </span>
+  </li>
+</ng-template>
 <app-health-entry-dialog
   [open]="dialogOpen()"
   [room]="room()"
