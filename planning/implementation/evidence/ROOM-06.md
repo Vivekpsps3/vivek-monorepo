@@ -3,7 +3,7 @@
 - Leaf issue and parent(s): [#456](https://github.com/Vivekpsps3/vivek-monorepo/issues/456) ROOM-06. Parents [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304) and [#314](https://github.com/Vivekpsps3/vivek-monorepo/issues/314) stay open. Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. #277 stays open and was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/room-06`; `/tmp/vivek-room-06`. The shared checkout was not edited. Health, Finance, Travel, Town, and pixels were not edited.
 - Base main SHA, current tested SHA: implementation base `45ef8ae69939f0cdc4bf2f5820c0b1e5a64c7515` (SCENE-09 merge, pull request #573). Tested product `2296dab7879583bb7e30d34f36679fe04a3b2af8`. The verification table is that product before this evidence wording.
-- Fresh-main/prerequisite/active-PR checks: `origin/main` was `45ef8ae69939f0cdc4bf2f5820c0b1e5a64c7515` at branch time and again before the product commit. SCENE-03 (#441), MUX-05 (#401), and SCENE-09 (#447) are closed and are ancestors of that tip. The only other open pull request was #574 (`agent/room-13`). It does not edit Media. `agent/room-05` owns Travel and was not edited.
+- Fresh-main/prerequisite/active-PR checks: `origin/main` was `45ef8ae69939f0cdc4bf2f5820c0b1e5a64c7515` at branch time and at the product commit. SCENE-03 (#441), MUX-05 (#401), and SCENE-09 (#447) are closed and are ancestors of that tip. After the product commit, `origin/main` moved to `73a289b481dc5227df62a0b2ff07270681ac1bad` (ROOM-13, pull request #574). That tip is merged into this branch. It changes Town health only. Media files are unchanged, so the product tests remain those of `2296dab7879583bb7e30d34f36679fe04a3b2af8`. `agent/room-05` owns Travel and was not edited.
 
 ## Acceptance
 
@@ -54,6 +54,6 @@ Commands ran in `/tmp/vivek-room-06` on the source that became `2296dab7879583bb
 
 - PR URL (leaf closure keyword only): filled in the follow-up commit after the pull request exists. The body is only the leaf closure keyword for #456.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
-- Merged/activation status (actual evidence, not assumption): not merged. `origin/main` remains `45ef8ae69939f0cdc4bf2f5820c0b1e5a64c7515`.
+- Merged/activation status (actual evidence, not assumption): not merged. This branch contains `origin/main` `73a289b481dc5227df62a0b2ff07270681ac1bad`.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate.
 - Next actor: this implementer opens the pull request, waits for the required checks, then merges with a merge commit.
