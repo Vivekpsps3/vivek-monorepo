@@ -42,6 +42,7 @@
       </li>
     }
   </ul>
+  <a class="visit-town" routerLink="/town" [queryParams]="townVisit()">Visit this life week</a>
   <div class="life-steppers">
     <button type="button" aria-label="◀ Wk, previous week" (click)="step.emit('week-prev')">◀ Wk</button>
     <button type="button" aria-label="Wk ▶, next week" (click)="step.emit('week-next')">Wk ▶</button>

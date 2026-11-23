@@ -7,7 +7,7 @@
     </div>
     <nav class="world-links" aria-label="Your places">
       <a routerLink="/town">← Town</a>
-      <a routerLink="/pixels" [queryParams]="{ year: selectedDate().slice(0, 4) || null, day: selectedDate() || null }">Pixels ↗</a>
+      <a [routerLink]="pixelsReturn().commands" [queryParams]="pixelsReturn().query">Pixels ↗</a>
       <ui-button variant="secondary" (clicked)="openConcepts()">{{ copy.concepts }}</ui-button>
     </nav>
   </header>
@@ -51,7 +51,7 @@
   }
   @if (reduced()) { <p class="world-motion">{{ copy.reducedMotionNote }}</p> }
 
-  <section class="world-landscape" [class.list-mode]="mode() === 'list'" aria-label="Journey landscape">
+  <section class="world-landscape" [class.list-mode]="mode() === 'list'" aria-label="Journey landscape" [attr.data-activity]="fogOn() ? 'on' : 'off'">
     <div class="world-scene-heading">
       <div><p class="world-eyebrow">{{ inTown() ? 'At home' : 'A week in your world' }}</p><h2>{{ inTown() ? 'The way home' : weekTitle() }}</h2></div>
       <ui-button variant="secondary" [pressed]="fogOn()" (clicked)="toggleFog()">{{ copy.litMap }}</ui-button>
@@ -81,7 +81,7 @@
   </section>
 
   <div class="world-details">
-    <section #weekPanel class="world-panel" tabindex="-1" [attr.aria-label]="copy.weekPanel">
+    <section #weekPanel class="world-panel" tabindex="-1" [attr.aria-label]="copy.weekPanel" [attr.data-day-state]="dayStateKey()">
       @if (inTown()) {
         <p class="world-eyebrow">Town · Home</p>
         <h2>Every journey has a place to return to.</h2>
@@ -133,7 +133,7 @@
             <button type="button" class="world-text" (click)="openCreate()">{{ copy.addConcept }}</button>
           </div>
         }
-        <a class="world-pixels-link" [routerLink]="'/pixels'" [queryParams]="{ year: selectedDate().slice(0, 4), day: selectedDate() }">See this day in Pixels →</a>
+        <a class="world-pixels-link" [routerLink]="pixelsReturn().commands" [queryParams]="pixelsReturn().query">{{ pixelsReturnName() }} →</a>
       } @else if (!busy() && !error()) {
         <p>Choose a date to explore your world.</p>
       }

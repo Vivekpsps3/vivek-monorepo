@@ -12,7 +12,9 @@ Channel counts stay on `GET /api/pixels`.
 The score engine still reads only those counts.
 
 `/pixels/day` names one civil day. Year and Life stay numerical and link here
-with the originating year or life-week span. [Atlas labels](atlas.ts) name that
+with the originating year or life-week span. Each also opens `/town` with one
+validated visit: that Year day, or the birthday-relative Life span unchanged.
+Town keeps its layout. The visit does not rebuild rooms, levels, or balances. [Atlas labels](atlas.ts) name that
 day's Sunday week, ISO week, and life span, plus a text-only preview of the one
 selected day. They do not score and they do not load thumbnails. Slots list
 saved records and keep empty, absent, expired, unavailable, and locked apart.
