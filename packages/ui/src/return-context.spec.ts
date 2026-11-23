@@ -15,6 +15,7 @@ describe('return context', () => {
       '/settings/calendars',
       '/town/clinic?entry=hlt_SyntheticWeightEntryAB',
       '/town/gym?entry=hlt_SyntheticLiftEntryABCD',
+      '/town/cosmetics?item=oak-seat&part=night',
       '/finance/spending?month=all',
       '/finance/pay?month=2026-10&history=1&year=custom&start=2024-02-29&end=2024-12-31',
       '/finance/bills?kind=subscription&status=active&order=latest',
@@ -53,6 +54,7 @@ describe('return context', () => {
     expect(returnPath('/town/review?week=2027-01-04')).toBe('/town/review?week=2027-01-04');
     expect(returnPath('/town/review?week=2027-01-03&note=secret')).toBe('/town/review');
     expect(returnPath('/town/hall?object=treasury&weeks=8')).toBe('/town/hall');
+    expect(returnPath('/town/cosmetics?item=oak-seat&part=dusk&note=private')).toBe('/town/cosmetics?item=oak-seat');
     expect(returnPath('/travel/terminal?object=ferry&trip=0&leg=9&day=2026-02-31&note=private'))
       .toBe('/travel/terminal?leg=9');
   });

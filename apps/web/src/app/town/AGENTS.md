@@ -7,7 +7,7 @@ integration must preserve that.
 
 [Health store](health/health-store.service.ts) owns browser-local Health records
 through Finance's public vault API. Clinic and Gym mount
-[the health room](health/health-room.component.ts). The room is not a second store.
+[the health room](health/health-room.component.ts).
 Check owner and generation before publishing plaintext. Preserve corrupt rows,
 revision conflicts, and drafts. Never send private Health values in Town payloads.
 Cross-domain Town views receive approved stages and counts only.
@@ -17,11 +17,11 @@ Clinic creates, corrects, and deletes weight, heart rate, blood pressure, sleep,
 Use [health constants](health/health.constants.ts) for units, thresholds, and badges.
 Do not duplicate conversion or XP math.
 
-Reuse shared controls. Town reset fixtures and worker clock stay deterministic.
+Town reset fixtures and worker clock stay deterministic.
 See [scene-appearance](../platform/scene-appearance.ts). Gym objects open that dialog.
 
-The Town exterior, Reading Hall, and Hall share the y-down [frame](library-room.scene.ts).
+The Town exterior, Reading Hall, Hall, and [cosmetic catalog](cosmetic-catalog.ts) share the y-down [frame](library-room.scene.ts).
 Higher layer wins. Pan, zoom, tap, drag, cancel use it. `/town/hall` shows rules,
-progress, and history. Keyboard, list, and the URL share cutaway and fade. Locked,
-empty, and archived lots. Check-in marks clear on Undo, owner, or
-day change. The keepsake shelf stores nothing. Clinic and Gym read [loadTownHealthStages](health/index.ts).
+progress, and history. `/town/cosmetics` lists twelve free starters and twelve shop items.
+Milestone ornaments stay separate. Keyboard and the URL share cutaway. Locked,
+empty, and archived lots. Check-in marks clear on Undo, owner or day change. The keepsake shelf stores nothing. Clinic and Gym read [loadTownHealthStages](health/index.ts).
