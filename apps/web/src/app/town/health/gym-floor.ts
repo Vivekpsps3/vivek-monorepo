@@ -7,7 +7,7 @@ import {
   type ScenePlacement,
 } from '../library-room.scene';
 
-/** Selectable gym-floor objects. Progress and trophies stay outside this room. */
+/** Selectable gym-floor objects. Progress and trophies are the upstairs scene. */
 export const GYM_FLOOR_IDS = ['desk', 'station', 'bench'] as const;
 export type GymFloorId = (typeof GYM_FLOOR_IDS)[number];
 export type GymGate = 'locked' | 'setup' | 'unavailable' | 'ready';

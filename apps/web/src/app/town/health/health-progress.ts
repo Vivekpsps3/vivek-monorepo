@@ -4,8 +4,10 @@ import {
   currentPrs,
   healthBadges,
   liftPrEligible,
+  prCandidates,
   type PrEvent,
 } from './health-math';
+import { isHealthDate } from './health-validate';
 import type { HealthUnits } from './health-entry';
 import { displayDistance, displayWeight, pace } from './health-units';
 import type { HealthPr, HealthStat } from './health.types';
@@ -40,6 +42,14 @@ export interface ProgressPoint {
   pace: string;
 }
 
+/** One plotted attempt. `y` is the same canonical value PR replay compares. */
+export interface ProgressHistoryPoint {
+  id: string;
+  measuredOn: string;
+  summary: string;
+  y: number;
+}
+
 export interface ProgressSeries {
   key: string;
   title: string;
@@ -47,6 +57,45 @@ export interface ProgressSeries {
   current: ProgressPoint;
   previous: ProgressPoint | null;
   recent: boolean;
+  /** Oldest first. The wall draws a bounded slice of this list. */
+  history: ProgressHistoryPoint[];
+}
+
+/** Newest points a progress chart may draw. Older points in the window stay off it. */
+export const PROGRESS_WALL_POINTS = 12;
+
+export function boundProgressWall(
+  points: readonly ProgressHistoryPoint[],
+  from: string,
+  to: string,
+): { points: ProgressHistoryPoint[]; omitted: number } {
+  const filtered = points.filter(point => Number.isFinite(point.y)
+    && (!from || point.measuredOn >= from)
+    && (!to || point.measuredOn <= to));
+  if (filtered.length <= PROGRESS_WALL_POINTS) return { points: filtered, omitted: 0 };
+  const omitted = filtered.length - PROGRESS_WALL_POINTS;
+  return { points: filtered.slice(omitted), omitted };
+}
+
+/**
+ * A blank end is open. A real date must sit on 1900-01-01 through today,
+ * and the start cannot fall after the end. Null keeps the previous window.
+ */
+export function progressDateWindow(
+  from: string,
+  to: string,
+  today: string,
+): { from: string; to: string } | null {
+  const start = from.trim();
+  const end = to.trim();
+  if (!openHealthDate(start, today) || !openHealthDate(end, today)) return null;
+  if (start && end && start > end) return null;
+  return { from: start, to: end };
+}
+
+function openHealthDate(value: string, today: string): boolean {
+  if (!value) return true;
+  return isHealthDate(value) && value >= HEALTH_LIMITS.measuredOnMin && value <= today;
 }
 
 export interface ProgressGroup {
@@ -317,19 +366,57 @@ function eventSeries(
   units: HealthUnits,
   today: string,
 ): ProgressSeries[] {
+  const history = historyByMetric(sources, units);
   return currentPrs(events).map(event => {
     const source = sources[event.index];
     const previous = previousSource(sources, event);
     const current = describeSource(source, event, units);
+    const key = `${event.kind}:${event.metric}`;
     return {
-      key: `${event.kind}:${event.metric}`,
+      key,
       title: seriesTitle(event, source),
       kind: event.kind,
       current,
       previous: previous ? describeSource(previous, previousEvent(sources, event), units) : null,
       recent: isRecent(current.measuredOn, today),
+      history: history.get(key) ?? [],
     };
   });
+}
+
+function historyByMetric(sources: readonly Source[], units: HealthUnits): Map<string, ProgressHistoryPoint[]> {
+  const grouped = new Map<string, Array<{ source: Source; event: PrEvent; order: number }>>();
+  sources.forEach((source, order) => {
+    for (const item of prCandidates(source.pr)) {
+      if (!Number.isFinite(item.value)) continue;
+      const key = `${item.kind}:${item.metric}`;
+      const list = grouped.get(key) ?? [];
+      list.push({
+        source,
+        order,
+        event: { index: order, kind: item.kind, metric: item.metric, value: item.value, first: false },
+      });
+      grouped.set(key, list);
+    }
+  });
+  const history = new Map<string, ProgressHistoryPoint[]>();
+  for (const [key, list] of grouped) {
+    list.sort((a, b) => byDate(a.source.pr.measured_on, b.source.pr.measured_on)
+      || byDate(a.source.pr.logged_on, b.source.pr.logged_on)
+      || a.order - b.order);
+    history.set(key, list.map(item => ({
+      id: historyId(item.source, key),
+      measuredOn: item.source.pr.measured_on,
+      summary: describeSource(item.source, item.event, units).summary,
+      y: item.event.value,
+    })));
+  }
+  return history;
+}
+
+function historyId(source: Source, key: string): string {
+  const who = source.kind === 'record' ? source.clientId : `${source.sessionId}:${source.setId}`;
+  return `${key}:${who}`;
 }
 
 function previousSource(sources: readonly Source[], event: PrEvent): Source | null {
@@ -372,6 +459,12 @@ function exerciseSeries(
       current: point,
       previous: previous ? describeExercise(previous, units) : null,
       recent: false,
+      history: ordered.filter(item => Number.isFinite(item.value)).map(item => ({
+        id: `${key}:${item.sessionId}:${item.setId}`,
+        measuredOn: item.measuredOn,
+        summary: describeExercise(item, units).summary,
+        y: item.value,
+      })),
     });
   }
   return series;

@@ -6,25 +6,32 @@ import { localTodayIso } from '@vivek/browser';
 import {
   ConfirmService,
   UiButtonComponent,
+  UiInputComponent,
   UiPageHeaderComponent,
   UiSegmentedComponent,
+  UiSelectComponent,
   UiSkeletonComponent,
   isHealthEntryId,
   vaultReturnQuery,
+  type UiSelectOption,
 } from '@vivek/ui';
 import { bindLockSnapshots, financeVaultExists, financeVaultPresent } from '../../../../../finance/frontend/src/public-api';
 import { SessionService } from '../../platform/session.service';
 import { HealthEntryDialogComponent, type HealthEntryValue } from './health-entry-dialog.component';
 import { HealthWorkoutDialogComponent } from './health-workout-dialog.component';
-import { HEALTH_HISTORY_PAGE, buildClinicSeries, pageClinicSeries } from './health-history';
+import { HEALTH_HISTORY_PAGE, buildClinicSeries, pageClinicSeries, sparklineGeometry } from './health-history';
 import {
   EMPTY_HEALTH_PROGRESS,
   GAME_MEDAL_EXPLANATION,
+  boundProgressWall,
+  progressDateWindow,
   projectHealthProgress,
   type GameMedalInput,
 } from './health-progress';
 import { GymFloorComponent } from './gym-floor.component';
 import { gymFloorId, type GymFloorId, type GymGate } from './gym-floor';
+import { GymMezzanineComponent } from './gym-mezzanine.component';
+import { gymUpId, type GymUpId } from './gym-mezzanine';
 import { HealthSparklineComponent } from './health-sparkline.component';
 import {
   DEFAULT_HEALTH_UNITS,
@@ -199,14 +206,17 @@ function isStat(value: HealthStat | HealthPr): value is HealthStat {
   selector: 'app-health-room',
   imports: [
     GymFloorComponent,
+    GymMezzanineComponent,
     HealthEntryDialogComponent,
     HealthWorkoutDialogComponent,
     HealthLinkedFocusDirective,
     HealthSparklineComponent,
     NgTemplateOutlet,
     UiButtonComponent,
+    UiInputComponent,
     UiPageHeaderComponent,
     UiSegmentedComponent,
+    UiSelectComponent,
     UiSkeletonComponent,
   ],
   templateUrl: './health-room.component.html',
@@ -256,6 +266,14 @@ export class HealthRoomComponent implements OnInit {
   protected readonly workoutFormError = signal('');
   protected readonly workoutBusy = signal(false);
   protected readonly floorObject = signal<GymFloorId | null>(null);
+  protected readonly upObject = signal<GymUpId | null>(null);
+  protected readonly wallExercise = signal('');
+  protected readonly wallFrom = signal('');
+  protected readonly wallTo = signal('');
+  protected readonly appliedFrom = signal('');
+  protected readonly appliedTo = signal('');
+  protected readonly wallDateError = signal('');
+  private readonly wallErrorTick = signal(0);
   protected readonly idleWorkoutDraft = emptyWorkoutDraft('exercise', '');
   private readonly returnWorkoutFocus = signal<string | null>(null);
   private readonly returnFocusKind = signal<HealthClinicKind | null>(null);
@@ -351,6 +369,30 @@ export class HealthRoomComponent implements OnInit {
       this.gameMedals(),
     );
   });
+  protected readonly wallChoices = computed((): UiSelectOption[] => this.progress().groups.flatMap(group =>
+    group.series.map(series => ({ value: series.key, label: series.title }))));
+  protected readonly wallKey = computed(() => {
+    const choices = this.wallChoices();
+    const picked = this.wallExercise();
+    if (picked && choices.some(choice => choice.value === picked)) return picked;
+    return choices[0]?.value ?? '';
+  });
+  protected readonly wallSeries = computed(() => {
+    const key = this.wallKey();
+    for (const group of this.progress().groups) {
+      const series = group.series.find(item => item.key === key);
+      if (series) return series;
+    }
+    return null;
+  });
+  protected readonly wallBound = computed(() => boundProgressWall(
+    this.wallSeries()?.history ?? [],
+    this.appliedFrom(),
+    this.appliedTo(),
+  ));
+  protected readonly wallChart = computed(() => sparklineGeometry(
+    this.wallBound().points.map(point => ({ y: point.y, y2: null })),
+  ));
   protected readonly floorGate = computed((): GymGate => {
     const phase = this.phase();
     if (phase === 'locked' || phase === 'setup' || phase === 'unavailable') return phase;
@@ -408,9 +450,20 @@ export class HealthRoomComponent implements OnInit {
     effect(() => {
       if (this.room() !== 'gym') {
         this.floorObject.set(null);
+        this.upObject.set(null);
         return;
       }
       this.floorObject.set(gymFloorId(this.params().get('object')));
+      this.upObject.set(gymUpId(this.params().get('up')));
+    });
+    afterRenderEffect(() => {
+      const tick = this.wallErrorTick();
+      const message = this.wallDateError();
+      if (!tick || !message || this.dialogOpen() || this.workoutDialogOpen() || this.phase() !== 'ready') return;
+      queueMicrotask(() => {
+        if (this.dead || this.wallErrorTick() !== tick || this.wallDateError() !== message) return;
+        document.getElementById('health-wall-date-error')?.focus();
+      });
     });
     afterRenderEffect(() => {
       const message = this.workoutFormError();
@@ -533,6 +586,45 @@ export class HealthRoomComponent implements OnInit {
     this.startCopy(clientId, 'session');
   }
 
+  protected chooseWallExercise(value: string): void {
+    this.wallExercise.set(value);
+  }
+
+  protected applyWallDates(): void {
+    const next = progressDateWindow(this.wallFrom(), this.wallTo(), this.today());
+    if (!next) {
+      const start = this.wallFrom().trim();
+      const end = this.wallTo().trim();
+      const ordered = start && end && start > end && progressDateWindow(start, '', this.today()) && progressDateWindow('', end, this.today());
+      this.wallDateError.set(ordered
+        ? 'The start date is after the end date.'
+        : 'Use a real date from 1900 through today.');
+      this.wallErrorTick.update(tick => tick + 1);
+      return;
+    }
+    this.wallDateError.set('');
+    this.appliedFrom.set(next.from);
+    this.appliedTo.set(next.to);
+  }
+
+  protected clearWallDates(): void {
+    this.wallFrom.set('');
+    this.wallTo.set('');
+    this.appliedFrom.set('');
+    this.appliedTo.set('');
+    this.wallDateError.set('');
+  }
+
+  protected focusWall(): void {
+    const target = document.getElementById('health-wall-exercise')
+      ?? document.getElementById('health-progress-title');
+    target?.focus();
+  }
+
+  protected focusCabinet(): void {
+    document.getElementById('health-cabinet-title')?.focus();
+  }
+
   /** The object id is the durable gym URL. Zoom stays on this floor. */
   protected selectFloor(id: GymFloorId | null): void {
     if (this.dead || this.room() !== 'gym') return;
@@ -542,6 +634,19 @@ export class HealthRoomComponent implements OnInit {
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { object: id },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  /** The upstairs id is the durable `up` query. The floor object stays put. */
+  protected selectUp(id: GymUpId | null): void {
+    if (this.dead || this.room() !== 'gym') return;
+    this.upObject.set(id);
+    if (!this.route.snapshot) return;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { up: id },
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
@@ -1045,6 +1150,13 @@ export class HealthRoomComponent implements OnInit {
     this.returnFocusKind.set(null);
     this.shownByKind.set({});
     this.revealFocusId.set(null);
+    this.wallExercise.set('');
+    this.wallFrom.set('');
+    this.wallTo.set('');
+    this.appliedFrom.set('');
+    this.appliedTo.set('');
+    this.wallDateError.set('');
+    this.wallErrorTick.set(0);
     this.confirm.close(false);
   }
 

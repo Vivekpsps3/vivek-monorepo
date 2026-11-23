@@ -271,6 +271,12 @@ function floorButton(el: HTMLElement, id: string): HTMLButtonElement {
   return found;
 }
 
+function upButton(el: HTMLElement, id: string): HTMLButtonElement {
+  const found = el.querySelector(`.up-objects [data-gym-up="${id}"]`);
+  if (!(found instanceof HTMLButtonElement)) throw new Error(`missing upstairs ${id}`);
+  return found;
+}
+
 function storageText(): string {
   const parts: string[] = [];
   for (const store of [localStorage, sessionStorage]) {
@@ -2996,6 +3002,157 @@ describe('Health room shell', () => {
     }
   });
 
+  it('charts one exercise, keeps a bad date, and shows the previous best after delete', async () => {
+    unlock();
+    seed();
+    const olderId = 'hlt_SyntheticOlderLiftABCD';
+    const runId = 'hlt_SyntheticRunEntryABCDE';
+    fake.rows.push(
+      row('health_prs', olderId, {
+        v: 1, kind: 'lift', measured_on: '2026-10-01', logged_on: '2026-10-01', exercise: 'Squat', kg: 90, reps: 1,
+      }),
+      row('health_prs', runId, {
+        v: 1, kind: 'run', measured_on: '2026-10-20', logged_on: '2026-10-20', distance_m: 5000, seconds: 1500,
+      }),
+    );
+    route.routeData.next({ healthRoom: 'gym' });
+    route.query.next(convertToParamMap({}));
+    const { fixture, el } = await show();
+    const wall = upButton(el, 'wall');
+    expect(wall.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    wall.click();
+    fixture.detectChanges();
+    expect(el.querySelector('#gym-up-object-title')?.textContent).toContain('Progress wall');
+    button(el, 'Show the chart').click();
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(el.querySelector('#health-wall-exercise'));
+    const table = (): HTMLElement => {
+      const found = el.querySelector('#health-wall-table');
+      if (!(found instanceof HTMLElement)) throw new Error('missing history table');
+      return found;
+    };
+    const chart = (): HTMLElement => {
+      const found = el.querySelector('[data-progress-chart]');
+      if (!(found instanceof HTMLElement)) throw new Error('missing chart');
+      return found;
+    };
+    expect(table().textContent).toContain('2026-10-01');
+    expect(table().textContent).toContain(DAY);
+    expect(chart().getAttribute('data-wall-count')).toBe(String(table().querySelectorAll('[data-wall-row]').length));
+    expect(el.textContent).toContain('Current · Squat');
+    expect(el.textContent).toContain('Previous best');
+    const apply = el.querySelector('#health-wall-apply button');
+    if (!(apply instanceof HTMLButtonElement)) throw new Error('missing apply');
+    expect(apply.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+
+    typeInto(el, '#health-wall-from', '2026-10-15');
+    typeInto(el, '#health-wall-to', DAY);
+    fixture.detectChanges();
+    apply.click();
+    fixture.detectChanges();
+    expect(table().textContent).not.toContain('2026-10-01');
+    expect(table().textContent).toContain(DAY);
+    expect(chart().getAttribute('data-wall-count')).toBe('1');
+    expect(el.querySelector('#health-wall-from') instanceof HTMLInputElement).toBeTrue();
+
+    typeInto(el, '#health-wall-from', '1899-01-01');
+    fixture.detectChanges();
+    apply.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(el.querySelector<HTMLInputElement>('#health-wall-from')?.value).toBe('1899-01-01');
+    expect(el.querySelector('#health-wall-date-error')?.textContent).toContain('Use a real date from 1900 through today.');
+    expect(document.activeElement).toBe(el.querySelector('#health-wall-date-error'));
+    expect(table().textContent).toContain(DAY);
+    expect(table().textContent).not.toContain('2026-10-01');
+
+    const select = el.querySelector<HTMLSelectElement>('#health-wall-exercise');
+    if (!select) throw new Error('missing exercise');
+    const runOption = [...select.options].find(option => option.textContent?.trim() === '5K');
+    if (!runOption) throw new Error('missing 5K');
+    choose(el, '#health-wall-exercise', runOption.value);
+    fixture.detectChanges();
+    expect(el.querySelector('#health-wall-table caption')?.textContent).toContain('5K');
+    expect(table().textContent).toContain('2026-10-20');
+    choose(el, '#health-wall-exercise', select.options[0].value);
+    fixture.detectChanges();
+
+    button(el, 'Clear dates').click();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#health-wall-from')?.value).toBe('');
+    expect(table().textContent).toContain('2026-10-01');
+    typeInto(el, '#health-wall-from', '2026-10-15');
+    fixture.detectChanges();
+    apply.click();
+    fixture.detectChanges();
+
+    const edit = el.querySelector<HTMLButtonElement>(`#health-edit-${LIFT_ID} button`);
+    if (!edit) throw new Error('missing lift edit');
+    edit.click();
+    fixture.detectChanges();
+    typeInto(el, '#health-reps', '8');
+    fixture.detectChanges();
+    fake.failUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#health-reps')?.value).toBe('8');
+    expect(el.querySelector<HTMLInputElement>('#health-wall-from')?.value).toBe('2026-10-15');
+    expect(table().textContent).not.toContain('2026-10-01');
+    fake.failUpsert = false;
+    button(el, 'Cancel').click();
+    fixture.detectChanges();
+
+    const remove = el.querySelector<HTMLButtonElement>(`#health-delete-${LIFT_ID} button`);
+    if (!remove) throw new Error('missing delete');
+    remove.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    clickConfirm(fixture, healthPrDeletePhrase('lift'), 'Delete lift');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await new Promise(resolve => setTimeout(resolve));
+    expect(el.textContent).toContain(`Current · Squat · ${displayWeight(90, 'lb')} lb × 1`);
+    expect(el.textContent).not.toContain(`${displayWeight(100, 'lb')} lb`);
+    button(el, 'Clear dates').click();
+    fixture.detectChanges();
+    expect(table().textContent).toContain('2026-10-01');
+    expect(table().textContent).not.toContain(DAY);
+
+    upButton(el, 'cabinet').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#gym-up-object-title')?.textContent).toContain('Record cabinet');
+    const medals = el.querySelector('[data-award="medal"]');
+    const badges = el.querySelector('[data-award="badge"]');
+    if (!(medals instanceof HTMLElement) || !(badges instanceof HTMLElement)) throw new Error('missing awards');
+    expect(getComputedStyle(medals).borderTopStyle).toBe('dashed');
+    expect(getComputedStyle(badges.querySelector('.trophy') ?? badges).borderLeftStyle).toBe('solid');
+    expect(medals.textContent).toContain('does not record a lift, a run, or a medical result');
+    expect(medals.textContent).not.toContain('First lift PR');
+    button(el, 'Show the cabinet').click();
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(el.querySelector('#health-cabinet-title'));
+
+    typeInto(el, '#health-wall-from', '2026-10-15');
+    fixture.detectChanges();
+    fake.holdList = true;
+    session.users.next({ id: 9 });
+    fixture.detectChanges();
+    await until(() => el.getAttribute('data-health-state') === 'loading');
+    expect(visible(el)).not.toContain('2026-10-15');
+    expect(visible(el)).not.toContain('Squat');
+    expect(visible(el)).not.toMatch(/\d/);
+    expect(el.querySelector('#health-wall-from')).toBeNull();
+    expect(el.querySelector('[data-progress-chart]')).toBeNull();
+    fake.listRelease.splice(0).forEach(release => release());
+    await settle(fixture);
+    expect(el.querySelector<HTMLInputElement>('#health-wall-from')?.value ?? '').toBe('');
+  });
+
   it('keeps a locked, empty, or direct gym visit useful', async () => {
     seed();
     route.routeData.next({ healthRoom: 'gym' });
@@ -3007,6 +3164,9 @@ describe('Health room shell', () => {
     const gym = locked.nativeElement as HTMLElement;
     expect(gym.getAttribute('data-health-state')).toBe('locked');
     expect(gym.querySelector('[data-gym-floor="locked"]')).not.toBeNull();
+    expect(gym.querySelector('[data-gym-up="locked"]')).not.toBeNull();
+    expect(gym.querySelector('[data-progress-chart]')).toBeNull();
+    expect(gym.querySelector('[data-record-cabinet]')).toBeNull();
     expect(gym.querySelector('#gym-floor-object-title')?.textContent).toContain('Routine desk');
     expect(gym.textContent).toContain('Finance is locked. Unlock to see measurements.');
     expect(href(gym, 'Unlock')).toContain('/finance/vault/unlock');
@@ -3025,7 +3185,9 @@ describe('Health room shell', () => {
     await clinic.whenStable();
     clinic.detectChanges();
     expect(clinic.nativeElement.querySelector('app-gym-floor')).toBeNull();
+    expect(clinic.nativeElement.querySelector('app-gym-mezzanine')).toBeNull();
     expect(clinic.nativeElement.textContent).not.toContain('Routine desk');
+    expect(clinic.nativeElement.textContent).not.toContain('Progress wall');
     clinic.destroy();
 
     gate.exists = false;
