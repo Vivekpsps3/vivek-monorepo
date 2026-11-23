@@ -2,7 +2,7 @@
 // Habit, check-in, dialog, and Health entry files run with Pixels and World.
 // In-file phone, desktop, and platform skips stay inside a selected spec.
 // A whole spec the allowlist omits needs an owner, issue, and reason below.
-export const townTestMatch = /(?:pixels-(?:year|detail|life|day|settings|atlas)|hub-(?:pixels|up-next)|world|town-checkin|town-dialogs|town-date-visit|town-habits|town-media-boundary|town-scene|town|health-entry)\.spec\.ts/;
+export const townTestMatch = /(?:pixels-(?:year|detail|life|day|settings|atlas)|hub-(?:pixels|up-next)|world|town-checkin|town-dialogs|town-date-visit|town-habits|town-hall|town-media-boundary|town-scene|town|health-entry)\.spec\.ts/;
 
 export const intendedProjects = [
   { name: 'finance', testDir: 'apps/finance/frontend/e2e', domain: 'finance' },

@@ -48,6 +48,8 @@ describe('return context', () => {
     expect(returnPath('/town/clinic?entry=hlt_short&kg=80')).toBe('/town/clinic');
     expect(returnPath('/town/clinic?entry=hlt_SyntheticWeightEntryAB&entry=hlt_SyntheticLiftEntryABCD')).toBe('/town/clinic');
     expect(returnPath('/town/gym?entry=80&weight=176.4')).toBe('/town/gym');
+    expect(returnPath('/town/hall?object=rules&edit=15&history=15&balance=10')).toBe('/town/hall?object=rules');
+    expect(returnPath('/town/hall?object=treasury&weeks=8')).toBe('/town/hall');
     expect(returnPath('/travel/terminal?object=ferry&trip=0&leg=9&day=2026-02-31&note=private'))
       .toBe('/travel/terminal?leg=9');
   });

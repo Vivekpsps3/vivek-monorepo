@@ -85,6 +85,13 @@
       "query": "object=calendar"
     },
     {
+      "id": "town-hall",
+      "path": "town/hall",
+      "owner": "town",
+      "status": "mounted",
+      "query": "object=rules"
+    },
+    {
       "id": "have-alias",
       "path": "have",
       "owner": "finance",

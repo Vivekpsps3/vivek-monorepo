@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+  <style>
+    :root { --sky:#eee3c6; --wall:#e7d3ac; --shade:#c4a57c; --floor:#b08a62; --plank:#8d6848; --trim:#f3e2bc; --shadow:#4d4338; --brass:#c4964e; }
+    @media (prefers-color-scheme: dark) {
+      :root { --sky:#1a2b3d; --wall:#6d6454; --shade:#463f3c; --floor:#6d4d38; --plank:#543c30; --trim:#b89a68; --shadow:#121820; --brass:#d0a45a; }
+    }
+  </style>
+  <rect width="600" height="400" fill="var(--sky)"/>
+  <path fill="var(--wall)" d="M0 70h600v210H0z"/>
+  <path fill="var(--shade)" d="M0 70h600v16H0z"/>
+  <path fill="var(--floor)" d="M0 280h600l-40 120H40z"/>
+  <path fill="var(--plank)" d="M80 292h440v8H70zm-20 28h500v8H40zm-16 28h530v8H30z"/>
+  <path fill="var(--trim)" d="M48 118h150v92H48zm354 0h150v92H402z"/>
+  <path fill="var(--brass)" d="M292 96h16v150h-16z"/>
+  <circle cx="300" cy="168" r="28" fill="var(--trim)" stroke="var(--brass)" stroke-width="6"/>
+  <path fill="var(--shadow)" opacity=".2" d="M40 300h520l-30 70H70z"/>
+</svg>

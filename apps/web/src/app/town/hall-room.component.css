@@ -1,0 +1,7 @@
+.rules, .habits { margin: 0; padding: 0; list-style: none; }
+.rules li, .habits li { margin: 0 0 12px; }
+.habit-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.rules-version { color: var(--text-muted); }
+@media (prefers-reduced-motion: reduce) {
+  .stage, .piece, .room { transition: none; animation: none; }
+}
