@@ -656,9 +656,8 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await activate(page, page.getByRole('button', { name: 'synthetic', exact: true }), touch);
       await activate(page, page.getByRole('link', { name: 'Settings', exact: true }), touch);
       const appearance = page.getByRole('navigation', { name: 'Settings', exact: true }).getByRole('link', { name: 'Appearance', exact: true });
-      await expect(appearance).toBeVisible();
-      if (touch) await appearance.tap();
-      else await appearance.press('Enter');
+      await expect(appearance).toHaveAttribute('href', /\/settings\/appearance$/);
+      await activate(page, appearance, touch);
       await expect(page).toHaveURL(/\/settings\/appearance$/);
       const themeRadio = page.getByRole('radio', { name: themeLabel, exact: true });
       await expect(themeRadio).toBeVisible();
