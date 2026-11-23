@@ -655,10 +655,15 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       const themeLabel = nextTheme === 'dark' ? 'Dark' : 'Light';
       await activate(page, page.getByRole('button', { name: 'synthetic', exact: true }), touch);
       await activate(page, page.getByRole('link', { name: 'Settings', exact: true }), touch);
+      await expect(page).toHaveURL(/\/settings$/);
+      // The shell keeps moving focus to the new heading for a short time.
+      // Settings links sit outside main, so Enter before that settles hits the heading.
+      await expect(page.getByRole('heading', { level: 1, name: 'Settings', exact: true })).toBeFocused();
       const appearance = page.getByRole('navigation', { name: 'Settings', exact: true }).getByRole('link', { name: 'Appearance', exact: true });
       await expect(appearance).toHaveAttribute('href', /\/settings\/appearance$/);
       await activate(page, appearance, touch);
       await expect(page).toHaveURL(/\/settings\/appearance$/);
+      await expect(page.getByRole('heading', { level: 1, name: 'Appearance', exact: true })).toBeFocused();
       const themeRadio = page.getByRole('radio', { name: themeLabel, exact: true });
       await expect(themeRadio).toBeVisible();
       if (touch) await themeRadio.tap();
