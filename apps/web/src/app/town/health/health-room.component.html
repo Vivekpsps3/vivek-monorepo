@@ -38,16 +38,78 @@
       @if (missingEntry()) {
         <p role="status">That entry is not in this room.</p>
       }
-      @if (rows().length === 0) {
-        <p>No entries yet.</p>
-      } @else if (room() === 'gym') {
-        <ul class="entries" aria-label="Personal records">
-          @for (row of rows(); track row.clientId) {
-            <li [attr.data-health-kind]="row.kind">
-              <span class="entry-label" [id]="'health-entry-' + row.clientId" tabindex="-1" [appHealthLinkedFocus]="row.clientId === entryId() && !dialogOpen()" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.label }}</span>
-            </li>
+      @if (room() === 'gym') {
+        <section class="progress" aria-labelledby="health-progress-title">
+          <h2 id="health-progress-title">Progress</h2>
+          @if (progress().empty) {
+            <p>No progress yet.</p>
+          } @else {
+            @if (progress().recent.length > 0) {
+              <section aria-labelledby="health-progress-recent">
+                <h3 id="health-progress-recent">New PR in the last 7 days</h3>
+                <ul class="entries" aria-label="New personal records">
+                  @for (series of progress().recent; track series.key) {
+                    <li>{{ series.title }} · {{ series.current.summary }}</li>
+                  }
+                </ul>
+              </section>
+            }
+            @for (group of progress().groups; track group.id) {
+              <section [attr.aria-labelledby]="'health-progress-group-' + group.id">
+                <h3 [id]="'health-progress-group-' + group.id">{{ group.title }}</h3>
+                <ul class="entries" [attr.aria-label]="group.title">
+                  @for (series of group.series; track series.key) {
+                    <li class="progress-series" [attr.data-progress-kind]="series.kind" [attr.data-progress-key]="series.key">
+                      <span class="entry-label">{{ series.title }}</span>
+                      <p class="current-best">Current · {{ series.current.summary }}</p>
+                      @if (series.previous; as previous) {
+                        <p class="previous-best">Previous best · {{ previous.summary }}</p>
+                      }
+                      <span class="entry-actions">
+                        @if (series.current.source === 'record') {
+                          <ui-button variant="secondary" [attr.id]="progressId(series.key, 'edit')" [ariaLabel]="'Edit ' + series.title" (clicked)="openEdit(series.current.recordId)">Edit</ui-button>
+                          <ui-button variant="danger" [attr.id]="progressId(series.key, 'delete')" [ariaLabel]="'Delete ' + series.title" (clicked)="removePr(series.current.recordId)">Delete</ui-button>
+                        } @else {
+                          <ui-button variant="secondary" [attr.id]="progressId(series.key, 'session')" [ariaLabel]="'Edit session for ' + series.title" (clicked)="editWorkout(series.current.sessionId)">Edit session</ui-button>
+                        }
+                      </span>
+                    </li>
+                  }
+                </ul>
+              </section>
+            }
+            @if (progress().trophies.length > 0) {
+              <section aria-labelledby="health-progress-trophies">
+                <h3 id="health-progress-trophies">Trophies</h3>
+                <ul class="entries" aria-label="Trophies">
+                  @for (trophy of progress().trophies; track trophy.id) {
+                    <li [attr.data-trophy]="trophy.id">{{ trophy.name }}</li>
+                  }
+                </ul>
+              </section>
+            }
           }
-        </ul>
+        </section>
+        <section class="records" aria-labelledby="health-records-title">
+          <h2 id="health-records-title">Records</h2>
+          @if (rows().length === 0) {
+            <p>No personal records yet.</p>
+          } @else {
+            <ul class="entries" aria-label="Personal records">
+              @for (row of rows(); track row.clientId) {
+                <li [attr.data-health-kind]="row.kind">
+                  <span class="entry-label" [id]="'health-entry-' + row.clientId" tabindex="-1" [appHealthLinkedFocus]="row.clientId === entryId() && !dialogOpen()" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.label }}</span>
+                  <span class="entry-actions">
+                    <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="openEdit(row.clientId)">Edit</ui-button>
+                    <ui-button variant="danger" [attr.id]="'health-delete-' + row.clientId" [ariaLabel]="'Delete ' + row.label" (clicked)="removePr(row.clientId)">Delete</ui-button>
+                  </span>
+                </li>
+              }
+            </ul>
+          }
+        </section>
+      } @else if (rows().length === 0) {
+        <p>No entries yet.</p>
       } @else {
         @if (measurementPages().length > 0) {
           <section class="result-group" aria-labelledby="health-group-measurements" data-health-group="health-group-measurements">
@@ -125,7 +187,11 @@
           }
         </div>
       } @else {
-        <ui-button id="health-add-lift" (clicked)="openLift()">Add lift</ui-button>
+        <div class="add-actions">
+          <ui-button id="health-add-lift" (clicked)="openPr('lift')">Add lift</ui-button>
+          <ui-button id="health-add-run" (clicked)="openPr('run')">Add run</ui-button>
+          <ui-button id="health-add-other" (clicked)="openPr('other')">Add record</ui-button>
+        </div>
         <section class="workouts" aria-labelledby="health-workouts-title">
           <h2 id="health-workouts-title">Workouts</h2>
           @if (workoutRows().length === 0) {
@@ -177,6 +243,7 @@
   [kind]="editorKind()"
   [today]="today()"
   [weightUnit]="units().weight"
+  [distanceUnit]="units().distance"
   [draft]="draft() ?? emptyDraft"
   [formError]="formError()"
   [busy]="busy()"

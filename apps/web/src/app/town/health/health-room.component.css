@@ -56,8 +56,29 @@
   gap: var(--space-2);
 }
 
+.progress,
+.records,
 .workouts {
   margin-block: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.progress h2,
+.progress h3,
+.records h2,
+.current-best,
+.previous-best,
+.progress-series {
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.current-best,
+.previous-best {
+  flex: 1 1 100%;
 }
 
 .workouts h2 {

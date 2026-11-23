@@ -17,23 +17,30 @@ import { SessionService } from '../../platform/session.service';
 import { HealthEntryDialogComponent, type HealthEntryValue } from './health-entry-dialog.component';
 import { HealthWorkoutDialogComponent } from './health-workout-dialog.component';
 import { HEALTH_HISTORY_PAGE, buildClinicSeries, pageClinicSeries } from './health-history';
+import { EMPTY_HEALTH_PROGRESS, projectHealthProgress } from './health-progress';
 import { HealthSparklineComponent } from './health-sparkline.component';
 import {
   DEFAULT_HEALTH_UNITS,
   EMPTY_HEALTH_DRAFT,
   corruptNotice,
+  draftFromPr,
   draftFromStat,
   formatHealthPr,
   healthDeletePhrase,
+  healthPrDeletePhrase,
   isClinicKind,
+  isPrKind,
   isVitalKind,
   readHealthUnits,
+  reformatDistanceDraft,
   reformatWeightDraft,
+  sameStoredPr,
   sameStoredStat,
   writeHealthUnits,
   type HealthClinicKind,
   type HealthDraft,
   type HealthEditorKind,
+  type HealthPrKind,
   type HealthUnits,
 } from './health-entry';
 import {
@@ -95,6 +102,40 @@ function vitalName(kind: 'weight' | 'rhr' | 'bp' | 'sleep'): string {
     case 'bp': return 'blood pressure';
     case 'sleep': return 'sleep';
   }
+}
+
+function prDeleteCopy(kind: HealthPrKind): {
+  title: string;
+  noun: string;
+  confirm: string;
+  cancel: string;
+  busy: string;
+} {
+  if (kind === 'lift') {
+    return {
+      title: 'Delete this lift?',
+      noun: 'lift',
+      confirm: 'Delete lift',
+      cancel: 'Keep lift',
+      busy: 'Deleting lift',
+    };
+  }
+  if (kind === 'run') {
+    return {
+      title: 'Delete this run?',
+      noun: 'run',
+      confirm: 'Delete run',
+      cancel: 'Keep run',
+      busy: 'Deleting run',
+    };
+  }
+  return {
+    title: 'Delete this record?',
+    noun: 'record',
+    confirm: 'Delete record',
+    cancel: 'Keep record',
+    busy: 'Deleting record',
+  };
 }
 
 function deleteCopy(kind: HealthClinicKind): {
@@ -275,6 +316,22 @@ export class HealthRoomComponent implements OnInit {
     if (entry.value.kind !== 'exercise' || entry.value.archived) return [];
     return [{ id: entry.clientId, name: entry.value.name, exerciseType: entry.value.exercise_type }];
   }));
+  protected readonly progress = computed(() => {
+    if (this.room() !== 'gym' || this.phase() !== 'ready') return EMPTY_HEALTH_PROGRESS;
+    const records = this.entries().flatMap(entry => isStat(entry.value)
+      ? []
+      : [{ clientId: entry.clientId, value: entry.value }]);
+    const sessions = this.workouts().flatMap(entry => entry.value.kind === 'session'
+      ? [{ clientId: entry.clientId, value: entry.value }]
+      : []);
+    return projectHealthProgress(
+      records,
+      sessions,
+      this.units(),
+      this.today(),
+      this.store.statsSnapshot.map(entry => entry.value),
+    );
+  });
   protected readonly workoutRows = computed(() => this.workouts().map(entry => ({
     clientId: entry.clientId,
     label: formatWorkout(entry.value, this.units()),
@@ -374,13 +431,23 @@ export class HealthRoomComponent implements OnInit {
     this.dialogOpen.set(true);
   }
 
-  protected openLift(): void {
+  protected openPr(kind: HealthPrKind): void {
     this.formError.set('');
+    this.returnWorkoutFocus.set(`health-add-${kind}`);
     const draft = this.draft();
-    if (!draft || draft.kind !== 'lift' || draft.clientId) {
-      this.draft.set({ ...EMPTY_HEALTH_DRAFT, kind: 'lift' });
+    if (!draft || draft.kind !== kind || draft.clientId) {
+      this.draft.set({
+        ...EMPTY_HEALTH_DRAFT,
+        kind,
+        direction: kind === 'other' ? 'higher' : '',
+      });
     }
     this.dialogOpen.set(true);
+  }
+
+  protected progressId(key: string, action: 'edit' | 'delete' | 'session'): string {
+    const slug = key.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+    return `health-progress-${action}-${slug || 'series'}`;
   }
 
   protected openWorkout(kind: WorkoutKind): void {
@@ -466,11 +533,18 @@ export class HealthRoomComponent implements OnInit {
 
   protected openEdit(clientId: string): void {
     const entry = this.entries().find(item => item.clientId === clientId);
-    if (!entry || !isStat(entry.value)) return;
-    const draft = draftFromStat({ clientId: entry.clientId, value: entry.value }, this.units());
-    if (!draft) return;
+    if (!entry) return;
+    if (isStat(entry.value)) {
+      const draft = draftFromStat({ clientId: entry.clientId, value: entry.value }, this.units());
+      if (!draft) return;
+      this.formError.set('');
+      this.draft.set(draft);
+      this.dialogOpen.set(true);
+      return;
+    }
     this.formError.set('');
-    this.draft.set(draft);
+    this.draft.set(draftFromPr({ clientId: entry.clientId, value: entry.value }, this.units()));
+    this.returnWorkoutFocus.set(`health-edit-${clientId}`);
     this.dialogOpen.set(true);
   }
 
@@ -517,6 +591,10 @@ export class HealthRoomComponent implements OnInit {
     if (previous.distance === value) return;
     const next: HealthUnits = { ...previous, distance: value };
     this.updateUnits(next);
+    const draft = this.draft();
+    if (draft?.kind === 'run' && draft.distance !== '') {
+      this.draft.set(reformatDistanceDraft(draft, previous.distance, value));
+    }
     const workout = this.workoutDraft();
     if (workout) this.workoutDraft.set(reformatWorkoutDraft(workout, previous, next));
   }
@@ -555,6 +633,45 @@ export class HealthRoomComponent implements OnInit {
       },
     }).then(confirmed => {
       if (confirmed && this.current(generation)) this.returnWorkoutFocus.set('health-add-session');
+    });
+  }
+
+  protected removePr(clientId: string): void {
+    const generation = this.generation;
+    const entry = this.entries().find(item => item.clientId === clientId);
+    if (!entry || isStat(entry.value) || !isPrKind(entry.value.kind)) return;
+    const kind = entry.value.kind;
+    const measured = entry.value.measured_on;
+    const copy = prDeleteCopy(kind);
+    void this.confirm.confirmAction({
+      title: copy.title,
+      message: `This permanently deletes the ${copy.noun} measured on ${measured}. This cannot be undone.`,
+      confirmLabel: copy.confirm,
+      cancelLabel: copy.cancel,
+      busyLabel: copy.busy,
+      phrase: healthPrDeletePhrase(kind),
+      errorMessage: 'Could not delete this entry. It is still saved. Try again.',
+      run: async () => {
+        if (!this.current(generation)) return;
+        const latest = this.store.prsSnapshot.find(item => item.clientId === clientId);
+        if (!latest) throw new Error('missing');
+        try {
+          await this.store.deletePr(latest);
+        } catch (error) {
+          if (!this.current(generation)) return;
+          if (error instanceof HealthConflictError) this.publish();
+          throw error;
+        }
+        if (!this.current(generation)) return;
+        if (this.draft()?.clientId === clientId) {
+          this.draft.set(null);
+          this.dialogOpen.set(false);
+          this.formError.set('');
+        }
+        this.publish();
+      },
+    }).then(confirmed => {
+      if (confirmed && this.current(generation)) this.returnWorkoutFocus.set(`health-add-${kind}`);
     });
   }
 
@@ -620,6 +737,22 @@ export class HealthRoomComponent implements OnInit {
         } else {
           await this.store.createStat(value);
         }
+      } else if (clientId) {
+        const current = this.store.prsSnapshot.find(item => item.clientId === clientId);
+        if (!this.current(generation)) return;
+        if (!current) {
+          this.formError.set('That entry is no longer saved. Your draft is still here.');
+          return;
+        }
+        if (current.value.kind !== value.kind) {
+          this.formError.set('That record is a different kind. Your draft is still here.');
+          return;
+        }
+        if (sameStoredPr(current.value, value)) {
+          this.finishSaved(generation, submitted);
+          return;
+        }
+        await this.store.updatePr(current, value);
       } else {
         await this.store.createPr(value);
       }
@@ -724,6 +857,11 @@ export class HealthRoomComponent implements OnInit {
     if (!this.current(generation)) return;
     const draft = this.draft();
     if (submitted && draft && JSON.stringify(draft) !== JSON.stringify(submitted)) return;
+    if (submitted && isPrKind(submitted.kind)) {
+      this.returnWorkoutFocus.set(submitted.clientId
+        ? `health-edit-${submitted.clientId}`
+        : `health-add-${submitted.kind}`);
+    }
     this.draft.set(null);
     this.dialogOpen.set(false);
     this.formError.set('');

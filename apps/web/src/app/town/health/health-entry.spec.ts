@@ -1,8 +1,10 @@
-import { displayWeight, lbToKg } from './health-units';
+import { displayDistance, displayWeight, kmToMetres, lbToKg, milesToMetres } from './health-units';
 import {
   DEFAULT_HEALTH_UNITS,
   EMPTY_HEALTH_DRAFT,
   corruptNotice,
+  distanceDraftMetres,
+  draftFromPr,
   draftFromStat,
   firstHealthField,
   formatHealthPr,
@@ -10,9 +12,13 @@ import {
   healthDeletePhrase,
   healthFieldId,
   healthFieldMessage,
+  healthPrDeletePhrase,
   parseHealthNumber,
+  prFromDraft,
   readHealthUnits,
+  reformatDistanceDraft,
   reformatWeightDraft,
+  sameStoredPr,
   sameStoredStat,
   vitalStatFromDraft,
   writeHealthUnits,
@@ -77,6 +83,8 @@ describe('Health entry shell helpers', () => {
     expect(EMPTY_HEALTH_DRAFT).toEqual({
       kind: 'weight', clientId: null, measuredOn: '', loggedOn: '', weight: '',
       bpm: '', sys: '', dia: '', hours: '', sourceKg: null, exercise: '', reps: '',
+      distance: '', seconds: '', sourceMetres: null, otherName: '', otherValue: '',
+      otherUnit: '', direction: '',
       labName: '', labValue: '', labUnit: '', refLow: '', refHigh: '', note: '',
     });
   });
@@ -179,7 +187,71 @@ describe('Health entry shell helpers', () => {
     expect(healthDeletePhrase('sleep')).toBe('DELETE SLEEP');
     expect(healthDeletePhrase('lab')).toBe('DELETE LAB');
     expect(healthDeletePhrase('checkup')).toBe('DELETE CHECKUP');
+    expect(healthPrDeletePhrase('lift')).toBe('DELETE LIFT');
+    expect(healthPrDeletePhrase('run')).toBe('DELETE RUN');
+    expect(healthPrDeletePhrase('other')).toBe('DELETE RECORD');
     expect(weight.kg).toBe(80);
+  });
+
+  it('keeps a legacy personal record canonical when the display unit changes', () => {
+    const units = { weight: 'lb' as const, distance: 'mi' as const };
+    const today = '2026-11-23';
+    const draft = draftFromPr({ clientId: 'hlt_SyntheticLiftEntryABCD', value: lift }, units);
+    expect(draft.weight).toBe('220.5');
+    expect(draft.sourceKg).toBe(100);
+    expect(draft.loggedOn).toBe(DAY);
+    expect(draft.reps).toBe('5');
+    const kept = prFromDraft(draft, today, units);
+    expect(kept.fieldErrors).toEqual({});
+    expect(kept.value.kg).toBe(100);
+    expect(kept.value.logged_on).toBe(DAY);
+    expect(sameStoredPr(lift, { ...kept.value, logged_on: today })).toBeTrue();
+    const kilograms = reformatWeightDraft(draft, 'lb', 'kg');
+    expect(prFromDraft(kilograms, today, { weight: 'kg', distance: 'mi' }).value.kg).toBe(100);
+    const typed = prFromDraft({ ...draft, weight: '150' }, today, units);
+    expect(typed.value.kg).toBe(lbToKg(150));
+    expect(typed.value.kg).not.toBe(100);
+    expect(sameStoredPr(lift, typed.value)).toBeFalse();
+
+    const run: HealthPr = {
+      v: 1, kind: 'run', measured_on: DAY, logged_on: DAY, distance_m: 1609.344, seconds: 480,
+    };
+    const miles = draftFromPr({ clientId: 'hlt_SyntheticRunEntryABCDE', value: run }, units);
+    expect(miles.distance).toBe('1.00');
+    expect(miles.sourceMetres).toBe(1609.344);
+    expect(prFromDraft(miles, today, units).value.distance_m).toBe(1609.344);
+    const kilometres = reformatDistanceDraft(miles, 'mi', 'km');
+    expect(kilometres.distance).toBe(displayDistance(1609.344, 'km'));
+    expect(kilometres.distance).toBe('1.61');
+    expect(prFromDraft(kilometres, today, { weight: 'lb', distance: 'km' }).value.distance_m).toBe(1609.344);
+    expect(kmToMetres(1.61)).toBe(1610);
+    expect(distanceDraftMetres('1.61', 'km', null).metres).toBe(1610);
+    expect(milesToMetres(3.11)).not.toBe(5000);
+
+    const other: HealthPr = {
+      v: 1, kind: 'other', measured_on: DAY, logged_on: DAY, name: 'Hold', value: 42, unit: 's', direction: 'higher',
+    };
+    const otherDraft = draftFromPr({ clientId: 'hlt_SyntheticOtherEntryABC', value: other }, units);
+    const switched = reformatDistanceDraft(reformatWeightDraft(otherDraft, 'lb', 'kg'), 'mi', 'km');
+    const savedOther = prFromDraft(switched, today, { weight: 'kg', distance: 'km' });
+    expect(savedOther.fieldErrors).toEqual({});
+    expect(savedOther.value).toEqual(jasmine.objectContaining({
+      kind: 'other', name: 'Hold', value: 42, unit: 's', direction: 'higher', logged_on: DAY,
+    }));
+    expect(sameStoredPr(other, savedOther.value)).toBeTrue();
+
+    const invalid = prFromDraft({ ...draft, measuredOn: '1899-01-01' }, today, units);
+    expect(invalid.fieldErrors['measured_on']).toBe('date_range');
+    expect(firstHealthField(invalid.fieldErrors, 'gym', 'lift')).toBe('measured_on');
+    const future = prFromDraft({ ...draft, measuredOn: '2999-01-01' }, today, units);
+    expect(future.fieldErrors['measured_on']).toBe('date_range');
+    expect(healthFieldId('distance_m')).toBe('health-distance');
+    expect(healthFieldId('seconds')).toBe('health-seconds');
+    expect(healthFieldId('name')).toBe('health-other-name');
+    expect(healthFieldId('direction')).toBe('health-direction');
+    expect(firstHealthField({ distance_m: 'range', seconds: 'finite' }, 'gym', 'run')).toBe('distance_m');
+    expect(lift.kg).toBe(100);
+    expect(run.distance_m).toBe(1609.344);
   });
 
   it('renders below, in, above, and no-range labs and roundtrips a checkup', () => {

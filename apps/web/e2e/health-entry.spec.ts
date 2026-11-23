@@ -655,11 +655,15 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       const themeLabel = nextTheme === 'dark' ? 'Dark' : 'Light';
       await activate(page, page.getByRole('button', { name: 'synthetic', exact: true }), touch);
       await activate(page, page.getByRole('link', { name: 'Settings', exact: true }), touch);
+      await expect(page).toHaveURL(/\/settings$/);
+      // The shell keeps moving focus to the new heading for a short time.
+      // Settings links sit outside main, so Enter before that settles hits the heading.
+      await expect(page.getByRole('heading', { level: 1, name: 'Settings', exact: true })).toBeFocused();
       const appearance = page.getByRole('navigation', { name: 'Settings', exact: true }).getByRole('link', { name: 'Appearance', exact: true });
-      await expect(appearance).toBeVisible();
-      if (touch) await appearance.tap();
-      else await appearance.press('Enter');
+      await expect(appearance).toHaveAttribute('href', /\/settings\/appearance$/);
+      await activate(page, appearance, touch);
       await expect(page).toHaveURL(/\/settings\/appearance$/);
+      await expect(page.getByRole('heading', { level: 1, name: 'Appearance', exact: true })).toBeFocused();
       const themeRadio = page.getByRole('radio', { name: themeLabel, exact: true });
       await expect(themeRadio).toBeVisible();
       if (touch) await themeRadio.tap();
@@ -1476,6 +1480,220 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       const fresh = page.getByRole('dialog', { name: 'Add session' });
       await expect(fresh.locator('#health-workout-definition')).toHaveCount(0);
       const roomFits = await room.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
+      expect(roomFits).toBe(true);
+      const readyMotion = await room.locator('.health-room').evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(readyMotion).toBe('0s');
+      const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+    });
+  });
+}
+
+for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'light'], [1280, 800, 'dark'], [390, 844, 'dark']] as const) {
+  test.describe(`health progress at ${width} ${theme}`, () => {
+    test.describe.configure({ timeout: 240_000 });
+    test.use({
+      viewport: { width, height },
+      hasTouch: width === 390,
+      timezoneId: 'America/Los_Angeles',
+    });
+
+    test.beforeEach(async ({ page, request }) => {
+      expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
+      await page.clock.setFixedTime(new Date('2026-10-29T19:00:00Z'));
+      await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: theme === 'dark' ? 'dark' : 'light' });
+      await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+    });
+
+    test('rolls a session best back to the legacy record without a second row', async ({ page }) => {
+      const touch = width === 390;
+      const olderId = 'hlt_SyntheticOlderLiftABCD';
+      const sessionId = 'hlt_SyntheticSessionBestAB';
+      const runId = 'hlt_SyntheticRunEntryABCDE';
+      let failPr = false;
+      let conflictPr = false;
+      await page.route('**/api/vault/records/upsert', async route => {
+        const body = route.request().postDataJSON() as { records?: Array<{ collection?: string }> };
+        const prs = (body.records ?? []).filter(record => record.collection === 'health_prs');
+        if (failPr && prs.length > 0) {
+          failPr = false;
+          await route.fulfill({ status: 503, contentType: 'application/json', body: '{"detail":"Synthetic save failed"}' });
+          return;
+        }
+        if (conflictPr && prs.length > 0) {
+          conflictPr = false;
+          await route.fulfill({ status: 409, contentType: 'application/json', body: '{"detail":"Revision conflict"}' });
+          return;
+        }
+        await route.fallback();
+      });
+      await syntheticVault(page, {
+        ...SEED,
+        health_prs: [
+          ...SEED.health_prs,
+          {
+            client_id: olderId,
+            v: 1,
+            kind: 'lift',
+            measured_on: '2026-10-01',
+            logged_on: '2026-10-01',
+            exercise: 'Squat',
+            kg: 90,
+            reps: 1,
+          },
+          {
+            client_id: runId,
+            v: 1,
+            kind: 'run',
+            measured_on: '2026-10-20',
+            logged_on: '2026-10-20',
+            distance_m: 5000,
+            seconds: 1500,
+          },
+        ],
+        health_workouts: [
+          {
+            client_id: sessionId,
+            v: 1,
+            kind: 'session',
+            measured_on: '2026-10-29',
+            logged_on: '2026-10-29',
+            state: 'completed',
+            exercises: [{
+              id: 'wex_progress1',
+              exercise_id: 'static:squat',
+              exercise_type: 'load-reps',
+              name: 'Squat',
+              sets: [
+                { id: 'wst_warmup001', set_type: 'warmup', completed: true, kg: 200, reps: 1 },
+                { id: 'wst_progress01', set_type: 'work', completed: true, kg: 140, reps: 1 },
+              ],
+            }],
+          },
+        ],
+      });
+      await page.goto('/town/gym');
+      const room = page.locator('app-health-room');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(room).toHaveAttribute('data-health-state', 'locked');
+      const locked = await room.evaluate(node => (node as HTMLElement).innerText);
+      noMeasurementDigits(locked);
+      const lockedMotion = await room.locator('.health-room').evaluate(node => getComputedStyle(node).transitionDuration);
+      expect(lockedMotion).toBe('0s');
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await expect(room).toContainText(`Current · Squat · ${displayWeight(140, 'lb')} lb × 1`);
+      await expect(room).toContainText('Previous best');
+      await expect(room).toContainText('220.5 lb');
+      await expect(room).toContainText('New PR in the last 7 days');
+      await expect(room).not.toContainText('176.4');
+      await expect(room).not.toContainText('64.25');
+      const before = await collectionCipher(page);
+      expect(before.health_prs).toHaveLength(3);
+      expect(before.health_workouts).toHaveLength(1);
+
+      await target(room.locator('#health-add-lift button'));
+      await target(room.locator('#health-add-run button'));
+      await target(room.locator('#health-add-other button'));
+      await activate(page, room.getByRole('radio', { name: 'Kilograms' }), touch);
+      await activate(page, room.getByRole('radio', { name: 'Kilometres' }), touch);
+      expect(cipherOnly((await collectionCipher(page)).health_prs)).toEqual(cipherOnly(before.health_prs));
+      expect(cipherOnly((await collectionCipher(page)).health_workouts)).toEqual(cipherOnly(before.health_workouts));
+      await expect(room).toContainText('140.0 kg');
+      await expect(room).toContainText('100.0 kg');
+      await expect(room).toContainText('5.00 km');
+      await expect(room).toContainText('5:00 /km');
+
+      await activate(page, room.locator(`#health-edit-${runId} button`), touch);
+      const runDialog = page.getByRole('dialog', { name: 'Edit run' });
+      await expect(runDialog.locator('#health-distance')).toHaveValue('5.00');
+      await expect(runDialog.locator('#health-seconds')).toHaveValue('1500');
+      await expect(runDialog.locator('.logged-on time')).toHaveAttribute('datetime', '2026-10-20');
+      if (touch) await runDialog.getByRole('button', { name: 'Save' }).tap();
+      else await runDialog.getByRole('button', { name: 'Save' }).click();
+      await expect(runDialog).toHaveCount(0);
+      expect(cipherOnly((await collectionCipher(page)).health_prs)).toEqual(cipherOnly(before.health_prs));
+
+      await activate(page, room.locator(`#health-edit-${LIFT_ID} button`), touch);
+      const dialog = page.getByRole('dialog', { name: 'Edit lift' });
+      await expect(dialog.locator('#health-weight')).toHaveValue('100.0');
+      await expect(dialog.locator('.logged-on time')).toHaveAttribute('datetime', DAY);
+      await dialog.locator('#health-measured-on').evaluate(node => {
+        const input = node as HTMLInputElement;
+        input.value = '1899-01-01';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      if (touch) await dialog.getByRole('button', { name: 'Save' }).tap();
+      else await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog.locator('#health-measured-on')).toHaveValue('1899-01-01');
+      await expect(dialog.locator('#health-measured-on')).toBeFocused();
+      await expect(dialog).toContainText('Use a real date from 1900 through today.');
+      expect(cipherOnly((await collectionCipher(page)).health_prs)).toEqual(cipherOnly(before.health_prs));
+      await dialog.locator('#health-measured-on').evaluate(node => {
+        const input = node as HTMLInputElement;
+        input.value = '2026-10-28';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await fillControl(page, dialog, '#health-reps', '4', touch);
+      failPr = true;
+      if (touch) await dialog.getByRole('button', { name: 'Save' }).tap();
+      else await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog).toContainText('Could not save this entry. Try again.');
+      await expect(dialog.locator('#health-reps')).toHaveValue('4');
+      await expect(dialog.locator('#health-form-error')).toBeFocused();
+      conflictPr = true;
+      if (touch) await dialog.getByRole('button', { name: 'Save' }).tap();
+      else await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog).toContainText('This entry changed in another tab. Reload and try again.');
+      await expect(dialog.locator('#health-reps')).toHaveValue('4');
+      await expect(dialog.locator('#health-weight')).toHaveValue('100.0');
+      await expect(dialog.locator('#health-form-error')).toBeFocused();
+      if (touch) await dialog.getByRole('button', { name: 'Save' }).tap();
+      else await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog).toHaveCount(0);
+      const edited = (await collectionCipher(page)).health_prs.find(row => row.client_id === LIFT_ID);
+      expect(edited?.ciphertext_b64).not.toBe(before.health_prs.find(row => row.client_id === LIFT_ID)?.ciphertext_b64);
+      await activate(page, room.locator(`#health-edit-${LIFT_ID} button`), touch);
+      const reopened = page.getByRole('dialog', { name: 'Edit lift' });
+      await expect(reopened.locator('#health-weight')).toHaveValue('100.0');
+      await expect(reopened.locator('#health-reps')).toHaveValue('4');
+      await expect(reopened.locator('.logged-on time')).toHaveAttribute('datetime', DAY);
+      if (touch) await reopened.getByRole('button', { name: 'Cancel' }).tap();
+      else await page.keyboard.press('Escape');
+      await expect(reopened).toHaveCount(0);
+      const editedCipher = await collectionCipher(page);
+
+      await activate(page, room.locator(`#health-edit-${sessionId} button`), touch);
+      const workout = page.getByRole('dialog', { name: 'Edit session' });
+      const box = workout.locator('#health-set-completed-wst_progress01');
+      await target(box);
+      await expect(box).toBeChecked();
+      if (touch) await box.tap();
+      else await box.click();
+      await expect(box).not.toBeChecked();
+      if (touch) await workout.getByRole('button', { name: 'Save' }).tap();
+      else await workout.getByRole('button', { name: 'Save' }).click();
+      await expect(workout).toHaveCount(0);
+      await expect(room).toContainText('Current · Squat · 100.0 kg × 4');
+      await expect(room).toContainText('Previous best · Squat · 90.0 kg × 1');
+      await expect(room).not.toContainText('140.0 kg');
+      expect(cipherOnly((await collectionCipher(page)).health_prs)).toEqual(cipherOnly(editedCipher.health_prs));
+
+      await activate(page, room.locator(`#health-delete-${LIFT_ID} button`), touch);
+      const confirm = page.getByRole('dialog', { name: 'Delete this lift?' });
+      await confirm.locator('#confirm-phrase-field').fill('DELETE');
+      await expect(confirm.getByRole('button', { name: 'Delete lift' })).toHaveAttribute('aria-disabled', 'true');
+      await confirm.locator('#confirm-phrase-field').fill('DELETE LIFT');
+      if (touch) await confirm.getByRole('button', { name: 'Delete lift' }).tap();
+      else await confirm.getByRole('button', { name: 'Delete lift' }).click();
+      await expect(confirm).toHaveCount(0);
+      await expect(room).toContainText('Current · Squat · 90.0 kg × 1');
+      await expect(room).not.toContainText('100.0 kg');
+      await expect(room.locator('#health-add-lift button')).toBeFocused();
+      expect((await collectionCipher(page)).health_prs.map(row => row.client_id).sort()).toEqual([olderId, runId].sort());
+      const roomFits = await room.locator('.health-room').evaluate(node => node.scrollWidth <= node.clientWidth + 1);
       expect(roomFits).toBe(true);
       const readyMotion = await room.locator('.health-room').evaluate(node => getComputedStyle(node).transitionDuration);
       expect(readyMotion).toBe('0s');
