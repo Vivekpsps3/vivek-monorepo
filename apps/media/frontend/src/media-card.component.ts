@@ -14,6 +14,7 @@ import { filmShelf, seriesShelf } from "./theater.mjs";
       class="media-card"
       [class.media-card--poster]="poster()"
       [class.media-card--box]="box()"
+      [class.media-card--record]="layout() === 'record'"
       [attr.data-tone]="poster() ? tone() : null"
       [attr.data-film]="poster() && item().kind === 'movie' ? film().tone : null"
       [attr.data-progress]="poster() && item().kind === 'tv' ? series().progress : null"
@@ -178,7 +179,7 @@ import { filmShelf, seriesShelf } from "./theater.mjs";
 export class MediaCardComponent {
   readonly item = input.required<MediaCard>();
   readonly source = input<Record<string, unknown> | undefined>(undefined);
-  readonly layout = input<"row" | "poster" | "box">("row");
+  readonly layout = input<"row" | "poster" | "box" | "record">("row");
   readonly busy = input(false);
   readonly broken = signal(false);
   readonly status = statusLabel;

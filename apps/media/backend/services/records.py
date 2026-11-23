@@ -3098,6 +3098,13 @@ def _group_stamp(
     return max(stamps) if stamps else 0.0
 
 
+def _group_artwork(catalog: CatalogItem, owned: UserEntry | None) -> str | None:
+    """This artist's portrait or catalog image. Album art and ratings stay on the album."""
+    if owned is not None and owned.portrait_url:
+        return owned.portrait_url
+    return catalog.artwork_url
+
+
 def _artist_group_payload(
     catalog: CatalogItem,
     owned: UserEntry | None,
@@ -3112,6 +3119,7 @@ def _artist_group_payload(
         "followed": owned is not None and artist_is_followed(owned),
         "entry_id": None if owned is None else owned.id,
         "rating": None if owned is None else owned.rating,
+        "artwork_url": _group_artwork(catalog, owned),
         "saved_count": len(children),
         "albums": shape["albums"],
         "songs": shape["songs"],
