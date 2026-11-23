@@ -3207,7 +3207,22 @@ describe('Health room shell', () => {
     expect(clinicEl.querySelector('[data-clinic-date]')).toBeNull();
     expect(clinicEl.querySelector('[data-clinic-history]')).toBeNull();
     expect(visible(clinicEl)).not.toMatch(/\d/);
+    clinicButton(clinicEl, 'labs').click();
+    clinic.detectChanges();
+    expect(clinicEl.querySelector('#clinic-object-title')?.textContent).toContain('Lab folders');
+    expect(clinicEl.textContent).toContain('Digits stay hidden until Finance is unlocked.');
+    expect(clinicEl.querySelector('[data-clinic-folder]')).toBeNull();
+    expect(clinicEl.querySelector('[data-clinic-table]')).toBeNull();
+    expect(visible(clinicEl)).not.toMatch(/\d/);
+    clinicButton(clinicEl, 'checkups').click();
+    clinic.detectChanges();
+    expect(clinicEl.querySelector('#clinic-object-title')?.textContent).toContain('Checkup book');
+    expect(clinicEl.textContent).toContain('Digits stay hidden until Finance is unlocked.');
+    expect(clinicEl.querySelector('[data-clinic-checkup]')).toBeNull();
+    expect(visible(clinicEl)).not.toMatch(/\d/);
     expect(clinicButton(clinicEl, 'weight').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(clinicButton(clinicEl, 'labs').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(clinicButton(clinicEl, 'checkups').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     clinic.destroy();
 
     gate.exists = false;
@@ -3486,6 +3501,145 @@ describe('Health room shell', () => {
     expect(visible(el)).not.toContain('150');
     expect(visible(el)).not.toContain('176.4');
     expect(el.querySelector('#health-weight')).toBeNull();
+  });
+
+  it('opens a no-range lab and an older checkup, and drops a held edit when the owner changes', async () => {
+    unlock();
+    const older = '2026-09-02';
+    const noneId = 'hlt_SyntheticLabNoRangeABC';
+    const belowId = 'hlt_SyntheticLabBelowRange';
+    const olderCheckup = 'hlt_SyntheticCheckupOlderAB';
+    const newerCheckup = 'hlt_SyntheticCheckupEntryAB';
+    fake.rows = [
+      row('health_stats', belowId, {
+        v: 1, kind: 'lab', measured_on: DAY, logged_on: DAY,
+        lab: { name: 'Ω-marker', value: 9, unit: 'u', ref_low: 10, ref_high: 20 },
+      }),
+      row('health_stats', noneId, {
+        v: 1, kind: 'lab', measured_on: DAY, logged_on: DAY,
+        lab: { name: 'Ω-other', value: 4, unit: 'u' },
+      }),
+      row('health_stats', olderCheckup, {
+        v: 1, kind: 'checkup', measured_on: older, logged_on: older, note: 'Older synthetic visit',
+      }),
+      row('health_stats', newerCheckup, {
+        v: 1, kind: 'checkup', measured_on: DAY, logged_on: DAY, note: 'Newer synthetic visit',
+      }),
+    ];
+    route.routeData.next({ healthRoom: 'clinic' });
+    route.query.next(convertToParamMap({}));
+    const { fixture, el } = await show();
+    const noneCells = () => [...el.querySelectorAll('[data-clinic-table="none"] td')].map(cell => cell.textContent?.trim());
+    expect(noneCells()).toEqual([DAY, '4', 'u', 'no range']);
+    expect(el.querySelector('[data-clinic-table="below"]')?.textContent).toContain('9');
+    expect(el.querySelector('[data-clinic-table="below"]')?.textContent).toContain('below range · 10 to 20 u');
+    expect(el.textContent).not.toMatch(/diagnos|healthy|normal/i);
+
+    clinicButton(el, 'labs').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#clinic-object-title')?.textContent).toContain('Lab folders');
+    expect(el.querySelector('#health-group-labs')).toBeNull();
+    expect(el.querySelector('[data-clinic-table="none"]')).toBeNull();
+    const openOther = el.querySelector<HTMLElement>('#health-open-health-lab-folder-0 button');
+    if (!openOther) throw new Error('missing no-range folder');
+    expect(openOther.textContent?.trim()).toBe('Ω-other');
+    expect(openOther.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    openOther.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(el.querySelector('#health-lab-folder-0'));
+    expect(noneCells()).toEqual([DAY, '4', 'u', 'no range']);
+    expect(el.querySelector('[data-clinic-unit="lab"]')?.textContent).toBe('Shown in u.');
+    expect(el.querySelector('[data-clinic-table="none"] td:last-child')?.textContent?.trim()).toBe('no range');
+    expect(el.querySelector('#health-group-labs')).toBeNull();
+
+    const back = el.querySelector<HTMLButtonElement>('#health-lab-back button');
+    if (!back) throw new Error('missing lab back');
+    back.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(el.querySelector('#health-open-health-lab-folder-0 button'));
+    const openMarker = el.querySelector<HTMLElement>('#health-open-health-lab-folder-1 button');
+    if (!openMarker) throw new Error('missing marker folder');
+    openMarker.click();
+    fixture.detectChanges();
+    const below = el.querySelector('[data-clinic-table="below"]');
+    expect(below?.textContent).toContain(DAY);
+    expect(below?.textContent).toContain('9');
+    expect(below?.textContent).toContain('u');
+    expect(below?.textContent).toContain('below range · 10 to 20 u');
+    expect(el.querySelector('[data-clinic-table="none"]')).toBeNull();
+
+    clinicButton(el, 'checkups').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#clinic-object-title')?.textContent).toContain('Checkup book');
+    expect(el.querySelector('#health-group-checkups')).toBeNull();
+    const visits = [...el.querySelectorAll('[data-clinic-checkup]')];
+    expect(visits[0]?.textContent).toContain(DAY);
+    expect(visits[0]?.textContent).toContain('Newer synthetic visit');
+    expect(visits[1]?.textContent).toContain(older);
+    expect(visits[1]?.textContent).toContain('Older synthetic visit');
+    expect(el.querySelector('[data-clinic-date="checkup"]')?.textContent).toContain('measured dates');
+    expect(el.textContent).not.toMatch(/diagnos|healthy|normal/i);
+
+    clinicButton(el, 'labs').click();
+    fixture.detectChanges();
+    el.querySelector<HTMLElement>('#health-open-health-lab-folder-0 button')?.click();
+    fixture.detectChanges();
+    const edit = el.querySelector<HTMLButtonElement>(`#health-edit-${noneId} button`);
+    if (!edit) throw new Error('missing lab edit');
+    edit.click();
+    fixture.detectChanges();
+    typeInto(el, '#health-lab-value', '8');
+    fixture.detectChanges();
+    fake.failUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#health-lab-value')?.value).toBe('8');
+    expect(el.textContent).toContain('Could not save this entry. Try again.');
+    expect(noneCells()[1]).toBe('4');
+    expect(fake.rows.find(item => item.client_id === noneId)?.revision).toBe(1);
+    fake.failUpsert = false;
+    button(el, 'Cancel').click();
+    fixture.detectChanges();
+
+    el.querySelector<HTMLButtonElement>(`#health-edit-${noneId} button`)?.click();
+    fixture.detectChanges();
+    typeInto(el, '#health-lab-name', 'Ω-held');
+    fixture.detectChanges();
+    fake.holdUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await until(() => fake.upsertRelease.length === 1);
+    const store = TestBed.inject(HealthStoreService);
+    fake.holdList = true;
+    fake.rows = [row('health_stats', historyId('W', 3), { v: 1, kind: 'weight', measured_on: DAY, logged_on: DAY, kg: 70 })];
+    session.users.next({ id: 8 });
+    fixture.detectChanges();
+    await until(() => el.getAttribute('data-health-state') === 'loading');
+    expect(visible(el)).not.toContain('Ω-other');
+    expect(visible(el)).not.toContain('Ω-held');
+    expect(visible(el)).not.toContain('Ω-marker');
+    expect(visible(el)).not.toContain('Older synthetic visit');
+    expect(visible(el)).not.toContain('Newer synthetic visit');
+    expect(visible(el)).not.toContain(older);
+    expect(el.querySelector('#health-lab-name')).toBeNull();
+    expect(el.querySelector('[data-clinic-table]')).toBeNull();
+    fake.upsertRelease.shift()?.();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(store.statsSnapshot.some(item => JSON.stringify(item.value).includes('Ω-'))).toBeFalse();
+    expect(fake.upsertCancelled).toBeGreaterThan(0);
+    fake.listRelease.splice(0).forEach(release => release());
+    await settle(fixture);
+    expect(el.getAttribute('data-health-state')).toBe('ready');
+    expect(visible(el)).not.toContain('Ω-other');
+    expect(visible(el)).not.toContain('Ω-held');
+    expect(visible(el)).not.toContain('Older synthetic visit');
+    expect(el.querySelector('[data-clinic-folder]')).toBeNull();
+    expect(el.querySelector('#health-lab-name')).toBeNull();
   });
 });
 

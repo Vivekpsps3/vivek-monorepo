@@ -279,6 +279,8 @@ export class HealthRoomComponent implements OnInit {
   protected readonly floorObject = signal<GymFloorId | null>(null);
   protected readonly upObject = signal<GymUpId | null>(null);
   protected readonly clinicObject = signal<ClinicObjectId | null>(null);
+  /** Folder title while the lab archive is open. Cleared with the other private draft. */
+  private readonly openLabTitle = signal<string | null>(null);
   protected readonly vitalStations = CLINIC_VITALS;
   protected readonly wallExercise = signal('');
   protected readonly wallFrom = signal('');
@@ -346,6 +348,11 @@ export class HealthRoomComponent implements OnInit {
   });
   protected readonly labPage = computed(() => this.clinicPages().find(page => page.kind === 'lab') ?? null);
   protected readonly checkupPage = computed(() => this.clinicPages().find(page => page.kind === 'checkup') ?? null);
+  protected readonly selectedLabFolder = computed(() => {
+    const title = this.openLabTitle();
+    if (!title || this.clinicObject() !== 'labs' || this.phase() !== 'ready') return null;
+    return this.labPage()?.visibleFolders.find(folder => folder.title === title) ?? null;
+  });
   protected readonly rows = computed((): HealthListRow[] => {
     const units = this.units();
     if (this.room() === 'clinic') {
@@ -477,13 +484,16 @@ export class HealthRoomComponent implements OnInit {
       const object = this.params().get('object');
       if (this.room() === 'gym') {
         this.clinicObject.set(null);
+        this.openLabTitle.set(null);
         this.floorObject.set(gymFloorId(object));
         this.upObject.set(gymUpId(this.params().get('up')));
         return;
       }
       this.floorObject.set(null);
       this.upObject.set(null);
-      this.clinicObject.set(clinicObjectId(object));
+      const clinicId = clinicObjectId(object);
+      this.clinicObject.set(clinicId);
+      if (clinicId !== 'labs') this.openLabTitle.set(null);
     });
     afterRenderEffect(() => {
       const tick = this.wallErrorTick();
@@ -672,6 +682,7 @@ export class HealthRoomComponent implements OnInit {
   protected selectClinic(id: ClinicObjectId | null): void {
     if (this.dead || this.room() !== 'clinic') return;
     this.clinicObject.set(id);
+    if (id !== 'labs') this.openLabTitle.set(null);
     if (!this.route.snapshot) return;
     void this.router.navigate([], {
       relativeTo: this.route,
@@ -695,6 +706,34 @@ export class HealthRoomComponent implements OnInit {
 
   protected stationUnit(kind: ClinicVitalId): string {
     return clinicUnitLine(kind, this.units());
+  }
+
+  /** Opens one lab folder in this session. The name stays off the clinic URL. */
+  protected openLab(title: string): void {
+    if (this.dead || this.phase() !== 'ready' || this.clinicObject() !== 'labs') return;
+    const folder = this.labPage()?.visibleFolders.find(item => item.title === title);
+    if (!folder) return;
+    this.openLabTitle.set(title);
+    const focusId = folder.id;
+    // The heading is created on the next render. A microtask still sees the index.
+    setTimeout(() => {
+      if (this.dead || this.openLabTitle() !== title) return;
+      document.getElementById(focusId)?.focus();
+    });
+  }
+
+  protected closeLab(): void {
+    if (this.dead) return;
+    const title = this.openLabTitle();
+    const folder = this.labPage()?.visibleFolders.find(item => item.title === title);
+    this.openLabTitle.set(null);
+    const focusId = folder ? `health-open-${folder.id}` : 'clinic-object-title';
+    setTimeout(() => {
+      if (this.dead || this.openLabTitle() !== null) return;
+      const host = document.getElementById(focusId);
+      const button = host?.querySelector('button');
+      (button instanceof HTMLElement ? button : host)?.focus();
+    });
   }
 
   /** The upstairs id is the durable `up` query. The floor object stays put. */
@@ -1206,6 +1245,7 @@ export class HealthRoomComponent implements OnInit {
     this.focusAnchor = null;
     this.workouts.set([]);
     this.returnFocusKind.set(null);
+    this.openLabTitle.set(null);
     this.shownByKind.set({});
     this.revealFocusId.set(null);
     this.wallExercise.set('');

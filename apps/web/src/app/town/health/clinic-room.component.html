@@ -19,13 +19,13 @@
         </div>
       </div>
     </div>
-    <p id="clinic-room-hint" class="scene-hint">Drag to look around. Choose reception or a vital station. Dragging does not open it.</p>
+    <p id="clinic-room-hint" class="scene-hint">Drag to look around. Choose reception, a vital station, the lab folders, or the checkup book. Dragging does not open it.</p>
     <div class="camera-controls" role="group" aria-label="Clinic view">
       <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
       <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
       <button type="button" class="action" (click)="resetView()">Reset view</button>
     </div>
-    <ul class="clinic-objects" aria-label="Clinic stations">
+    <ul class="clinic-objects" aria-label="Clinic places">
       @for (frame of frames; track frame.id) {
         <li>
           <button type="button" class="action" [attr.data-clinic-object]="frame.id"
