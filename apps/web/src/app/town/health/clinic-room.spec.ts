@@ -13,7 +13,7 @@ import {
 
 describe('Clinic room geometry', () => {
   const gates: ClinicGate[] = ['locked', 'setup', 'unavailable', 'ready'];
-  const ids: Array<ClinicObjectId | null> = [null, 'reception', 'weight', 'rhr', 'bp', 'sleep'];
+  const ids: Array<ClinicObjectId | null> = [null, 'reception', 'weight', 'rhr', 'bp', 'sleep', 'labs', 'checkups'];
 
   it('picks the front object and fades whatever covers the selection', () => {
     expect(clinicHit({ x: 40, y: 40 })).toBe('reception');
@@ -25,6 +25,8 @@ describe('Clinic room geometry', () => {
     expect(clinicHit({ x: 220, y: 190 })).toBe('bp');
     expect(clinicHit({ x: 450, y: 250 })).toBe('sleep');
     expect(clinicHit({ x: 260, y: 220 })).toBe('sleep');
+    expect(clinicHit({ x: 540, y: 180 })).toBe('labs');
+    expect(clinicHit({ x: 540, y: 300 })).toBe('checkups');
     expect(clinicHit({ x: 8, y: 8 })).toBeNull();
     expect(clinicFaded('reception').has('weight')).toBeTrue();
     expect(clinicFaded('reception').has('rhr')).toBeFalse();
@@ -33,9 +35,11 @@ describe('Clinic room geometry', () => {
     expect(clinicFaded('weight').has('sleep')).toBeFalse();
     expect(clinicFaded('bp').has('sleep')).toBeTrue();
     expect(clinicFaded('sleep').size).toBe(0);
+    expect(clinicFaded('labs').size).toBe(0);
+    expect(clinicFaded('checkups').size).toBe(0);
     expect(clinicFaded(null).size).toBe(0);
-    expect(clinicFrames().map(frame => frame.id)).toEqual(['reception', 'weight', 'rhr', 'bp', 'sleep']);
-    expect(CLINIC_PIECES).toHaveSize(5);
+    expect(clinicFrames().map(frame => frame.id)).toEqual(['reception', 'weight', 'rhr', 'bp', 'sleep', 'labs', 'checkups']);
+    expect(CLINIC_PIECES).toHaveSize(7);
   });
 
   it('keeps locked, empty, and unavailable copy free of digits and advice', () => {
@@ -57,6 +61,8 @@ describe('Clinic room geometry', () => {
       expect(clinicUnitLine(id, { weight: 'kg', distance: 'km' })).not.toMatch(/\d|normal|healthy|diagnos/i);
     }
     expect(clinicObjectId('weight')).toBe('weight');
+    expect(clinicObjectId('labs')).toBe('labs');
+    expect(clinicObjectId('checkups')).toBe('checkups');
     expect(clinicObjectId('desk')).toBeNull();
     expect(clinicObjectId(null)).toBeNull();
   });

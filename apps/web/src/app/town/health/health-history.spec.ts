@@ -157,9 +157,56 @@ describe('Clinic history projection', () => {
     expect(marker?.sparkline.points.map(point => point.text).join('\n')).toContain('above range');
     expect(other?.sparkline.points[0]?.text).toContain('no range');
     expect(other?.sparkline.line).toBe('');
+    expect(other?.unitLine).toBe('Shown in u.');
+    expect(other?.groups.map(group => group.id)).toEqual(['none']);
+    expect(other?.groups[0]?.rows[0]).toEqual({
+      clientId: id('L', 4),
+      measuredOn: sameDay,
+      value: '4',
+      unit: 'u',
+      range: 'no range',
+    });
+    expect(marker?.groups.map(group => group.id)).toEqual(['below', 'in', 'above']);
+    expect(marker?.groups[0]?.rows[0]?.range).toBe('below range · 10 to 20 u');
+    expect(marker?.groups[0]?.rows[0]?.value).toBe('9');
+    expect(marker?.groups[0]?.rows[0]?.unit).toBe('u');
     const checkup = series.find(item => item.kind === 'checkup');
     expect(checkup?.sparkline.line).toBe('');
     expect(checkup?.sparkline.points[0]?.text).toBe(`Checkup · Synthetic visit note · ${sameDay}`);
-    expect(JSON.stringify(series)).not.toContain('medical');
+    expect(checkup?.visits[0]).toEqual({ clientId: id('C', 1), measuredOn: sameDay, note: 'Synthetic visit note' });
+    expect(JSON.stringify(series)).not.toMatch(/medical|diagnos|healthy|normal/i);
+  });
+
+  it('keeps an unordered bound and an older checkup on the archive table', () => {
+    const older = day(1);
+    const newer = day(4);
+    const records = [
+      entry(id('L', 1), {
+        v: 1, kind: 'lab', measured_on: newer, logged_on: newer,
+        lab: { name: 'Ω-plain', value: 4, unit: '', ref_low: 20, ref_high: 10 },
+      }),
+      entry(id('L', 2), {
+        v: 1, kind: 'lab', measured_on: older, logged_on: older,
+        lab: { name: 'Ω-side', value: 3, unit: 'u', ref_low: 5 },
+      }),
+      entry(id('C', 1), { v: 1, kind: 'checkup', measured_on: older, logged_on: older, note: 'Older synthetic visit' }),
+      entry(id('C', 2), { v: 1, kind: 'checkup', measured_on: newer, logged_on: newer, note: 'Newer synthetic visit' }),
+    ];
+    const series = buildClinicSeries(records, UNITS);
+    const plain = series.find(item => item.kind === 'lab')?.folders.find(folder => folder.title === 'Ω-plain');
+    const side = series.find(item => item.kind === 'lab')?.folders.find(folder => folder.title === 'Ω-side');
+    expect(plain?.unitLine).toBe('No unit was saved with this result.');
+    expect(plain?.groups[0]?.rows[0]).toEqual({
+      clientId: id('L', 1),
+      measuredOn: newer,
+      value: '4',
+      unit: '',
+      range: 'no range',
+    });
+    expect(plain?.groups[0]?.rows[0]?.range).not.toContain('20');
+    expect(side?.groups[0]?.rows[0]?.range).toBe('below range · from 5 u');
+    const visits = series.find(item => item.kind === 'checkup')?.visits ?? [];
+    expect(visits.map(visit => visit.measuredOn)).toEqual([newer, older]);
+    expect(visits[1]).toEqual({ clientId: id('C', 1), measuredOn: older, note: 'Older synthetic visit' });
   });
 });

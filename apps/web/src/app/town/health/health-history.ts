@@ -1,4 +1,4 @@
-import { formatHealthStat, type HealthUnits } from './health-entry';
+import { formatHealthStat, labRange, labRangeText, type HealthUnits, type LabRange } from './health-entry';
 import type { HealthStat } from './health.types';
 
 /** Initial window for each Clinic kind. Show more reveals the next window. */
@@ -42,11 +42,35 @@ export interface HealthHistoryRow {
   kind: HealthStat['kind'];
 }
 
+export interface LabTableRow {
+  clientId: string;
+  measuredOn: string;
+  value: string;
+  unit: string;
+  /** Same words as the saved label. No range does not invent a bound. */
+  range: string;
+}
+
+export interface LabRangeGroupView {
+  id: LabRange;
+  label: string;
+  rows: readonly LabTableRow[];
+}
+
+export interface CheckupVisitView {
+  clientId: string;
+  measuredOn: string;
+  note: string;
+}
+
 export interface HealthFolderView {
   title: string;
   latestLabel: string;
+  /** Display sentence for the unit saved on the result. Not a conversion. */
+  unitLine: string;
   sparkline: HealthSparklineView;
   rows: readonly HealthHistoryRow[];
+  groups: readonly LabRangeGroupView[];
 }
 
 export interface HealthSeriesView {
@@ -60,6 +84,7 @@ export interface HealthSeriesView {
   /** Newest first. This is the store snapshot, not a second history. */
   rows: readonly HealthHistoryRow[];
   folders: readonly HealthFolderView[];
+  visits: readonly CheckupVisitView[];
 }
 
 export interface HealthVisibleFolder extends HealthFolderView {
@@ -72,6 +97,7 @@ export interface HealthSeriesPage extends HealthSeriesView {
   more: boolean;
   visibleRows: readonly HealthHistoryRow[];
   visibleFolders: readonly HealthVisibleFolder[];
+  visibleVisits: readonly CheckupVisitView[];
 }
 
 interface DatedEntry {
@@ -80,6 +106,15 @@ interface DatedEntry {
 }
 
 const EMPTY_SPARKLINE: HealthSparklineView = { points: [], line: '', line2: '', dot: null, dot2: null };
+
+const RANGE_ORDER: readonly LabRange[] = ['below', 'in', 'above', 'none'];
+
+const RANGE_GROUP_LABEL: Record<LabRange, string> = {
+  below: 'Below range',
+  in: 'In range',
+  above: 'Above range',
+  none: 'No range',
+};
 
 function roundCoord(value: number): number {
   return Math.round(value * 100) / 100;
@@ -175,6 +210,47 @@ function sparklineFor(entries: readonly DatedEntry[], units: HealthUnits, numeri
   return { points: chosen, ...sparklineGeometry(drawable) };
 }
 
+function labTableRow(entry: DatedEntry): LabTableRow {
+  const lab = entry.value.lab;
+  const value = lab && Number.isFinite(lab.value) ? String(lab.value) : '';
+  return {
+    clientId: entry.clientId,
+    measuredOn: entry.value.measured_on,
+    value,
+    unit: lab?.unit.trim() ?? '',
+    range: lab ? labRangeText(lab) : 'no range',
+  };
+}
+
+function labUnitLine(entries: readonly DatedEntry[]): string {
+  const units = new Set(entries.map(entry => entry.value.lab?.unit.trim() ?? ''));
+  if (units.size !== 1) return 'Each result keeps the unit saved with it.';
+  const unit = [...units][0] ?? '';
+  return unit ? `Shown in ${unit}.` : 'No unit was saved with this result.';
+}
+
+function labGroups(entries: readonly DatedEntry[]): LabRangeGroupView[] {
+  const buckets = new Map<LabRange, LabTableRow[]>();
+  for (const entry of entries) {
+    const id = labRange(entry.value.lab);
+    const rows = buckets.get(id) ?? [];
+    rows.push(labTableRow(entry));
+    buckets.set(id, rows);
+  }
+  return RANGE_ORDER.flatMap(id => {
+    const rows = buckets.get(id);
+    return rows && rows.length > 0 ? [{ id, label: RANGE_GROUP_LABEL[id], rows }] : [];
+  });
+}
+
+function checkupVisits(entries: readonly DatedEntry[]): CheckupVisitView[] {
+  return entries.map(entry => ({
+    clientId: entry.clientId,
+    measuredOn: entry.value.measured_on,
+    note: entry.value.note?.trim() ?? '',
+  }));
+}
+
 function labFolders(entries: readonly DatedEntry[], units: HealthUnits): HealthFolderView[] {
   const groups: { title: string; entries: DatedEntry[] }[] = [];
   for (const entry of entries) {
@@ -188,8 +264,10 @@ function labFolders(entries: readonly DatedEntry[], units: HealthUnits): HealthF
     return {
       title: group.title,
       latestLabel: rows[0]?.label ?? '',
+      unitLine: labUnitLine(group.entries),
       sparkline: sparklineFor(group.entries, units, true),
       rows,
+      groups: labGroups(group.entries),
     };
   });
 }
@@ -211,6 +289,7 @@ export function buildClinicSeries(entries: readonly DatedEntry[], units: HealthU
       sparkline: kind === 'lab' ? EMPTY_SPARKLINE : sparklineFor(matching, units, kind !== 'checkup'),
       rows,
       folders: kind === 'lab' ? labFolders(matching, units) : [],
+      visits: kind === 'checkup' ? checkupVisits(matching) : [],
     }];
   });
 }
@@ -229,7 +308,12 @@ export function pageClinicSeries(
     const visibleIds = new Set(visibleRows.map(row => row.clientId));
     const visibleFolders = item.folders.flatMap(folder => {
       const rows = folder.rows.filter(row => visibleIds.has(row.clientId));
-      return rows.length === 0 ? [] : [{ ...folder, rows }];
+      if (rows.length === 0) return [];
+      const groups = folder.groups.flatMap(group => {
+        const groupRows = group.rows.filter(row => visibleIds.has(row.clientId));
+        return groupRows.length === 0 ? [] : [{ ...group, rows: groupRows }];
+      });
+      return [{ ...folder, rows, groups }];
     }).map((folder, index) => ({ ...folder, id: `health-lab-folder-${index}` }));
     return {
       ...item,
@@ -238,6 +322,7 @@ export function pageClinicSeries(
       more: visibleRows.length < item.rows.length,
       visibleRows,
       visibleFolders,
+      visibleVisits: item.visits.filter(visit => visibleIds.has(visit.clientId)),
     };
   });
 }

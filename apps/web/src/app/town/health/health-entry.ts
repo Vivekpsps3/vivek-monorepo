@@ -479,7 +479,8 @@ function labMeasure(value: number, unit: string): string {
   return trimmed ? `${value} ${trimmed}` : String(value);
 }
 
-function labRangeDetail(lab: NonNullable<HealthStat['lab']>): string {
+/** The range words for a saved lab. No range omits the bounds. This is not a diagnosis. */
+export function labRangeText(lab: NonNullable<HealthStat['lab']>): string {
   const status = labRange(lab);
   const word = RANGE_WORD[status];
   if (status === 'none') return word;
@@ -511,7 +512,7 @@ export function formatHealthStat(stat: HealthStat, units: HealthUnits): string {
     case 'lab': {
       const lab = stat.lab;
       if (!lab) return `Lab · ${date}`;
-      return `Lab · ${lab.name} · ${labMeasure(lab.value, lab.unit)} · ${labRangeDetail(lab)} · ${date}`;
+      return `Lab · ${lab.name} · ${labMeasure(lab.value, lab.unit)} · ${labRangeText(lab)} · ${date}`;
     }
     case 'checkup':
       return stat.note ? `Checkup · ${stat.note} · ${date}` : `Checkup · ${date}`;

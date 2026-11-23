@@ -132,21 +132,25 @@
   stroke: none;
 }
 
-.wall-table {
+.wall-table,
+.archive-table {
   width: 100%;
   max-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
-.wall-table caption {
+.wall-table caption,
+.archive-table caption {
   text-align: start;
   margin-block: var(--space-2);
   font-weight: 600;
 }
 
 .wall-table th,
-.wall-table td {
+.wall-table td,
+.archive-table th,
+.archive-table td {
   padding: var(--space-2);
   border-block-end: 1px solid var(--border);
   text-align: start;
@@ -217,10 +221,20 @@
 
 .result-group h2,
 .result-group h3,
+.result-group h4,
 .lab-folder,
+.lab-block h4,
 .latest {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.clinic-folders {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .series,

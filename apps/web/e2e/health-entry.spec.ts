@@ -230,7 +230,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       const room = page.locator('app-health-room');
       await expect(room).toHaveAttribute('data-health-state', 'locked');
       await expect(room.locator('app-clinic-room')).toHaveAttribute('data-clinic-room', 'locked');
-      const stations = ['Reception', 'Weight station', 'Heart rate station', 'Blood pressure station', 'Sleep station'];
+      const stations = ['Reception', 'Weight station', 'Heart rate station', 'Blood pressure station', 'Lab folders', 'Checkup book', 'Sleep station'];
       for (const name of stations) {
         const choice = room.locator('.clinic-objects').getByRole('button', { name, exact: true });
         await target(choice);
@@ -1857,6 +1857,11 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'light'],
       const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
       expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
     });
+
+    test('opens a no-range lab folder and an older checkup in the clinic archive', async ({ page }) => {
+      test.setTimeout(180_000);
+      await openClinicArchive(page, width === 390);
+    });
   });
 }
 
@@ -1939,6 +1944,171 @@ function historyId(mark: string, index: number): string {
 
 function historyDay(index: number): string {
   return new Date(Date.UTC(2024, 0, 1 + index)).toISOString().slice(0, 10);
+}
+
+async function openClinicArchive(page: Page, touch: boolean): Promise<void> {
+  const older = '2026-09-02';
+  const marker = 'Ω-marker';
+  const other = 'Ω-other';
+  const held = 'Ω-held';
+  const olderNote = 'Older synthetic visit';
+  const newerNote = 'Newer synthetic visit';
+  const town: string[] = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/town')) town.push(`${request.method()} ${url.pathname}${url.search}\n${request.postData() ?? ''}`);
+  });
+  await page.goto('/town');
+  const exterior = page.locator('[data-building="clinic"]');
+  await expect(exterior).toBeVisible();
+  const exteriorText = await exterior.innerText();
+  expect(exteriorText).not.toContain(marker);
+  expect(exteriorText).not.toContain(other);
+  expect(exteriorText).not.toContain(olderNote);
+  noMeasurementDigits(exteriorText);
+  const vault = await syntheticVault(page, {
+    ...SEED,
+    health_stats: [
+      ...SEED.health_stats,
+      {
+        client_id: 'hlt_SyntheticLabBelowRange',
+        v: 1,
+        kind: 'lab',
+        measured_on: DAY,
+        logged_on: DAY,
+        lab: { name: marker, value: 9, unit: 'u', ref_low: 10, ref_high: 20 },
+      },
+      {
+        client_id: 'hlt_SyntheticLabNoRangeABC',
+        v: 1,
+        kind: 'lab',
+        measured_on: DAY,
+        logged_on: DAY,
+        lab: { name: other, value: 4, unit: 'u' },
+      },
+      {
+        client_id: 'hlt_SyntheticCheckupOlderAB',
+        v: 1,
+        kind: 'checkup',
+        measured_on: older,
+        logged_on: older,
+        note: olderNote,
+      },
+      {
+        client_id: 'hlt_SyntheticCheckupEntryAB',
+        v: 1,
+        kind: 'checkup',
+        measured_on: DAY,
+        logged_on: DAY,
+        note: newerNote,
+      },
+    ],
+  });
+  await page.goto('/town/clinic');
+  const room = page.locator('app-health-room');
+  await expect(room).toHaveAttribute('data-health-state', 'locked');
+  const chooseLocked = async (name: string) => {
+    const choice = room.locator('.clinic-objects').getByRole('button', { name, exact: true });
+    await target(choice);
+    await activate(page, choice, touch);
+    await expect(room.locator('#clinic-object-title')).toContainText(name);
+    const locked = await room.evaluate(node => ({
+      text: (node as HTMLElement).innerText,
+      fields: [...node.querySelectorAll('input, textarea')].map(item => (item as HTMLInputElement).value).join(''),
+    }));
+    noMeasurementDigits(locked.text);
+    expect(locked.text).not.toContain(marker);
+    expect(locked.text).not.toContain(other);
+    expect(locked.text).not.toContain(olderNote);
+    expect(locked.fields).not.toContain('Ω');
+    await expect(room.locator('[data-clinic-table]')).toHaveCount(0);
+  };
+  await chooseLocked('Lab folders');
+  await chooseLocked('Checkup book');
+
+  await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+  await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+  await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+  const folders = room.locator('.clinic-objects').getByRole('button', { name: 'Lab folders', exact: true });
+  await target(folders);
+  await activate(page, folders, touch);
+  await expect(room.locator('#clinic-object-title')).toContainText('Lab folders');
+  await expect(room.locator('#health-group-labs')).toHaveCount(0);
+  const otherFolder = room.locator('[data-clinic-folder]').filter({ hasText: other }).getByRole('button');
+  await target(otherFolder);
+  await activate(page, otherFolder, touch);
+  await expect(room.locator('h3.lab-folder')).toContainText(other);
+  const none = room.locator('[data-clinic-table="none"] td');
+  await expect(none.nth(0)).toHaveText(DAY);
+  await expect(none.nth(1)).toHaveText('4');
+  await expect(none.nth(2)).toHaveText('u');
+  await expect(none.nth(3)).toHaveText('no range');
+  await expect(room.locator('[data-clinic-unit="lab"]')).toHaveText('Shown in u.');
+  await expect(room.locator('[data-clinic-table="none"]')).not.toContainText('10 to 20');
+  await expect(room.locator('[data-clinic-table="below"]')).toHaveCount(0);
+  const overflow = await room.evaluate(node => (node as HTMLElement).scrollWidth - node.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  const motion = await room.locator('app-clinic-room').evaluate(node => getComputedStyle(node).transitionDuration);
+  expect(motion).toBe('0s');
+
+  const edit = room.getByRole('button', { name: `Edit Lab · ${other} · 4 u · no range · ${DAY}` });
+  await target(edit);
+  await activate(page, edit, touch);
+  const editor = page.getByRole('dialog', { name: 'Edit lab result' });
+  await enter(page, editor.locator('#health-lab-name'), held, touch);
+  vault.failNextWrites(1);
+  if (touch) await editor.getByRole('button', { name: 'Save' }).tap();
+  else await editor.getByRole('button', { name: 'Save' }).click();
+  await expect(editor).toContainText('Could not save this entry. Try again.');
+  await expect(editor.locator('#health-lab-name')).toHaveValue(held);
+  await expect(none.nth(1)).toHaveText('4');
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+  await expect(edit).toBeFocused();
+  await expect(room).not.toContainText(held);
+
+  const back = room.getByRole('button', { name: 'All lab folders', exact: true });
+  await target(back);
+  await activate(page, back, touch);
+  await expect(otherFolder).toBeFocused();
+  const markerFolder = room.locator('[data-clinic-folder]').filter({ hasText: marker }).getByRole('button');
+  await activate(page, markerFolder, touch);
+  const below = room.locator('[data-clinic-table="below"]');
+  await expect(below).toContainText(DAY);
+  await expect(below).toContainText('9');
+  await expect(below).toContainText('u');
+  await expect(below).toContainText('below range · 10 to 20 u');
+
+  const book = room.locator('.clinic-objects').getByRole('button', { name: 'Checkup book', exact: true });
+  await target(book);
+  await activate(page, book, touch);
+  await expect(room.locator('#clinic-object-title')).toContainText('Checkup book');
+  await expect(room.locator('#health-group-checkups')).toHaveCount(0);
+  const visits = room.locator('[data-clinic-checkup]');
+  await expect(visits.nth(0)).toContainText(DAY);
+  await expect(visits.nth(0)).toContainText(newerNote);
+  await expect(visits.nth(1)).toContainText(older);
+  await expect(visits.nth(1)).toContainText(olderNote);
+  await expect(room.locator('[data-clinic-date="checkup"]')).toContainText('measured dates');
+  const bookText = await room.innerText();
+  expect(bookText).not.toMatch(/diagnos|healthy|normal/i);
+  const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
+  expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+  for (const entry of town) {
+    expect(entry).not.toContain(marker);
+    expect(entry).not.toContain(other);
+    expect(entry).not.toContain(held);
+    expect(entry).not.toContain(olderNote);
+  }
+
+  await activate(page, page.getByRole('button', { name: 'synthetic', exact: true }), touch);
+  await activate(page, page.getByRole('button', { name: 'Sign out', exact: true }), touch);
+  await expect.poll(async () => {
+    const text = await page.locator('body').innerText();
+    return [marker, other, held, olderNote, newerNote].every(secret => !text.includes(secret));
+  }).toBe(true);
+  await expect(page.locator('[data-clinic-table], [data-clinic-folder], #health-lab-name')).toHaveCount(0);
 }
 
 async function saveLab(

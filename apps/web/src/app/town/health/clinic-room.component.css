@@ -113,6 +113,21 @@
     var(--surface-elevated);
 }
 
+.prop[data-clinic-prop='labs'] {
+  background:
+    linear-gradient(var(--border), var(--border)) 16% 22% / 18% 56% no-repeat,
+    linear-gradient(var(--border), var(--border)) 41% 22% / 18% 56% no-repeat,
+    linear-gradient(var(--border), var(--border)) 66% 22% / 18% 56% no-repeat,
+    var(--surface-elevated);
+}
+
+.prop[data-clinic-prop='checkups'] {
+  background:
+    linear-gradient(var(--accent), var(--accent)) 12% 18% / 8% 64% no-repeat,
+    linear-gradient(var(--surface-soft), var(--surface-elevated)) 22% 16% / 64% 68% no-repeat,
+    var(--surface-elevated);
+}
+
 .piece[aria-current='true'] .prop {
   box-shadow: inset 0 0 0 3px var(--focus-ring);
 }

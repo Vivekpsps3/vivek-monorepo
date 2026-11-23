@@ -72,6 +72,41 @@
             <p class="station-fact" [attr.data-clinic-empty]="kind">No {{ vitalNoun(kind) }} yet.</p>
             <ui-button [attr.id]="'health-station-record-' + kind" (clicked)="openCreate(kind)">Record {{ vitalNoun(kind) }}</ui-button>
           }
+        } @else if (phase() === 'ready' && clinicObject() === 'labs') {
+          @if (labPage(); as lab) {
+            @if (selectedLabFolder(); as folder) {
+              <ui-button variant="secondary" id="health-lab-back" (clicked)="closeLab()">All lab folders</ui-button>
+              <article class="series" data-health-series="lab" [attr.data-health-shown]="lab.shown" [attr.data-health-total]="lab.total">
+                <ng-container *ngTemplateOutlet="labFolder; context: { $implicit: folder }" />
+              </article>
+              @if (lab.more) {
+                <ui-button variant="secondary" id="health-more-lab" (clicked)="showMore('lab')">Show more {{ lab.noun }}</ui-button>
+              }
+            } @else {
+              <ul class="clinic-folders" aria-label="Lab folders">
+                @for (folder of lab.visibleFolders; track folder.id) {
+                  <li>
+                    <ui-button variant="secondary" [attr.id]="'health-open-' + folder.id" [attr.data-clinic-folder]="folder.id" (clicked)="openLab(folder.title)">{{ folder.title }}</ui-button>
+                  </li>
+                }
+              </ul>
+              @if (lab.more) {
+                <ui-button variant="secondary" id="health-more-lab" (clicked)="showMore('lab')">Show more {{ lab.noun }}</ui-button>
+              }
+            }
+          } @else {
+            <p class="station-fact" data-clinic-empty="labs">No lab results yet.</p>
+            <ui-button id="health-station-record-lab" (clicked)="openCreate('lab')">Record a lab result</ui-button>
+          }
+        } @else if (phase() === 'ready' && clinicObject() === 'checkups') {
+          @if (checkupPage(); as checkup) {
+            <article class="series" data-health-series="checkup" [attr.data-health-shown]="checkup.shown" [attr.data-health-total]="checkup.total">
+              <ng-container *ngTemplateOutlet="checkupBody; context: { $implicit: checkup }" />
+            </article>
+          } @else {
+            <p class="station-fact" data-clinic-empty="checkups">No checkups yet.</p>
+            <ui-button id="health-station-record-checkup" (clicked)="openCreate('checkup')">Record a checkup</ui-button>
+          }
         }
       </app-clinic-room>
     }
@@ -258,43 +293,29 @@
           </section>
         }
         @if (labPage(); as lab) {
-          <section class="result-group" aria-labelledby="health-group-labs" data-health-group="health-group-labs">
-            <h2 id="health-group-labs">Lab results</h2>
-            <article class="series" data-health-series="lab" [attr.data-health-shown]="lab.shown" [attr.data-health-total]="lab.total">
-              @for (folder of lab.visibleFolders; track folder.title) {
-                <div class="lab-block">
-                  <h3 class="lab-folder" [id]="folder.id">{{ folder.title }}</h3>
-                  <p class="latest" data-health-latest="lab">Latest · {{ folder.latestLabel }}</p>
-                  <app-health-sparkline seriesId="lab" [caption]="folder.title + ' history'" [view]="folder.sparkline" />
-                  <ul class="entries" [attr.aria-label]="folder.title + ' results'">
-                    @for (row of folder.rows; track row.clientId) {
-                      <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: row }" />
-                    }
-                  </ul>
-                </div>
-              }
-              @if (lab.more) {
-                <ui-button variant="secondary" id="health-more-lab" (clicked)="showMore('lab')">Show more {{ lab.noun }}</ui-button>
-              }
-            </article>
-          </section>
+          @if (clinicObject() !== 'labs') {
+            <section class="result-group" aria-labelledby="health-group-labs" data-health-group="health-group-labs">
+              <h2 id="health-group-labs">Lab results</h2>
+              <article class="series" data-health-series="lab" [attr.data-health-shown]="lab.shown" [attr.data-health-total]="lab.total">
+                @for (folder of lab.visibleFolders; track folder.id) {
+                  <ng-container *ngTemplateOutlet="labFolder; context: { $implicit: folder }" />
+                }
+                @if (lab.more) {
+                  <ui-button variant="secondary" id="health-more-lab" (clicked)="showMore('lab')">Show more {{ lab.noun }}</ui-button>
+                }
+              </article>
+            </section>
+          }
         }
         @if (checkupPage(); as checkup) {
-          <section class="result-group" aria-labelledby="health-group-checkups" data-health-group="health-group-checkups">
-            <h2 id="health-group-checkups">Checkups</h2>
-            <article class="series" data-health-series="checkup" [attr.data-health-shown]="checkup.shown" [attr.data-health-total]="checkup.total">
-              <p class="latest" data-health-latest="checkup">Latest · {{ checkup.latestLabel }}</p>
-              <app-health-sparkline seriesId="checkup" caption="Checkup history" [view]="checkup.sparkline" />
-              <ul class="entries" aria-label="Checkups">
-                @for (row of checkup.visibleRows; track row.clientId) {
-                  <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: row }" />
-                }
-              </ul>
-              @if (checkup.more) {
-                <ui-button variant="secondary" id="health-more-checkup" (clicked)="showMore('checkup')">Show more {{ checkup.noun }}</ui-button>
-              }
-            </article>
-          </section>
+          @if (clinicObject() !== 'checkups') {
+            <section class="result-group" aria-labelledby="health-group-checkups" data-health-group="health-group-checkups">
+              <h2 id="health-group-checkups">Checkups</h2>
+              <article class="series" data-health-series="checkup" [attr.data-health-shown]="checkup.shown" [attr.data-health-total]="checkup.total">
+                <ng-container *ngTemplateOutlet="checkupBody; context: { $implicit: checkup }" />
+              </article>
+            </section>
+          }
         }
       }
       @if (room() === 'clinic') {
@@ -355,6 +376,75 @@
   }
   }
 </main>
+<ng-template #labFolder let-folder>
+  <div class="lab-block">
+    <h3 class="lab-folder" [id]="folder.id" tabindex="-1">{{ folder.title }}</h3>
+    <p class="latest" data-health-latest="lab">Latest · {{ folder.latestLabel }}</p>
+    <p class="station-fact" data-clinic-unit="lab">{{ folder.unitLine }}</p>
+    <app-health-sparkline seriesId="lab" [caption]="folder.title + ' history'" [view]="folder.sparkline" />
+    @for (group of folder.groups; track group.id) {
+      <section [attr.data-clinic-range]="group.id" [attr.aria-labelledby]="folder.id + '-' + group.id">
+        <h4 [id]="folder.id + '-' + group.id">{{ group.label }}</h4>
+        <table class="archive-table" [attr.data-clinic-table]="group.id">
+          <caption>{{ folder.title }} · {{ group.label }}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Measured</th>
+              <th scope="col">Value</th>
+              <th scope="col">Unit</th>
+              <th scope="col">Range</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of group.rows; track row.clientId) {
+              <tr [attr.data-clinic-lab]="row.clientId">
+                <td>{{ row.measuredOn }}</td>
+                <td>{{ row.value }}</td>
+                <td>{{ row.unit }}</td>
+                <td>{{ row.range }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+    }
+    <ul class="entries" [attr.aria-label]="folder.title + ' results'">
+      @for (row of folder.rows; track row.clientId) {
+        <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: row }" />
+      }
+    </ul>
+  </div>
+</ng-template>
+<ng-template #checkupBody let-checkup>
+  <p class="latest" data-health-latest="checkup">Latest · {{ checkup.latestLabel }}</p>
+  <p class="station-fact" data-clinic-date="checkup">Dates are the measured dates saved with each visit.</p>
+  <app-health-sparkline seriesId="checkup" caption="Checkup history" [view]="checkup.sparkline" />
+  <table class="archive-table" data-clinic-table="checkups">
+    <caption>Checkups</caption>
+    <thead>
+      <tr>
+        <th scope="col">Measured</th>
+        <th scope="col">Visit</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (visit of checkup.visibleVisits; track visit.clientId) {
+        <tr [attr.data-clinic-checkup]="visit.clientId">
+          <td>{{ visit.measuredOn }}</td>
+          <td>{{ visit.note }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+  <ul class="entries" aria-label="Checkups">
+    @for (row of checkup.visibleRows; track row.clientId) {
+      <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: row }" />
+    }
+  </ul>
+  @if (checkup.more) {
+    <ui-button variant="secondary" id="health-more-checkup" (clicked)="showMore('checkup')">Show more {{ checkup.noun }}</ui-button>
+  }
+</ng-template>
 <ng-template #vitalArticle let-page>
   <article class="series" [attr.data-health-series]="page.kind" [attr.data-health-shown]="page.shown" [attr.data-health-total]="page.total">
     <h3 [id]="'health-series-' + page.kind">{{ page.title }}</h3>
