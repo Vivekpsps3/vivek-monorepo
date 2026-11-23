@@ -396,8 +396,9 @@ export class HealthStoreService {
     collection: Collection,
     entry: { clientId: string; revision: number | null; keyVersion: number },
     value: T,
+    caller?: AbortSignal,
   ): Promise<HealthEntry<T>> {
-    const work = openBoundedWork({ parents: [this.stop.signal] });
+    const work = openBoundedWork({ parents: [this.stop.signal, caller] });
     const signal = work.signal;
     try {
       this.guard(ticket, signal);
@@ -477,8 +478,9 @@ export class HealthStoreService {
     ticket: Publication,
     collection: Collection,
     entry: HealthEntry<T>,
+    caller?: AbortSignal,
   ): Promise<void> {
-    const work = openBoundedWork({ parents: [this.stop.signal] });
+    const work = openBoundedWork({ parents: [this.stop.signal, caller] });
     const signal = work.signal;
     try {
       this.guard(ticket, signal);
@@ -517,15 +519,16 @@ export class HealthStoreService {
     }
   }
 
-  async createStat(value: HealthStat): Promise<HealthEntry<HealthStat>> {
+  async createStat(value: HealthStat, caller?: AbortSignal): Promise<HealthEntry<HealthStat>> {
     const ticket = this.publication(false);
     const entry = await this.upsert<HealthStat>(
       ticket,
       HEALTH_STATS_COLLECTION,
       { clientId: newHealthClientId(), revision: null, keyVersion: 1 },
       value,
+      caller,
     );
-    this.guard(ticket);
+    this.guard(ticket, caller);
     this.stats = [...this.stats, entry];
     return entry;
   }
@@ -533,29 +536,31 @@ export class HealthStoreService {
   async updateStat(
     entry: HealthEntry<HealthStat>,
     changes: Partial<HealthStat>,
+    caller?: AbortSignal,
   ): Promise<HealthEntry<HealthStat>> {
     // Edits never move the day the entry was logged (§18.8).
     const value: HealthStat = { ...entry.value, ...changes, logged_on: entry.value.logged_on };
     const ticket = this.publication(false);
-    const saved = await this.upsert<HealthStat>(ticket, HEALTH_STATS_COLLECTION, entry, value);
-    this.guard(ticket);
+    const saved = await this.upsert<HealthStat>(ticket, HEALTH_STATS_COLLECTION, entry, value, caller);
+    this.guard(ticket, caller);
     this.stats = this.stats.map(item => (item.clientId === entry.clientId ? saved : item));
     return saved;
   }
 
-  async deleteStat(entry: HealthEntry<HealthStat>): Promise<void> {
-    await this.remove(this.publication(false), HEALTH_STATS_COLLECTION, entry);
+  async deleteStat(entry: HealthEntry<HealthStat>, caller?: AbortSignal): Promise<void> {
+    await this.remove(this.publication(false), HEALTH_STATS_COLLECTION, entry, caller);
   }
 
-  async createPr(value: HealthPr): Promise<HealthEntry<HealthPr>> {
+  async createPr(value: HealthPr, caller?: AbortSignal): Promise<HealthEntry<HealthPr>> {
     const ticket = this.publication(false);
     const entry = await this.upsert<HealthPr>(
       ticket,
       HEALTH_PRS_COLLECTION,
       { clientId: newHealthClientId(), revision: null, keyVersion: 1 },
       value,
+      caller,
     );
-    this.guard(ticket);
+    this.guard(ticket, caller);
     this.prs = [...this.prs, entry];
     return entry;
   }
@@ -563,34 +568,36 @@ export class HealthStoreService {
   async updatePr(
     entry: HealthEntry<HealthPr>,
     changes: Partial<HealthPr>,
+    caller?: AbortSignal,
   ): Promise<HealthEntry<HealthPr>> {
     const value: HealthPr = { ...entry.value, ...changes, logged_on: entry.value.logged_on };
     const ticket = this.publication(false);
-    const saved = await this.upsert<HealthPr>(ticket, HEALTH_PRS_COLLECTION, entry, value);
-    this.guard(ticket);
+    const saved = await this.upsert<HealthPr>(ticket, HEALTH_PRS_COLLECTION, entry, value, caller);
+    this.guard(ticket, caller);
     this.prs = this.prs.map(item => (item.clientId === entry.clientId ? saved : item));
     return saved;
   }
 
-  async deletePr(entry: HealthEntry<HealthPr>): Promise<void> {
-    await this.remove(this.publication(false), HEALTH_PRS_COLLECTION, entry);
+  async deletePr(entry: HealthEntry<HealthPr>, caller?: AbortSignal): Promise<void> {
+    await this.remove(this.publication(false), HEALTH_PRS_COLLECTION, entry, caller);
   }
 
   /**
    * One workout record. Invalid and oversized records throw before encrypt
    * or upsert, so a refusal cannot leave a partial or cross-collection write.
    */
-  async createWorkout(value: WorkoutRecord, today: string): Promise<HealthEntry<WorkoutRecord>> {
+  async createWorkout(value: WorkoutRecord, today: string, caller?: AbortSignal): Promise<HealthEntry<WorkoutRecord>> {
     const ticket = this.publication(false);
-    this.guard(ticket);
+    this.guard(ticket, caller);
     const checked = this.checkedWorkout(value, today);
     const entry = await this.upsert<WorkoutRecord>(
       ticket,
       HEALTH_WORKOUTS_COLLECTION,
       { clientId: newHealthClientId(), revision: null, keyVersion: 1 },
       checked,
+      caller,
     );
-    this.guard(ticket);
+    this.guard(ticket, caller);
     this.workouts = [...this.workouts, entry];
     return entry;
   }
@@ -603,12 +610,13 @@ export class HealthStoreService {
     entry: HealthEntry<WorkoutRecord>,
     value: WorkoutRecord,
     today: string,
+    caller?: AbortSignal,
   ): Promise<HealthEntry<WorkoutRecord>> {
     if (entry.value.kind !== 'session' || value.kind !== 'session') {
       throw new HealthWorkoutError('Save the session draft and try again.');
     }
     const ticket = this.publication(false);
-    this.guard(ticket);
+    this.guard(ticket, caller);
     const pinned: WorkoutSession = {
       ...value,
       logged_on: entry.value.logged_on,
@@ -617,8 +625,8 @@ export class HealthStoreService {
     const checked = this.checkedWorkout(pinned, today, entry.clientId);
     if (checked.kind !== 'session') throw new HealthWorkoutError('Save the session draft and try again.');
     checked.logged_on = entry.value.logged_on;
-    const saved = await this.upsert<WorkoutRecord>(ticket, HEALTH_WORKOUTS_COLLECTION, entry, checked);
-    this.guard(ticket);
+    const saved = await this.upsert<WorkoutRecord>(ticket, HEALTH_WORKOUTS_COLLECTION, entry, checked, caller);
+    this.guard(ticket, caller);
     this.workouts = this.workouts.map(item => (item.clientId === entry.clientId ? saved : item));
     return saved;
   }
@@ -631,25 +639,26 @@ export class HealthStoreService {
     entry: HealthEntry<WorkoutRecord>,
     value: WorkoutRecord,
     today: string,
+    caller?: AbortSignal,
   ): Promise<HealthEntry<WorkoutRecord>> {
     if (entry.value.kind === 'session' || value.kind === 'session' || entry.value.kind !== value.kind) {
       throw new HealthWorkoutError('Save the workout draft and try again.');
     }
     const ticket = this.publication(false);
-    this.guard(ticket);
+    this.guard(ticket, caller);
     const checked = this.checkedWorkout(value, today, entry.clientId);
-    const saved = await this.upsert<WorkoutRecord>(ticket, HEALTH_WORKOUTS_COLLECTION, entry, checked);
-    this.guard(ticket);
+    const saved = await this.upsert<WorkoutRecord>(ticket, HEALTH_WORKOUTS_COLLECTION, entry, checked, caller);
+    this.guard(ticket, caller);
     this.workouts = this.workouts.map(item => (item.clientId === entry.clientId ? saved : item));
     return saved;
   }
 
   /** Delete one saved session. A stale revision refetches once and does not write. */
-  async deleteWorkout(entry: HealthEntry<WorkoutRecord>): Promise<void> {
+  async deleteWorkout(entry: HealthEntry<WorkoutRecord>, caller?: AbortSignal): Promise<void> {
     if (entry.value.kind !== 'session') {
       throw new HealthWorkoutError('Save the session draft and try again.');
     }
-    await this.remove(this.publication(false), HEALTH_WORKOUTS_COLLECTION, entry);
+    await this.remove(this.publication(false), HEALTH_WORKOUTS_COLLECTION, entry, caller);
   }
 
   private checkedWorkout(value: WorkoutRecord, today: string, exceptClientId = ''): WorkoutRecord {

@@ -230,6 +230,10 @@ export class HealthRoomComponent implements OnInit {
   private dead = false;
   private seenOwner: number | null | undefined;
   private seenRoom: HealthRoom | null = null;
+  /** Aborted when this room leaves. Lock and owner change abort the store itself. */
+  private readonly life = new AbortController();
+  private read: AbortController | null = null;
+  private releaseRead: (() => void) | null = null;
 
   protected readonly phase = signal<'loading' | 'locked' | 'setup' | 'unavailable' | 'ready'>('loading');
   protected readonly units = signal<HealthUnits>({ ...DEFAULT_HEALTH_UNITS });
@@ -357,6 +361,9 @@ export class HealthRoomComponent implements OnInit {
     this.destroyRef.onDestroy(() => {
       this.dead = true;
       this.generation += 1;
+      this.life.abort();
+      this.releaseRead?.();
+      this.read?.abort();
       this.dropPrivate();
       releaseLock();
     });
@@ -381,34 +388,20 @@ export class HealthRoomComponent implements OnInit {
     afterRenderEffect(() => {
       const kind = this.returnFocusKind();
       if (!kind || this.phase() !== 'ready' || this.dialogOpen()) return;
-      setTimeout(() => {
-        if (this.returnFocusKind() !== kind || this.phase() !== 'ready' || this.dialogOpen()) return;
-        const button = document.querySelector<HTMLElement>(`#health-add-${kind} button`);
-        if (!button) return;
-        let node: HTMLElement | null = button;
-        while (node) {
-          if (node.inert) return;
-          node = node.parentElement;
-        }
-        this.returnFocusKind.set(null);
-        button.focus();
-      });
+      this.scheduleReturnFocus(
+        () => this.returnFocusKind() === kind && this.phase() === 'ready' && !this.dialogOpen(),
+        () => document.querySelector<HTMLElement>(`#health-add-${kind} button`),
+        () => this.returnFocusKind.set(null),
+      );
     });
     afterRenderEffect(() => {
       const id = this.returnWorkoutFocus();
       if (!id || this.phase() !== 'ready' || this.dialogOpen() || this.workoutDialogOpen()) return;
-      setTimeout(() => {
-        if (this.returnWorkoutFocus() !== id || this.phase() !== 'ready' || this.dialogOpen() || this.workoutDialogOpen()) return;
-        const button = document.querySelector<HTMLElement>(`#${id} button`);
-        if (!button) return;
-        let node: HTMLElement | null = button;
-        while (node) {
-          if (node.inert) return;
-          node = node.parentElement;
-        }
-        this.returnWorkoutFocus.set(null);
-        button.focus();
-      });
+      this.scheduleReturnFocus(
+        () => this.returnWorkoutFocus() === id && this.phase() === 'ready' && !this.dialogOpen() && !this.workoutDialogOpen(),
+        () => document.querySelector<HTMLElement>(`#${id} button`),
+        () => this.returnWorkoutFocus.set(null),
+      );
     });
   }
 
@@ -437,6 +430,7 @@ export class HealthRoomComponent implements OnInit {
     if (!draft || draft.kind !== kind || draft.clientId) {
       this.draft.set({ ...EMPTY_HEALTH_DRAFT, kind });
     }
+    this.rememberFocusAnchor();
     this.dialogOpen.set(true);
   }
 
@@ -451,6 +445,7 @@ export class HealthRoomComponent implements OnInit {
         direction: kind === 'other' ? 'higher' : '',
       });
     }
+    this.rememberFocusAnchor();
     this.dialogOpen.set(true);
   }
 
@@ -466,6 +461,7 @@ export class HealthRoomComponent implements OnInit {
     if (!draft || draft.kind !== kind || draft.clientId !== '') {
       this.workoutDraft.set(emptyWorkoutDraft(kind, this.today()));
     }
+    this.rememberFocusAnchor();
     this.workoutDialogOpen.set(true);
   }
 
@@ -489,6 +485,7 @@ export class HealthRoomComponent implements OnInit {
         : draftFromRoutine({ clientId: entry.clientId, revision: entry.revision, value: entry.value }));
     }
     this.returnWorkoutFocus.set(`health-edit-${clientId}`);
+    this.rememberFocusAnchor();
     this.workoutDialogOpen.set(true);
   }
 
@@ -518,7 +515,7 @@ export class HealthRoomComponent implements OnInit {
         if (!this.current(generation)) return;
         const latest = this.store.workoutsSnapshot.find(item => item.clientId === clientId);
         if (!latest || latest.value.kind === 'session' || latest.value.archived) throw new Error('missing');
-        const saved = await this.store.updateWorkoutCatalog(latest, { ...latest.value, archived: true }, this.today());
+        const saved = await this.store.updateWorkoutCatalog(latest, { ...latest.value, archived: true }, this.today(), this.life.signal);
         if (!this.current(generation)) return;
         const draft = this.workoutDraft();
         if (draft?.clientId === clientId) this.workoutDraft.set({ ...draft, archived: true, revision: saved.revision });
@@ -548,12 +545,14 @@ export class HealthRoomComponent implements OnInit {
       if (!draft) return;
       this.formError.set('');
       this.draft.set(draft);
+      this.rememberFocusAnchor();
       this.dialogOpen.set(true);
       return;
     }
     this.formError.set('');
     this.draft.set(draftFromPr({ clientId: entry.clientId, value: entry.value }, this.units()));
     this.returnWorkoutFocus.set(`health-edit-${clientId}`);
+    this.rememberFocusAnchor();
     this.dialogOpen.set(true);
   }
 
@@ -626,7 +625,7 @@ export class HealthRoomComponent implements OnInit {
         const latest = this.store.workoutsSnapshot.find(item => item.clientId === clientId);
         if (!latest || latest.value.kind !== 'session') throw new Error('missing');
         try {
-          await this.store.deleteWorkout(latest);
+          await this.store.deleteWorkout(latest, this.life.signal);
         } catch (error) {
           if (!this.current(generation)) return;
           if (error instanceof HealthConflictError) this.publish();
@@ -665,7 +664,7 @@ export class HealthRoomComponent implements OnInit {
         const latest = this.store.prsSnapshot.find(item => item.clientId === clientId);
         if (!latest) throw new Error('missing');
         try {
-          await this.store.deletePr(latest);
+          await this.store.deletePr(latest, this.life.signal);
         } catch (error) {
           if (!this.current(generation)) return;
           if (error instanceof HealthConflictError) this.publish();
@@ -704,7 +703,7 @@ export class HealthRoomComponent implements OnInit {
         const latest = this.store.statsSnapshot.find(item => item.clientId === clientId);
         if (!latest) throw new Error('missing');
         try {
-          await this.store.deleteStat(latest);
+          await this.store.deleteStat(latest, this.life.signal);
         } catch (error) {
           if (!this.current(generation)) return;
           if (error instanceof HealthConflictError) this.publish();
@@ -742,9 +741,9 @@ export class HealthRoomComponent implements OnInit {
             this.finishSaved(generation, submitted);
             return;
           }
-          await this.store.updateStat(current, value);
+          await this.store.updateStat(current, value, this.life.signal);
         } else {
-          await this.store.createStat(value);
+          await this.store.createStat(value, this.life.signal);
         }
       } else if (clientId) {
         const current = this.store.prsSnapshot.find(item => item.clientId === clientId);
@@ -761,9 +760,9 @@ export class HealthRoomComponent implements OnInit {
           this.finishSaved(generation, submitted);
           return;
         }
-        await this.store.updatePr(current, value);
+        await this.store.updatePr(current, value, this.life.signal);
       } else {
-        await this.store.createPr(value);
+        await this.store.createPr(value, this.life.signal);
       }
       if (!this.current(generation)) return;
       this.publish();
@@ -799,18 +798,18 @@ export class HealthRoomComponent implements OnInit {
         const revision = submitted.revision ?? current.revision;
         const pinned = { ...current, revision };
         if (value.kind === 'session') {
-          await this.store.updateWorkoutSession(pinned, value, this.today());
+          await this.store.updateWorkoutSession(pinned, value, this.today(), this.life.signal);
           if (this.current(generation)) {
             this.returnWorkoutFocus.set(value.state === 'draft'
               ? `health-resume-${submitted.clientId}`
               : `health-edit-${submitted.clientId}`);
           }
         } else {
-          await this.store.updateWorkoutCatalog(pinned, value, this.today());
+          await this.store.updateWorkoutCatalog(pinned, value, this.today(), this.life.signal);
           if (this.current(generation)) this.returnWorkoutFocus.set(`health-edit-${submitted.clientId}`);
         }
       } else {
-        const created = await this.store.createWorkout(value, this.today());
+        const created = await this.store.createWorkout(value, this.today(), this.life.signal);
         if (this.current(generation) && submitted?.startedFrom && created.value.kind === 'session') {
           this.returnWorkoutFocus.set(created.value.state === 'draft'
             ? `health-resume-${created.clientId}`
@@ -889,6 +888,7 @@ export class HealthRoomComponent implements OnInit {
       }));
     }
     this.returnWorkoutFocus.set(focusId);
+    this.rememberFocusAnchor();
     this.workoutDialogOpen.set(true);
   }
 
@@ -903,6 +903,7 @@ export class HealthRoomComponent implements OnInit {
     this.workoutFormError.set('');
     this.workoutDraft.set(draftFromPlan(source, this.today(), kind));
     this.returnWorkoutFocus.set(kind === 'routine' ? `health-start-${clientId}` : `health-again-${clientId}`);
+    this.rememberFocusAnchor();
     this.workoutDialogOpen.set(true);
   }
 
@@ -927,6 +928,7 @@ export class HealthRoomComponent implements OnInit {
     this.workoutFormError.set('');
     this.workoutBusy.set(false);
     this.returnWorkoutFocus.set(null);
+    this.focusAnchor = null;
     this.workouts.set([]);
     this.returnFocusKind.set(null);
     this.shownByKind.set({});
@@ -949,14 +951,66 @@ export class HealthRoomComponent implements OnInit {
     if (owner) writeHealthUnits(owner, units);
   }
 
+  /** The control that was focused when a dialog opened. Dialog restore returns here. */
+  private focusAnchor: Element | null = null;
+
+  private rememberFocusAnchor(): void {
+    this.focusAnchor = document.activeElement;
+  }
+
+  /** A dialog's background stays inert until the dialog is gone, so focus waits one turn. */
+  private scheduleReturnFocus(
+    still: () => boolean,
+    locate: () => HTMLElement | null,
+    clear: () => void,
+  ): void {
+    const anchor = this.focusAnchor;
+    setTimeout(() => {
+      if (this.dead || !still()) return;
+      const button = locate();
+      if (!button) return;
+      let node: HTMLElement | null = button;
+      while (node) {
+        if (node.inert) return;
+        node = node.parentElement;
+      }
+      const active = document.activeElement;
+      clear();
+      if (
+        active instanceof HTMLElement
+        && active.isConnected
+        && active !== document.body
+        && active !== document.documentElement
+        && active !== anchor
+      ) return;
+      button.focus();
+    });
+  }
+
+  /** A newer read or leaving the room aborts the previous vault read. */
+  private openRead(): AbortSignal {
+    this.releaseRead?.();
+    this.read?.abort();
+    const controller = new AbortController();
+    this.read = controller;
+    const onLife = (): void => controller.abort();
+    if (this.life.signal.aborted) controller.abort();
+    else {
+      this.life.signal.addEventListener('abort', onLife, { once: true });
+      this.releaseRead = () => this.life.signal.removeEventListener('abort', onLife);
+    }
+    return controller.signal;
+  }
+
   private async resolveGate(): Promise<void> {
     const generation = this.generation;
-    if (!this.current(generation)) return;
+    const signal = this.openRead();
+    if (!this.current(generation) || signal.aborted) return;
     if (!financeVaultPresent()) {
       this.phase.set('loading');
       this.entries.set([]);
       const exists = await this.vaultExists();
-      if (!this.current(generation)) return;
+      if (!this.current(generation) || signal.aborted) return;
       if (exists === true) {
         this.phase.set('locked');
         return;
@@ -969,12 +1023,12 @@ export class HealthRoomComponent implements OnInit {
     this.unreadable.set(0);
     let result;
     try {
-      result = await this.store.load();
+      result = await this.store.load({ signal });
     } catch {
-      if (this.current(generation)) this.phase.set('unavailable');
+      if (this.current(generation) && !signal.aborted) this.phase.set('unavailable');
       return;
     }
-    if (!this.current(generation)) return;
+    if (!this.current(generation) || signal.aborted) return;
     if (!financeVaultPresent() || result.state === 'locked') {
       this.dropPrivate();
       this.phase.set('locked');
