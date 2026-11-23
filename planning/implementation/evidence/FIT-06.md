@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#437](https://github.com/Vivekpsps3/vivek-monorepo/issues/437) FIT-06. Parents [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304), [#257](https://github.com/Vivekpsps3/vivek-monorepo/issues/257), [#90](https://github.com/Vivekpsps3/vivek-monorepo/issues/90), and roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stay open. #277 stays open and was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/fit-06`; `/tmp/vivek-fit-06`. Source edits stayed in that worktree. Travel, Media, pixels, server, and Town files outside `apps/web/src/app/town/health/` were not edited. `apps/finance/frontend/src/public-api.ts` was reviewed and left unchanged. `FEATURES.md` records the badge and medal contract.
-- Base main SHA, current tested SHA: fetched `origin/main` at `b4975ffffabde7e693c7af5de99a0fd78b652faa` (ROOM-09, pull request #564). The branch fast-forwarded from `28459f9e4642e7a614eff651e4af069520648537` (FIT-05, pull request #561) to that SHA. The FIT-06 diff stayed uncommitted during the gates. The commands below ran on `b4975fff` plus that diff. The implementation commit is named in the handoff after it exists.
+- Base main SHA, current tested SHA: fetched `origin/main` at `b4975ffffabde7e693c7af5de99a0fd78b652faa` (ROOM-09, pull request #564). The branch fast-forwarded from `28459f9e4642e7a614eff651e4af069520648537` (FIT-05, pull request #561) to that SHA. The FIT-06 diff stayed uncommitted during the gates. The commands below ran on `b4975fff` plus that diff. The implementation commit is `5bbd4284c5c9f5e1a9536d9cf3583f00af37e248`.
 - Fresh-main/prerequisite/active-PR checks: FIT-05 is pull request #561 and is an ancestor of `b4975fff`. Issue #435 is merged. Issue #437 is open. ROOM-09 changed Media music-bar files only. Those files do not overlap `apps/web/src/app/town/health/` or `apps/finance/frontend/src/public-api.ts`. The gates below include that Media code because the web bundle compiles it.
 
 ## Acceptance
@@ -65,4 +65,4 @@ Commands ran in `/tmp/vivek-fit-06` on `b4975ffffabde7e693c7af5de99a0fd78b652faa
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #257, #90, #134, and #277 stay open. This leaf does not deploy.
-- Next actor: open the pull request, wait for green required checks, then merge with a merge commit.
+- Next actor: open the pull request, wait for green required checks, then merge with a merge commit. The tested implementation commit is `5bbd4284c5c9f5e1a9536d9cf3583f00af37e248`.
