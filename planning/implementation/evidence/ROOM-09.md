@@ -54,8 +54,8 @@ The first `make build-frontends` failed because the template bound private `curr
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened at this commit.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/564. The body says `Closes #459` only.
 - Roadmap #134 append-only status-note URL: not posted. The issue body was not edited.
-- Merged/activation status (actual evidence, not assumption): the branch is local. It includes the FIT-05 merge `cc9657a58e8162b6cce4cd035192af8968b26cfc` and is not pushed.
+- Merged/activation status (actual evidence, not assumption): pull request #564 is open and not merged. `origin/main` is `28459f9e4642e7a614eff651e4af069520648537`. The branch is pushed and includes the FIT-05 merge `cc9657a58e8162b6cce4cd035192af8968b26cfc`.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate.
-- Next actor: this implementer opens the pull request, waits for the required checks, then merges with a merge commit.
+- Next actor: this implementer waits for the required checks, then merges with a merge commit.
