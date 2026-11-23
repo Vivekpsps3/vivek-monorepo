@@ -58,7 +58,7 @@ Commands ran in `/tmp/vivek-home-01` on `bd7f694fd589d274075b112a114f228dff8e320
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded after the pull request is opened. The body is only `Closes #466`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/622. The body is only `Closes #466`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: HOME-04 owns the placement editor. HOME-05 owns undo and corrupt recovery. The scene frame stays y-down. Refund does not look for a placed unlock.
