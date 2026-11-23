@@ -1,0 +1,59 @@
+# SCENE-08 — implementation evidence
+
+- Leaf issue and parent(s): [#446](https://github.com/Vivekpsps3/vivek-monorepo/issues/446) SCENE-08. Parents [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304), [#253](https://github.com/Vivekpsps3/vivek-monorepo/issues/253), [#316](https://github.com/Vivekpsps3/vivek-monorepo/issues/316), and [#81](https://github.com/Vivekpsps3/vivek-monorepo/issues/81) remain open. Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) remains open. #277 remains open and was not edited.
+- Agent/context, branch/worktree: sole implementer, no subagents; `agent/scene-08`; `/tmp/vivek-scene-08`. The shared checkout was not edited. `apps/web/src/app/town/health/`, `apps/finance/frontend/src/public-api.ts`, and `apps/media/` were not edited.
+- Base main SHA, current tested SHA: implementation base after the fast-forward is `f527ccf6515fe64d5441d0068f1c6c26114816e8` (ROOM-08, pull request #562). The branch started at `1745b9c0e2ecece93122544570e3c72edef6654a` (SCENE-04, pull request #558). The gates below ran on that base plus this diff, before this evidence file was added. The product commit SHA is named in the handoff.
+- Fresh-main/prerequisite/active-PR checks: SCENE-02 (#440, merge `b1c9d0ea9420858d2a68a982ba69be386b3f0871`) is an ancestor. NAV-04 (#389, pull request #518, merge `2e4a6013`) is an ancestor. Appearance settings and the six-district exterior are on this base. [Claim](https://github.com/Vivekpsps3/vivek-monorepo/issues/446#issuecomment-7093757352). At claim time the open pull requests were #561 (FIT-05, Health and Finance `public-api.ts`) and #562 (ROOM-08, Media). #562 later merged and was fast-forwarded with no overlap. #561 does not own these files.
+
+## Acceptance
+
+| Row | Current proof/test | Result | Artifact or command |
+| --- | --- | --- | --- |
+| SCENE-08-A1 | Synthetic user 1 on Appearance. Clock `2026-05-31T19:00:00Z` in America/Los_Angeles shows Automatic, Spring, Day. Keyboard selects Winter, Discard returns Automatic, and See on Town keeps the unsaved winter preview. Reload drops it and the exterior is spring. Save keeps Winter across `2026-06-01T19:00:00Z`. `town.scene.v1.2` stays spring while user 1 stays winter. Town XP, level, and today are unchanged. No non-GET `/api/town` or `/api/pixels` write. | PASS | `apps/web/e2e/town-scene.spec.ts` month-boundary journey. `scene-appearance.service.spec.ts` owner switch and month boundary. `appearance-section.component.spec.ts` save and reload. |
+| SCENE-08-A2 | Reduced motion and a hidden document keep `data-ambience="still"`, animation `none`, and zero `AudioContext` constructions. The live idle mark animates only while the scene is on screen and visible. | PASS | `town-exterior.spec.ts` ambience describes. `scene-sound.spec.ts`. `town-scene.spec.ts` live and reduced-motion journeys. |
+| SCENE-08-LIFE | An owner change drops the draft and does not publish it onto the new owner, including a write that switches owner mid-save. A thrown `setItem` keeps the same-session preview and the error. A signed-out editor does not write. | PASS | `scene-appearance.service.spec.ts` blocked write and mid-write owner change. `appearance-section.component.spec.ts` failed save and owner 9. |
+| SCENE-08-VIEW | 1280×800 light keyboard with reduced motion, and 390×844 night touch with reduced motion. Season, Save, See on Town, Town season, and Play targets are at least 44px. Focus returns to the saved note or the restored season radio. Axe serious and critical violations are empty on `app-appearance-section` and `app-town`. No horizontal scroll. | PASS | Both viewport journeys in `town-scene.spec.ts`, including `town-scene-1280-light`, `town-scene-390-appearance`, and `town-scene-390-night`. Label and button height checks in `appearance-section.component.spec.ts`. |
+| APPEAR1 | March–May spring, June–August summer, September–November autumn, December–February winter, including February 29 and March 1. Explicit choice wins. Hours 6–17 are day. Each owner key is isolated. No server Town record or XP change. | PASS | `scene-appearance.spec.ts` month edges. The e2e clock cases above. `townFacts` before and after are equal. |
+| PLACE-12-IDLE | Hidden, offscreen, or reduced motion does no idle animation and does not autoplay. Play while still or hidden creates no context. One visible play creates one context. The tone module loads through `scene-audio.ts` dynamic import. Sound stays off until the checkbox is saved. | PASS | `town-scene.spec.ts` live journey (margin, visibility, one tone). `scene-sound.spec.ts` one construct, hidden and reduced motion construct zero times. |
+
+Fixtures are synthetic. Copy is authored (rain, sun, leaves, snow, and idle sentences). It does not read location, a weather service, or habit facts. The Town y-down frame is unchanged. Pixel scores and server Town records are unchanged.
+
+## Deletion and compatibility
+
+| Candidate | Previous consumers | Surviving owner | Removed / moved / retained | Proof |
+| --- | --- | --- | --- | --- |
+| No prior season preference, weather paint, or scene tone | Appearance owned color theme only (`suite-theme`). Town exterior had no season attribute. | `platform/scene-appearance.ts` for the owner-keyed device preference. Town exterior paints it and plays the opt-in tone. | None removed. The preference lives in platform because settings cannot import town. Color theme storage is unchanged. | `git diff` does not name `theme.service.ts`, `town/health/`, Finance `public-api.ts`, or `apps/media/`. |
+
+- Candidate class and protected counterexamples: color theme radios, the Game section theme combobox absence, Town camera and district behavior, and `TownLotComponent` stay. No previous season implementation existed to delete.
+- Comparison base SHA and full replacement closure (including new files): `f527ccf6515fe64d5441d0068f1c6c26114816e8`. New production files: `platform/scene-appearance.ts`, `platform/scene-appearance.service.ts`, `town/scene-audio.ts`, `town/scene-sound.ts`. Changed production files: appearance section component, template, and CSS; town exterior component, template, and CSS.
+- Production added/deleted/moved; comments/blank-only churn separately: production +552/−3, net +549. Guidance and discovery +10/−5 (`settings/AGENTS.md`, `town/AGENTS.md`, `docs/QUALITY.md`, `tests/e2e/discovery.mjs`, `scripts/check-e2e-discovery.test.mjs`). Blank-only lines are not split out.
+- Independent equivalent implementations before/after: 1 / 1 color theme store. 0 / 1 season preference (`town.scene.v1.${ownerId}`). 0 / 1 scene tone (`playSceneTone`).
+- State/cache owners and public entry points before/after: the season draft and saved record live on `SceneAppearanceService`. localStorage is the device record. Theme stays on `ThemeService`. Town XP stays on the server. Routes are unchanged. Appearance and Town both read the platform service.
+- Remaining old symbol/path search, including config and discovery: no old season symbol. `townTestMatch` includes `town-scene.spec.ts` before `town`. The allowlist sentence in `docs/QUALITY.md` names that file.
+- Follow-up change: which production files and independent policy owners now need editing: none inside this leaf. No queue or parent ledger was edited.
+- Tests/docs/generated changes separately: tests +787, including `apps/web/e2e/town-scene.spec.ts`. This evidence file is docs. No generated bundle is committed. `make build-frontends` recipe (`npm run build` and `node scripts/write-release-manifest.mjs`) exited 0. Release `cefa4d3d8a128e68a119a2cc476df2bb5da300725cf074e77f467cc105433a20`. The initial-bundle warning stays over the 650 kB warning budget (679.80 kB). The budget was not raised. Existing Finance unused-import warnings remain.
+- Net production delta and specific reviewed safety/compatibility exception if positive: +549 production lines. This is the feature: owner-keyed season preference, authored day and night paint, and an opt-in tone that stops when the scene is hidden, offscreen, or motion is reduced. The positive delta is the implementation, not a simplification claim. No Reviewed boundary exception was added. The preference sits in platform so settings and town can both import it.
+- No behavior/data/meaningful assertion silently removed: confirmed. Existing Town Playwright journeys still pass (161 passed).
+
+## Verification
+
+Commands ran in `/tmp/vivek-scene-08`. `make test-fast` used `PATH="/tmp/vivek-scene-08/.venv/bin:$PATH"` because `/usr/bin/python3` has no project dependencies. Karma and Playwright used `CHROME_BIN` / `PLAYWRIGHT_CHROMIUM_EXECUTABLE` `/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome` and `PLAYWRIGHT_BROWSERS_PATH=/home/vivek/.cache/ms-playwright`. `node_modules` and `.venv` are symlinks to the shared checkout. Neither symlink is committed. An earlier `make test-fast` failed the settings-to-town import, then the preference moved to platform. A system-python retry failed before the unittest import of alembic. The table records the venv run after that move. An earlier focused Karma run (39 tests) failed the tone promise, the quiet status refresh, and the scoped animation name. Those three were fixed and the full web suite below is the result. Python lint, typecheck, and coverage gates were not run. The diff has no Python product file.
+
+| Command | Result |
+| --- | --- |
+| `python3 planning/implementation/plan.py launch SCENE-08` | Printed the commands below. It did not edit the queue. |
+| `make test-fast` | PASS. Boundaries OK. 135 Python tests OK. 21 Node script tests pass. Town e2e files are listed (16) and not executed by this gate. |
+| `make lint-web` | PASS after the platform move. eslint-finance 344, eslint-site 9, eslint-packages 1, eslint-world-engine 0. Each matches its baseline. |
+| `make typecheck-web` | PASS after the platform move. Web app and spec, Finance, packages, and site. |
+| `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS. 592 SUCCESS. Statements 77.17% (8804/11408), branches 64.35% (3812/5923), functions 78.61% (1809/2301), lines 82.26% (7647/9296). |
+| `make build-frontends` | PASS. The Makefile recipe `npm run build` and `node scripts/write-release-manifest.mjs` exited 0. Release hash above. |
+| `npx playwright test --config apps/web/e2e/playwright.config.ts` | PASS. 161 passed (3.1m), including the three `town-scene.spec.ts` journeys at 1280 light and 390 night, reduced motion, and one live tone. |
+| `npx playwright test --project=suite` | PASS. 61 passed (1.4m). |
+
+## Handoff
+
+- PR URL (leaf closure keyword only): recorded after the pull request is opened. The body is only the leaf keyword for #446.
+- Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
+- Merged/activation status (actual evidence, not assumption): not merged when this sentence is written.
+- Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate. The Hall appearance desk does not exist, so the controls live on `/settings/appearance`.
+- Next actor: push this branch, open the pull request, wait until the required checks are green, then merge with a merge commit.

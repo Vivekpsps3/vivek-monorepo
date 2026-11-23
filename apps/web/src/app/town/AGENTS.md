@@ -18,9 +18,8 @@ Clinic creates, corrects, and deletes weight, heart rate, blood pressure, sleep,
 Use [health constants](health/health.constants.ts) and existing pure logic for units,
 thresholds, and badges. Do not duplicate conversion or XP math.
 
-Reuse shared controls. Town reset fixtures and worker clock ownership stay
-deterministic. Root test gates apply, including Town Playwright and server
-coverage.
+Town reset fixtures and the worker clock stay deterministic. Season and sound
+use [scene appearance](../platform/scene-appearance.ts), with no hidden or reduced-motion work.
 
 The Town exterior and the Reading Hall share the y-down [frame](library-room.scene.ts).
 One rectangle paints and picks; the higher layer wins. Pan, zoom, tap, drag, and

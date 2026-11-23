@@ -35,6 +35,53 @@ button.action { cursor: pointer; }
 .buildings img { width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
 .scene-hint { margin: 8px 0 0; }
 .camera-controls { margin-top: 12px; }
+.scene-presentation { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+.scene-note, .scene-draft, .sound-status { color: var(--text-muted); }
+.sound-status { margin: 8px 0 0; }
+.sky { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.idle-mark {
+  position: absolute;
+  top: 14%;
+  left: 22%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 40%, transparent);
+  opacity: 0.7;
+}
+.viewport[data-day="night"] { background: linear-gradient(#1b2a3a, #22303a 60%, #1f3322); }
+.viewport[data-season="spring"][data-day="day"] { background: linear-gradient(#d5efcf, #e7f6df 55%, #c9e2c4); }
+.viewport[data-season="spring"][data-day="night"] { background: linear-gradient(#1a3144, #1d3a34 60%, #173028); }
+.viewport[data-season="summer"][data-day="day"] { background: linear-gradient(#c7e7f6, #e5f3d8 55%, #d7e7b8); }
+.viewport[data-season="summer"][data-day="night"] { background: linear-gradient(#1a2740, #24344a 60%, #1c3328); }
+.viewport[data-season="autumn"][data-day="day"] { background: linear-gradient(#f3d7b0, #ead3b4 55%, #d7c4a2); }
+.viewport[data-season="autumn"][data-day="night"] { background: linear-gradient(#2a241c, #3a2e24 60%, #243028); }
+.viewport[data-season="winter"][data-day="day"] { background: linear-gradient(#e4eef4, #e7eef2 55%, #d5e0e6); }
+.viewport[data-season="winter"][data-day="night"] { background: linear-gradient(#1c2836, #243240 60%, #1e2e36); }
+:host-context([data-theme="dark"]) .viewport[data-season="spring"][data-day="day"] { background: linear-gradient(#24382c, #1e3330 60%, #1a2e24); }
+:host-context([data-theme="dark"]) .viewport[data-season="summer"][data-day="day"] { background: linear-gradient(#1d3344, #243828 60%, #1c3024); }
+:host-context([data-theme="dark"]) .viewport[data-season="autumn"][data-day="day"] { background: linear-gradient(#3a3328, #2e3430 60%, #243028); }
+:host-context([data-theme="dark"]) .viewport[data-season="winter"][data-day="day"] { background: linear-gradient(#2a3642, #24323c 60%, #1e2c34); }
+.viewport[data-weather="rain"] .sky { background-image: repeating-linear-gradient(100deg, transparent 0 14px, rgb(126 182 216 / 35%) 14px 15px); }
+.viewport[data-weather="snow"] .sky {
+  background-image: radial-gradient(circle, rgb(255 255 255 / 75%) 1px, transparent 1.6px);
+  background-size: 28px 22px;
+}
+.viewport[data-weather="leaves"] .sky {
+  background-image:
+    radial-gradient(circle at 20% 30%, rgb(196 122 58 / 70%) 0 3px, transparent 4px),
+    radial-gradient(circle at 70% 22%, rgb(166 92 46 / 65%) 0 2px, transparent 3px);
+}
+.viewport[data-weather="sun"] .sky { background-image: radial-gradient(circle at 84% 18%, rgb(240 193 74 / 90%) 0 14px, transparent 16px); }
+.viewport[data-weather="rain"] .idle-mark { width: 2px; height: 14px; border-radius: 2px; background: rgb(90 150 190 / 80%); }
+.viewport[data-weather="snow"] .idle-mark { background: #fff; }
+.viewport[data-weather="leaves"] .idle-mark { border-radius: 40% 0; background: #c47a3a; }
+.viewport[data-weather="sun"] .idle-mark { width: 14px; height: 14px; background: #f0c14a; }
+.viewport[data-ambience="live"] .idle-mark { animation: scene-idle 4.8s ease-in-out infinite alternate; }
+@keyframes scene-idle {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(10px, 8px, 0); }
+}
 .viewport {
   position: relative;
   isolation: isolate;
@@ -112,4 +159,5 @@ button.action { cursor: pointer; }
 }
 @media (prefers-reduced-motion: reduce) {
   .piece .old { display: none; }
+  .viewport[data-ambience="live"] .idle-mark { animation: none; }
 }

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { distinctUntilChanged, map } from 'rxjs';
@@ -27,7 +27,11 @@ import {
 } from './town-exterior';
 import type { TownResponse } from './town.types';
 import type { TreasuryView } from './weeks-kept';
+import { sceneAudio } from './scene-audio';
+import { SceneAppearanceService } from '../platform/scene-appearance.service';
 import { TownPlaceComponent, type PlaceCrumb } from './town-place.component';
+
+const QUIET_SOUND = 'Town sound stays quiet while the scene is hidden, offscreen, or motion is reduced.';
 
 interface SceneGesture {
   id: number;
@@ -50,11 +54,14 @@ export class TownExteriorComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly session = inject(SessionService);
+  private readonly scene = inject(SceneAppearanceService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
   private gesture: SceneGesture | null = null;
   private owner: number | null = null;
   private alive = true;
+  private onScreen = false;
+  private sceneObserver: IntersectionObserver | null = null;
 
   readonly data = input.required<TownResponse>();
   readonly treasury = input.required<TreasuryView>();
@@ -92,6 +99,14 @@ export class TownExteriorComponent {
     const camera = this.camera();
     return `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
   });
+  protected readonly ambience = signal<'still' | 'live'>('still');
+  private readonly soundOutcome = signal<string | null>(null);
+  protected readonly presentation = this.scene.presentation;
+  protected readonly seasonDirty = this.scene.dirty;
+  protected readonly soundStatus = computed(() => {
+    if (!this.scene.effective().sound) return 'Town sound is off until you turn it on in Appearance.';
+    return this.soundOutcome() ?? 'Town sound is on. Nothing plays until you choose Play Town sound.';
+  });
 
   constructor() {
     const destroyRef = inject(DestroyRef);
@@ -105,7 +120,12 @@ export class TownExteriorComponent {
     destroyRef.onDestroy(() => {
       this.alive = false;
       this.gesture = null;
+      this.sceneObserver?.disconnect();
+      this.sceneObserver = null;
+      this.onScreen = false;
+      this.ambience.set('still');
     });
+    afterNextRender(() => this.watchScene(destroyRef));
     this.session.user$.pipe(
       map(user => user?.id ?? null),
       distinctUntilChanged(),
@@ -113,6 +133,7 @@ export class TownExteriorComponent {
     ).subscribe(owner => {
       const previous = this.owner;
       this.owner = owner;
+      this.soundOutcome.set(null);
       this.dropUncommittedGesture();
       if (previous !== null && previous !== owner) this.clearInspect();
     });
@@ -275,6 +296,57 @@ export class TownExteriorComponent {
 
   protected reducedMotion(): boolean {
     return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  protected playSound(): void {
+    void this.playSoundNow();
+  }
+
+  private watchScene(destroyRef: DestroyRef): void {
+    if (!this.alive || typeof document === 'undefined') return;
+    const reduce = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+    const onReduce = (): void => this.syncAmbience();
+    reduce?.addEventListener?.('change', onReduce);
+    const onVisible = (): void => this.syncAmbience();
+    document.addEventListener('visibilitychange', onVisible);
+    const viewport = this.viewport()?.nativeElement;
+    if (viewport && typeof IntersectionObserver === 'function') {
+      this.sceneObserver = new IntersectionObserver(entries => {
+        this.onScreen = entries.some(entry => entry.isIntersecting && entry.intersectionRatio > 0);
+        this.syncAmbience();
+      });
+      this.sceneObserver.observe(viewport);
+    }
+    this.syncAmbience();
+    destroyRef.onDestroy(() => {
+      reduce?.removeEventListener?.('change', onReduce);
+      document.removeEventListener('visibilitychange', onVisible);
+    });
+  }
+
+  private syncAmbience(): void {
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    const live = this.alive && this.onScreen && !hidden && !this.reducedMotion();
+    this.ambience.set(live ? 'live' : 'still');
+    if (live && this.soundOutcome() === QUIET_SOUND) this.soundOutcome.set(null);
+  }
+
+  private async playSoundNow(): Promise<void> {
+    if (!this.alive) return;
+    const owner = this.owner;
+    if (!this.scene.effective().sound || this.ambience() !== 'live') {
+      this.soundOutcome.set(this.scene.effective().sound ? QUIET_SOUND : null);
+      return;
+    }
+    try {
+      await sceneAudio.play();
+    } catch {
+      if (!this.alive || this.owner !== owner) return;
+      this.soundOutcome.set('Town sound could not play. The scene is unchanged.');
+      return;
+    }
+    if (!this.alive || this.owner !== owner || !this.scene.effective().sound || this.ambience() !== 'live') return;
+    this.soundOutcome.set('Played one Town tone.');
   }
 
   private publishInspect(id: string | null, after?: () => void): void {
