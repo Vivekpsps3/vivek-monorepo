@@ -50,7 +50,7 @@ function snapshot(): TownResponse {
 describe('Town page', () => {
   let response: Subject<TownResponse>;
   let created: Subject<unknown>;
-  let api: { getTown: jasmine.Spy; checkin: jasmine.Spy; undoCheckin: jasmine.Spy; createHabit: jasmine.Spy };
+  let api: { getTown: jasmine.Spy; checkin: jasmine.Spy; undoCheckin: jasmine.Spy; createHabit: jasmine.Spy; getStamps: jasmine.Spy };
   let budget: jasmine.Spy;
   let health: jasmine.Spy;
   let user: BehaviorSubject<{ id: number } | null>;
@@ -77,6 +77,7 @@ describe('Town page', () => {
       checkin: jasmine.createSpy(),
       undoCheckin: jasmine.createSpy().and.callFake(() => new Subject()),
       createHabit: jasmine.createSpy().and.callFake(() => created),
+      getStamps: jasmine.createSpy().and.callFake(() => new Subject()),
     };
     TestBed.configureTestingModule({
       imports: [TownComponent],
@@ -96,6 +97,17 @@ describe('Town page', () => {
     if (data) { response.next(data); fixture.detectChanges(); }
     return { fixture, el: fixture.nativeElement as HTMLElement };
   }
+
+  it('closes the stamp wallet when the owner changes', () => {
+    const { fixture, el } = render(snapshot());
+    el.querySelector<HTMLButtonElement>('button.explore-world')!.click();
+    fixture.detectChanges();
+    expect(el.querySelector('app-stamp-wallet')).not.toBeNull();
+    session.user = { id: 8 };
+    user.next({ id: 8 });
+    fixture.detectChanges();
+    expect(el.querySelector('app-stamp-wallet')).toBeNull();
+  });
 
   it('recovers from unavailable via Retry', () => {
     const { fixture, el } = render();

@@ -11,6 +11,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
@@ -25,7 +26,16 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 # raises APIError 422 name_too_long with field_errors.name set; it is not truncated.
 from apps.server.town.engine import name_key as make_name_key
 
-__all__ = ["Habit", "HabitCadence", "HabitCheckin", "TownBase", "make_name_key"]
+__all__ = [
+    "Habit",
+    "HabitCadence",
+    "HabitCheckin",
+    "StampEntitlement",
+    "StampReceipt",
+    "StampWallet",
+    "TownBase",
+    "make_name_key",
+]
 
 
 class TownBase(DeclarativeBase):
@@ -119,3 +129,73 @@ class HabitCadence(TownBase):
     per_week: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class StampWallet(TownBase):
+    """One game-only balance per owner. Absence of a row means zero."""
+
+    __tablename__ = "town_stamp_wallets"
+    __table_args__ = (CheckConstraint("balance >= 0", name="ck_town_stamp_wallets_balance"),)
+
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    balance: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class StampReceipt(TownBase):
+    """One owner and one grant identity. A retry returns this row."""
+
+    __tablename__ = "town_stamp_receipts"
+    __table_args__ = (
+        Index("uq_town_stamp_receipt_grant", "user_id", "grant_key", unique=True),
+        CheckConstraint(
+            "consumer IN ('market', 'quest', 'minigame')",
+            name="ck_town_stamp_receipts_consumer",
+        ),
+        CheckConstraint(
+            "kind IN ('grant', 'spend', 'refund')",
+            name="ck_town_stamp_receipts_kind",
+        ),
+        CheckConstraint("amount BETWEEN 1 AND 20", name="ck_town_stamp_receipts_amount"),
+        CheckConstraint(
+            "length(grant_key) BETWEEN 1 AND 80",
+            name="ck_town_stamp_receipts_grant_key",
+        ),
+        CheckConstraint(
+            "catalog_id IS NULL OR length(catalog_id) BETWEEN 1 AND 64",
+            name="ck_town_stamp_receipts_catalog",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    grant_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    consumer: Mapped[str] = mapped_column(String(16), nullable=False)
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    catalog_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class StampEntitlement(TownBase):
+    """One unlock per owner and catalog id. Refund clears it without a second copy."""
+
+    __tablename__ = "town_stamp_entitlements"
+    __table_args__ = (
+        Index("uq_town_stamp_entitlement_item", "user_id", "catalog_id", unique=True),
+        CheckConstraint(
+            "length(catalog_id) BETWEEN 1 AND 64",
+            name="ck_town_stamp_entitlements_catalog",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    catalog_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    spend_receipt_id: Mapped[int] = mapped_column(
+        ForeignKey("town_stamp_receipts.id", name="fk_town_stamp_entitlements_spend"),
+        nullable=False,
+    )
+    refund_receipt_id: Mapped[int | None] = mapped_column(
+        ForeignKey("town_stamp_receipts.id", name="fk_town_stamp_entitlements_refund"),
+        nullable=True,
+    )

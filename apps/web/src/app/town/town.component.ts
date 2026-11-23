@@ -18,6 +18,7 @@ import { SessionService } from '../platform/session.service';
 import { TownApiService, type CheckinResult } from './town.api';
 import { HabitDialogComponent } from './habit-dialog.component';
 import { HistoryDialogComponent } from './history-dialog.component';
+import { StampWalletComponent } from './stamp-wallet.component';
 import { loadTownHealthStages, type TownHealthStages } from './health';
 import { DateVisitComponent } from './date-visit.component';
 import { TownExteriorComponent } from './town-exterior.component';
@@ -73,7 +74,7 @@ function vaultOpenFor(userId: number | null): boolean {
 
 @Component({
   selector: 'app-town',
-  imports: [RouterLink, UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent, DateVisitComponent, TownExteriorComponent, TownTodayComponent, HabitDialogComponent, HistoryDialogComponent],
+  imports: [RouterLink, UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent, DateVisitComponent, TownExteriorComponent, TownTodayComponent, HabitDialogComponent, HistoryDialogComponent, StampWalletComponent],
   templateUrl: './town.component.html',
   styleUrl: './town.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -105,6 +106,7 @@ export class TownComponent {
   readonly swapping = signal<Record<string, 1 | 2 | 3>>({});
   readonly edit = signal<{ slot: number | null; habitId: number | null; prefill: string } | null>(null);
   readonly historyOpen = signal(false);
+  readonly stampsOpen = signal(false);
   readonly suggestions = ['Read 20 pages', 'Walk 30 minutes', 'Sleep by 12'];
   readonly emptySprite = townSpriteUrl('lot-empty');
   readonly exploreWorld = WORLD_COPY.explore;
@@ -246,6 +248,8 @@ export class TownComponent {
     this.reload();
   }
   habit(id: number | null) { return this.data()?.habits.find(habit => habit.id === id); }
+  openStamps(): void { this.stampsOpen.set(true); }
+  closeStamps(): void { this.stampsOpen.set(false); }
 
   private noteOwner(userId: number | null): void {
     if (this.ownerId === undefined) {
@@ -268,6 +272,7 @@ export class TownComponent {
     this.habitFeedback.set(EMPTY_FEEDBACK);
     this.edit.set(null);
     this.historyOpen.set(false);
+    this.stampsOpen.set(false);
     this.dropVaultViews();
   }
 

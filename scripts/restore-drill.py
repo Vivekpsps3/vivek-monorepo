@@ -63,7 +63,14 @@ DOMAIN_TABLES = {
         "album_ratings",
         "track_ratings",
     ),
-    "town": ("habits", "habit_checkins", "habit_cadences"),
+    "town": (
+        "habits",
+        "habit_checkins",
+        "habit_cadences",
+        "town_stamp_wallets",
+        "town_stamp_receipts",
+        "town_stamp_entitlements",
+    ),
     "world": ("world_concepts",),
 }
 _NOTE = "Synthetic measurement only. This does not establish production recovery."

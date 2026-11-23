@@ -42,7 +42,14 @@ REVISION = "site_town_ownership_v1"
 def _later_model(diff) -> tuple[set[str], set[str]]:
     columns: set[str] = set()
     tables: set[str] = set()
-    draft_tables = {"trip_drafts", "trip_draft_legs", "trip_draft_proposals"}
+    later_tables = {
+        "trip_drafts",
+        "trip_draft_legs",
+        "trip_draft_proposals",
+        "town_stamp_wallets",
+        "town_stamp_receipts",
+        "town_stamp_entitlements",
+    }
     for item in diff:
         if item[0] == "add_column":
             columns.add(f"{item[2]}.{item[3].name}")
@@ -50,7 +57,7 @@ def _later_model(diff) -> tuple[set[str], set[str]]:
             tables.add(str(getattr(item[1], "name", None)))
         elif item[0] == "add_index":
             table = getattr(getattr(item[1], "table", None), "name", None)
-            if table not in draft_tables:
+            if table not in later_tables:
                 raise AssertionError(item)
         else:
             raise AssertionError(item)
@@ -168,11 +175,18 @@ def test_upgrade_preserves_multi_owner_history_and_is_the_only_head(tmp_path: Pa
     digest = _digest(before)
     _upgrade_to(database, REVISION)
     assert current_revision(database) == REVISION
-    assert head_revision() == "site_trip_draft_v1"
-    assert ScriptDirectory.from_config(_cfg(database)).get_heads() == ["site_trip_draft_v1"]
+    assert head_revision() == "site_town_stamps_v1"
+    assert ScriptDirectory.from_config(_cfg(database)).get_heads() == ["site_town_stamps_v1"]
     assert _later_model(model_diff(database)) == (
         {"transports.fa_flight_id"},
-        {"trip_drafts", "trip_draft_legs", "trip_draft_proposals"},
+        {
+            "trip_drafts",
+            "trip_draft_legs",
+            "trip_draft_proposals",
+            "town_stamp_wallets",
+            "town_stamp_receipts",
+            "town_stamp_entitlements",
+        },
     )
     after = _snapshot(database)
     assert after == before
@@ -244,7 +258,14 @@ def test_upgrade_preserves_multi_owner_history_and_is_the_only_head(tmp_path: Pa
     assert _snapshot(database) == before
     assert _later_model(model_diff(database)) == (
         {"transports.fa_flight_id"},
-        {"trip_drafts", "trip_draft_legs", "trip_draft_proposals"},
+        {
+            "trip_drafts",
+            "trip_draft_legs",
+            "trip_draft_proposals",
+            "town_stamp_wallets",
+            "town_stamp_receipts",
+            "town_stamp_entitlements",
+        },
     )
 
 

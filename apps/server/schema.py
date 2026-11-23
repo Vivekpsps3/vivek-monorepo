@@ -30,6 +30,9 @@ OWNER_TABLES = {
     "habits",
     "habit_checkins",
     "habit_cadences",
+    "town_stamp_wallets",
+    "town_stamp_receipts",
+    "town_stamp_entitlements",
     "world_concepts",
 }
 

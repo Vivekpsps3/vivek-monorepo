@@ -36,7 +36,7 @@ The suite runs as one Angular web application, one FastAPI service, and one SQLi
 | Compact Finance | `/finance/embed` | Authenticated, unlocked compact net-worth view; framing is denied by security policy |
 | Travel | `/travel`, `/travel/trips/new`, `/travel/trips/:id`, `/travel/calendar`, `/travel/pto`, `/travel/settings` | Trips, itinerary, maps, leave balances, and policy settings |
 | Media | `/media`, `/media/library`, `/media/search`, `/media/calendar`, `/media/add`, `/media/item/:id`, `/media/item/:id/discography` | Personal media journal and public metadata discovery |
-| Town | `/town` | Habits, check-ins, history, buildings, and XP |
+| Town | `/town` | Habits, check-ins, history, buildings, XP, and Stamps |
 | World | `/town/world` | Navigable week-based world, concepts, and activity projections |
 | Pixels | `/pixels`, `/pixels/life` | Daily year grid and weekly life view |
 
@@ -261,6 +261,8 @@ Town is a personal visual projection with a name, founding date, XP, level progr
 Users create/edit habits, choose cadence, assign available lots, check in, undo, and inspect history through dialogs. Today shows actionable habits with announcements. Cadence changes and archived streak runs preserve history; name normalization/uniqueness and input bounds are server validated. The server's clock owns local-day check-in eligibility, calendar rules, XP, streaks, and levels. The client displays that result instead of maintaining a competing ledger.
 
 Current Town tuning awards 10 XP for a manual check-in, 5 per eligible Media episode, 10 for finishing an eligible movie/series/book/game, 5 for a travel reminder, 30 for a completed trip, and 10 for the seven-day streak event. Library/Inn daily XP caps are 10/15. Town level thresholds are 0, 100, 250, 500, 900, 1,400, 2,000, 2,800, 3,800, and 5,000; six habit lots unlock at levels 1, 1, 3, 5, 7, and 9. These are source tuning values, subject to the server's eligibility/history rules.
+
+Stamps are a game-only balance that starts at zero. Each receipt belongs to one owner and one grant identity. The named consumers are the workshop market, chapter quests, and minigames. A repeated grant returns the same receipt. A spend cannot make the balance negative, and a refund returns the full recorded price of an unlock the owner still holds. The wallet does not read health, finance, travel, or identity measurements.
 
 The Library and Inn reflect eligible Media/Travel activity. Treasury uses Finance's approved weekly budget-kept projection, with a visible locked state and no raw monetary evidence in server Town payloads. Habit streak completion and budget-kept completion use their own distinct week rules. Workspace has a Town summary card; the page links to World. Loading, first-run, unavailable, and expired-session behavior is explicit.
 
