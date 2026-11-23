@@ -2095,6 +2095,72 @@
       ]
     },
     {
+      "id": "FIXUP-16",
+      "title": "Keep workspace search actions tied to the current query",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 604,
+      "dependencies": [
+        "HUB-04",
+        "NAV-02"
+      ],
+      "conflict_groups": [
+        "suite-search",
+        "finance-public-api",
+        "private-shell"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-22",
+      "title": "Protect unsaved weekly reflections on every exit",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 610,
+      "dependencies": [
+        "SCENE-07",
+        "NAV-02"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-23",
+      "title": "Keep Memory Shelves playable after every keyboard match",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 611,
+      "dependencies": [
+        "GAME-10"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
       "id": "FIXUP-03",
       "title": "Compose Town as a connected isometric coastal map",
       "parent_issues": [
@@ -2328,6 +2394,319 @@
       "conflict_groups": [
         "town-ui",
         "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-17",
+      "title": "Make the mobile app switcher lead with app destinations",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 605,
+      "dependencies": [
+        "NAV-01",
+        "FIXUP-01"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "private-shell"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-18",
+      "title": "Return from suite Settings to the task that opened it",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 606,
+      "dependencies": [
+        "NAV-02",
+        "NAV-04"
+      ],
+      "conflict_groups": [
+        "private-shell",
+        "private-routes",
+        "account-settings"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-19",
+      "title": "Keep Town appearance preview and Apply together",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 607,
+      "dependencies": [
+        "NAV-04",
+        "SCENE-08"
+      ],
+      "conflict_groups": [
+        "account-settings",
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-20",
+      "title": "Make the Town Treasury door open its actual rooms",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 608,
+      "dependencies": [
+        "SCENE-02",
+        "NAV-02",
+        "ROOM-01",
+        "ROOM-02"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui",
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FIXUP-21",
+      "title": "Give Treasury inspection one useful record and an explicit edit",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 609,
+      "dependencies": [
+        "ROOM-01",
+        "ROOM-02"
+      ],
+      "conflict_groups": [
+        "finance-ui",
+        "finance-public-api"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FIXUP-24",
+      "title": "Make Travel trip detail start at the selected day",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 612,
+      "dependencies": [
+        "TUX-06",
+        "ROOM-05",
+        "NAV-02"
+      ],
+      "conflict_groups": [
+        "travel-ui",
+        "travel-forms"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "FIXUP-25",
+      "title": "Put setup and requesting time off first in PTO",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 613,
+      "dependencies": [
+        "TUX-08"
+      ],
+      "conflict_groups": [
+        "travel-ui",
+        "travel-forms"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "FIXUP-26",
+      "title": "Open Finance Planning tools at their results and inputs",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 614,
+      "dependencies": [
+        "FUX-06"
+      ],
+      "conflict_groups": [
+        "finance-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FIXUP-27",
+      "title": "Lead Media Search and manual capture with the selected task",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 615,
+      "dependencies": [
+        "MUX-07"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "FIXUP-28",
+      "title": "Give Pixels Year an easy exact-date path and usable table",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 616,
+      "dependencies": [
+        "PIX-02",
+        "PIX-03"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-29",
+      "title": "Make repeated set logging the Gym editor\u2019s main flow",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 617,
+      "dependencies": [
+        "FIT-03",
+        "FIT-04",
+        "FIT-07"
+      ],
+      "conflict_groups": [
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-30",
+      "title": "Give Home a composed browse state and a deliberate edit mode",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 618,
+      "dependencies": [
+        "HOME-02",
+        "HOME-03",
+        "HOME-04",
+        "HOME-05"
+      ],
+      "conflict_groups": [
+        "town-ui",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-31",
+      "title": "Put the next saved episode at the top of Series detail",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 619,
+      "dependencies": [
+        "MUX-08",
+        "ROOM-08"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "FIXUP-32",
+      "title": "Use one set of actionable Clinic lab and checkup rows",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 620,
+      "dependencies": [
+        "ROOM-14",
+        "HEAL-05"
+      ],
+      "conflict_groups": [
+        "health-ui"
       ],
       "verification_profiles": [
         "docs",

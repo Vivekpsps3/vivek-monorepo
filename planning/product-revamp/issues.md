@@ -7,6 +7,8 @@ The original 56 acceptance rows remain assigned to their accountable children. O
 The [FIXUP audit](fixup-audit-2026-11-23.md) records the reproduced UX gaps and their
 [tracker](https://github.com/Vivekpsps3/vivek-monorepo/issues/578). Use the same
 execution queue for FIXUP work.
+The [follow-up usability and vision review](usability-review-2026-11-23.md) covers
+the later merged rooms and end-to-end interactions across the suite.
 
 ## STYLE
 
