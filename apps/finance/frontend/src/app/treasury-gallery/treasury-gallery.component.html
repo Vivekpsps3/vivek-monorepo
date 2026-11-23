@@ -1,0 +1,255 @@
+<ui-page-header title="Treasury gallery" titleId="treasury-gallery-heading">
+  <div uiPageActions>
+    <ui-button variant="ghost" href="/finance/have" label="Accounts" />
+    <ui-button variant="ghost" href="/finance/have" [queryParams]="{ t: 'holdings' }" label="Holdings" />
+    <ui-button variant="ghost" href="/finance/spending" label="Activity" />
+  </div>
+</ui-page-header>
+
+@if (!exposed()) {
+  <p role="status">Finance is locked. Tickers stay hidden.</p>
+} @else {
+  @if (loadFailed()) {
+    <div class="load-error">
+      <p role="alert">Couldn't load holdings and activity.</p>
+      <ui-button variant="secondary" (clicked)="loadRecords()">Try again</ui-button>
+    </div>
+  } @else if (loading()) {
+    <p role="status">Loading the gallery…</p>
+  }
+
+  <div class="room-layout">
+    <aside class="inspector" aria-label="Gallery inspector">
+      <h2>Inspector</h2>
+      @if (projection().inspectorPosition; as position) {
+        <button
+          type="button"
+          class="inspector-line"
+          data-inspector-position
+          [attr.data-position]="position.id"
+          [attr.aria-current]="position.opened ? 'true' : null"
+          (click)="openPosition(position.id)"
+        >
+          <span class="line-title">{{ position.label }}</span>
+          <span class="line-meta">{{ position.account }} · {{ position.quoteLabel }}</span>
+          @if (position.opened) {
+            <span class="line-meta">Shares {{ position.shares }}</span>
+            @if (position.basis === 'unknown') {
+              <span class="line-meta">Cost basis unknown</span>
+            } @else {
+              <span class="line-meta">Cost basis {{ position.purchasePrice | money }}</span>
+            }
+            @let bought = position.purchaseDate | appDate;
+            @let posted = position.positionDate | appDate;
+            @let quoted = position.quoteDate | appDate;
+            <span class="line-meta">Bought {{ bought === 'No date' ? 'on an unknown date' : bought }} · Position {{ posted === 'No date' ? 'has no date' : posted }} · Quote {{ quoted === 'No date' ? 'has no date' : quoted }}</span>
+            <span class="line-meta">{{ position.value === null ? 'Value unavailable' : (position.value | money) }}</span>
+            <span class="line-meta">Gain</span>
+            <span data-gallery-gain>{{ position.gain === null ? 'Unavailable' : (position.gain | money) }}</span>
+          } @else {
+            <span>Hidden</span>
+          }
+        </button>
+      } @else {
+        <p data-inspector-position>No position yet.</p>
+      }
+
+      @if (projection().ledgerOutsideFilter) {
+        <p>The selected entry is outside this filter.</p>
+      }
+      @if (projection().positionMissing) {
+        <p>That position is not in the published holdings.</p>
+      }
+      @if (projection().inspectorLedger; as line) {
+        <button
+          type="button"
+          class="inspector-line"
+          data-inspector-ledger
+          [attr.data-ledger]="line.id"
+          [attr.aria-current]="line.opened ? 'true' : null"
+          (click)="openLedger(line.id)"
+        >
+          <span class="line-title">{{ line.description }}</span>
+          @let posted = line.date | appDate;
+          <span class="line-meta">{{ line.useful ? posted : 'No date' }} · {{ line.category }}</span>
+          @if (line.account) {
+            <span class="line-meta">{{ line.account }}</span>
+          }
+          @if (line.opened && line.amount !== null) {
+            <span class="money" data-ledger-amount>{{ line.amount | money }}</span>
+          } @else {
+            <span>Hidden</span>
+          }
+        </button>
+      } @else {
+        <p data-inspector-ledger>No ledger line in this filter.</p>
+      }
+    </aside>
+
+    <section class="readout" aria-labelledby="gallery-readout">
+      <h2 id="gallery-readout">Portfolio</h2>
+      <p>Portfolio value adds published position values. This room does not keep another ledger or price a quote.</p>
+      <p data-readout-value>
+        @if (projection().readout.revealed && projection().readout.value !== null) {
+          <span class="money">{{ projection().readout.value | money }}</span>
+        } @else {
+          Hidden until you open a position.
+        }
+      </p>
+      @if (projection().readout.revealed) {
+        @if (projection().readout.gain !== null) {
+          <p class="line-meta">Gain</p>
+        }
+        <p data-readout-gain>
+          {{ projection().readout.gain === null ? 'Gain unavailable' : (projection().readout.gain | money) }}
+        </p>
+        @if (projection().readout.withheld > 0) {
+          <p>A stale or uncertain quote is not counted as a gain.</p>
+        }
+        @if (projection().readout.staleCount > 0) {
+          <p>{{ projection().readout.staleCount }} stale quote{{ projection().readout.staleCount === 1 ? '' : 's' }}.</p>
+        }
+      }
+    </section>
+  </div>
+
+  <section class="plaques" aria-labelledby="gallery-plaques">
+    <h2 id="gallery-plaques">Holdings plaques</h2>
+    <ul class="plaque-list">
+      @for (plaque of projection().plaques; track plaque.id) {
+        <li>
+          <button
+            type="button"
+            class="plaque"
+            [class.opened]="plaque.opened"
+            [attr.data-plaque]="plaque.id"
+            [attr.aria-current]="plaque.opened ? 'true' : null"
+            (click)="openPosition(plaque.id)"
+          >
+            <span class="line-title">{{ plaque.label }}</span>
+            <span class="line-meta">{{ plaque.account }} · {{ plaque.quoteLabel }}</span>
+            @if (plaque.opened && plaque.value !== null) {
+              <strong class="money">{{ plaque.value | money }}</strong>
+            } @else if (plaque.opened) {
+              <span>Value unavailable</span>
+            } @else {
+              <span>Hidden</span>
+            }
+          </button>
+        </li>
+      } @empty {
+        @if (!loading() && !loadFailed()) {
+          <li class="empty-note">No holdings yet. Add one from Holdings. This room does not keep a separate list.</li>
+        }
+      }
+    </ul>
+  </section>
+
+  <section class="desk" aria-labelledby="gallery-desk">
+    <h2 id="gallery-desk">Cashflow desk</h2>
+    <p>The same Activity filters decide which dated entries are on the desk.</p>
+    <div class="filters" role="group" aria-label="Filters">
+      <label>
+        Search transactions
+        <input type="search" [value]="filters().searchTerm" (input)="setSearch(inputValue($event))" />
+      </label>
+      <label>
+        Type
+        <select [value]="activityView()" (change)="setView(inputValue($event))">
+          <option value="all">All</option>
+          <option value="spending">Spending</option>
+          <option value="income">Income</option>
+        </select>
+      </label>
+      <label>
+        Category
+        <select [value]="filters().categoryFilter" (change)="setChoice('categoryFilter', inputValue($event))">
+          <option value="">All categories</option>
+          @for (choice of choices().categories; track choice.value) {
+            <option [value]="choice.value">{{ choice.label }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Account
+        <select [value]="filters().accountFilter" (change)="setChoice('accountFilter', inputValue($event))">
+          <option value="">All accounts</option>
+          <option [value]="unassignedAccount">Unassigned account</option>
+          @for (choice of choices().accounts; track choice.value) {
+            <option [value]="choice.value">{{ choice.label }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Merchant
+        <select [value]="filters().merchantFilter" (change)="setChoice('merchantFilter', inputValue($event))">
+          <option value="">All merchants</option>
+          @for (choice of choices().merchants; track choice.value) {
+            <option [value]="choice.value">{{ choice.label }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Trip
+        <select [value]="filters().tripFilter" (change)="setChoice('tripFilter', inputValue($event))">
+          <option value="">All trips</option>
+          <option value="none">No trip</option>
+          @for (choice of choices().trips; track choice.value) {
+            <option [value]="choice.value">{{ choice.label }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Exact day
+        <input type="date" [value]="filters().selectedCalendarDate || ''" (input)="setDate('selectedCalendarDate', inputValue($event))" />
+      </label>
+      <label>
+        From date
+        <input type="date" [value]="filters().fromDate" (input)="setDate('fromDate', inputValue($event))" />
+      </label>
+      <label>
+        Through date
+        <input type="date" [value]="filters().throughDate" (input)="setDate('throughDate', inputValue($event))" />
+      </label>
+      <label>
+        Sort
+        <select [value]="sort().column + '-' + sort().direction" (change)="setSort(inputValue($event))">
+          <option value="date-desc">Newest</option>
+          <option value="date-asc">Oldest</option>
+          <option value="amount-desc">Highest amount</option>
+          <option value="amount-asc">Lowest amount</option>
+          <option value="category-asc">Category A–Z</option>
+        </select>
+      </label>
+      <ui-button variant="ghost" (clicked)="clearFilters()">Clear filters</ui-button>
+    </div>
+
+    <ul class="ledger-list" aria-label="Filtered ledger">
+      @for (line of projection().lines; track line.id) {
+        <li>
+          <button
+            type="button"
+            class="ledger-line"
+            [class.opened]="line.opened"
+            [attr.data-ledger-line]="line.id"
+            [attr.aria-current]="line.opened ? 'true' : null"
+            (click)="openLedger(line.id)"
+          >
+            <span class="line-title">{{ line.description }}</span>
+            @let posted = line.date | appDate;
+            <span class="line-meta">{{ line.useful ? posted : 'No date' }} · {{ line.category }}</span>
+            @if (line.opened && line.amount !== null) {
+              <strong class="money">{{ line.amount | money }}</strong>
+            } @else {
+              <span>Hidden</span>
+            }
+          </button>
+        </li>
+      } @empty {
+        @if (!loading() && !loadFailed()) {
+          <li class="empty-note">No ledger line matches these filters.</li>
+        }
+      }
+    </ul>
+  </section>
+}
