@@ -4,6 +4,10 @@ This map groups published issues by scope. Use the [execution queue](../implemen
 
 The original 56 acceptance rows remain assigned to their accountable children. OPS-06 remains an independent open leaf.
 
+The [FIXUP audit](fixup-audit-2026-11-23.md) records the reproduced UX gaps and their
+[tracker](https://github.com/Vivekpsps3/vivek-monorepo/issues/578). Use the same
+execution queue for FIXUP work.
+
 ## STYLE
 
 STYLE-01 through STYLE-04 ([#382](https://github.com/Vivekpsps3/vivek-monorepo/issues/382)–[#385](https://github.com/Vivekpsps3/vivek-monorepo/issues/385)) are merged and archived.

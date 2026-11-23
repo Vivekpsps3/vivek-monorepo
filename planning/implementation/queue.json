@@ -98,6 +98,10 @@
     {
       "number": 318,
       "title": "Prove integrated beauty, interaction, information and release readiness \u2014 retained scope tracker"
+    },
+    {
+      "number": 578,
+      "title": "FIXUP: Make Town feel playable and everyday tasks easy to reach"
     }
   ],
   "tasks": [
@@ -1984,6 +1988,371 @@
       "verification_profiles": [
         "docs",
         "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-01",
+      "title": "Connect Health to the Hub, suite switcher, and Quick add",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 579,
+      "dependencies": [
+        "NAV-01",
+        "NAV-03",
+        "HEAL-01",
+        "FIT-03",
+        "HEAL-05"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "private-shell",
+        "hub-main",
+        "suite-shortcuts",
+        "health-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-02",
+      "title": "Put Town exploration and Today on the phone\u2019s first screen",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 580,
+      "dependencies": [
+        "SCENE-02",
+        "SCENE-04",
+        "SCENE-05",
+        "SCENE-08"
+      ],
+      "conflict_groups": [
+        "town-ui",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-10",
+      "title": "Make the Town harbor door open Terminal with a real return",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 588,
+      "dependencies": [
+        "SCENE-02",
+        "NAV-02",
+        "ROOM-04",
+        "ROOM-05"
+      ],
+      "conflict_groups": [
+        "town-ui",
+        "private-routes",
+        "travel-forms",
+        "travel-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "FIXUP-11",
+      "title": "Put Health unlock and the next practical action above the scene",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 589,
+      "dependencies": [
+        "FIXUP-01",
+        "HEAL-05",
+        "ROOM-11",
+        "ROOM-12",
+        "ROOM-13"
+      ],
+      "conflict_groups": [
+        "health-ui",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-03",
+      "title": "Compose Town as a connected isometric coastal map",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 581,
+      "dependencies": [
+        "FIXUP-02",
+        "STYLE-04",
+        "SCENE-01",
+        "SCENE-02",
+        "SCENE-08"
+      ],
+      "conflict_groups": [
+        "town-ui",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-04",
+      "title": "Keep Reading Hall and Hall object actions beside the scene",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 582,
+      "dependencies": [
+        "SCENE-03",
+        "SCENE-06",
+        "ROOM-06"
+      ],
+      "conflict_groups": [
+        "town-ui",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-05",
+      "title": "Put saved Media before room introductions",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 583,
+      "dependencies": [
+        "MUX-04",
+        "MUX-05",
+        "MUX-06",
+        "ROOM-06",
+        "ROOM-07",
+        "ROOM-08",
+        "ROOM-09"
+      ],
+      "conflict_groups": [
+        "media-collections"
+      ],
+      "verification_profiles": [
+        "docs",
+        "media_front"
+      ]
+    },
+    {
+      "id": "FIXUP-06",
+      "title": "Give Town games one Arcade entry and keep Media Games focused",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 584,
+      "dependencies": [
+        "ROOM-10",
+        "GAME-10",
+        "GAME-11",
+        "GAME-12"
+      ],
+      "conflict_groups": [
+        "media-collections",
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front",
+        "media_front"
+      ]
+    },
+    {
+      "id": "FIXUP-07",
+      "title": "Make the Pixels Life atlas readable and orientable on phones",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 585,
+      "dependencies": [
+        "PIX-03"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-08",
+      "title": "Show one useful trail through a Pixels day",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 586,
+      "dependencies": [
+        "PIX-02",
+        "SCENE-09",
+        "SCENE-10"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "town-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-09",
+      "title": "Make flight, calendar, and manual trip planning deliberate choices",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 587,
+      "dependencies": [
+        "TUX-03",
+        "TUX-04",
+        "TUX-05",
+        "TUX-07"
+      ],
+      "conflict_groups": [
+        "travel-forms",
+        "travel-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
+      ]
+    },
+    {
+      "id": "FIXUP-12",
+      "title": "Keep Hub summaries compact and remove repeated destination panels",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 590,
+      "dependencies": [
+        "FIXUP-01",
+        "NAV-03",
+        "HUB-01",
+        "HUB-05"
+      ],
+      "conflict_groups": [
+        "hub-main",
+        "hub-agenda"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-13",
+      "title": "Use the canonical Finance Imports entry from Home",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 591,
+      "dependencies": [
+        "FUX-03",
+        "FUX-07",
+        "NAV-02"
+      ],
+      "conflict_groups": [
+        "finance-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "finance_front"
+      ]
+    },
+    {
+      "id": "FIXUP-15",
+      "title": "Move cosmetic placement from the catalog preview into Home",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 593,
+      "dependencies": [
+        "HOME-01",
+        "HOME-02",
+        "HOME-03",
+        "HOME-04",
+        "HOME-05",
+        "GAME-02"
+      ],
+      "conflict_groups": [
+        "town-ui",
+        "private-routes"
+      ],
+      "verification_profiles": [
+        "docs",
+        "web_front"
+      ]
+    },
+    {
+      "id": "FIXUP-14",
+      "title": "Make Travel Memories a scannable, browsable trip collection",
+      "parent_issues": [
+        578,
+        304
+      ],
+      "kind": "implementation",
+      "issue": 592,
+      "dependencies": [
+        "TUX-10",
+        "ROOM-05"
+      ],
+      "conflict_groups": [
+        "travel-ui"
+      ],
+      "verification_profiles": [
+        "docs",
+        "travel_front"
       ]
     },
     {
