@@ -983,6 +983,124 @@ describe('Health workout collection', () => {
     expect(fake.rows.find(item => item.client_id === kept.clientId)?.ciphertext_b64).toBe(cipher);
     expect(textOf(fake.rows)).not.toContain('Synthetic kept');
   });
+
+  it('renames or archives one definition without rewriting a session', async () => {
+    fake.rows = [row('health_prs', 'hlt_b', PR)];
+    await store.load();
+    const prCipher = fake.rows.find(item => item.client_id === 'hlt_b')?.ciphertext_b64;
+    const exercise = workoutFromDraft({
+      ...emptyWorkoutDraft('exercise', WORKOUT_TODAY),
+      name: 'Synthetic press',
+    }, WORKOUT_TODAY, { weight: 'kg', distance: 'km' });
+    const defined = await store.createWorkout(exercise, WORKOUT_TODAY);
+    const routine = workoutFromDraft({
+      ...emptyWorkoutDraft('routine', WORKOUT_TODAY),
+      templateName: 'Synthetic plan',
+      name: 'Synthetic press',
+      exerciseId: defined.clientId,
+      load: '40',
+      reps: '5',
+    }, WORKOUT_TODAY, { weight: 'kg', distance: 'km' });
+    const planned = await store.createWorkout(routine, WORKOUT_TODAY);
+    const logged = workoutRecord();
+    const saved = await store.createWorkout(logged, WORKOUT_TODAY);
+    const sessionCipher = fake.rows.find(item => item.client_id === saved.clientId)?.ciphertext_b64;
+    const routineCipher = fake.rows.find(item => item.client_id === planned.clientId)?.ciphertext_b64;
+    if (defined.value.kind !== 'exercise' || planned.value.kind !== 'routine' || saved.value.kind !== 'session') return;
+
+    const renamed = await store.updateWorkoutCatalog(defined, {
+      ...defined.value,
+      name: 'Synthetic push',
+    }, WORKOUT_TODAY);
+    if (renamed.value.kind !== 'exercise') return;
+    expect(renamed.value.name).toBe('Synthetic push');
+    expect(renamed.value.exercise_type).toBe('load-reps');
+    expect(renamed.revision).toBe(2);
+    expect(fake.rows.find(item => item.client_id === saved.clientId)?.ciphertext_b64).toBe(sessionCipher);
+    expect(fake.rows.find(item => item.client_id === planned.clientId)?.ciphertext_b64).toBe(routineCipher);
+    expect(store.workoutsSnapshot.find(item => item.clientId === saved.clientId)?.value).toEqual(saved.value);
+    expect(fake.rows.find(item => item.client_id === 'hlt_b')?.ciphertext_b64).toBe(prCipher);
+
+    const archived = await store.updateWorkoutCatalog(renamed, { ...renamed.value, archived: true }, WORKOUT_TODAY);
+    if (archived.value.kind !== 'exercise') return;
+    expect(archived.value.archived).toBeTrue();
+    expect(archived.value.name).toBe('Synthetic push');
+    expect(fake.rows.find(item => item.client_id === saved.clientId)?.ciphertext_b64).toBe(sessionCipher);
+    expect(store.workoutsSnapshot.find(item => item.clientId === saved.clientId)?.value).toEqual(saved.value);
+    expect(fake.rows.filter(item => item.collection === 'transactions')).toEqual([]);
+
+    const attempts = fake.upserted.length;
+    const stale = { ...archived.value, name: 'Synthetic loser' };
+    await expectAsync(store.updateWorkoutCatalog(defined, stale, WORKOUT_TODAY)).toBeRejectedWithError(HealthConflictError);
+    expect(store.workoutsSnapshot.find(item => item.clientId === defined.clientId)?.value).toEqual(archived.value);
+    expect(fake.rows.find(item => item.client_id === saved.clientId)?.ciphertext_b64).toBe(sessionCipher);
+    expect(fake.upserted.length).toBe(attempts + 1);
+    await expectAsync(store.updateWorkoutCatalog(saved, saved.value, WORKOUT_TODAY)).toBeRejectedWithError(HealthWorkoutError);
+    await expectAsync(store.deleteWorkout(archived)).toBeRejectedWithError(HealthWorkoutError);
+    await expectAsync(store.deleteWorkout(planned)).toBeRejectedWithError(HealthWorkoutError);
+    expect(fake.rows.find(item => item.client_id === archived.clientId)?.ciphertext_b64).toBeTruthy();
+    expect(fake.rows.find(item => item.client_id === saved.clientId)?.ciphertext_b64).toBe(sessionCipher);
+
+    const cipher = fake.rows.find(item => item.client_id === archived.clientId)?.ciphertext_b64;
+    fake.holdUpsert = true;
+    const pending = store.updateWorkoutCatalog(archived, { ...archived.value, name: 'Synthetic late' }, WORKOUT_TODAY);
+    await until(() => fake.upsertRelease.length === 1);
+    localStorage.removeItem('finance-dek');
+    session.become(null);
+    expect(fake.upsertCancelled).toBe(1);
+    fake.upsertRelease.shift()?.();
+    await expectAsync(pending).toBeRejected();
+    expect(store.workoutsSnapshot).toEqual([]);
+    expect(fake.rows.find(item => item.client_id === archived.clientId)?.ciphertext_b64).toBe(cipher);
+    expect(fake.rows.find(item => item.client_id === saved.clientId)?.ciphertext_b64).toBe(sessionCipher);
+    expect(textOf(fake.rows)).not.toContain('Synthetic late');
+  });
+
+  it('allows a rename at the definition cap and refuses a 201st active exercise', async () => {
+    const archivedId = 'hlt_archivedexercise000001';
+    fake.rows = [
+      row('health_prs', 'hlt_b', PR),
+      ...Array.from({ length: 200 }, (_, index) => row(
+        'health_workouts',
+        `hlt_${String(index).padStart(22, '0')}`,
+        { v: 1, kind: 'exercise', name: `Synthetic ${index}`, exercise_type: 'load-reps', archived: false },
+      )),
+      row('health_workouts', archivedId, {
+        v: 1, kind: 'exercise', name: 'Synthetic archived', exercise_type: 'bodyweight-reps', archived: true,
+      }),
+      row('health_workouts', 'hlt_sessioncap000000000001', workoutRecord()),
+    ];
+    await store.load();
+    const sessionCipher = fake.rows.find(item => item.client_id === 'hlt_sessioncap000000000001')?.ciphertext_b64;
+    const other = fake.rows.find(item => item.client_id === 'hlt_0000000000000000000001')?.ciphertext_b64;
+    const current = store.workoutsSnapshot.find(item => item.clientId === 'hlt_0000000000000000000000');
+    if (!current || current.value.kind !== 'exercise') throw new Error('missing definition');
+    const renamed = await store.updateWorkoutCatalog(current, { ...current.value, name: 'Synthetic renamed' }, WORKOUT_TODAY);
+    if (renamed.value.kind !== 'exercise') return;
+    expect(renamed.value.name).toBe('Synthetic renamed');
+    expect(store.workoutsSnapshot.filter(item => item.value.kind === 'exercise' && !item.value.archived)).toHaveSize(200);
+    expect(fake.rows.find(item => item.client_id === 'hlt_0000000000000000000001')?.ciphertext_b64).toBe(other);
+    expect(fake.rows.find(item => item.client_id === 'hlt_sessioncap000000000001')?.ciphertext_b64).toBe(sessionCipher);
+
+    const held = store.workoutsSnapshot.find(item => item.clientId === archivedId);
+    if (!held || held.value.kind !== 'exercise') throw new Error('missing archived definition');
+    const before = fake.encryptCalls.length;
+    await expectAsync(store.updateWorkoutCatalog(held, { ...held.value, archived: false }, WORKOUT_TODAY))
+      .toBeRejectedWithError(HealthWorkoutError, /200 custom exercises/);
+    expect(fake.encryptCalls.length).toBe(before);
+    expect(store.workoutsSnapshot.find(item => item.clientId === archivedId)?.value).toEqual(held.value);
+    expect(fake.rows.find(item => item.client_id === 'hlt_sessioncap000000000001')?.ciphertext_b64).toBe(sessionCipher);
+    const routine = workoutFromDraft({
+      ...emptyWorkoutDraft('routine', WORKOUT_TODAY),
+      templateName: 'Synthetic plan',
+      name: 'Synthetic press',
+      load: '40',
+      reps: '5',
+    }, WORKOUT_TODAY, { weight: 'kg', distance: 'km' });
+    const planned = await store.createWorkout(routine, WORKOUT_TODAY);
+    expect(planned.value.kind).toBe('routine');
+    expect(store.workoutsSnapshot.filter(item => item.value.kind === 'exercise' && !item.value.archived)).toHaveSize(200);
+  });
 });
 
 describe('loadTownHealthStages (barrel)', () => {

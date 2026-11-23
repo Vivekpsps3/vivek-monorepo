@@ -334,7 +334,8 @@ test('a late cabinet move does not rewrite the movie shelf, and sign-out clears 
   await started.promise;
   await page.goto('/media/library?kind=movie&sort=title');
   release.resolve();
-  await expect(page.locator('.media-card--poster')).toHaveCount(1);
+  await expect(page.locator('.theater-poster')).toHaveCount(1);
+  await expect(page.locator('.media-card--poster')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Paper Lantern', exact: true })).toBeVisible();
   await expect(page.locator('media-game-cabinet')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Playing now. Move Paper Cartridge to Playing' })).toHaveCount(0);
@@ -403,7 +404,8 @@ test('an empty cabinet says so, and books, movies, and all items stay themselves
   await page.addInitScript(() => localStorage.setItem('suite-theme', 'dark'));
   await page.goto('/media/library?kind=movie&sort=title');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.locator('.media-card--poster')).toHaveCount(1);
+  await expect(page.locator('media-theater .theater-poster')).toHaveCount(1);
+  await expect(page.locator('.media-card--poster')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Paper Lantern', exact: true })).toBeVisible();
   await expect(page.locator('media-game-cabinet, media-book-shelf')).toHaveCount(0);
   await expect(page.getByText('Movies. Films you want to watch', { exact: false })).toBeVisible();

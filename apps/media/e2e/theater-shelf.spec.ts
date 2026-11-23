@@ -97,7 +97,7 @@ async function seedShelf(request: APIRequestContext) {
 }
 
 function card(page: Page, title: string) {
-  return page.locator('media-card').filter({
+  return page.locator('media-card, .theater-poster').filter({
     has: page.getByRole('link', { name: title, exact: true }),
   });
 }
@@ -105,7 +105,12 @@ function card(page: Page, title: string) {
 async function openCollection(page: Page, kind: 'movie' | 'tv') {
   await page.goto(`/media/library?kind=${kind}&sort=title`);
   await expect(page.locator('html')).toHaveAttribute('data-theme', /.+/);
-  await expect(page.locator('.theater-shelf')).toBeVisible();
+  if (kind === 'movie') {
+    await expect(page.locator('media-theater')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Lobby' })).toBeVisible();
+  } else {
+    await expect(page.locator('.theater-shelf')).toBeVisible();
+  }
 }
 
 async function activate(control: Locator, pointer: 'keyboard' | 'touch') {
@@ -147,7 +152,7 @@ for (const [width, height, theme, pointer] of [
       const planned = card(page, 'Paper Lantern');
       const dated = card(page, 'Velvet Screening');
       const undated = card(page, 'Quiet Projector');
-      await expect(planned.locator('article')).toHaveAttribute('data-film', 'planned');
+      await expect(planned).toHaveAttribute('data-film', 'planned');
       await expect(planned.locator('.poster-fact')).toHaveText('Planned');
       await expect(planned.locator('.poster-date')).toHaveCount(0);
       await expect(planned).not.toContainText('2024');
@@ -156,7 +161,8 @@ for (const [width, height, theme, pointer] of [
       await expect(dated.locator('.poster-date')).toContainText('2024');
       await expect(undated.locator('.poster-fact')).toHaveText('Watched');
       await expect(undated.locator('.poster-date')).toHaveCount(0);
-      await expect(page.locator('.media-card--poster')).toHaveCount(3);
+      await expect(page.locator('.theater-poster')).toHaveCount(3);
+      await expect(page.locator('media-card')).toHaveCount(0);
       await expect(page.getByRole('progressbar')).toHaveCount(0);
       const filmLink = planned.getByRole('link', { name: 'Paper Lantern', exact: true });
       await expectTarget(filmLink);

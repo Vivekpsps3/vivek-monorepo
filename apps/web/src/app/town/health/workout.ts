@@ -1,4 +1,5 @@
 import { HEALTH_LIMITS, WORKOUT_LIMITS as L } from './health.constants';
+import { e1RM, liftPrEligible } from './health-math';
 import { parseHealthNumber, type HealthUnits } from './health-entry';
 import { healthFieldMessage } from './health-entry';
 import {
@@ -112,10 +113,41 @@ export interface WorkoutDraft {
   floorBefore: WorkoutFloorLine[];
   /** Exercises after the open line. Empty until the user switches to an earlier exercise. */
   floorAfter: WorkoutFloorLine[];
+  /** True when this definition or routine is archived. Sessions do not use it. */
+  archived: boolean;
+  /** Routine title. Empty falls back to the open exercise name. */
+  templateName: string;
+  /** Set when this draft was copied from a routine or a completed session. */
+  startedFrom: '' | 'routine' | 'session';
+}
+
+/** One active custom exercise the composer can attach to a new line. */
+export interface WorkoutDefinitionChoice {
+  id: string;
+  name: string;
+  exerciseType: ExerciseType;
+}
+
+/**
+ * How one saved exercise line reads for best history.
+ * The line's stored kind and canonical numbers are the source. A later rename
+ * or archive of the custom definition is not an input, so it cannot change this.
+ */
+export interface WorkoutBestReading {
+  exerciseId: string;
+  name: string;
+  exerciseType: ExerciseType;
+  units: readonly ('kg' | 'reps' | 'seconds' | 'metres')[];
+  better: 'higher' | 'lower';
+  best: number | null;
 }
 
 const PART_ID = /^w(?:ex|st)_[A-Za-z0-9_-]{8,64}$/;
 const CUSTOM_ID = /^hlt_[A-Za-z0-9_-]{22}$/;
+
+export function isCustomExerciseId(value: string): boolean {
+  return CUSTOM_ID.test(value);
+}
 
 export function newWorkoutPartId(prefix: 'wex' | 'wst'): string {
   const bytes = new Uint8Array(9);
@@ -147,6 +179,9 @@ export function emptyWorkoutDraft(kind: WorkoutKind, today: string): WorkoutDraf
     sets: [],
     floorBefore: [],
     floorAfter: [],
+    archived: false,
+    templateName: '',
+    startedFrom: '',
   };
 }
 
@@ -195,10 +230,14 @@ export function setTypeLabel(type: SetType): string {
 }
 
 export function formatWorkout(record: WorkoutRecord, units: HealthUnits): string {
-  if (record.kind === 'exercise') return `Exercise · ${record.name} · ${exerciseTypeLabel(record.exercise_type)}`;
+  if (record.kind === 'exercise') {
+    const label = record.archived ? 'Archived exercise' : 'Exercise';
+    return `${label} · ${record.name} · ${exerciseTypeLabel(record.exercise_type)}`;
+  }
   if (record.kind === 'routine') {
     const count = record.exercises.length;
-    return `Routine · ${record.name} · ${count} ${count === 1 ? 'exercise' : 'exercises'}`;
+    const label = record.archived ? 'Archived routine' : 'Routine';
+    return `${label} · ${record.name} · ${count} ${count === 1 ? 'exercise' : 'exercises'}`;
   }
   const line = record.exercises[0];
   const count = record.exercises.reduce((sum, item) => sum + item.sets.length, 0);
@@ -255,8 +294,19 @@ export function workoutFieldMessage(code: string | undefined): string {
 export function firstWorkoutField(errors: FieldErrors, kind: WorkoutKind): string | null {
   const order = kind === 'exercise'
     ? ['name', 'exercise_type', 'definitions', 'record']
-    : ['measured_on', 'name', 'exercise_type', 'set_type', 'kg', 'reps', 'seconds', 'metres', 'note', 'exercises', 'sets', 'definitions', 'record'];
+    : kind === 'routine'
+      ? ['template_name', 'name', 'exercise_type', 'set_type', 'kg', 'reps', 'seconds', 'metres', 'exercises', 'sets', 'definitions', 'record']
+      : ['measured_on', 'name', 'exercise_type', 'set_type', 'kg', 'reps', 'seconds', 'metres', 'note', 'exercises', 'sets', 'definitions', 'record'];
   return order.find(field => errors[field]) ?? Object.keys(errors)[0] ?? null;
+}
+
+/** The routine title is required in the editor. An empty title is not saved as the exercise name. */
+export function routineTitleError(draft: WorkoutDraft): string | undefined {
+  if (draft.kind !== 'routine') return undefined;
+  if (hasForbiddenHealthChars(draft.templateName)) return CONTROL_TEXT_MESSAGE;
+  const title = normalizeHealthText(draft.templateName);
+  if (title === '' || [...title].length > L.nameMax) return title === '' ? 'required' : 'length';
+  return undefined;
 }
 
 export function workoutFieldId(field: string): string {
@@ -271,6 +321,7 @@ export function workoutFieldId(field: string): string {
     case 'metres': return 'health-workout-distance';
     case 'note':
     case 'record': return 'health-workout-note';
+    case 'template_name': return 'health-workout-routine-name';
     default: return 'health-workout-name';
   }
 }
@@ -315,13 +366,13 @@ export function commitEnteredSet(
   units: HealthUnits,
   today: string,
 ): { draft: WorkoutDraft; fieldErrors: FieldErrors } {
-  if (draft.kind !== 'session') return { draft, fieldErrors: {} };
+  if (draft.kind === 'exercise') return { draft, fieldErrors: {} };
   if (progressBlank(draft)) {
     return { draft, fieldErrors: { [progressField(draft.exerciseType)]: 'required' } };
   }
   const probe = workoutFromDraft({ ...draft, sets: [], floorBefore: [], floorAfter: [], note: '' }, today, units);
   const checked = validateWorkoutRecord(probe, 0, today);
-  if (Object.keys(checked.fieldErrors).length > 0 || checked.value.kind !== 'session') {
+  if (Object.keys(checked.fieldErrors).length > 0 || checked.value.kind === 'exercise') {
     return { draft, fieldErrors: checked.fieldErrors };
   }
   const set = checked.value.exercises[0]?.sets[0];
@@ -343,7 +394,7 @@ export function commitEnteredSet(
 
 /** Move one entered set within its exercise. The ends do not wrap, and no set is added. */
 export function moveDraftSet(draft: WorkoutDraft, setId: string, direction: -1 | 1): WorkoutDraft {
-  if (draft.kind !== 'session') return draft;
+  if (draft.kind === 'exercise') return draft;
   const sets = moveWithin(draft.sets, setId, direction);
   if (sets !== draft.sets) return { ...draft, sets };
   const floorBefore = draft.floorBefore.map(line => retarget(line, setId, next => moveWithin(next, setId, direction)));
@@ -355,7 +406,7 @@ export function moveDraftSet(draft: WorkoutDraft, setId: string, direction: -1 |
 
 /** Drop one entered set. An exercise with no sets left leaves the floor. Nothing is invented in its place. */
 export function removeDraftSet(draft: WorkoutDraft, setId: string): WorkoutDraft {
-  if (draft.kind !== 'session') return draft;
+  if (draft.kind === 'exercise') return draft;
   const sets = draft.sets.filter(set => set.id !== setId);
   const floorBefore = draft.floorBefore
     .map(line => ({ ...line, sets: line.sets.filter(set => set.id !== setId) }))
@@ -375,7 +426,7 @@ export function removeDraftSet(draft: WorkoutDraft, setId: string): WorkoutDraft
 
 /** Change the role of one entered set. The measured numbers stay put. */
 export function retagDraftSet(draft: WorkoutDraft, setId: string, setType: SetType): WorkoutDraft {
-  if (draft.kind !== 'session') return draft;
+  if (draft.kind === 'exercise') return draft;
   const apply = (set: WorkoutDraftSet): WorkoutDraftSet => set.id === setId ? { ...set, setType } : set;
   return {
     ...draft,
@@ -394,7 +445,7 @@ export function commitExerciseLine(
   units: HealthUnits,
   today: string,
 ): { draft: WorkoutDraft; fieldErrors: FieldErrors } {
-  if (draft.kind !== 'session') return { draft, fieldErrors: {} };
+  if (draft.kind === 'exercise') return { draft, fieldErrors: {} };
   const prepared = commitOpenSet(draft, units, today);
   if (prepared.fieldErrors) return { draft: prepared.draft, fieldErrors: prepared.fieldErrors };
   const current = prepared.draft;
@@ -433,7 +484,7 @@ export function activateDraftLine(
   units: HealthUnits,
   today: string,
 ): { draft: WorkoutDraft; fieldErrors: FieldErrors } {
-  if (draft.kind !== 'session' || draft.exerciseLineId === lineId) return { draft, fieldErrors: {} };
+  if (draft.kind === 'exercise' || draft.exerciseLineId === lineId) return { draft, fieldErrors: {} };
   const prepared = commitOpenSet(draft, units, today);
   if (prepared.fieldErrors) return { draft: prepared.draft, fieldErrors: prepared.fieldErrors };
   const current = prepared.draft;
@@ -497,6 +548,126 @@ export function draftFromSession(
   };
 }
 
+/** Edit one saved custom exercise. The record stays archived when it already was. */
+export function draftFromExercise(
+  entry: { clientId: string; revision: number; value: WorkoutExercise },
+): WorkoutDraft {
+  const fresh = emptyWorkoutDraft('exercise', '');
+  return {
+    ...fresh,
+    name: entry.value.name,
+    exerciseType: isExerciseType(entry.value.exercise_type) ? entry.value.exercise_type : 'load-reps',
+    archived: entry.value.archived === true,
+    clientId: entry.clientId,
+    revision: entry.revision,
+  };
+}
+
+/** Edit one saved routine. Planned set ids stay so a no-op save does not invent a new template. */
+export function draftFromRoutine(
+  entry: { clientId: string; revision: number; value: WorkoutRoutine },
+): WorkoutDraft {
+  const lines = entry.value.exercises.map(floorLineFromStored);
+  const active = lines[lines.length - 1];
+  const fresh = emptyWorkoutDraft('routine', '');
+  return {
+    ...fresh,
+    templateName: entry.value.name,
+    name: active?.name ?? '',
+    exerciseType: active?.exerciseType ?? 'load-reps',
+    archived: entry.value.archived === true,
+    state: 'draft',
+    exerciseLineId: active?.id ?? fresh.exerciseLineId,
+    exerciseId: active?.exerciseId ?? '',
+    sets: active?.sets ?? [],
+    floorBefore: lines.slice(0, -1),
+    clientId: entry.clientId,
+    revision: entry.revision,
+  };
+}
+
+/**
+ * Copy a routine or a completed session into a new draft.
+ * Line and set ids are new, the copy is unsaved, and the source object is not written.
+ */
+export function draftFromPlan(
+  source: WorkoutRoutine | WorkoutSession,
+  today: string,
+  startedFrom: 'routine' | 'session',
+): WorkoutDraft {
+  const lines = source.exercises.map(plannedLine);
+  const active = lines[lines.length - 1];
+  const fresh = emptyWorkoutDraft('session', today);
+  return {
+    ...fresh,
+    name: active?.name ?? '',
+    exerciseType: active?.exerciseType ?? 'load-reps',
+    measuredOn: today,
+    state: 'draft',
+    exerciseLineId: active?.id ?? fresh.exerciseLineId,
+    exerciseId: active?.exerciseId ?? '',
+    sets: active?.sets ?? [],
+    floorBefore: lines.slice(0, -1),
+    startedFrom,
+  };
+}
+
+const BEST_UNITS: Record<ExerciseType, WorkoutBestReading['units']> = {
+  'load-reps': ['kg', 'reps'],
+  'assisted-reps': ['kg', 'reps'],
+  'bodyweight-reps': ['reps'],
+  'time-distance': ['seconds', 'metres'],
+  'time-only': ['seconds'],
+};
+
+/** Best reading of one saved session. Warm-up and uncompleted sets do not qualify. */
+export function bestHistory(session: WorkoutSession): WorkoutBestReading[] {
+  return session.exercises.map(line => {
+    const type = isExerciseType(line.exercise_type) ? line.exercise_type : 'load-reps';
+    const counted = line.sets.filter(set => set.completed && set.set_type !== 'warmup');
+    return {
+      exerciseId: line.exercise_id,
+      name: line.name,
+      exerciseType: type,
+      units: BEST_UNITS[type],
+      better: type === 'assisted-reps' || type === 'time-distance' ? 'lower' : 'higher',
+      best: bestValue(type, counted),
+    };
+  });
+}
+
+function bestValue(type: ExerciseType, sets: readonly WorkoutSet[]): number | null {
+  let best: number | null = null;
+  const prefer = (value: number, lower: boolean): void => {
+    if (!Number.isFinite(value)) return;
+    if (best === null || (lower ? value < best : value > best)) best = value;
+  };
+  for (const set of sets) {
+    if (type === 'load-reps') {
+      if (set.kg !== undefined && set.reps !== undefined && liftPrEligible(set.reps)) prefer(e1RM(set.kg, set.reps), false);
+    } else if (type === 'assisted-reps') {
+      if (set.kg !== undefined) prefer(set.kg, true);
+    } else if (type === 'bodyweight-reps') {
+      if (set.reps !== undefined) prefer(set.reps, false);
+    } else if (type === 'time-distance') {
+      if (set.seconds !== undefined && set.metres !== undefined && set.metres > 0) prefer(set.seconds / set.metres, true);
+    } else if (set.seconds !== undefined) {
+      prefer(set.seconds, false);
+    }
+  }
+  return best;
+}
+
+function plannedLine(line: WorkoutExerciseLine): WorkoutFloorLine {
+  const stored = floorLineFromStored(line);
+  return {
+    ...stored,
+    id: newWorkoutPartId('wex'),
+    exerciseId: isCustomExerciseId(stored.exerciseId) ? stored.exerciseId : '',
+    sets: stored.sets.map(set => ({ ...set, id: newWorkoutPartId('wst') })),
+  };
+}
+
 export function workoutFromDraft(draft: WorkoutDraft, today: string, units: HealthUnits): WorkoutRecord {
   if (draft.kind === 'exercise') {
     return {
@@ -504,16 +675,17 @@ export function workoutFromDraft(draft: WorkoutDraft, today: string, units: Heal
       kind: 'exercise',
       name: draft.name,
       exercise_type: draft.exerciseType,
-      archived: false,
+      archived: draft.archived,
     };
   }
   if (draft.kind === 'routine') {
+    const title = normalizeHealthText(draft.templateName) !== '' ? draft.templateName : draft.name;
     return {
       v: 1,
       kind: 'routine',
-      name: draft.name,
-      archived: false,
-      exercises: [exerciseLineFromDraft(draft, units, false)],
+      name: title,
+      archived: draft.archived,
+      exercises: sessionExercises({ ...draft, state: 'draft' }, units),
     };
   }
   const session: WorkoutSession = {
@@ -675,16 +847,6 @@ function progressSet(draft: WorkoutDraft, units: HealthUnits, completed: boolean
     if (seconds !== undefined) set.seconds = seconds;
   }
   return set;
-}
-
-function exerciseLineFromDraft(draft: WorkoutDraft, units: HealthUnits, completed: boolean): WorkoutExerciseLine {
-  return {
-    id: draft.exerciseLineId,
-    exercise_id: exerciseIdFromDraft(draft),
-    exercise_type: draft.exerciseType,
-    name: draft.name,
-    sets: [progressSet(draft, units, completed)],
-  };
 }
 
 function withinHealthDate(value: string, today: string): boolean {

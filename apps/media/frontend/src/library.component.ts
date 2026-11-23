@@ -23,6 +23,7 @@ import {
 import { formatDay } from "@vivek/browser";
 import { BookShelfComponent } from "./book-shelf.component";
 import { GameCabinetComponent } from "./game-cabinet.component";
+import { TheaterComponent } from "./theater.component";
 import { noteExcerpt } from "./books.mjs";
 import { MediaCardComponent } from "./media-card.component";
 import { NextEpisodeButtonComponent } from "./next-episode-button.component";
@@ -75,6 +76,7 @@ const LIBRARY = "/media/library";
     RouterLink,
     BookShelfComponent,
     GameCabinetComponent,
+    TheaterComponent,
     MediaCardComponent,
     NextEpisodeButtonComponent,
     UiButtonComponent,
@@ -409,6 +411,21 @@ const LIBRARY = "/media/library";
             />
           </ui-empty-state>
         }
+      } @else if (collection === "movie") {
+        <media-theater
+          [items]="library.items"
+          [query]="q"
+          [status]="status"
+          [sort]="sort"
+          [favorite]="favorite"
+          [tags]="tags"
+          [linkState]="source()"
+          [emptyTitle]="emptyTitle"
+          [emptyMessage]="emptyMessage"
+          [filtered]="filtered"
+          (saved)="onFilmSaved($event)"
+          (clearFilters)="clearAllFilters()"
+        />
       } @else {
       <div
         class="media-grid"
@@ -727,7 +744,34 @@ export class LibraryComponent {
     return { ...collectionQuery(this.currentFilters(), "artist"), group: group.catalog_id };
   }
   shelfLayout(): "poster" | "row" {
-    return this.collection === "movie" || this.collection === "tv" ? "poster" : "row";
+    return this.collection === "tv" ? "poster" : "row";
+  }
+  onFilmSaved(detail: Detail): void {
+    if (
+      !this.active ||
+      this.session.currentUser?.id !== this.shelfOwner ||
+      this.collection !== "movie"
+    ) {
+      return;
+    }
+    const library = this.data();
+    if (!library) return;
+    const note = noteExcerpt(detail.review);
+    this.data.set({
+      ...library,
+      items: library.items.map((item) =>
+        item.id === detail.id
+          ? {
+              ...item,
+              status: detail.status,
+              rating: detail.rating,
+              favorite: detail.favorite,
+              note,
+              viewed_on: detail.viewed_on ?? null,
+            }
+          : item,
+      ),
+    });
   }
   showShelfAction(item: MediaCard): boolean {
     if (this.collection !== "tv" || item.kind !== "tv") return false;

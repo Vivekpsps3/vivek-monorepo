@@ -133,18 +133,30 @@
           } @else {
             <ul class="entries" aria-label="Workouts">
               @for (row of workoutRows(); track row.clientId) {
-                <li [attr.data-workout-kind]="row.kind" [attr.data-workout-state]="row.state" [attr.data-set-count]="row.setCount">
+                <li [attr.data-workout-kind]="row.kind" [attr.data-workout-state]="row.state" [attr.data-workout-archived]="row.archived ? 'true' : 'false'" [attr.data-set-count]="row.setCount">
                   <span class="entry-label" [id]="'health-workout-' + row.clientId" tabindex="-1">{{ row.label }}</span>
-                  @if (row.kind === 'session') {
-                    <span class="entry-actions">
+                  <span class="entry-actions">
+                    @if (row.kind === 'exercise') {
+                      <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="editCatalog(row.clientId)">Edit</ui-button>
+                      @if (!row.archived) {
+                        <ui-button variant="secondary" [attr.id]="'health-archive-' + row.clientId" [ariaLabel]="'Archive ' + row.label" (clicked)="archiveWorkout(row.clientId)">Archive</ui-button>
+                      }
+                    } @else if (row.kind === 'routine') {
+                      <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="editCatalog(row.clientId)">Edit</ui-button>
+                      @if (!row.archived) {
+                        <ui-button variant="secondary" [attr.id]="'health-start-' + row.clientId" [ariaLabel]="'Start ' + row.label" (clicked)="startFromRoutine(row.clientId)">Start</ui-button>
+                        <ui-button variant="secondary" [attr.id]="'health-archive-' + row.clientId" [ariaLabel]="'Archive ' + row.label" (clicked)="archiveWorkout(row.clientId)">Archive</ui-button>
+                      }
+                    } @else {
                       @if (row.state === 'draft') {
                         <ui-button variant="secondary" [attr.id]="'health-resume-' + row.clientId" [ariaLabel]="'Resume ' + row.label" (clicked)="resumeWorkout(row.clientId)">Resume</ui-button>
                       } @else {
                         <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="editWorkout(row.clientId)">Edit</ui-button>
+                        <ui-button variant="secondary" [attr.id]="'health-again-' + row.clientId" [ariaLabel]="'Start again ' + row.label" (clicked)="startFromSession(row.clientId)">Start again</ui-button>
                       }
                       <ui-button variant="danger" [attr.id]="'health-delete-' + row.clientId" [ariaLabel]="'Delete ' + row.label" (clicked)="removeWorkout(row.clientId)">Delete</ui-button>
-                    </span>
-                  }
+                    }
+                  </span>
                 </li>
               }
             </ul>
@@ -177,6 +189,7 @@
   [units]="units()"
   [draft]="workoutDraft() ?? idleWorkoutDraft"
   [customExerciseCount]="customExerciseCount()"
+  [definitions]="exerciseChoices()"
   [formError]="workoutFormError()"
   [busy]="workoutBusy()"
   (draftChange)="onWorkoutDraft($event)"
