@@ -12,6 +12,7 @@ import {
   type VaultRecordCapability,
   type VaultRecordEnvelope,
 } from '../../../../../finance/frontend/src/public-api';
+import { scenePreferenceKey } from '../../platform/scene-appearance';
 import { SessionService } from '../../platform/session.service';
 import { HEALTH_BADGES, HEALTH_BADGE_EXPLANATIONS } from './health.constants';
 import { healthDeletePhrase, healthPrDeletePhrase } from './health-entry';
@@ -292,6 +293,12 @@ function storageText(): string {
     }
   }
   return parts.join('\n');
+}
+
+function restButton(root: ParentNode, id: string): HTMLButtonElement {
+  const found = root.querySelector(`#${id} button`);
+  if (!(found instanceof HTMLButtonElement)) throw new Error(`missing ${id}`);
+  return found;
 }
 
 function controlButton(root: ParentNode, selector: string): HTMLButtonElement {
@@ -3640,6 +3647,206 @@ describe('Health room shell', () => {
     expect(visible(el)).not.toContain('Older synthetic visit');
     expect(el.querySelector('[data-clinic-folder]')).toBeNull();
     expect(el.querySelector('#health-lab-name')).toBeNull();
+  });
+
+  it('disposes the rest timer on leave and lock and keeps the saved session', async () => {
+    unlock();
+    seed();
+    localStorage.setItem(scenePreferenceKey(7), JSON.stringify({ season: 'default', sound: false }));
+    const realMatch = window.matchMedia.bind(window);
+    spyOn(window, 'matchMedia').and.callFake((query: string) => {
+      if (query.includes('prefers-reduced-motion')) {
+        return {
+          matches: true,
+          media: query,
+          addEventListener() { /* rest timer */ },
+          removeEventListener() { /* rest timer */ },
+        } as unknown as MediaQueryList;
+      }
+      return realMatch(query);
+    });
+    let constructed = 0;
+    let closed = 0;
+    const originalAudio = window.AudioContext;
+    window.AudioContext = class {
+      currentTime = 0;
+      destination = {};
+      constructor() { constructed += 1; }
+      resume() { return Promise.resolve(); }
+      createOscillator() {
+        return {
+          frequency: { value: 0 },
+          connect() { return this; },
+          start() { /* tick */ },
+          stop() { /* tick */ },
+        };
+      }
+      createGain() {
+        return {
+          gain: { setValueAtTime() { /* envelope */ }, exponentialRampToValueAtTime() { /* envelope */ } },
+          connect() { return this; },
+        };
+      }
+      close() { closed += 1; return Promise.resolve(); }
+    } as unknown as typeof AudioContext;
+    try {
+      route.routeData.next({ healthRoom: 'gym' });
+      route.query.next(convertToParamMap({}));
+      const { fixture, el } = await show();
+      button(el, 'Add exercise').click();
+      fixture.detectChanges();
+      expect(el.querySelector('#health-rest-start')).toBeNull();
+      button(el, 'Cancel').click();
+      fixture.detectChanges();
+      button(el, 'Add routine').click();
+      fixture.detectChanges();
+      expect(el.querySelector('#health-rest-start')).toBeNull();
+      button(el, 'Cancel').click();
+      fixture.detectChanges();
+
+      button(el, 'Add session').click();
+      fixture.detectChanges();
+      expect(el.querySelector('[data-rest-phase]')?.getAttribute('data-rest-phase')).toBe('idle');
+      expect(el.querySelector('#health-rest-clock')?.textContent?.trim()).toBe('0:00');
+      expect(el.querySelector('.rest')?.textContent).not.toContain('Synthetic press');
+      for (const id of ['health-rest-start', 'health-rest-pause', 'health-rest-reset']) {
+        expect(restButton(el, id).getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+      }
+      typeInto(el, '#health-workout-name', 'Synthetic press');
+      typeInto(el, '#health-workout-load', '100');
+      typeInto(el, '#health-workout-reps', '5');
+      fixture.detectChanges();
+      const beforeTimer = fake.encryptCalls.length;
+      restButton(el, 'health-rest-start').click();
+      fixture.detectChanges();
+      expect(el.querySelector('[data-rest-phase]')?.getAttribute('data-rest-phase')).toBe('running');
+      expect(el.querySelector('[data-rest-audio]')?.getAttribute('data-rest-audio')).toBe('off');
+      expect(constructed).toBe(0);
+      typeInto(el, '#health-workout-note', 'Synthetic kept');
+      fixture.detectChanges();
+      expect(el.querySelector('[data-rest-phase]')?.getAttribute('data-rest-phase')).toBe('running');
+      expect(el.querySelector('#health-rest-clock')?.getAttribute('aria-label')).not.toContain('Synthetic');
+      restButton(el, 'health-rest-pause').click();
+      fixture.detectChanges();
+      expect(el.querySelector('[data-rest-phase]')?.getAttribute('data-rest-phase')).toBe('paused');
+      restButton(el, 'health-rest-reset').click();
+      fixture.detectChanges();
+      expect(el.querySelector('#health-rest-clock')?.textContent?.trim()).toBe('0:00');
+      expect(fake.encryptCalls.length).toBe(beforeTimer);
+      expect(storageText()).not.toContain('Synthetic press');
+
+      fake.failUpsert = true;
+      button(el, 'Add set').click();
+      fixture.detectChanges();
+      choose(el, '#health-workout-state', 'draft');
+      fixture.detectChanges();
+      restButton(el, 'health-rest-start').click();
+      fixture.detectChanges();
+      button(el, 'Save').click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(el.textContent).toContain('Could not save this workout. Try again.');
+      expect(el.querySelector<HTMLInputElement>('#health-workout-name')?.value).toBe('Synthetic press');
+      expect(el.querySelector<HTMLTextAreaElement>('#health-workout-note')?.value).toBe('Synthetic kept');
+      expect(el.querySelector('[data-rest-phase]')?.getAttribute('data-rest-phase')).toBe('running');
+      expect(fake.rows.filter(item => item.collection === 'health_workouts')).toEqual([]);
+      fake.failUpsert = false;
+      restButton(el, 'health-rest-pause').click();
+      fixture.detectChanges();
+      button(el, 'Save').click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const stored = fake.rows.find(item => item.collection === 'health_workouts');
+      if (!stored) throw new Error('missing session');
+      const saved = decode(stored.ciphertext_b64) as { state: string; note?: string; exercises: Array<{ name: string; sets: unknown[] }> };
+      expect(saved.state).toBe('draft');
+      expect(saved.exercises[0].name).toBe('Synthetic press');
+      expect(saved.exercises[0].sets).toHaveSize(1);
+      expect(JSON.stringify(saved)).not.toMatch(/rest timer|bankedMs|runningSince/i);
+      expect(el.querySelector('#health-rest-clock')).toBeNull();
+      const cipher = stored.ciphertext_b64;
+
+      button(el, 'Resume').click();
+      fixture.detectChanges();
+      expect(el.querySelector('#health-workout-title')?.textContent).toContain('Resume session');
+      expect(el.querySelector('[data-rest-phase]')?.getAttribute('data-rest-phase')).toBe('idle');
+      expect(el.querySelector('#health-rest-clock')?.textContent?.trim()).toBe('0:00');
+      expect(el.querySelector('[data-entered-set]')).not.toBeNull();
+      expect(el.querySelector<HTMLTextAreaElement>('#health-workout-note')?.value).toBe('Synthetic kept');
+      restButton(el, 'health-rest-start').click();
+      fixture.detectChanges();
+      button(el, 'Cancel').click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(el.querySelector('#health-rest-clock')).toBeNull();
+      expect(stored.ciphertext_b64).toBe(cipher);
+      button(el, 'Resume').click();
+      fixture.detectChanges();
+      expect(el.querySelector('[data-rest-phase]')?.getAttribute('data-rest-phase')).toBe('idle');
+      expect(el.querySelector<HTMLTextAreaElement>('#health-workout-note')?.value).toBe('Synthetic kept');
+      expect(el.querySelector<HTMLInputElement>('#health-workout-name')?.value).toBe('Synthetic press');
+
+      fixture.destroy();
+      const sounding = await show();
+      button(sounding.el, 'Resume').click();
+      sounding.fixture.detectChanges();
+      expect(sounding.el.querySelector('[data-rest-audio]')?.getAttribute('data-rest-audio')).toBe('off');
+      restButton(sounding.el, 'health-rest-start').click();
+      sounding.fixture.detectChanges();
+      expect(sounding.el.querySelector('[data-rest-phase]')?.getAttribute('data-rest-phase')).toBe('running');
+      expect(sounding.el.querySelector('[data-rest-audio]')?.getAttribute('data-rest-audio')).toBe('off');
+      expect(constructed).toBe(0);
+      route.routeData.next({ healthRoom: 'clinic' });
+      sounding.fixture.detectChanges();
+      expect(sounding.el.querySelector('#health-rest-clock')).toBeNull();
+      expect(visible(sounding.el)).not.toContain('Synthetic press');
+      expect(visible(sounding.el)).not.toContain('Synthetic kept');
+      route.routeData.next({ healthRoom: 'gym' });
+      sounding.fixture.detectChanges();
+      button(sounding.el, 'Resume').click();
+      sounding.fixture.detectChanges();
+      expect(sounding.el.querySelector('#health-workout-title')?.textContent).toContain('Resume session');
+      expect(sounding.el.querySelector('[data-rest-phase]')?.getAttribute('data-rest-phase')).toBe('idle');
+      expect(sounding.el.querySelector<HTMLInputElement>('#health-workout-name')?.value).toBe('Synthetic press');
+      expect(sounding.el.querySelector<HTMLTextAreaElement>('#health-workout-note')?.value).toBe('Synthetic kept');
+      restButton(sounding.el, 'health-rest-start').click();
+      sounding.fixture.detectChanges();
+      const locking = lockFinance(TestBed.inject(Injector));
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        sounding.fixture.detectChanges();
+        if (sounding.el.getAttribute('data-health-state') === 'locked') break;
+        await Promise.resolve();
+      }
+      await locking.catch(() => undefined);
+      sounding.fixture.detectChanges();
+      expect(sounding.el.getAttribute('data-health-state')).toBe('locked');
+      expect(sounding.el.querySelector('#health-rest-clock')).toBeNull();
+      expect(sounding.el.querySelector('#health-workout-name')).toBeNull();
+      expect(visible(sounding.el)).not.toContain('Synthetic press');
+      expect(visible(sounding.el)).not.toContain('Synthetic kept');
+      expect(stored.ciphertext_b64).toBe(cipher);
+      sounding.fixture.destroy();
+
+      unlock();
+      const returned = await show();
+      expect(returned.el.getAttribute('data-health-state')).toBe('ready');
+      expect(returned.el.querySelector('#health-rest-clock')).toBeNull();
+      button(returned.el, 'Resume').click();
+      returned.fixture.detectChanges();
+      expect(returned.el.querySelector('#health-workout-title')?.textContent).toContain('Resume session');
+      expect(returned.el.querySelector('[data-rest-phase]')?.getAttribute('data-rest-phase')).toBe('idle');
+      expect(returned.el.querySelector('#health-rest-clock')?.textContent?.trim()).toBe('0:00');
+      expect(returned.el.querySelector<HTMLInputElement>('#health-workout-name')?.value).toBe('Synthetic press');
+      expect(returned.el.querySelector('[data-entered-set]')).not.toBeNull();
+      expect(returned.el.querySelector<HTMLTextAreaElement>('#health-workout-note')?.value).toBe('Synthetic kept');
+      expect(returned.el.querySelector('[data-rest-audio]')?.getAttribute('data-rest-audio')).toBe('off');
+      expect(closed).toBe(0);
+      expect(decode(stored.ciphertext_b64)).toEqual(saved);
+    } finally {
+      window.AudioContext = originalAudio;
+    }
   });
 });
 
