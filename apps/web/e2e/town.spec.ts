@@ -986,9 +986,23 @@ function stageMatrix(room: Locator): Promise<string> {
 }
 
 async function sceneOffset(target: Locator, frame: Locator): Promise<{ x: number; y: number }> {
-  const [box, view] = await Promise.all([target.boundingBox(), frame.boundingBox()]);
-  if (!box || !view) throw new Error('missing scene bounds');
-  return { x: box.x - view.x, y: box.y - view.y };
+  const piece = await target.elementHandle();
+  if (!piece) throw new Error('missing scene bounds');
+  try {
+    // One layout frame. Separate box reads can straddle the scroll that a camera
+    // URL update used to schedule, and the restored desk then looks a gesture away.
+    const offset = await frame.evaluate((view, desk) => {
+      if (!(desk instanceof Element)) return null;
+      const viewBox = view.getBoundingClientRect();
+      const deskBox = desk.getBoundingClientRect();
+      if (viewBox.width <= 0 || viewBox.height <= 0 || deskBox.width <= 0 || deskBox.height <= 0) return null;
+      return { x: deskBox.x - viewBox.x, y: deskBox.y - viewBox.y };
+    }, piece);
+    if (!offset) throw new Error('missing scene bounds');
+    return offset;
+  } finally {
+    await piece.dispose();
+  }
 }
 
 async function overlapCenter(first: Locator, second: Locator) {

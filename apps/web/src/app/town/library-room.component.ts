@@ -296,6 +296,8 @@ export class LibraryRoomComponent {
       relativeTo: this.route,
       queryParams: query,
       replaceUrl: true,
+      // A camera or selection change must not scroll the page back to the top.
+      scroll: 'manual',
     }).then(() => {
       if (!this.alive || this.owner !== owner) return;
       after?.();
