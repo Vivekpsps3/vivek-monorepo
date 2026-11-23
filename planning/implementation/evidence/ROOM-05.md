@@ -53,7 +53,7 @@ Commands ran in `/tmp/vivek-room-05` on `1a01e5157e44390ed6e0dec07a4c50df402da61
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened when this sentence is written. The body will be only the leaf keyword for #455.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/576. The body is only the leaf keyword for #455.
 - Roadmap #134 append-only status-note URL: not added yet. The issue body will not be edited.
 - Merged/activation status (actual evidence, not assumption): not merged when this sentence is written.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review of the rooms stays separate from these passing checks.
