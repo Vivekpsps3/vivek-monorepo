@@ -1,0 +1,157 @@
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+  box-sizing: border-box;
+}
+
+:host * {
+  box-sizing: border-box;
+}
+
+.arcade-tables {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-block-end: 12px solid var(--wood);
+  border-radius: var(--radius-lg) var(--radius-lg) 0.2rem 0.2rem;
+  background: color-mix(in srgb, var(--chart-2) 10%, var(--surface-2));
+  color: var(--text);
+}
+
+.arcade-tables h2,
+.arcade-tables h3,
+.arcade-tables h4,
+.arcade-tables p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.arcade-boundary {
+  padding: var(--space-3);
+  border-inline-start: 4px solid var(--wood);
+  background: var(--card-bg);
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.play-table,
+.gameplay {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.play-table {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+}
+
+.gameplay {
+  padding: var(--space-3);
+  border: 1px dashed var(--border);
+  border-block-start: 8px solid var(--brass);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.gameplay h4:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.memory-board,
+.lanes,
+.table-actions {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.memory-board,
+.lanes,
+.table-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.shelf,
+.lane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.shelf:focus-visible,
+.lane:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.shelf[data-face="up"],
+.shelf[data-face="matched"],
+.lane[aria-current="step"] {
+  border-color: var(--brass);
+  background: color-mix(in srgb, var(--wood) 16%, var(--card-bg));
+}
+
+.shelf-state,
+.lane-state,
+.table-mark {
+  font-weight: 650;
+}
+
+.play-table ui-button,
+.table-actions ui-button {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+:host ::ng-deep .ui-btn {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+@media (min-width: 800px) {
+  .table-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .memory-board,
+  .lanes {
+    grid-template-columns: repeat(4, minmax(44px, 1fr));
+  }
+}

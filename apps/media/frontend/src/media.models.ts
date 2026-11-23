@@ -75,6 +75,8 @@ export interface MediaCard {
   series?: { id: string; name: string | null } | null;
   /** Excerpt of the saved note. The full note stays on the entry. */
   note?: string | null;
+  /** Game cabinet only. True when this membership has not started it. */
+  unopened?: boolean;
   anticipated?: boolean;
   lifecycle?: Lifecycle;
   caught_up?: boolean;

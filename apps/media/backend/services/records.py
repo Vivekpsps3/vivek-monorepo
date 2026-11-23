@@ -212,6 +212,7 @@ def library_cards(db: Session, entries: list[UserEntry]) -> list[dict]:
             card["note"] = excerpt(entry.review, 160) or None
         elif kind == "game":
             card["note"] = excerpt(entry.review, 160) or None
+            card["unopened"] = game_unopened(entry)
         elif kind == "track":
             extra = loads(entry.catalog.extra, {})
             raw = (
@@ -525,6 +526,18 @@ def progress_label(entry: UserEntry) -> str | None:
     if unit == "hour":
         return f"{entry.progress_value:g} h"
     return f"{entry.progress_value:g}"
+
+
+def game_unopened(entry: UserEntry) -> bool:
+    """True when this membership has not started the game.
+
+    Want or anticipating with no recorded progress is unopened. Any recorded
+    value, or playing, paused, dropped, or played, is not. Another owner's
+    row is never read.
+    """
+    if entry.progress_value is not None:
+        return False
+    return entry.status in {"want", "anticipating"}
 
 
 def owned_entry(db: Session, user_id: int, entry_id: int) -> UserEntry:

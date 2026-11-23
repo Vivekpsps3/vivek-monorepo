@@ -22,6 +22,7 @@ import {
 } from "rxjs";
 import { BookShelfComponent } from "./book-shelf.component";
 import { EpisodeLoungeComponent } from "./episode-lounge.component";
+import { ArcadeTablesComponent } from "./arcade.component";
 import { GameCabinetComponent } from "./game-cabinet.component";
 import { MusicRoomsComponent, MusicStageComponent } from "./music-bar.component";
 import { TheaterComponent } from "./theater.component";
@@ -76,6 +77,7 @@ const LIBRARY = "/media/library";
     RouterLink,
     BookShelfComponent,
     EpisodeLoungeComponent,
+    ArcadeTablesComponent,
     GameCabinetComponent,
     MusicRoomsComponent,
     MusicStageComponent,
@@ -227,6 +229,9 @@ const LIBRARY = "/media/library";
     }
     @if (collection === "music") {
       <media-music-stage />
+    }
+    @if (collection === "game") {
+      <media-arcade-tables />
     }
     @if (data(); as library) {
       <p class="muted">
