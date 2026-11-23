@@ -21,6 +21,8 @@ import {
   UiPageHeaderComponent,
 } from "@vivek/ui";
 import { FlightStartComponent } from "./flight-start.component";
+import { HarborRoomsComponent } from "./harbor-rooms.component";
+import { readRoomQuery } from "./harbor-rooms.mjs";
 import { settleAttach, type AcceptedFlight } from "./flight-start.mjs";
 import {
   acceptHallLoad,
@@ -43,7 +45,7 @@ import { Home, Trip, travelError } from "./travel.models";
 @Component({
   selector: "travel-terminal-hall",
   standalone: true,
-  imports: [FlightStartComponent, UiPageHeaderComponent],
+  imports: [FlightStartComponent, HarborRoomsComponent, UiPageHeaderComponent],
   styleUrl: "./terminal-hall.component.css",
   templateUrl: "./terminal-hall.component.html",
 })
@@ -76,6 +78,7 @@ export class TerminalHallComponent {
   readonly pending = signal(false);
   readonly closed = signal(false);
   readonly selection = signal(readHallQuery(this.route.snapshot.queryParamMap));
+  readonly room = signal(readRoomQuery(this.route.snapshot.queryParamMap).room);
 
   constructor() {
     merge(
@@ -86,6 +89,7 @@ export class TerminalHallComponent {
       .subscribe(() => this.retire());
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       this.selection.set(readHallQuery(params));
+      this.room.set(readRoomQuery(params).room);
     });
     this.load();
   }
@@ -136,7 +140,7 @@ export class TerminalHallComponent {
   focusObject(object: "board" | "desk" | "table"): void {
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { object },
+      queryParams: { object, room: null, card: null, place: null },
       queryParamsHandling: "merge",
       replaceUrl: true,
     });
@@ -250,6 +254,31 @@ export class TerminalHallComponent {
     }
   }
 
+  openRoom(room: "map" | "gallery"): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { room, object: null, leg: null, day: null },
+      queryParamsHandling: "merge",
+      replaceUrl: true,
+    });
+  }
+
+  closeRoom(): void {
+    const room = this.room();
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { room: null, card: null, place: null },
+      queryParamsHandling: "merge",
+      replaceUrl: true,
+    }).then(() => {
+      afterNextRender(() => {
+        if (this.destroy.destroyed) return;
+        const id = room === "gallery" ? "terminal-souvenir-gallery" : "terminal-map-room";
+        document.getElementById(id)?.focus();
+      }, { injector: this.injector });
+    });
+  }
+
   whenText(row: HallLeg): string {
     return row.departAt ? row.departAt.replace("T", " ") : "Time not set";
   }
@@ -282,6 +311,7 @@ export class TerminalHallComponent {
         : query.object === "table" && query.trip && query.day
           ? "terminal-day-" + query.trip + "-" + query.day
           : "";
+    if (this.room()) return;
     const empty = !this.error() && hallIsEmpty(this.home());
     const failed = Boolean(this.error());
     afterNextRender(() => {

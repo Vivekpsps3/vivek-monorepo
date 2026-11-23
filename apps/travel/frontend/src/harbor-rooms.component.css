@@ -1,0 +1,120 @@
+.harbor-room {
+  color: var(--text);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.harbor-scene {
+  height: 4.5rem;
+  margin: 0 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, transparent 0 58%, var(--brass, var(--accent)) 58% 64%, transparent 64%),
+    var(--card-bg, var(--surface));
+}
+
+.harbor-toolbar,
+.harbor-room section {
+  margin: 0 0 1.25rem;
+}
+
+.harbor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.harbor-toolbar h2 {
+  margin-right: auto;
+}
+
+.harbor-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.harbor-room button,
+.harbor-room .harbor-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.5rem 0.75rem;
+  color: var(--text);
+  background: var(--card-bg, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  text-align: left;
+  text-decoration: none;
+}
+
+.harbor-room .harbor-grid button,
+.harbor-postcard {
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.harbor-room button[aria-pressed="true"],
+.harbor-postcard[aria-pressed="true"] {
+  border-color: var(--brass, var(--accent));
+}
+
+.harbor-postcard {
+  border-style: dashed;
+}
+
+.harbor-room input {
+  box-sizing: border-box;
+  display: block;
+  width: min(100%, 24rem);
+  min-height: 44px;
+  margin-top: 0.35rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.harbor-costs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 0.75rem;
+}
+
+.harbor-costs div {
+  margin: 0;
+}
+
+.harbor-costs dt {
+  font-size: 0.8rem;
+}
+
+.harbor-room button:focus-visible,
+.harbor-room a:focus-visible,
+.harbor-room input:focus-visible,
+.harbor-room h2:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (min-width: 800px) {
+  .harbor-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .harbor-room,
+  .harbor-room * {
+    animation: none;
+    transition: none;
+  }
+}

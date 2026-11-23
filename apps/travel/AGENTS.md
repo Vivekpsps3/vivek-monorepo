@@ -27,8 +27,8 @@ consumers before deleting repeated editor logic. Preserve keyboard access, save-
 drafts and chart-only recovery; a failed summary must not hide usable forms.
 FlightAware settings use the same editor from suite Settings, the transport
 dialog, and flight-first planning. Keep that draft mounted and cancel obsolete
-lookups. Plan-a-trip draft, PTO, and `/travel/memories` rules stay in TRAVEL.md.
-Terminal and memories read saved trips.
+lookups. Draft, PTO, memory, terminal, map, and gallery rules stay in TRAVEL.md.
+The model ferry never completes trips.
 
 Read [TRAVEL](../../docs/TRAVEL.md) for the affected journey and root instructions
 for applicable gates. Pure chart/date behavior has Node tests under
