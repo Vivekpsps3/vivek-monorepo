@@ -1,4 +1,5 @@
 <main>
+  <app-date-visit [today]="state() === 'ready' ? (data()?.town?.today ?? '') : ''" />
   <header>
     <h1>{{ data()?.town?.name || 'Town' }}</h1>
     @if (state() === 'ready') {

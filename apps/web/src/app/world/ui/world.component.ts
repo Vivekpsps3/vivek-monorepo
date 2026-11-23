@@ -28,6 +28,7 @@ import {
   financeVaultPresent,
   loadFinanceBudgetKept,
 } from '../../../../../finance/frontend/src/public-api';
+import { originRoute, readDateSelection } from '../../platform/date-visit';
 import { SessionService } from '../../platform/session.service';
 import { FIXED_LOTS, weeksKeptRun, type TownResponse } from '../../town';
 import { loadTownHealthStages, type TownHealthStages } from '../../town/health';
@@ -329,6 +330,12 @@ export class WorldComponent {
     if (this.selectedDate() > this.serverToday()) return 'On the horizon';
     return this.dayItems().length ? 'Recorded activity' : 'No recorded activity';
   });
+  readonly dayStateKey = computed(() => {
+    if (!this.selectedDate()) return '';
+    if (this.error()) return 'unavailable';
+    if (this.selectedDate() > this.serverToday()) return 'future';
+    return this.dayItems().length ? 'recorded' : 'unrecorded';
+  });
   readonly liveText = computed(() => {
     if (!this.view()) return '';
     if (this.inTown()) return WORLD_COPY.town;
@@ -590,6 +597,25 @@ export class WorldComponent {
       case 'trip': return 'This landscape follows a booked or completed trip. Its scenery is illustrative; the title, place and dates come from Travel.';
       default: return 'This is a weekly summary, separate from your daily activity.';
     }
+  }
+
+  pixelsReturn(): { commands: string[]; query: Record<string, string | null> } {
+    const params = new URLSearchParams(this.location.path().split('?')[1] ?? '');
+    const read = readDateSelection(params);
+    if (read.status === 'ready') {
+      const route = originRoute(read.selection);
+      return { commands: route.commands, query: route.query };
+    }
+    const date = this.selectedDate();
+    return { commands: ['/pixels'], query: { year: date.slice(0, 4) || null, day: date || null } };
+  }
+
+  pixelsReturnName(): string {
+    const params = new URLSearchParams(this.location.path().split('?')[1] ?? '');
+    const read = readDateSelection(params);
+    return read.status === 'ready' && read.selection.kind === 'life'
+      ? 'Back to this life week in Pixels'
+      : 'See this day in Pixels';
   }
 
   sourceHref(item: ReadingItem): string | null {

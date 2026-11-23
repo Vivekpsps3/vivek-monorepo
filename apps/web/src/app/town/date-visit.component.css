@@ -1,0 +1,66 @@
+:host { display: block; }
+.date-visit {
+  margin: 0 0 24px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card-bg);
+  color: var(--text);
+}
+.date-visit h2 { margin: 0 0 8px; font-size: 1.125rem; }
+.date-visit p { margin: 0 0 12px; }
+.actions, form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.date-visit a,
+.date-visit button,
+.date-visit input {
+  min-height: 44px;
+  min-width: 44px;
+  box-sizing: border-box;
+}
+.date-visit a,
+.date-visit button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.date-visit input {
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text);
+  font: inherit;
+}
+.date-visit a:focus-visible,
+.date-visit button:focus-visible,
+.date-visit input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.date-visit ul {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.date-visit li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}

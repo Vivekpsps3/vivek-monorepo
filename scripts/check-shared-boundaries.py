@@ -229,6 +229,11 @@ REVIEWED: tuple[Reviewed, ...] = (
         "apps/web/src/app/town/index.ts",
         "web-world",
     ),
+    Reviewed(
+        "apps/web/src/app/town/date-visit.component.ts",
+        "apps/web/src/app/pixels/pixels-data.service.ts",
+        "web-town",
+    ),
 )
 _REVIEWED_INDEX = {(item.source, item.target): item.removal_owner for item in REVIEWED}
 

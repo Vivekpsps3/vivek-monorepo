@@ -35,6 +35,9 @@
     @if (!pageMode()) {
       <a class="open-day" routerLink="/pixels/day" [queryParams]="dayParams()" [state]="openState()">Open this day</a>
     }
+    @if (townVisit(); as visit) {
+      <a class="visit-town" routerLink="/town" [queryParams]="visit">Visit this day</a>
+    }
     @if (spans(); as spans) {
       <ul class="atlas-spans" aria-label="Week spans">
         <li [attr.data-sunday-span]="spans.sunday.start + '/' + spans.sunday.end">Sunday week · {{ spans.sunday.label }}</li>

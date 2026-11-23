@@ -94,8 +94,9 @@ export class TownExteriorComponent {
   protected readonly sheet = computed(() => this.narrow() && this.place() != null);
   protected readonly crumbs = computed((): readonly PlaceCrumb[] => {
     const place = this.place();
+    const home = { ...this.visitQuery(), inspect: null };
     return place
-      ? [{ label: 'Town', href: '/town', query: { inspect: null } }, { label: place.name }]
+      ? [{ label: 'Town', href: '/town', query: home }, { label: place.name }]
       : [{ label: 'Town' }];
   });
   protected readonly buildings = computed(() => exteriorBuildings({
@@ -365,6 +366,16 @@ export class TownExteriorComponent {
     }
     if (!this.alive || this.owner !== owner || !this.scene.effective().sound || this.ambience() !== 'live') return;
     this.soundOutcome.set('Played one Town tone.');
+  }
+
+  private visitQuery(): Record<string, string> {
+    const params = this.params();
+    const query: Record<string, string> = {};
+    for (const key of ['visit', 'from', 'year', 'span'] as const) {
+      const value = params.get(key);
+      if (value) query[key] = value;
+    }
+    return query;
   }
 
   private publishInspect(id: string | null, after?: () => void): void {

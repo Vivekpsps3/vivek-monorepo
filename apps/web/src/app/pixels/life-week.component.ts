@@ -6,6 +6,7 @@ import { calendarSpans, civilSpanLabel, civilWeekday, type CompactMemoryPreview 
 import { weekFinanceText } from './day-memory';
 import { formatDayHeading } from './day-detail.component';
 import { MemoryPreviewComponent } from './memory-preview.component';
+import { townVisitQuery } from '../platform/date-visit';
 import { inclusiveIsoDates } from './pixels-dates';
 import type { FinanceJoinStatus } from './pixels.types';
 import type { LifeWeekCell } from './life-model';
@@ -90,6 +91,11 @@ export class LifeWeekComponent {
 
   protected dayParams(date: string): Record<string, string> {
     return { date, from: 'life', year: date.slice(0, 4), span: this.week().start };
+  }
+
+  protected townVisit(): Record<string, string> {
+    const start = this.week().start;
+    return townVisitQuery({ kind: 'life', span: start, day: start });
   }
 
   protected dayState(date: string): Record<string, unknown> {

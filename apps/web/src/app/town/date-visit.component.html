@@ -1,0 +1,69 @@
+@if (selection().status === 'invalid') {
+  <section class="date-visit" data-visit-state="invalid" aria-label="Date visit">
+    <h2 id="date-visit-heading">This date is not available</h2>
+    <p role="status">{{ invalidNotice() }}</p>
+    <a routerLink="/town">Town today</a>
+  </section>
+} @else if (selection().status === 'ready') {
+  <section
+    class="date-visit"
+    [attr.data-visit-state]="appearance()"
+    [attr.data-origin]="originKind()"
+    [attr.data-origin-year]="originYear()"
+    [attr.data-origin-span]="originSpan()"
+    aria-labelledby="date-visit-heading"
+  >
+    <h2 id="date-visit-heading">{{ heading() }}</h2>
+    <p data-layout-note>{{ layoutNote }}</p>
+    <p data-visit-sentence role="status">{{ sentence() }}</p>
+    <div class="actions">
+      <a [routerLink]="originCommands()" [queryParams]="originParams()">{{ originText() }}</a>
+      <a routerLink="/town/world" [queryParams]="worldParams()">Open World for this date</a>
+      <button type="button" [attr.aria-pressed]="overlay()" (click)="toggleOverlay()">Activity</button>
+      @if (canRetry()) {
+        <button type="button" (click)="retry()">Retry records</button>
+      }
+    </div>
+    <p data-activity-note>
+      @if (overlay()) {
+        Saved records are listed apart from the current town.
+      } @else {
+        Activity is off. The town stays visible.
+      }
+    </p>
+    @if (overlay()) {
+      <ul data-activity="shown" aria-label="Recorded facts">
+        @for (line of lines(); track line.id) {
+          <li [attr.data-fact-id]="line.id">
+            <span>{{ line.label }}</span>
+            @if (line.href) {
+              <a [routerLink]="line.href">Open</a>
+            }
+          </li>
+        }
+        @for (key of ['town', 'media', 'travel', 'concepts']; track key) {
+          @if (sourceLine(key); as text) {
+            <li [attr.data-source-gap]="key">{{ text }}</li>
+          }
+        }
+      </ul>
+    } @else {
+      <p data-activity="hidden">Activity is off.</p>
+    }
+    <form (submit)="correct($event)">
+      <label for="date-visit-correct">Visit another date</label>
+      <input
+        id="date-visit-correct"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        [value]="draft()"
+        (input)="onDraft($event)"
+      />
+      <button type="submit">Go</button>
+      @if (draftNotice(); as notice) {
+        <p role="status">{{ notice }}</p>
+      }
+    </form>
+  </section>
+}

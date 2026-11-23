@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import { type Route } from '@playwright/test';
 import { expect, test, type Locator } from '../../../tests/e2e/fixtures';
 import type { TownResponse } from '../src/app/town/town.types';
 
@@ -917,9 +918,14 @@ test.describe('Reading Hall', () => {
     await expect(objects.getByRole('link', { name: 'Bookshelves' })).toBeFocused();
     expect(await room.evaluate(el => el.getAnimations({ subtree: true }).length)).toBe(0);
 
-    await page.route(url => url.pathname === '/api/town', route => route.fulfill({
+    // Playwright matches route predicates by function identity. A new arrow
+    // function does not remove the previous handler, so the next navigation
+    // would still receive the stubbed library source.
+    const townApi = (url: URL) => url.pathname === '/api/town';
+    const townDown = (route: Route) => route.fulfill({
       status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'unavailable' }),
-    }));
+    });
+    await page.route(townApi, townDown);
     await page.reload();
     await expect(room.getByText('Library progress is unavailable.')).toBeVisible();
     await objects.getByRole('link', { name: 'Wall calendar' }).focus();
@@ -932,14 +938,15 @@ test.describe('Reading Hall', () => {
     await expect(page).not.toHaveURL(/object=/);
     await expect.poll(() => stageMatrix(room)).toBe(errored);
     await expect(objects.getByRole('link', { name: 'Wall calendar' })).toBeFocused();
-    await page.unroute(url => url.pathname === '/api/town');
+    await page.unroute(townApi, townDown);
 
-    await page.route(url => url.pathname === '/api/town', async route => {
+    const librarySourceDown = async (route: Route) => {
       const response = await route.fetch();
       const body = await response.json() as TownResponse;
       body.buildings.library.source = 'unavailable';
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-    });
+    };
+    await page.route(townApi, librarySourceDown);
     await room.getByRole('button', { name: 'Retry progress' }).click();
     await expect(room.locator('[data-inspector]')).toHaveAttribute('data-inspector', 'locked');
     await expect(room.getByText('Media is unavailable. Library progress may be out of date.')).toBeVisible();
@@ -947,7 +954,7 @@ test.describe('Reading Hall', () => {
     await page.keyboard.press('Enter');
     await page.keyboard.press('Escape');
     await expect(objects.getByRole('link', { name: 'Wall calendar' })).toBeFocused();
-    await page.unroute(url => url.pathname === '/api/town');
+    await page.unroute(townApi, librarySourceDown);
 
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -955,6 +962,7 @@ test.describe('Reading Hall', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(room.locator('.inspector.sheet')).toHaveCount(0);
     await expect(room.locator('[data-inspector]')).toHaveAttribute('data-inspector', 'ready');
+    await expect(room.getByText(/Media XP today/)).toBeVisible();
     await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
     await expect(room.locator('img.room.cutaway')).toBeVisible();
     await expect.poll(() => stageMatrix(room)).toContain('matrix(1.5,');

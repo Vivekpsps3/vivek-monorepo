@@ -18,6 +18,7 @@ import { pixelsDayActivityPath } from '../../../../finance/frontend/src/public-a
 import { calendarSpans, compactMemoryPreview, type CalendarSpans, type CompactMemoryPreview } from './atlas';
 import { buildDayMemory, type DayMemory } from './day-memory';
 import { MemoryPreviewComponent } from './memory-preview.component';
+import { townVisitQuery, type DateSelection } from '../platform/date-visit';
 import { dayOriginPath, daySearch, type DayQuery } from './day-route';
 import { isIsoDate } from './pixels-dates';
 import { dayScoreVector } from './pixels-model';
@@ -204,6 +205,15 @@ export class DayDetailComponent implements AfterViewInit, OnDestroy {
     return dayOriginPath(query) === `/pixels?year=${query.year}`
       ? { year: query.year }
       : { year: query.year, day: query.date };
+  }
+
+  protected townVisit(): Record<string, string> | null {
+    const query = this.coordinates();
+    if (!query) return null;
+    const selection: DateSelection = query.from === 'life' && query.span
+      ? { kind: 'life', span: query.span, day: query.date }
+      : { kind: 'year', year: query.year, day: query.date };
+    return townVisitQuery(selection);
   }
 
   protected backLabel(): string {

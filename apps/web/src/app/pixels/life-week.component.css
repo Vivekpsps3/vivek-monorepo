@@ -35,7 +35,8 @@
 }
 
 .life-lock a,
-.life-days a {
+.life-days a,
+.visit-town {
   min-height: 44px;
   min-width: 44px;
   max-width: 100%;

@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { BehaviorSubject,Subject } from 'rxjs';
 import { ToastService } from '@vivek/ui';
 import { VAULT_PRESENCE } from '../../../../finance/frontend/src/public-api';
+import { PixelsDataService } from '../pixels/pixels-data.service';
 import { SessionService } from '../platform/session.service';
 import { TownApiService, type CheckinResult } from './town.api';
 import { TOWN_BUDGET_KEPT, TOWN_HEALTH_STAGES, TownComponent } from './town.component';
@@ -85,6 +86,7 @@ describe('Town page', () => {
         { provide: SessionService, useValue: session },
         { provide: TOWN_BUDGET_KEPT, useValue: budget },
         { provide: TOWN_HEALTH_STAGES, useValue: health },
+        { provide: PixelsDataService, useValue: { loadDay: () => Promise.resolve({ status: 'dropped' }) } },
       ],
     });
   });

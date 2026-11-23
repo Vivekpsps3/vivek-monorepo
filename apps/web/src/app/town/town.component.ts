@@ -19,6 +19,7 @@ import { TownApiService, type CheckinResult } from './town.api';
 import { HabitDialogComponent } from './habit-dialog.component';
 import { HistoryDialogComponent } from './history-dialog.component';
 import { loadTownHealthStages, type TownHealthStages } from './health';
+import { DateVisitComponent } from './date-visit.component';
 import { TownExteriorComponent } from './town-exterior.component';
 import type { ExteriorHealth } from './town-exterior';
 import { TownTodayComponent, liveAgain, liveCheck, liveUndo } from './town-today.component';
@@ -72,7 +73,7 @@ function vaultOpenFor(userId: number | null): boolean {
 
 @Component({
   selector: 'app-town',
-  imports: [RouterLink, UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent, TownExteriorComponent, TownTodayComponent, HabitDialogComponent, HistoryDialogComponent],
+  imports: [RouterLink, UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent, DateVisitComponent, TownExteriorComponent, TownTodayComponent, HabitDialogComponent, HistoryDialogComponent],
   templateUrl: './town.component.html',
   styleUrl: './town.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
