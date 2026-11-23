@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#452](https://github.com/Vivekpsps3/vivek-monorepo/issues/452) ROOM-02. Parent [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304) stays open. Roadmap [#134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134) stays open. [#277](https://github.com/Vivekpsps3/vivek-monorepo/issues/277) stays open and was not edited.
 - Agent/context, branch/worktree: sole implementer, no subagents; `agent/room-02`; `/tmp/vivek-room-02`. The shared checkout was not edited. Town, Health, Travel, Media, and server product files were not edited by this leaf. FIT-07 arrived through the merge below and those files were left as merged.
-- Base main SHA, current tested SHA: product and tests are `94f94e872a4fcf0310f31ff828aefa9f57dabec7`. Finance Karma, root Karma, lint, typecheck, and `make e2e` ran in `/tmp/vivek-room-02` on that tree before this evidence file. `origin/main` at branch start was `95e298d599c2f96dfda4776df5dede6c0e48c5cc` (ROOM-01, pull request #599). It moved to `49bb1d1c2d5333996dbe40e7afecc2f341d91544` (pull request #594, planning only), then to `e5e1fde32cdcca8b97811cd7017206b70f291e1b` (FIT-07, pull request #600). Both updates were merged into this branch. The second merge is `651a8839b27e39bd30fb397027d7010b65a91f45`. No rebase and no force-push.
+- Base main SHA, current tested SHA: product and tests are `94f94e872a4fcf0310f31ff828aefa9f57dabec7`. Finance Karma, root Karma, lint, typecheck, and `make e2e` ran in `/tmp/vivek-room-02` on that tree before this evidence file. The pull-request URL line is the only later edit. `origin/main` at branch start was `95e298d599c2f96dfda4776df5dede6c0e48c5cc` (ROOM-01, pull request #599). It moved to `49bb1d1c2d5333996dbe40e7afecc2f341d91544` (pull request #594, planning only), then to `e5e1fde32cdcca8b97811cd7017206b70f291e1b` (FIT-07, pull request #600). Both updates were merged into this branch. The second merge is `651a8839b27e39bd30fb397027d7010b65a91f45`. No rebase and no force-push.
 - Fresh-main/prerequisite/active-PR checks: SCENE-03 (#441, merge `57b69462126defe6bf3b8853237a8b18c1c9abcf`, pull request #555), FUX-01 (#390, merge `9ae590269cde2f2cda1b03f54eb717d163efee94`, pull request #520), and FUX-03 (#392, merge `b7bb3cc4bb00d4ee77f6a2ad5432ab1241e962bc`, pull request #527) are ancestors of `e5e1fde32cdcca8b97811cd7017206b70f291e1b`. [Claim](https://github.com/Vivekpsps3/vivek-monorepo/issues/452#issuecomment-7111772969). `packages/ui` return-context was not edited, so a vault unlock from the gallery returns to `/finance/have` and the ticker list starts hidden again.
 
 ## Acceptance
@@ -49,7 +49,7 @@ Commands ran in `/tmp/vivek-room-02` on `94f94e87`. `make test-fast` and `make e
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded after the pull request is opened. The body is only `Closes #452`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/601. The body is only `Closes #452`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: none. Vault return still drops `t=gallery` because that query is outside the existing return allowlist, and that file was not part of this leaf.
