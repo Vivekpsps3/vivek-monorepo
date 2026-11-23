@@ -117,6 +117,7 @@ export class TownComponent {
     if (path === 'town/hall') return '/town/hall';
     if (path === 'town/home' || path?.startsWith('town/home/')) return '/town/home/living';
     if (path === 'town/cosmetics') return '/town/cosmetics';
+    if (path === 'town/memory') return '/town/memory';
     return null;
   })();
   constructor() {
@@ -197,7 +198,7 @@ export class TownComponent {
         const active = this.document.activeElement;
         const town = this.host.nativeElement;
         if (active === this.document.body || active === town.querySelector('h1')) {
-          const selector = href === '/town/hall' || href === '/town/home/living'
+          const selector = href === '/town/hall' || href === '/town/home/living' || href === '/town/memory'
             ? `a.explore-world[href="${href}"]`
             : `a[href="${href}"]`;
           town.querySelector<HTMLAnchorElement>(selector)?.focus();

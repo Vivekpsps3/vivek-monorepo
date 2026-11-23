@@ -1,0 +1,106 @@
+:host {
+  display: block;
+  box-sizing: border-box;
+  max-width: 880px;
+  margin: auto;
+  padding: 16px;
+  min-width: 0;
+}
+
+.memory {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+.keys,
+.memory > p:not(#memory-status) {
+  color: var(--text-secondary);
+}
+
+#memory-status {
+  font-weight: 650;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(44px, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.shelf {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  min-width: 44px;
+  min-height: 72px;
+  padding: 0 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px 12px 6px 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: 0 8px 0 color-mix(in srgb, var(--text) 16%, transparent);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.shelf[data-face="up"],
+.shelf[data-face="matched"] {
+  background: var(--card-bg);
+}
+
+.shelf[data-face="matched"] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.shelf:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.shelf:disabled {
+  cursor: default;
+}
+
+.shelf-lip {
+  display: block;
+  height: 10px;
+  margin: 0 -8px 8px;
+  border-radius: 12px 12px 0 0;
+  background: color-mix(in srgb, var(--accent) 32%, var(--surface-2));
+}
+
+.shelf-face {
+  display: block;
+  min-height: 44px;
+  line-height: 44px;
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (forced-colors: active) {
+  .shelf {
+    border: 1px solid ButtonText;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shelf {
+    transition: none;
+  }
+}

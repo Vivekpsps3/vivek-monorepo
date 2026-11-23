@@ -25,6 +25,7 @@ export const routes: Routes = [
       { path: 'hall', title: 'Town · Hall', loadComponent: () => import('./town/hall-room.component').then(m => m.HallRoomComponent) },
       { path: 'cosmetics', title: 'Town · Cosmetic catalog', loadComponent: () => import('./town/cosmetic-catalog.component').then(m => m.CosmeticCatalogComponent) },
       { path: 'keepsakes', title: 'Town · Keepsakes', loadComponent: () => import('./town/keepsake-page.component').then(m => m.KeepsakePageComponent) },
+      { path: 'memory', title: 'Town · Memory Shelves', loadComponent: () => import('./town/memory-shelves.component').then(m => m.MemoryShelvesComponent) },
       { path: 'clinic', title: 'Town · Clinic', data: { healthRoom: 'clinic' }, loadComponent: () => import('./town/health/health-room.component').then(m => m.HealthRoomComponent) },
       { path: 'gym', title: 'Town · Gym', data: { healthRoom: 'gym' }, loadComponent: () => import('./town/health/health-room.component').then(m => m.HealthRoomComponent) },
       { path: 'review', title: 'Town · Weekly review', loadComponent: () => import('./town/health/review-editor.component').then(m => m.WeeklyReviewComponent) },
