@@ -35,6 +35,7 @@ describe('canonical tab links', () => {
       ['', 'Accounts', 'app-assets-liabilities'],
       ['?t=assets', 'Accounts', 'app-assets-liabilities'],
       ['?t=holdings', 'Holdings', 'app-portfolio'],
+      ['?t=hall', 'Accounts hall', 'app-accounts-hall'],
     ]) {
       await harness.navigateByUrl('/finance/have' + suffix, HaveHubComponent);
       harness.detectChanges();
