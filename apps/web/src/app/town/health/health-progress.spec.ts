@@ -4,7 +4,8 @@ import {
 } from './health.constants';
 import { computePrEvents, e1RM, healthBadges } from './health-math';
 import {
-  GAME_MEDAL_EXPLANATION, presentGameMedals, projectHealthProgress, type ProgressSeries,
+  GAME_MEDAL_EXPLANATION, PROGRESS_WALL_POINTS, boundProgressWall, presentGameMedals,
+  progressDateWindow, projectHealthProgress, type ProgressSeries,
 } from './health-progress';
 import { displayWeight, pace } from './health-units';
 import type { HealthPr, HealthStat } from './health.types';
@@ -273,6 +274,42 @@ describe('health progress projection', () => {
       expect(medal.explanation).not.toContain('Two plates');
       expect(medal.explanation).not.toContain('Marathon finisher');
     }
+  });
+
+  it('charts every attempt and restores the previous best after the current one is gone', () => {
+    const older = lift('older', '2026-10-01', 90, 1);
+    const best = lift('best', '2026-10-20', 110, 1);
+    const view = projectHealthProgress([older, best], [], KG, TODAY);
+    const series = lifts(view)[0];
+    expect(series.history.map(point => point.id)).toEqual([
+      'lift:squat:older',
+      'lift:squat:best',
+    ]);
+    expect(series.history[1].y).toBe(110);
+    expect(series.current.summary).toContain('110.0 kg');
+    const restored = projectHealthProgress([older], [], KG, TODAY);
+    expect(lifts(restored)[0].current.summary).toContain('90.0 kg');
+    expect(lifts(restored)[0].history.map(point => point.measuredOn)).toEqual(['2026-10-01']);
+    const bounded = boundProgressWall(series.history, '2026-10-15', '2026-10-31');
+    expect(bounded.points.map(point => point.measuredOn)).toEqual(['2026-10-20']);
+    expect(bounded.omitted).toBe(0);
+    const many = Array.from({ length: PROGRESS_WALL_POINTS + 3 }, (_, index) => ({
+      id: `point-${index}`,
+      measuredOn: `2026-01-${String(index + 1).padStart(2, '0')}`,
+      summary: `point ${index}`,
+      y: index + 1,
+    }));
+    const capped = boundProgressWall(many, '', '');
+    expect(capped.points).toHaveSize(PROGRESS_WALL_POINTS);
+    expect(capped.points[0].id).toBe('point-3');
+    expect(capped.omitted).toBe(3);
+    expect(progressDateWindow('1899-01-01', '', TODAY)).toBeNull();
+    expect(progressDateWindow('2026-10-20', '2026-10-01', TODAY)).toBeNull();
+    expect(progressDateWindow('', '', TODAY)).toEqual({ from: '', to: '' });
+    expect(progressDateWindow('2026-10-01', '2026-10-20', TODAY)).toEqual({
+      from: '2026-10-01',
+      to: '2026-10-20',
+    });
   });
 });
 

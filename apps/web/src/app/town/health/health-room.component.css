@@ -67,6 +67,7 @@
 }
 
 .progress,
+.record-cabinet,
 .records,
 .workouts {
   margin-block: var(--space-3);
@@ -76,7 +77,9 @@
 
 .progress h2,
 .progress h3,
-.records h2,
+.record-cabinet h2,
+.record-cabinet h3,
+.records h3,
 .current-best,
 .previous-best,
 .progress-series {
@@ -84,6 +87,78 @@
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.wall-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+  margin-block: var(--space-3);
+}
+
+.wall-controls ui-select,
+.wall-controls ui-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wall-chart {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 0 var(--space-3);
+}
+
+.wall-chart svg {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 72px;
+}
+
+.wall-chart polyline {
+  fill: none;
+  stroke: var(--chart-1);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wall-chart circle {
+  fill: var(--chart-1);
+  stroke: none;
+}
+
+.wall-table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.wall-table caption {
+  text-align: start;
+  margin-block: var(--space-2);
+  font-weight: 600;
+}
+
+.wall-table th,
+.wall-table td {
+  padding: var(--space-2);
+  border-block-end: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.record-cabinet {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
 }
 
 .current-best,
@@ -173,7 +248,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .health-room {
+  .health-room,
+  .wall-chart svg {
     transition: none;
+    animation: none;
   }
 }

@@ -38,6 +38,14 @@
           }
         }
       </app-gym-floor>
+      <app-gym-mezzanine [selected]="upObject()" [gate]="floorGate()" (chosen)="selectUp($event)">
+        @if (phase() === 'ready' && upObject() === 'wall') {
+          <ui-button id="health-up-wall" (clicked)="focusWall()">Show the chart</ui-button>
+        }
+        @if (phase() === 'ready' && upObject() === 'cabinet') {
+          <ui-button id="health-up-cabinet" (clicked)="focusCabinet()">Show the cabinet</ui-button>
+        }
+      </app-gym-mezzanine>
     }
     @if (phase() === 'locked') {
     <div class="gate" role="status">
@@ -69,11 +77,59 @@
         <p role="status">That entry is not in this room.</p>
       }
       @if (room() === 'gym') {
-        <section class="progress" aria-labelledby="health-progress-title">
-          <h2 id="health-progress-title">Progress</h2>
+        <section class="progress" aria-labelledby="health-progress-title" data-progress-wall>
+          <h2 id="health-progress-title" tabindex="-1">Progress wall</h2>
           @if (progress().empty) {
             <p>No progress yet.</p>
           } @else {
+            <div class="wall-controls">
+              <ui-select selectId="health-wall-exercise" label="Exercise" [options]="wallChoices()" [value]="wallKey()" (valueChange)="chooseWallExercise($event)" />
+              <ui-input inputId="health-wall-from" label="From" type="date" [value]="wallFrom()" [describedBy]="wallDateError() ? 'health-wall-date-error' : ''" (valueChange)="wallFrom.set($event)" />
+              <ui-input inputId="health-wall-to" label="To" type="date" [value]="wallTo()" [describedBy]="wallDateError() ? 'health-wall-date-error' : ''" (valueChange)="wallTo.set($event)" />
+              <ui-button id="health-wall-apply" (clicked)="applyWallDates()">Apply dates</ui-button>
+              <ui-button id="health-wall-clear" variant="secondary" (clicked)="clearWallDates()">Clear dates</ui-button>
+            </div>
+            @if (wallDateError()) {
+              <p class="form-error" id="health-wall-date-error" role="alert" tabindex="-1">{{ wallDateError() }}</p>
+            }
+            @if (wallSeries(); as series) {
+              <figure class="wall-chart" data-progress-chart [attr.data-wall-count]="wallBound().points.length" [attr.data-wall-omitted]="wallBound().omitted">
+                @if (wallChart().line || wallChart().dot) {
+                  <svg aria-hidden="true" viewBox="0 0 120 36" focusable="false">
+                    @if (wallChart().line) {
+                      <polyline [attr.points]="wallChart().line" />
+                    }
+                    @if (wallChart().dot; as dot) {
+                      <circle [attr.cx]="dot.x" [attr.cy]="dot.y" r="1.8" />
+                    }
+                  </svg>
+                }
+                @if (wallBound().points.length === 0) {
+                  <p>No points in this date range.</p>
+                } @else {
+                  <table class="wall-table" id="health-wall-table">
+                    <caption>History for {{ series.title }}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Result</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (point of wallBound().points; track point.id) {
+                        <tr [attr.data-wall-row]="point.id">
+                          <td>{{ point.measuredOn }}</td>
+                          <td>{{ point.summary }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                  @if (wallBound().omitted > 0) {
+                    <p>Older points in this range stay off this chart.</p>
+                  }
+                }
+              </figure>
+            }
             @if (progress().recent.length > 0) {
               <section aria-labelledby="health-progress-recent">
                 <h3 id="health-progress-recent">New PR in the last 7 days</h3>
@@ -108,20 +164,41 @@
                 </ul>
               </section>
             }
-            @if (progress().trophies.length > 0) {
-              <section aria-labelledby="health-progress-trophies" data-award="badge">
-                <h3 id="health-progress-trophies">Trophies</h3>
-                <ul class="entries" aria-label="Trophies">
-                  @for (trophy of progress().trophies; track trophy.id) {
-                    <li class="trophy" [attr.data-trophy]="trophy.id">
-                      <span class="award-kind">Health</span>
-                      <span class="entry-label">{{ trophy.name }}</span>
-                      <p class="trophy-explanation">{{ trophy.explanation }}</p>
-                    </li>
-                  }
-                </ul>
-              </section>
+          }
+        </section>
+        <section class="record-cabinet" aria-labelledby="health-cabinet-title" data-record-cabinet>
+          <h2 id="health-cabinet-title" tabindex="-1">Record cabinet</h2>
+          <section class="records" aria-labelledby="health-records-title">
+            <h3 id="health-records-title">Personal records</h3>
+            @if (rows().length === 0) {
+              <p>No personal records yet.</p>
+            } @else {
+              <ul class="entries" aria-label="Personal records">
+                @for (row of rows(); track row.clientId) {
+                  <li [attr.data-health-kind]="row.kind">
+                    <span class="entry-label" [id]="'health-entry-' + row.clientId" tabindex="-1" [appHealthLinkedFocus]="row.clientId === entryId() && !dialogOpen()" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.label }}</span>
+                    <span class="entry-actions">
+                      <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="openEdit(row.clientId)">Edit</ui-button>
+                      <ui-button variant="danger" [attr.id]="'health-delete-' + row.clientId" [ariaLabel]="'Delete ' + row.label" (clicked)="removePr(row.clientId)">Delete</ui-button>
+                    </span>
+                  </li>
+                }
+              </ul>
             }
+          </section>
+          @if (progress().trophies.length > 0) {
+            <section aria-labelledby="health-progress-trophies" data-award="badge">
+              <h3 id="health-progress-trophies">Trophies</h3>
+              <ul class="entries" aria-label="Trophies">
+                @for (trophy of progress().trophies; track trophy.id) {
+                  <li class="trophy" [attr.data-trophy]="trophy.id">
+                    <span class="award-kind">Health</span>
+                    <span class="entry-label">{{ trophy.name }}</span>
+                    <p class="trophy-explanation">{{ trophy.explanation }}</p>
+                  </li>
+                }
+              </ul>
+            </section>
           }
           <section class="medal-cabinet" data-award="medal" aria-labelledby="health-game-medals">
             <h3 id="health-game-medals">Game medals</h3>
@@ -140,24 +217,6 @@
               </ul>
             }
           </section>
-        </section>
-        <section class="records" aria-labelledby="health-records-title">
-          <h2 id="health-records-title">Records</h2>
-          @if (rows().length === 0) {
-            <p>No personal records yet.</p>
-          } @else {
-            <ul class="entries" aria-label="Personal records">
-              @for (row of rows(); track row.clientId) {
-                <li [attr.data-health-kind]="row.kind">
-                  <span class="entry-label" [id]="'health-entry-' + row.clientId" tabindex="-1" [appHealthLinkedFocus]="row.clientId === entryId() && !dialogOpen()" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.label }}</span>
-                  <span class="entry-actions">
-                    <ui-button variant="secondary" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + row.label" (clicked)="openEdit(row.clientId)">Edit</ui-button>
-                    <ui-button variant="danger" [attr.id]="'health-delete-' + row.clientId" [ariaLabel]="'Delete ' + row.label" (clicked)="removePr(row.clientId)">Delete</ui-button>
-                  </span>
-                </li>
-              }
-            </ul>
-          }
         </section>
       } @else if (rows().length === 0) {
         <p>No entries yet.</p>

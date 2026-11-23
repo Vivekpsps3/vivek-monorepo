@@ -41,6 +41,49 @@ export type PrEvent = {
   first: boolean;
 };
 
+/** One way a record can compete. The chart reads the same candidates as PR replay. */
+export interface PrCandidate {
+  kind: HealthPr['kind'];
+  metric: string;
+  value: number;
+  lower: boolean;
+}
+
+/**
+ * Metrics a record can enter. Lift sets outside 1..12 reps stay out.
+ * A run enters longest and any standard it reaches. This is the same
+ * partition `computePrEvents` replays.
+ */
+export function prCandidates(record: HealthPr): PrCandidate[] {
+  if (record.kind === 'lift') {
+    const reps = record.reps ?? NaN;
+    if (!liftPrEligible(reps)) return [];
+    return [{
+      kind: 'lift',
+      metric: casefoldExercise(record.exercise ?? ''),
+      value: e1RM(record.kg ?? NaN, reps),
+      lower: false,
+    }];
+  }
+  if (record.kind === 'run') {
+    const distance = record.distance_m ?? NaN;
+    const seconds = record.seconds ?? NaN;
+    const found: PrCandidate[] = [{ kind: 'run', metric: 'longest', value: distance, lower: false }];
+    for (const [id, standard] of Object.entries(RUN_DISTANCES)) {
+      if (distance >= standard && distance <= standard * RUN_TOLERANCE) {
+        found.push({ kind: 'run', metric: id, value: seconds * standard / distance, lower: true });
+      }
+    }
+    return found;
+  }
+  return [{
+    kind: 'other',
+    metric: otherSeriesKey(record),
+    value: record.value ?? NaN,
+    lower: record.direction === 'lower',
+  }];
+}
+
 const byDate = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
 
 /**
@@ -80,22 +123,7 @@ export function computePrEvents(records: readonly HealthPr[]): PrEvent[] {
     }
   };
   for (const { record, index } of ordered) {
-    if (record.kind === 'lift') {
-      if (liftPrEligible(record.reps ?? NaN)) {
-        candidate(index, 'lift', casefoldExercise(record.exercise ?? ''), e1RM(record.kg ?? NaN, record.reps ?? NaN));
-      }
-    } else if (record.kind === 'run') {
-      const distance = record.distance_m ?? NaN;
-      const seconds = record.seconds ?? NaN;
-      candidate(index, 'run', 'longest', distance);
-      for (const [id, standard] of Object.entries(RUN_DISTANCES)) {
-        if (distance >= standard && distance <= standard * RUN_TOLERANCE) {
-          candidate(index, 'run', id, seconds * standard / distance, true);
-        }
-      }
-    } else {
-      candidate(index, 'other', otherSeriesKey(record), record.value ?? NaN, record.direction === 'lower');
-    }
+    for (const item of prCandidates(record)) candidate(index, item.kind, item.metric, item.value, item.lower);
   }
   return events;
 }
