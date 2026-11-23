@@ -184,6 +184,79 @@ describe('Today panel', () => {
       town: { xp: 360, level: 3, level_xp_start: 250, next_level_xp: 500 },
     });
     expect(settled).not.toHaveBeenCalled();
+    expect(el.textContent).not.toContain('Chimney smoke');
+    expect(el.textContent).not.toContain('Saving check');
+  });
+
+  it('shows pending feedback immediately and celebrates only the habit that succeeds', () => {
+    const read = habit({ id: 12, name: 'Read 20 pages' });
+    const walk = habit({ id: 15, name: 'Walk 30 minutes', slot: 1, building_style: 'garden' });
+    const posts: Subject<CheckinResult>[] = [];
+    api.checkin.and.callFake(() => {
+      const subject = new Subject<CheckinResult>();
+      posts.push(subject);
+      return subject;
+    });
+    const { fixture, el } = render(snapshot([read, walk]));
+    const settled = jasmine.createSpy();
+    fixture.componentInstance.settled.subscribe(settled);
+    const readRow = () => el.querySelector('[data-check="12"]')!.closest('li')!;
+    const walkRow = () => el.querySelector('[data-check="15"]')!.closest('li')!;
+    const readButton = el.querySelector<HTMLButtonElement>('[data-check="12"] button')!;
+    const walkButton = el.querySelector<HTMLButtonElement>('[data-check="15"] button')!;
+    readButton.click();
+    fixture.detectChanges();
+    expect(Number(fixture.nativeElement.getAttribute('data-pending-ms'))).toBeLessThan(100);
+    expect(readRow().textContent).toContain('Saving check');
+    expect(readRow().textContent).toContain('3-day streak');
+    expect(readRow().textContent).not.toContain('Chimney smoke');
+    expect(walkRow().textContent).not.toContain('Saving check');
+    expect(readButton.getAttribute('aria-describedby')).toBe('habit-feedback-12');
+    expect(walkButton.getAttribute('aria-disabled')).toBeNull();
+    walkButton.click();
+    fixture.detectChanges();
+    expect(api.checkin).toHaveBeenCalledTimes(2);
+    expect(walkRow().textContent).toContain('Saving check');
+    expect(walkRow().textContent).not.toContain('Flower open');
+    posts[1].error({ error: { message: 'Check not saved. Try again.' } });
+    fixture.detectChanges();
+    expect(walkRow().textContent).not.toContain('Flower open');
+    expect(walkRow().textContent).not.toContain('Saving check');
+    expect(walkRow().textContent).toContain('3-day streak');
+    expect(settled).not.toHaveBeenCalled();
+    posts[0].next({
+      day: '2026-10-29', checked: true,
+      habit: { ...read, checked_today: true },
+      town: { xp: 350, level: 3, level_xp_start: 250, next_level_xp: 500 },
+    });
+    fixture.detectChanges();
+    expect(settled).toHaveBeenCalledTimes(1);
+    expect(readRow().querySelectorAll('[data-habit-feedback="smoke"]').length).toBe(1);
+    expect(readRow().textContent).toContain('Chimney smoke');
+    expect(walkRow().textContent).not.toContain('Flower open');
+    posts[0].next({
+      day: '2026-10-29', checked: true,
+      habit: { ...read, checked_today: true },
+      town: { xp: 360, level: 3, level_xp_start: 250, next_level_xp: 500 },
+    });
+    fixture.detectChanges();
+    expect(settled).toHaveBeenCalledTimes(1);
+    expect(readRow().querySelectorAll('[data-celebration="1"]').length).toBe(1);
+
+    const nextDay = snapshot([read, walk]);
+    nextDay.town = { ...nextDay.town, today: '2026-10-30' };
+    fixture.componentRef.setInput('data', nextDay);
+    fixture.detectChanges();
+    expect(el.textContent).not.toContain('Chimney smoke');
+    expect(el.textContent).not.toContain('Saving check');
+    posts[0].next({
+      day: '2026-10-29', checked: true,
+      habit: read,
+      town: { xp: 370, level: 3, level_xp_start: 250, next_level_xp: 500 },
+    });
+    fixture.detectChanges();
+    expect(settled).toHaveBeenCalledTimes(1);
+    expect(el.textContent).not.toContain('Chimney smoke');
   });
 
 });

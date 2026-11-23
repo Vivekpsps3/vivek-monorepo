@@ -29,6 +29,7 @@ import {
   type FinanceBudgetWeek,
   type TreasuryView,
 } from './weeks-kept';
+import { EMPTY_FEEDBACK, retainFeedback, type FeedbackBook } from './habit-feedback';
 import { applySeen, readSeen } from './town-seen';
 import type { TownResponse } from './town.types';
 import { WORLD_COPY } from '../world/world.types';
@@ -99,6 +100,7 @@ export class TownComponent {
   readonly financeVaultPresent = financeVaultPresent;
   readonly state = signal<'loading' | 'ready' | 'unavailable'>('loading');
   readonly live = signal('');
+  readonly habitFeedback = signal<FeedbackBook>(EMPTY_FEEDBACK);
   readonly swapping = signal<Record<string, 1 | 2 | 3>>({});
   readonly edit = signal<{ slot: number | null; habitId: number | null; prefill: string } | null>(null);
   readonly historyOpen = signal(false);
@@ -159,14 +161,25 @@ export class TownComponent {
     this.pendingLive = result;
     this.reload();
   }
+  onFeedback(book: FeedbackBook): void {
+    const owner = this.session.currentUser?.id ?? null;
+    const day = this.data()?.town.today;
+    if (owner == null || day == null) {
+      this.habitFeedback.set(EMPTY_FEEDBACK);
+      return;
+    }
+    this.habitFeedback.set(retainFeedback(book, owner, day));
+  }
   swapFrom(key: string): 1 | 2 | 3 | null {
     return this.swapping()[key] ?? null;
   }
   private show(data: TownResponse): void {
     this.pendingDay = null;
+    const previousDay = this.data()?.town.today;
     const lots = Array.isArray(data.lots) ? [...data.lots].sort((a, b) => a.slot - b.slot) : [];
     const sorted = { ...data, lots };
     const toasted = this.observe(sorted);
+    if (previousDay && previousDay !== sorted.town.today) this.habitFeedback.set(EMPTY_FEEDBACK);
     this.data.set(sorted);
     this.state.set('ready');
     if (this.returnToLibrary) {
@@ -239,6 +252,7 @@ export class TownComponent {
   /** A new owner or a cleared session drops drafts before either vault view can publish. */
   private invalidateOwner(): void {
     this.pendingLive = null;
+    this.habitFeedback.set(EMPTY_FEEDBACK);
     this.edit.set(null);
     this.historyOpen.set(false);
     this.dropVaultViews();

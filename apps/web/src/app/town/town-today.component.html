@@ -13,8 +13,11 @@
           @if (habit.cadence.kind === 'weekly' && habit.week) {
             <span class="muted">{{ habit.week.done }}/{{ habit.week.target }} this week</span>
           }
+          @if (markFor(habit); as mark) {
+            <span class="feedback" [id]="'habit-feedback-' + habit.id" [attr.data-habit-feedback]="feedbackAttr(mark)" [attr.data-celebration]="mark.celebration">{{ feedbackLabel(mark) }}</span>
+          }
         </div>
-        <ui-button class="check" [attr.data-check]="habit.id" [pressed]="pressed(habit)" [ariaLabel]="checkLabel(habit)" [ariaDisabled]="busyCheck(habit)" [busy]="busyCheck(habit)" (clicked)="toggle(habit)">✓</ui-button>
+        <ui-button class="check" [attr.data-check]="habit.id" [pressed]="pressed(habit)" [ariaLabel]="checkLabel(habit)" [describedBy]="describedBy(habit)" [ariaDisabled]="busyCheck(habit)" [busy]="busyCheck(habit)" (clicked)="toggle(habit)">✓</ui-button>
       </li>
     }
   </ul>
