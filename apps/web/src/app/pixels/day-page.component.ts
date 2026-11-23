@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { todayIsoDate } from '@vivek/browser';
 import { ReturnContext, UiStateComponent, returnPath, type HubCardState } from '@vivek/ui';
+import { KeepsakeShelfComponent } from '../town/keepsake-shelf.component';
 import { DayDetailComponent } from './day-detail.component';
 import { dayOriginPath, parseDayQuery, type DayQuery } from './day-route';
 import { PixelsDataService } from './pixels-data.service';
@@ -12,7 +13,7 @@ import type { AnnotationChange, DayFactsStatus, PixelDayFacts, PixelsSnapshot } 
 @Component({
   selector: 'app-pixels-day',
   standalone: true,
-  imports: [DayDetailComponent, UiStateComponent],
+  imports: [DayDetailComponent, KeepsakeShelfComponent, UiStateComponent],
   templateUrl: './day-page.component.html',
   styleUrl: './pixels.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

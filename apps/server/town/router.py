@@ -16,12 +16,14 @@ from apps.server.identity.session import get_current_user
 from apps.server.path_ids import MAX_PATH_ID
 from apps.server.town import writes
 from apps.server.town.clock import get_town_clock, resolve_tz
+from apps.server.town.keepsakes import read_keepsakes
 from apps.server.town.schemas import (
     CheckinDays,
     CheckinResult,
     Habit,
     HabitList,
     HubTownSummary,
+    Keepsakes,
     Town,
 )
 from apps.server.town.service import read_checkins, read_habits, read_town, read_town_summary
@@ -89,6 +91,21 @@ def get_town(
 ) -> Town:
     zone = resolve_tz(tz)
     return Town.model_validate(read_town(db, principal.id, today_in_zone(zone, now), zone))
+
+
+@router.get("/keepsakes", response_model=Keepsakes)
+def get_keepsakes(
+    tz: str | None = None,
+    on_day: Annotated[str | None, Query(alias="on")] = None,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+    now: datetime = Depends(get_town_clock),
+) -> Keepsakes:
+    zone = resolve_tz(tz)
+    selected = None if on_day is None else _date_param(on_day)
+    return Keepsakes.model_validate(
+        read_keepsakes(db, principal.id, zone, today_in_zone(zone, now), selected)
+    )
 
 
 @router.get("/summary", response_model=HubTownSummary)

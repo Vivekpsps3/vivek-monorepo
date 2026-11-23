@@ -1,0 +1,142 @@
+<section class="keepsake-shelf" aria-labelledby="keepsake-heading">
+  <h2 id="keepsake-heading" tabindex="-1">Keepsakes@if (activeDay(); as day) { <span> · {{ day }}</span> }</h2>
+  <p>Saved records only. Nothing here is stored as a separate keepsake.</p>
+  @if (!persist()) {
+    <a class="shelf-control" routerLink="/town/keepsakes" [queryParams]="dayLink()">Open the keepsake shelf</a>
+  }
+  @if (phase() === 'loading') {
+    <p role="status">Loading keepsakes…</p>
+  } @else if (phase() === 'idle') {
+    <p role="status">Sign in to see keepsakes.</p>
+  } @else if (phase() === 'unavailable') {
+    <p role="status">Keepsakes are unavailable. Town stays usable.</p>
+    <button type="button" class="shelf-control" (click)="retry()">Retry</button>
+  }
+  @if (notice(); as text) {
+    <p role="status">{{ text }}</p>
+    <button type="button" class="shelf-control" (click)="retry()">Retry</button>
+  }
+  @if (view(); as view) {
+    @if (phase() === 'refreshing') {
+      <p role="status">Refreshing keepsakes…</p>
+    }
+    <div class="find">
+      <label for="keepsake-find">Find a keepsake</label>
+      <input id="keepsake-find" [value]="draft()" (input)="onFind($event)" autocomplete="off" />
+    </div>
+    @if (view.shelf.media.status !== 'ok') {
+      <p data-source="media" role="status" [attr.data-status]="view.shelf.media.status">
+        @if (view.shelf.media.status === 'absent') {
+          Media is not available on this server.
+        } @else {
+          Media is unavailable.
+        }
+        Town stays usable. This shelf does not ask an artwork provider.
+      </p>
+    } @else {
+      <section aria-labelledby="keepsake-completions">
+        <h3 id="keepsake-completions">Completions</h3>
+        @if (view.shelf.media.truncated) {
+          <p>Showing {{ view.shelf.media.included }} of {{ view.shelf.media.total }} completions. Older completions stay on their records.</p>
+        }
+        @if (view.keepsakes.matched === 0 && view.shelf.media.total === 0) {
+          <p>No completed book, movie, TV show, or game yet.</p>
+        } @else if (view.keepsakes.matched === 0) {
+          <p>Nothing matches that find.</p>
+        }
+        <div class="cards">
+          @for (item of view.keepsakes.shown; track item.id) {
+            <article class="card" [attr.data-keepsake]="item.id" data-mark="keepsake">
+              <h4>{{ artifactLabel(item.kind) }}</h4>
+              <p>{{ item.title }}</p>
+              <p>{{ item.on }}</p>
+              <p>{{ item.note }}</p>
+              <a [routerLink]="item.route">Open {{ item.title }} · {{ item.on }}</a>
+              <button type="button" class="shelf-control" (click)="choose(item.id)" [attr.aria-current]="selectedId() === item.id ? 'true' : null">Inspect {{ item.title }}</button>
+            </article>
+          }
+        </div>
+      </section>
+    }
+    @if (view.shelf.travel.status !== 'ok') {
+      <p data-source="travel" role="status" [attr.data-status]="view.shelf.travel.status">
+        @if (view.shelf.travel.status === 'absent') {
+          Travel is not available on this server.
+        } @else {
+          Travel is unavailable.
+        }
+        Town stays usable.
+      </p>
+    } @else {
+      <section aria-labelledby="keepsake-souvenirs">
+        <h3 id="keepsake-souvenirs">Souvenirs</h3>
+        @if (view.shelf.travel.souvenirs.truncated) {
+          <p>Showing {{ view.shelf.travel.souvenirs.included }} of {{ view.shelf.travel.souvenirs.total }} credited trips. Older trips stay on their records.</p>
+        }
+        @if (view.souvenirs.matched === 0 && view.shelf.travel.souvenirs.total === 0) {
+          <p>No credited trip yet.</p>
+        } @else if (view.souvenirs.matched === 0) {
+          <p>Nothing matches that find.</p>
+        }
+        <div class="cards">
+          @for (item of view.souvenirs.shown; track item.id) {
+            <ng-container *ngTemplateOutlet="tripCard; context: { $implicit: item }" />
+          }
+        </div>
+      </section>
+      <section aria-labelledby="keepsake-planned">
+        <h3 id="keepsake-planned">Planned trips</h3>
+        @if (view.shelf.travel.planned.truncated) {
+          <p>Showing {{ view.shelf.travel.planned.included }} of {{ view.shelf.travel.planned.total }} planned trips. Older trips stay on their records.</p>
+        }
+        @if (view.planned.matched === 0 && view.shelf.travel.planned.total === 0) {
+          <p>No planned trip is on this shelf.</p>
+        } @else if (view.planned.matched === 0) {
+          <p>Nothing matches that find.</p>
+        }
+        <div class="cards">
+          @for (item of view.planned.shown; track item.id) {
+            <ng-container *ngTemplateOutlet="tripCard; context: { $implicit: item }" />
+          }
+        </div>
+      </section>
+      @if (view.shelf.travel.ineligible.total > 0 || view.shelf.travel.ineligible.truncated) {
+        <section aria-labelledby="keepsake-ineligible">
+          <h3 id="keepsake-ineligible">Not souvenirs</h3>
+          @if (view.shelf.travel.ineligible.truncated) {
+            <p>Showing {{ view.shelf.travel.ineligible.included }} of {{ view.shelf.travel.ineligible.total }} trips that do not credit. Older trips stay on their records.</p>
+          }
+          <div class="cards">
+            @for (item of view.ineligible.shown; track item.id) {
+              <ng-container *ngTemplateOutlet="tripCard; context: { $implicit: item }" />
+            }
+          </div>
+        </section>
+      }
+    }
+    @if (view.toggle) {
+      <button type="button" class="shelf-control" (click)="toggleMore()">{{ expanded() ? 'Show the first three' : 'More keepsakes' }}</button>
+    }
+    <ul>
+      @for (item of view.shelf.differences; track item.id) {
+        <li [attr.data-difference]="item.id">{{ item.text }}</li>
+      }
+    </ul>
+  }
+</section>
+
+<ng-template #tripCard let-item>
+  <article class="card" [attr.data-keepsake]="item.id" [attr.data-mark]="item.mark">
+    <h4>{{ item.title }}</h4>
+    <p>Span {{ item.span_start }} through {{ item.span_end }}. @if (item.credit_date) { Credit date {{ item.credit_date }}. } @else { This trip does not credit. }</p>
+    @if (item.destinations.length) {
+      <p>Saved destination: {{ item.destinations.join(', ') }}</p>
+    } @else {
+      <p>No destination city was saved.</p>
+    }
+    <p [attr.data-biome]="sceneryFor(item).biome">{{ sceneryFor(item).text }}</p>
+    <p>{{ item.note }}</p>
+    <a [routerLink]="item.route">Open {{ item.title }} · {{ item.span_end }}</a>
+    <button type="button" class="shelf-control" (click)="choose(item.id)" [attr.aria-current]="selectedId() === item.id ? 'true' : null">Inspect {{ item.title }}</button>
+  </article>
+</ng-template>

@@ -194,3 +194,73 @@ class CheckinResult(_Shape):
     checked: bool
     habit: Habit
     town: TownProgress
+
+
+KeepsakeSource = Literal["ok", "absent", "unavailable"]
+KeepsakeMark = Literal["planned", "souvenir", "ineligible"]
+FinishedKind = Literal["movie", "tv", "book", "game"]
+KeepsakeDateSource = Literal["completed_on", "finished_on"]
+
+
+class KeepsakeCoverage(_Shape):
+    status: KeepsakeSource
+    included: int
+    total: int
+    truncated: bool
+
+
+class KeepsakeTravel(_Shape):
+    status: KeepsakeSource
+    souvenirs: KeepsakeCoverage
+    planned: KeepsakeCoverage
+    ineligible: KeepsakeCoverage
+
+
+class KeepsakePlace(_Shape):
+    label: str
+    lat_e2: int | None
+
+
+class MediaKeepsake(_Shape):
+    id: str
+    entry_id: int
+    kind: FinishedKind
+    title: str
+    on: date
+    route: str
+    note: str
+    date_source: KeepsakeDateSource
+
+
+class TripKeepsake(_Shape):
+    id: str
+    trip_id: int
+    title: str
+    status: str
+    mark: KeepsakeMark
+    span_start: date
+    span_end: date
+    credit_date: date | None
+    credit_eligible: bool
+    destinations: list[str]
+    place: KeepsakePlace | None
+    scenery: str
+    route: str
+    note: str
+
+
+class KeepsakeDifference(_Shape):
+    id: str
+    text: str
+
+
+class Keepsakes(_Shape):
+    on: date | None
+    cap: int
+    media: KeepsakeCoverage
+    travel: KeepsakeTravel
+    keepsakes: list[MediaKeepsake]
+    souvenirs: list[TripKeepsake]
+    planned: list[TripKeepsake]
+    ineligible: list[TripKeepsake]
+    differences: list[KeepsakeDifference]

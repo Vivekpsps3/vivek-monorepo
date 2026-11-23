@@ -5,7 +5,7 @@ engine/session lifecycle; [identity](identity/) owns auth/session/credentials.
 [Calendar feeds](calendar.py) compose saved Travel/Media projections; identity
 owns hash-only capabilities and owner-scoped management. URL query tokens must be
 redacted, including exception messages. Reauthorize conditional reads after revocation.
-Town, Pixels and search are server projections. Day facts project existing
+Town, Pixels and search are server projections. Day facts and keepsakes project existing
 rows and leave score counts unchanged. Finance, Travel and Media rules
 remain in their own app directories.
 

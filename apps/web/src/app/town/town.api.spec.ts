@@ -24,6 +24,17 @@ describe('TownApiService', () => {
     expect(error).toHaveBeenCalled();
     expect(req.cancelled).toBeTrue();
   }));
+  it('asks for one keepsake shelf and omits an empty day', () => {
+    api.getKeepsakes('2026-10-01').subscribe();
+    const dated = http.expectOne(request => request.url === '/api/town/keepsakes');
+    expect(dated.request.params.get('on')).toBe('2026-10-01');
+    expect(dated.request.params.get('tz')).toBeTruthy();
+    dated.flush({});
+    api.getKeepsakes(null).subscribe();
+    const open = http.expectOne(request => request.url === '/api/town/keepsakes');
+    expect(open.request.params.has('on')).toBeFalse();
+    open.flush({});
+  });
   it('preserves authentication errors for the expired state', () => {
     const error = jasmine.createSpy('error');
     api.getTown().subscribe({ error });

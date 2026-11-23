@@ -255,6 +255,7 @@ describe('Town page', () => {
     expect(el.textContent).toContain('Choose a first habit');
     expect(el.textContent).toContain('Read 20 pages');
     expect(el.querySelector('a[href="/town/library"]')?.textContent).toContain('Visit the Reading Hall');
+    expect(el.querySelector('a[href="/town/keepsakes"]')?.textContent).toContain('Keepsake shelf');
     expect(el.querySelector('a[href="/town/hall"]')?.textContent).toContain('Visit the Hall');
     const list = el.querySelector('[aria-label="Town buildings"]');
     expect(list?.textContent).toContain('Library');
