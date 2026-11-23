@@ -18,7 +18,7 @@ Use [health constants](health/health.constants.ts) and existing pure logic for u
 thresholds, and badges. Do not duplicate conversion or XP math.
 
 Reuse shared controls. Town reset fixtures and worker clock stay deterministic.
-See [scene-appearance](../platform/scene-appearance.ts). Idle if hidden or reduced-motion.
+See [scene-appearance](../platform/scene-appearance.ts). Gym objects open that dialog.
 
 The Town exterior, Reading Hall, and Hall share the y-down [frame](library-room.scene.ts).
 Higher layer wins. Pan, zoom, tap, drag, cancel use it. `/town/hall` shows rules,

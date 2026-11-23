@@ -131,6 +131,9 @@
       </p>
     }
     <div class="dialog-actions">
+      @if (local().kind === 'session') {
+        <ui-button id="health-workout-finish" variant="secondary" [busy]="busy()" [disabled]="busy()" (clicked)="onFinish()">Complete session</ui-button>
+      }
       <ui-button type="submit" [busy]="busy()" [disabled]="busy()">Save</ui-button>
       <ui-button variant="secondary" (clicked)="onClosed()">Cancel</ui-button>
     </div>

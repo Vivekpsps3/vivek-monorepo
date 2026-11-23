@@ -301,6 +301,13 @@ export class HealthWorkoutDialogComponent {
     this.publish(markSetCounted(this.local(), setId, target.checked));
   }
 
+  /** Finish the open session. The bench stays inert while this dialog is up. */
+  protected onFinish(): void {
+    if (this.busy() || this.local().kind !== 'session') return;
+    this.patch({ state: 'completed' });
+    this.onSubmit(new Event('submit', { cancelable: true }));
+  }
+
   protected onSubmit(event: Event): void {
     event.preventDefault();
     if (this.busy()) return;
