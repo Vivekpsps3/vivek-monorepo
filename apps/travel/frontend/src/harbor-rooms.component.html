@@ -1,0 +1,260 @@
+<section class="harbor-room" [attr.data-room]="room()">
+  <div class="harbor-scene" aria-hidden="true"></div>
+  @if (closed()) {
+    <p>Sign in to see this room.</p>
+  } @else {
+    <div class="harbor-toolbar">
+      <h2 id="harbor-room-title" tabindex="-1">
+        {{ room() === "map" ? "Map room" : "Souvenir gallery" }}
+      </h2>
+      <button type="button" (click)="leave.emit()">← Terminal</button>
+    </div>
+    @if (room() === "map") {
+      <p>
+        Select a saved destination. The span, PTO, and costs are that trip's.
+        A failed map leaves the days and the saved souvenirs.
+      </p>
+    } @else {
+      <p>
+        A planned postcard and a completed postcard show the saved status and
+        span. The model ferry is not a completed trip.
+      </p>
+    }
+    <button type="button" (click)="load()">Reload this room</button>
+    @if (homeError()) {
+      <p class="local-error" role="alert">{{ homeError() }}</p>
+      <button id="harbor-retry-trips" type="button" (click)="loadHome()">Retry trips</button>
+    }
+    @if (memoryError()) {
+      <p class="local-error" role="alert">{{ memoryError() }}</p>
+      <button id="harbor-retry-souvenirs" type="button" (click)="loadMemories()">Retry souvenirs</button>
+    }
+    @if (room() === "gallery") {
+      <section aria-labelledby="harbor-planned-title">
+        <h3 id="harbor-planned-title">Planned postcards</h3>
+        @if (memories() && !planned().length) {
+          <p>No planned trip is saved.</p>
+        }
+        <div class="harbor-grid">
+          @for (memory of planned(); track memory.id) {
+            <button
+              type="button"
+              class="harbor-postcard"
+              [id]="'harbor-planned-' + memory.trip_id"
+              [attr.aria-pressed]="selection().card === 'planned' && selection().trip === memory.trip_id"
+              (click)="selectPostcard(memory)"
+            >
+              {{ postcardLabel(memory) }}
+            </button>
+          }
+        </div>
+      </section>
+      <section aria-labelledby="harbor-completed-title">
+        <h3 id="harbor-completed-title">Completed postcards</h3>
+        @if (memories() && !completed().length) {
+          <p>No completed trip is saved.</p>
+        }
+        <div class="harbor-grid">
+          @for (memory of completed(); track memory.id) {
+            <button
+              type="button"
+              class="harbor-postcard"
+              [id]="'harbor-completed-' + memory.trip_id"
+              [attr.aria-pressed]="selection().card === 'completed' && selection().trip === memory.trip_id"
+              (click)="selectPostcard(memory)"
+            >
+              {{ postcardLabel(memory) }}
+            </button>
+          }
+        </div>
+      </section>
+      <section aria-labelledby="harbor-ferry-title">
+        <h3 id="harbor-ferry-title">Model ferry</h3>
+        <p id="harbor-ferry-note">
+          Decorative. Ringing this bell does not complete a trip, set a return
+          date, or charge PTO.
+        </p>
+        <button type="button" aria-describedby="harbor-ferry-note" (click)="ring()">
+          Ring the model ferry
+        </button>
+        @if (ferry(); as rung) {
+          <p id="harbor-ferry-status" role="status">
+            The model ferry bell rang. This is decorative. It does not complete
+            a trip, set a return date, or charge PTO.
+            @if (rung.status) {
+              Trip status remains {{ rung.status }}.
+            } @else {
+              No trip status was changed.
+            }
+          </p>
+        }
+      </section>
+    }
+    @if (room() === "map") {
+      <section aria-labelledby="harbor-destinations-title">
+        <h3 id="harbor-destinations-title">Saved destinations</h3>
+        @if (!home() && !homeError()) {
+          <p role="status">Loading trips…</p>
+        } @else if (home() && !destinations().length) {
+          <p>No saved destinations. A trip title is not a place.</p>
+        }
+        <div class="harbor-grid">
+          @for (row of destinations(); track row.tripId + row.kind + row.label) {
+            <button
+              type="button"
+              [attr.aria-pressed]="selection().trip === row.tripId && selection().place === row.label"
+              (click)="selectDestination(row)"
+            >
+              {{ destinationLabel(row) }}
+            </button>
+          }
+        </div>
+      </section>
+      <travel-map [places]="mapPlaces()" />
+      <section aria-labelledby="harbor-itinerary-title">
+        <h3 id="harbor-itinerary-title">Itinerary</h3>
+        @if (homeError() && !home()) {
+          <p>Trip days are unavailable.</p>
+        } @else if (!home() && !homeError()) {
+          <p role="status">Loading trips…</p>
+        } @else if (!itinerary().length) {
+          <p>No trip days yet. A saved trip shows each local day here.</p>
+        }
+        <div class="harbor-grid">
+          @for (row of itinerary(); track row.tripId + row.day) {
+            <button
+              type="button"
+              [attr.aria-pressed]="dayPressed(row.day, row.tripId)"
+              (click)="selectDay(row.tripId, row.day)"
+            >
+              {{ roomDayLabel(row) }}
+            </button>
+          }
+        </div>
+        @for (leg of transports(); track leg.id) {
+          <p>Saved {{ leg.mode }} {{ leg.number }}</p>
+        }
+      </section>
+    }
+    <section id="harbor-facts" aria-live="polite" aria-label="Selected trip">
+      <h3>Span, PTO, and costs</h3>
+      @if (selectedTrip(); as trip) {
+        <p>{{ trip.title }}</p>
+        @if (span(); as dates) {
+          <p>Span {{ dates.text }}</p>
+        }
+        @if (facts(); as card) {
+          <p>Status {{ card.status }}.</p>
+          <p>{{ card.markLabel }}</p>
+          @if (card.spanText) {
+            <p>{{ card.spanText }}</p>
+          }
+          @if (card.spanStart && card.spanEnd) {
+            <p>{{ card.spanStart }} through {{ card.spanEnd }}</p>
+          } @else if (card.spanStart) {
+            <p>Leaves {{ card.spanStart }}. Return date is not saved.</p>
+          }
+          @if (!card.agrees) {
+            <p>The saved trip dates do not match this souvenir.</p>
+          }
+        }
+        <h3>PTO</h3>
+        @if (pto(); as leave) {
+          <p>{{ leave.text }}</p>
+          @if (leave.dates.length) {
+            <h4>Saved day choices</h4>
+            <ul>
+              @for (day of leave.dates; track day.on_date) {
+                <li>{{ day.on_date }} · {{ day.amount }}</li>
+              }
+            </ul>
+          }
+        }
+        <a class="harbor-action" [routerLink]="['/travel/trips', trip.id]">Open allocation</a>
+        <h3>Costs</h3>
+        @if (!stages().length) {
+          <p>No Travel costs saved.</p>
+        }
+        @for (stage of stages(); track stage.currency) {
+          <dl class="harbor-costs">
+            <div>
+              <dt>Planned</dt>
+              <dd>{{ formatMoney(stage.planned, { currency: stage.currency }) }}</dd>
+            </div>
+            <div>
+              <dt>Booked</dt>
+              <dd>{{ formatMoney(stage.booked, { currency: stage.currency }) }}</dd>
+            </div>
+            <div>
+              <dt>Posted</dt>
+              <dd>
+                @if (stage.locked) {
+                  Hidden while Finance is locked
+                } @else if (stage.posted === null) {
+                  No posted {{ stage.currency }}
+                } @else {
+                  {{ formatMoney(stage.posted, { currency: stage.currency }) }}
+                }
+              </dd>
+            </div>
+            @if (stage.countedOnce > 0) {
+              <div>
+                <dt>Counted once</dt>
+                <dd>{{ formatMoney(stage.countedOnce, { currency: stage.currency }) }}</dd>
+              </div>
+            }
+          </dl>
+        }
+        @if (financeLocked() && !stages().length) {
+          <p>Hidden while Finance is locked</p>
+        }
+        @if (financeLocked()) {
+          <a class="harbor-action" routerLink="/finance">Unlock Finance to see card spend</a>
+        }
+        @if (stages().length >= 2) {
+          <p>Currencies are kept separate. Totals aren't converted.</p>
+        }
+      } @else {
+        <p>Select a saved trip. This room does not invent a return date or a PTO charge.</p>
+        <a class="harbor-action" routerLink="/travel/pto">Open PTO</a>
+        @if (financeLocked()) {
+          <p>Hidden while Finance is locked</p>
+          <a class="harbor-action" routerLink="/finance">Unlock Finance to see card spend</a>
+        }
+      }
+    </section>
+    <section aria-labelledby="harbor-souvenirs-title">
+      <h3 id="harbor-souvenirs-title">Saved souvenirs</h3>
+      @if (!memories() && !memoryError()) {
+        <p role="status">Loading saved souvenirs…</p>
+      } @else if (memories() && !souvenirs().length) {
+        <p>No saved trips yet. A souvenir appears from a trip you save. Nothing is invented.</p>
+      }
+      <div class="harbor-grid">
+        @for (memory of souvenirs(); track memory.id) {
+          <button
+            type="button"
+            [attr.aria-pressed]="selection().trip === memory.trip_id && selection().card === souvenirKind(memory)"
+            (click)="selectPostcard(memory)"
+          >
+            {{ souvenirLabel(memory) }}
+          </button>
+        }
+      </div>
+    </section>
+    <section aria-labelledby="harbor-note-title">
+      <h3 id="harbor-note-title">Private note</h3>
+      <p id="harbor-note-hint">This note stays in this visit and is not saved on the trip.</p>
+      <label>
+        Private note
+        <input
+          id="harbor-note"
+          type="text"
+          [value]="note()"
+          aria-describedby="harbor-note-hint"
+          (input)="setNote($event)"
+        />
+      </label>
+    </section>
+  }
+</section>

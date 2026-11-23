@@ -2,6 +2,10 @@
   border-top: 3px solid var(--brass);
 }
 
+.terminal-hall [hidden] {
+  display: none !important;
+}
+
 .terminal-objects {
   display: flex;
   flex-wrap: wrap;

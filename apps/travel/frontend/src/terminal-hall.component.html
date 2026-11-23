@@ -2,7 +2,8 @@
   <ui-page-header backLabel="← Trips" backLink="/travel" title="Terminal" eyebrow="Harbor">
     <p>
       The departure board opens a saved leg. The booking desk starts with a
-      flight number. The itinerary table opens a saved day.
+      flight number. The itinerary table opens a saved day. The map room and
+      souvenir gallery read those same trips.
     </p>
   </ui-page-header>
   <nav class="terminal-objects" aria-label="Terminal hall">
@@ -27,10 +28,30 @@
     >
       Itinerary table
     </button>
+    <button
+      id="terminal-map-room"
+      type="button"
+      [attr.aria-pressed]="room() === 'map'"
+      (click)="openRoom('map')"
+    >
+      Map room
+    </button>
+    <button
+      id="terminal-souvenir-gallery"
+      type="button"
+      [attr.aria-pressed]="room() === 'gallery'"
+      (click)="openRoom('gallery')"
+    >
+      Souvenir gallery
+    </button>
   </nav>
   @if (closed()) {
     <p>Sign in to see this terminal.</p>
   } @else {
+    @if (room(); as active) {
+      <travel-harbor-rooms [room]="active" (leave)="closeRoom()" />
+    }
+    <div [hidden]="!!room()">
     @if (error()) {
       <p class="local-error" role="alert">{{ error() }}</p>
       <button id="terminal-retry" type="button" (click)="load()">Retry departures</button>
@@ -131,5 +152,6 @@
         </div>
       }
     </section>
+    </div>
   }
 </main>
