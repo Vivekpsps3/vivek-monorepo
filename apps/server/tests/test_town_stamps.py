@@ -33,7 +33,7 @@ from apps.server.town.models import StampEntitlement, StampReceipt, StampWallet,
 from apps.server.town.stamps import grant_stamps, purchase_stamps, read_wallet, refund_stamps
 
 PARENT = "site_trip_draft_v1"
-HEAD = "site_town_stamps_v1"
+HEAD = "site_town_layouts_v1"
 WHEN = datetime(2026, 10, 29, 19, 0, tzinfo=UTC)
 GRANT = {"grant_key": "quest:chapter-1", "amount": 10, "consumer": "quest"}
 _CHECK = "Check the highlighted fields."
@@ -541,6 +541,7 @@ def test_upgrade_keeps_unsupported_rows_and_downgrade_drops_only_stamps(tmp_path
         assert "town_stamp_wallets" not in names
         assert "town_stamp_receipts" not in names
         assert "town_stamp_entitlements" not in names
+        assert "town_room_layouts" not in names
         assert db.execute("SELECT note FROM kept_unsupported").fetchone() == ("keep",)
         assert db.execute("SELECT name FROM habits").fetchone() == ("Read",)
         assert db.execute(

@@ -31,7 +31,8 @@ import {
   zoomToward,
   type SceneCamera,
 } from './library-room.scene';
-import { TownApiService } from './town.api';
+import { homeLayoutWrite, type HomePalette } from './home-layout';
+import { TownApiService, type RoomLayout } from './town.api';
 import { TownPlaceComponent, type PlaceCrumb } from './town-place.component';
 import { formatTownDay } from './town-text';
 import type { TownResponse } from './town.types';
@@ -48,6 +49,14 @@ interface SceneGesture {
 interface TownLoad {
   owner: number;
   data: TownResponse | null;
+  failed: boolean;
+}
+
+interface LayoutLoad {
+  owner: number;
+  roomId: string;
+  epoch: number;
+  data: RoomLayout | null;
   failed: boolean;
 }
 
@@ -69,7 +78,9 @@ export class HomeRoomComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly themeService = inject(ThemeService);
   private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly retry = new Subject<void>();
+  private readonly layoutRequest = new Subject<void>();
   private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
   private readonly attempts = signal<Partial<Record<string, number>>>({});
   private readonly notes = new Map<number, string>();
@@ -88,6 +99,14 @@ export class HomeRoomComponent {
   protected readonly watered = signal<ReadonlySet<string>>(new Set());
   protected readonly town = signal<TownResponse | null>(null);
   protected readonly townState = signal<'loading' | 'ready' | 'unavailable'>('loading');
+  protected readonly palettes = [0, 1, 2, 3] as const;
+  protected readonly palette = signal<HomePalette>(0);
+  protected readonly layoutRevision = signal(0);
+  protected readonly layoutStatus = signal('');
+  protected readonly layoutLoading = signal(false);
+  protected readonly layoutBusy = signal(false);
+  private layoutEpoch = 0;
+  private loadedKey = '';
   protected readonly camera = signal<SceneCamera>(REST_CAMERA);
   private readonly narrow = signal(false);
   protected readonly lotSlots = [0, 1, 2, 3, 4, 5];
@@ -126,20 +145,33 @@ export class HomeRoomComponent {
 
   constructor() {
     this.camera.set(cameraFromQuery(this.route.snapshot.queryParamMap));
-    const destroyRef = inject(DestroyRef);
     const media = typeof matchMedia === 'function' ? matchMedia('(max-width: 799px)') : null;
     if (media) {
       this.narrow.set(media.matches);
       const onNarrow = (): void => this.narrow.set(media.matches);
       media.addEventListener('change', onNarrow);
-      destroyRef.onDestroy(() => media.removeEventListener('change', onNarrow));
+      this.destroyRef.onDestroy(() => media.removeEventListener('change', onNarrow));
     }
-    destroyRef.onDestroy(() => {
+    this.destroyRef.onDestroy(() => {
       this.alive = false;
       this.gesture = null;
       this.resizeObserver?.disconnect();
     });
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => this.syncQuery(params));
+    this.layoutRequest.pipe(
+      switchMap(() => {
+        const owner = this.owner;
+        const room = this.room();
+        const epoch = this.layoutEpoch;
+        if (owner == null || room == null) return EMPTY;
+        this.layoutLoading.set(true);
+        return this.api.getLayout(room.id).pipe(
+          map(data => ({ owner, roomId: room.id, epoch, data, failed: false })),
+          catchError(() => of({ owner, roomId: room.id, epoch, data: null, failed: true })),
+        );
+      }),
+      takeUntilDestroyed(),
+    ).subscribe(result => this.publishLayout(result));
     this.session.user$.pipe(
       map(user => user?.id ?? null),
       distinctUntilChanged(),
@@ -156,6 +188,7 @@ export class HomeRoomComponent {
       }),
       takeUntilDestroyed(),
     ).subscribe(result => this.publishTown(result));
+    this.route.paramMap.pipe(takeUntilDestroyed()).subscribe(() => this.onRoomChange());
     afterNextRender(() => {
       this.host.nativeElement.querySelector<HTMLElement>('.objects [aria-current="true"]')?.focus({ preventScroll: true });
       const element = this.viewport()?.nativeElement;
@@ -259,6 +292,23 @@ export class HomeRoomComponent {
     return habit ? habit.name : `Lot ${slot + 1}`;
   }
 
+  protected saveDisabled(): boolean {
+    return !this.signedIn() || this.layoutLoading() || this.layoutBusy() || this.room() == null;
+  }
+
+  protected choosePalette(swatch: HomePalette): void {
+    if (!this.signedIn()) return;
+    this.palette.set(swatch);
+  }
+
+  protected saveCurrent(): void {
+    this.writeLayout(this.layoutRevision());
+  }
+
+  protected saveOlder(): void {
+    this.writeLayout(Math.max(0, this.layoutRevision() - 1));
+  }
+
   protected retryTown(): void {
     this.host.nativeElement.querySelector<HTMLElement>('#garden-lots')?.focus();
     this.retry.next();
@@ -357,15 +407,97 @@ export class HomeRoomComponent {
     this.town.set(null);
     this.townState.set(owner == null ? 'unavailable' : 'loading');
     this.signedIn.set(owner != null);
+    this.palette.set(0);
+    this.layoutBusy.set(false);
+    this.layoutEpoch += 1;
+    this.loadedKey = '';
     if (owner == null) {
       this.notes.clear();
       this.gardens.clear();
       this.note.set('');
       this.watered.set(new Set());
+    } else {
+      this.note.set(this.notes.get(owner) ?? '');
+      this.watered.set(new Set(this.gardens.get(owner) ?? []));
+    }
+    this.requestLayout();
+  }
+
+  private onRoomChange(): void {
+    this.layoutEpoch += 1;
+    this.layoutBusy.set(false);
+    this.loadedKey = '';
+    this.requestLayout();
+  }
+
+  private requestLayout(): void {
+    const room = this.room();
+    if (this.owner == null) {
+      this.layoutLoading.set(false);
+      this.layoutRevision.set(0);
+      this.layoutStatus.set(room ? 'Sign in to save this room.' : '');
       return;
     }
-    this.note.set(this.notes.get(owner) ?? '');
-    this.watered.set(new Set(this.gardens.get(owner) ?? []));
+    if (room == null) {
+      this.layoutLoading.set(false);
+      this.layoutStatus.set('');
+      return;
+    }
+    const key = `${this.owner}:${room.id}`;
+    if (key === this.loadedKey) return;
+    this.layoutRevision.set(0);
+    this.layoutStatus.set('');
+    this.layoutRequest.next();
+  }
+
+  private publishLayout(result: LayoutLoad): void {
+    if (!this.alive || result.epoch !== this.layoutEpoch || result.owner !== this.owner) return;
+    if (this.room()?.id !== result.roomId) return;
+    this.layoutLoading.set(false);
+    if (result.failed || result.data == null) {
+      this.layoutStatus.set('The saved layout could not be loaded. Your palette choice is still here.');
+      return;
+    }
+    this.loadedKey = `${result.owner}:${result.roomId}`;
+    this.layoutRevision.set(result.data.revision);
+    this.layoutStatus.set(result.data.revision === 0
+      ? 'Nothing is saved yet. Revision 0.'
+      : `Saved. Revision ${result.data.revision}.`);
+  }
+
+  private writeLayout(expected: number): void {
+    const room = this.room();
+    const owner = this.owner;
+    if (owner == null || room == null || this.layoutLoading() || this.layoutBusy()) return;
+    const epoch = this.layoutEpoch + 1;
+    this.layoutEpoch = epoch;
+    this.layoutBusy.set(true);
+    const body = homeLayoutWrite(room.id, expected, this.palette());
+    this.api.saveLayout(room.id, body).pipe(
+      map(data => ({ ok: true as const, data })),
+      catchError((error: { error?: { message?: unknown } }) => of({ ok: false as const, error })),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(result => {
+      if (!this.alive || epoch !== this.layoutEpoch || owner !== this.owner || this.room()?.id !== room.id) return;
+      this.layoutBusy.set(false);
+      if (!result.ok) {
+        const message = result.error.error?.message;
+        const match = typeof message === 'string' ? /^This room was saved at revision (\d+)\.$/.exec(message) : null;
+        if (match) {
+          const revision = Number(match[1]);
+          this.layoutRevision.set(revision);
+          this.layoutStatus.set(`This room was saved at revision ${revision}. The older revision was not written.`);
+          return;
+        }
+        this.layoutStatus.set('The layout was not saved. Your palette choice is still here.');
+        return;
+      }
+      this.loadedKey = `${owner}:${room.id}`;
+      this.layoutRevision.set(result.data.revision);
+      this.layoutStatus.set(result.data.revision === 0
+        ? 'Nothing is saved yet. Revision 0.'
+        : `Saved. Revision ${result.data.revision}.`);
+    });
   }
 
   private publishTown(result: TownLoad): void {

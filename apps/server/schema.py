@@ -33,6 +33,7 @@ OWNER_TABLES = {
     "town_stamp_wallets",
     "town_stamp_receipts",
     "town_stamp_entitlements",
+    "town_room_layouts",
     "world_concepts",
 }
 

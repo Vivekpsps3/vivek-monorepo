@@ -34,7 +34,10 @@
 .shell.cutaway .wall {
   mask-image: linear-gradient(to bottom, transparent 0%, transparent 30%, #000 78%);
 }
-.sample, .lots { margin-top: 12px; }
+.sample, .lots, .layout-save { margin-top: 12px; }
+.layout-save { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.layout-save [data-layout-status], .layout-save [role="group"] { flex-basis: 100%; margin: 0; }
+.layout-save [role="group"] { display: flex; flex-wrap: wrap; gap: 8px; }
 .credit { color: var(--text-muted); }
 textarea, label {
   display: block;

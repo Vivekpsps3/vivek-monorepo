@@ -3,8 +3,15 @@ import { HttpClient } from '@angular/common/http';
 import { timeout } from 'rxjs';
 import { silentErrorToast } from '@vivek/ui';
 import { HUB_SUMMARY_DEADLINE_MS } from '../hub/hub-load';
+import type { HomeLayoutWrite } from './home-layout';
 import type { KeepsakeShelf } from './keepsake.types';
 import type { Habit, TownResponse } from './town.types';
+
+export interface RoomLayout {
+  room_id: string;
+  revision: number;
+  items: HomeLayoutWrite['items'];
+}
 
 export interface CreateHabit {
   name: string;
@@ -87,5 +94,11 @@ export class TownApiService {
   }
   refundStamps(body: StampRefund) {
     return this.http.post<StampWallet>('/api/town/stamps/refunds', body, this.options());
+  }
+  getLayout(room: string) {
+    return this.http.get<RoomLayout>(`/api/town/layouts/${encodeURIComponent(room)}`, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
+  saveLayout(room: string, body: HomeLayoutWrite) {
+    return this.http.put<RoomLayout>(`/api/town/layouts/${encodeURIComponent(room)}`, body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
   }
 }

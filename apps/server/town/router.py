@@ -17,6 +17,7 @@ from apps.server.path_ids import MAX_PATH_ID
 from apps.server.town import writes
 from apps.server.town.clock import get_town_clock, resolve_tz
 from apps.server.town.keepsakes import read_keepsakes
+from apps.server.town.layouts import ROOMS, parse_body, read_layout, save_layout
 from apps.server.town.schemas import (
     CheckinDays,
     CheckinResult,
@@ -24,6 +25,7 @@ from apps.server.town.schemas import (
     HabitList,
     HubTownSummary,
     Keepsakes,
+    RoomLayoutView,
     StampWalletView,
     Town,
 )
@@ -265,3 +267,28 @@ async def post_stamp_refund(
     wallet, created = refund_stamps(db, user.id, payload, now)
     response.status_code = 201 if created else 200
     return StampWalletView.model_validate(wallet)
+
+
+@router.get("/layouts/{room_id}", response_model=RoomLayoutView)
+def get_layout(
+    room_id: str,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+) -> RoomLayoutView:
+    return RoomLayoutView.model_validate(read_layout(db, principal.id, room_id))
+
+
+@router.put("/layouts/{room_id}", response_model=RoomLayoutView)
+async def put_layout(
+    room_id: str,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db, scope="function"),
+    user: User = Depends(get_current_user),
+    now: datetime = Depends(get_town_clock),
+) -> RoomLayoutView:
+    if room_id not in ROOMS:
+        raise APIError(404, "layout_not_found", "That room is not in this home.")
+    view, created = save_layout(db, user.id, room_id, parse_body(await request.body()), now)
+    response.status_code = 201 if created else 200
+    return RoomLayoutView.model_validate(view)

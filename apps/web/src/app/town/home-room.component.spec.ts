@@ -72,7 +72,19 @@ function setup(userId: number | null = 1) {
     return subject;
   });
   const checkin = jasmine.createSpy().and.returnValue(new Subject());
-  return { user$, loads, api: { getTown, checkin } };
+  const layouts: Subject<{ room_id: string; revision: number; items: never[] }>[] = [];
+  const saves: Subject<{ room_id: string; revision: number; items: never[] }>[] = [];
+  const getLayout = jasmine.createSpy().and.callFake(() => {
+    const subject = new Subject<{ room_id: string; revision: number; items: never[] }>();
+    layouts.push(subject);
+    return subject;
+  });
+  const saveLayout = jasmine.createSpy().and.callFake(() => {
+    const subject = new Subject<{ room_id: string; revision: number; items: never[] }>();
+    saves.push(subject);
+    return subject;
+  });
+  return { user$, loads, layouts, saves, api: { getTown, checkin, getLayout, saveLayout } };
 }
 
 function providers(user$: BehaviorSubject<{ id: number } | null>, api: { getTown: jasmine.Spy; checkin: jasmine.Spy }) {
@@ -256,5 +268,58 @@ describe('Home room ownership', () => {
       expect(host.querySelector(`[data-home-link="${id}"]`)).withContext(id).not.toBeNull();
     }
     expect(host.querySelector('.viewport')).toBeNull();
+    expect(api.getLayout).not.toHaveBeenCalled();
+  });
+
+  it('keeps a palette through a failed save and drops a late overwrite', async () => {
+    const { user$, layouts, saves, api } = setup();
+    TestBed.configureTestingModule({ providers: providers(user$, api) });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/town/home/study?object=study-desk');
+    const host = () => harness.routeNativeElement as HTMLElement;
+    const named = (label: string) => [...host().querySelectorAll('button')].find(button => button.textContent?.trim() === label) as HTMLButtonElement;
+    harness.detectChanges();
+    const note = host().querySelector<HTMLTextAreaElement>('#home-note');
+    note!.value = 'Harbor draft stays';
+    note!.dispatchEvent(new Event('input'));
+    layouts.at(-1)!.next({ room_id: 'study', revision: 0, items: [] });
+    harness.detectChanges();
+    expect(host().querySelector('[data-layout-status]')?.textContent).toContain('Nothing is saved yet. Revision 0.');
+    named('Palette 2').click();
+    harness.detectChanges();
+    named('Save layout').click();
+    const body = api.saveLayout.calls.mostRecent().args[1] as { expected_revision: number; items: { catalog_id: string }[] };
+    expect(body.expected_revision).toBe(0);
+    expect(body.items.map(item => item.catalog_id)).toEqual(['desk', 'desk-lamp', 'bookshelf']);
+    expect(JSON.stringify(body)).not.toContain('Harbor');
+    expect(JSON.stringify(body)).not.toContain('note');
+    saves.at(-1)!.error({ status: 503, error: { message: 'The layout service is down.' } });
+    harness.detectChanges();
+    expect(host().textContent).toContain('The layout was not saved. Your palette choice is still here.');
+    expect(host().textContent).not.toContain('layout service');
+    expect(named('Palette 2').getAttribute('aria-pressed')).toBe('true');
+    expect(note!.value).toBe('Harbor draft stays');
+
+    named('Save layout').click();
+    saves.at(-1)!.next({ room_id: 'study', revision: 1, items: [] });
+    harness.detectChanges();
+    expect(host().querySelector('[data-layout-status]')?.textContent).toContain('Saved. Revision 1.');
+    expect(host().querySelector('[data-layout-revision]')?.getAttribute('data-layout-revision')).toBe('1');
+    named('Save the older revision').click();
+    expect((api.saveLayout.calls.mostRecent().args[1] as { expected_revision: number }).expected_revision).toBe(0);
+    saves.at(-1)!.error({ status: 409, error: { message: 'This room was saved at revision 1.' } });
+    harness.detectChanges();
+    expect(host().textContent).toContain('This room was saved at revision 1. The older revision was not written.');
+    expect(named('Palette 2').getAttribute('aria-pressed')).toBe('true');
+    expect(note!.value).toBe('Harbor draft stays');
+
+    named('Save layout').click();
+    user$.next({ id: 2 });
+    harness.detectChanges();
+    saves.at(-1)!.next({ room_id: 'study', revision: 4, items: [] });
+    harness.detectChanges();
+    expect(host().textContent).not.toContain('Revision 4');
+    expect(named('Palette 2').getAttribute('aria-pressed')).toBe('false');
+    expect(note!.value).toBe('');
   });
 });

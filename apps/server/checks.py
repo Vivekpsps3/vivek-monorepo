@@ -177,6 +177,7 @@ def main():
                     "habit_checkins",
                     "habit_cadences",
                     "habits",
+                    "town_room_layouts",
                     "town_stamp_entitlements",
                     "town_stamp_receipts",
                     "town_stamp_wallets",
