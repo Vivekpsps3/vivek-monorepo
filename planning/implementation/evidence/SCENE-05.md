@@ -53,8 +53,8 @@ Commands ran in `/tmp/vivek-scene-05`. `make test-fast` used `PATH="/tmp/vivek-s
 
 ## Handoff
 
-- PR URL (leaf closure keyword only):
-- Roadmap #134 append-only status-note URL:
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/567. The body is only the leaf keyword for #443.
+- Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
 - Merged/activation status (actual evidence, not assumption): not merged when this sentence is written.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review of the authored marks stays separate from these passing checks.
 - Next actor: open the pull request, wait for required checks, then merge.
