@@ -53,7 +53,7 @@ Launch commands ran in `/tmp/vivek-scene-06` on the working tree committed as `e
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this note. The body is only the leaf keyword for #444.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/571. The body is only the leaf keyword for #444.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
 - Merged/activation status (actual evidence, not assumption): not merged when this sentence is written.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review of the Hall stays separate from these passing checks.
