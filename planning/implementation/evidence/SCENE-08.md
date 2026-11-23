@@ -52,8 +52,8 @@ Commands ran in `/tmp/vivek-scene-08`. `make test-fast` used `PATH="/tmp/vivek-s
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded after the pull request is opened. The body is only the leaf keyword for #446.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/563. The body is only the leaf keyword for #446.
 - Roadmap #134 append-only status-note URL: added after the merge, without editing the issue body.
 - Merged/activation status (actual evidence, not assumption): not merged when this sentence is written.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Owner visual review and deployed activation stay separate. The Hall appearance desk does not exist, so the controls live on `/settings/appearance`.
-- Next actor: push this branch, open the pull request, wait until the required checks are green, then merge with a merge commit. Product commit `d75f40dab6c29bf87a96dee0038a62a9e8e0e096`.
+- Next actor: wait until the required checks on pull request #563 are green, then merge with a merge commit. Product commit `d75f40dab6c29bf87a96dee0038a62a9e8e0e096`.
