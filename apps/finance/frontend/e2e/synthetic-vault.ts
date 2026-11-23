@@ -193,12 +193,12 @@ export async function syntheticVault(
       const data = { ...input, id: input.id ?? nextId++ };
       const schemaVersion = data.schema_version === 1 ? 1 : 2;
       const requestedId = typeof data.client_id === 'string' ? data.client_id : '';
-      const clientId = /^hlt_[A-Za-z0-9_-]{22}$/.test(requestedId)
+      const clientId = /^(?:hlt|rev)_[A-Za-z0-9_-]{22}$/.test(requestedId)
         ? requestedId
         : `synthetic_${collection}_${data.id}`;
       delete data.schema_version;
       delete data.client_id;
-      if (collection.startsWith('health_')) delete data.id;
+      if (collection.startsWith('health_') || collection === 'town_reviews') delete data.id;
       const row: RecordRow = {
         collection, client_id: clientId, ciphertext_b64: '',
         schema_version: schemaVersion, key_version: 1, revision: 1, updated_at: new Date().toISOString(),

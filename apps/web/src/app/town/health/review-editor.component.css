@@ -1,0 +1,77 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.review {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  transition: none;
+  animation: none;
+}
+
+.week-label,
+.prompt,
+.form-error,
+#review-link-help {
+  margin: 0;
+}
+
+.fields {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+input,
+textarea {
+  width: 100%;
+  min-height: 44px;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  color: var(--text);
+  padding: var(--space-2);
+}
+
+textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+.weeks,
+.saved-weeks,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.reference {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  overflow-wrap: anywhere;
+  color: var(--accent);
+}
+
+.form-error {
+  color: var(--danger);
+}
+
+.form-error:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host,
+  :host * {
+    transition: none;
+    animation: none;
+  }
+}

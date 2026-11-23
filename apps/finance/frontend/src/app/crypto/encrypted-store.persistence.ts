@@ -33,6 +33,7 @@ export const FINANCE_FOREIGN_COLLECTIONS: ReadonlySet<string> = new Set([
   'health_stats',
   'health_prs',
   'health_workouts',
+  'town_reviews',
 ]);
 
 export interface EncryptedStoreChange {

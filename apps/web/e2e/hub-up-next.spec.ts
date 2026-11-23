@@ -113,13 +113,15 @@ for (const width of [390, 1280]) {
       await expect(next.getByRole('link', { name: 'Check in' })).toBeVisible();
       await expect(page.locator('.pixel-strip .pixel')).toHaveCount(91);
       const shortcuts = page.getByRole('navigation', { name: 'Shortcuts' });
-      await expect(shortcuts.getByRole('listitem')).toHaveCount(6);
+      await expect(shortcuts.getByRole('listitem')).toHaveCount(7);
       await expect(shortcuts).toContainText('Health');
       await expect(shortcuts.getByRole('link', { name: 'Holdings' })).toHaveAttribute('href', '/finance/have?t=holdings');
       await expect(shortcuts.getByRole('link', { name: 'Trips' })).toHaveAttribute('href', '/travel');
       await expect(shortcuts.getByRole('link', { name: 'Library' })).toHaveAttribute('href', '/media/library');
       await expect(shortcuts.getByRole('link', { name: 'Pixels' })).toHaveAttribute('href', '/pixels');
       await expect(shortcuts.getByRole('link', { name: 'Town' })).toHaveAttribute('href', '/town');
+      await expect(shortcuts.getByRole('link', { name: 'Weekly review', exact: true })).toHaveCount(1);
+      await expect(shortcuts.getByRole('link', { name: 'Weekly review', exact: true })).toHaveAttribute('href', '/town/review');
       const firstScreen = [page.getByRole('button', { name: 'Quick add' }), next.locator('.event-link').last(), shortcuts.getByRole('link', { name: 'Town' })];
       for (const control of firstScreen) {
         const box = (await control.boundingBox())!;
@@ -214,7 +216,7 @@ test('pins reorder shortcuts, survive reload and reset from the keyboard', async
   const edit = shortcuts.getByRole('button', { name: 'Edit pins' });
   const links = shortcuts.getByRole('link');
   const dialog = page.getByRole('dialog', { name: 'Edit pins' });
-  const defaults = ['Holdings', 'Trips', 'Library', 'Pixels', 'Town'];
+  const defaults = ['Holdings', 'Trips', 'Library', 'Pixels', 'Town', 'Weekly review'];
   await expect(links).toHaveText(defaults);
   await edit.press('Enter');
   await expect(dialog.getByRole('button', { name: 'Holdings' })).toBeFocused();
@@ -227,9 +229,9 @@ test('pins reorder shortcuts, survive reload and reset from the keyboard', async
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.keyboard.press('Escape');
   await expect(edit).toBeFocused();
-  await expect(links).toHaveText(['Town', 'Pixels', 'Library', 'Holdings', 'Trips']);
+  await expect(links).toHaveText(['Town', 'Pixels', 'Library', 'Holdings', 'Trips', 'Weekly review']);
   await page.reload();
-  await expect(links).toHaveText(['Town', 'Pixels', 'Library', 'Holdings', 'Trips']);
+  await expect(links).toHaveText(['Town', 'Pixels', 'Library', 'Holdings', 'Trips', 'Weekly review']);
   await edit.press('Enter');
   await dialog.getByRole('button', { name: 'Reset pins' }).press('Enter');
   await dialog.getByRole('button', { name: 'Done' }).press('Enter');
@@ -282,7 +284,7 @@ test('shortcut and agenda links stay readable at 320px with enlarged text', asyn
   await sources(page);
   await page.goto('/hub');
   const shortcuts = page.getByRole('navigation', { name: 'Shortcuts' });
-  await expect(shortcuts.getByRole('listitem')).toHaveCount(6);
+  await expect(shortcuts.getByRole('listitem')).toHaveCount(7);
   await page.locator('html').evaluate(el => { el.style.fontSize = '200%'; });
   for (const area of [shortcuts, page.getByRole('region', { name: 'Up next' })]) {
     await expect(area).toBeVisible();

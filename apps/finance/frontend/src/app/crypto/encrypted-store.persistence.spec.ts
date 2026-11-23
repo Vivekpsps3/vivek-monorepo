@@ -76,6 +76,15 @@ describe('foreign health collections', () => {
       revision: 1,
       updated_at: '2026-01-01T00:00:00Z',
     },
+    {
+      collection: 'town_reviews',
+      client_id: 'rev_townreview0000000001',
+      ciphertext_b64: 'opaque-reviews',
+      schema_version: 2,
+      key_version: 1,
+      revision: 1,
+      updated_at: '2026-01-01T00:00:00Z',
+    },
   ];
 
   it('decrypts Finance rows only and keeps health data out of every bag', async () => {
@@ -102,17 +111,22 @@ describe('foreign health collections', () => {
     expect(bags['health_stats']).toBeUndefined();
     expect(bags['health_prs']).toBeUndefined();
     expect(bags['health_workouts']).toBeUndefined();
+    expect(bags['town_reviews']).toBeUndefined();
     const stored = JSON.stringify(Object.values(bags).map(bag => Array.from(bag.values())));
     expect(stored).not.toContain('opaque-stats');
     expect(stored).not.toContain('opaque-prs');
     expect(stored).not.toContain('opaque-workouts');
+    expect(stored).not.toContain('opaque-reviews');
     expect(stored).not.toContain('health_stats');
     expect(stored).not.toContain('health_prs');
     expect(stored).not.toContain('health_workouts');
+    expect(stored).not.toContain('town_reviews');
   });
 
   it('names exactly the health owner subset', () => {
-    expect(Array.from(FINANCE_FOREIGN_COLLECTIONS).sort()).toEqual(['health_prs', 'health_stats', 'health_workouts']);
+    expect(Array.from(FINANCE_FOREIGN_COLLECTIONS).sort()).toEqual([
+      'health_prs', 'health_stats', 'health_workouts', 'town_reviews',
+    ]);
   });
 
   it('LOCAL3: an older finance load or save does not decrypt, delete, or rewrite an unknown row', async () => {
