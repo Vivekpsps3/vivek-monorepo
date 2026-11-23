@@ -79,16 +79,37 @@
               </section>
             }
             @if (progress().trophies.length > 0) {
-              <section aria-labelledby="health-progress-trophies">
+              <section aria-labelledby="health-progress-trophies" data-award="badge">
                 <h3 id="health-progress-trophies">Trophies</h3>
                 <ul class="entries" aria-label="Trophies">
                   @for (trophy of progress().trophies; track trophy.id) {
-                    <li [attr.data-trophy]="trophy.id">{{ trophy.name }}</li>
+                    <li class="trophy" [attr.data-trophy]="trophy.id">
+                      <span class="award-kind">Health</span>
+                      <span class="entry-label">{{ trophy.name }}</span>
+                      <p class="trophy-explanation">{{ trophy.explanation }}</p>
+                    </li>
                   }
                 </ul>
               </section>
             }
           }
+          <section class="medal-cabinet" data-award="medal" aria-labelledby="health-game-medals">
+            <h3 id="health-game-medals">Game medals</h3>
+            <p class="medal-note">{{ medalNote }}</p>
+            @if (progress().medals.length === 0) {
+              <p>No game medals yet.</p>
+            } @else {
+              <ul class="entries medals" aria-label="Game medals">
+                @for (medal of progress().medals; track medal.id) {
+                  <li class="medal" [attr.data-medal]="medal.id">
+                    <span class="award-kind">Minigame</span>
+                    <span class="entry-label">{{ medal.name }}</span>
+                    <p class="medal-note">{{ medal.explanation }}</p>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
         </section>
         <section class="records" aria-labelledby="health-records-title">
           <h2 id="health-records-title">Records</h2>
