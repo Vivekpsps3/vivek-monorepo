@@ -3,6 +3,22 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { ToastService, UiBadgeComponent, UiButtonComponent, UiEmptyStateComponent } from '@vivek/ui';
 import { SessionService } from '../platform/session.service';
+import {
+  EMPTY_FEEDBACK,
+  armCheck,
+  armUndo,
+  commitCheck,
+  commitUndo,
+  dropAll,
+  dropHabit,
+  failCheck,
+  failUndo,
+  feedbackAttr,
+  feedbackLabel,
+  visibleMark,
+  type FeedbackBook,
+  type FeedbackMark,
+} from './habit-feedback';
 import { TownApiService, type CheckinResult } from './town.api';
 import { treasuryFace as presentTreasury, type TreasuryFace, type TreasuryView } from './weeks-kept';
 import type { Building, Habit, TownResponse } from './town.types';
@@ -60,6 +76,7 @@ function problem(error: unknown): { code?: string; message: string } {
   templateUrl: './town-today.component.html',
   styleUrl: './town-today.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[attr.data-pending-ms]': 'pendingMs()' },
 })
 export class TownTodayComponent {
   private readonly api = inject(TownApiService);
@@ -79,7 +96,15 @@ export class TownTodayComponent {
   readonly history = output<void>();
   readonly settled = output<CheckinResult>();
   readonly dayChanged = output<void>();
+  readonly feedback = output<FeedbackBook>();
   readonly pending = signal<Readonly<Record<number, boolean>>>({});
+  readonly feedbackBook = signal<FeedbackBook>(EMPTY_FEEDBACK);
+  /** Milliseconds from the click to the pending mark. Scene celebration is not included. */
+  readonly pendingMs = signal<number | null>(null);
+  protected readonly feedbackLabel = feedbackLabel;
+  protected readonly feedbackAttr = feedbackAttr;
+  private book: FeedbackBook = EMPTY_FEEDBACK;
+  private boundDay: string | null = null;
   private readonly focusHabit = signal<number | null>(null);
   /** Snapshot present when a check was armed. Only the next snapshot may move focus back. */
   private focusBaseline: TownResponse | null = null;
@@ -98,6 +123,13 @@ export class TownTodayComponent {
     this.session.cleared$.pipe(takeUntilDestroyed(this.destroy)).subscribe(() => this.dropPending());
     effect(() => {
       const data = this.data();
+      const day = data.town.today;
+      if (this.boundDay === null) this.boundDay = day;
+      else if (this.boundDay !== day) {
+        this.boundDay = day;
+        this.dropPending();
+        return;
+      }
       const pending = this.pending();
       const copy = { ...pending };
       let changed = false;
@@ -179,20 +211,54 @@ export class TownTodayComponent {
     return this.inflight()[habit.id] === true;
   }
 
+  markFor(habit: Habit): FeedbackMark | null {
+    const owner = this.ownerNow();
+    if (owner == null) return null;
+    return visibleMark(this.feedbackBook(), habit.id, owner, this.data().town.today);
+  }
+
+  describedBy(habit: Habit): string | undefined {
+    return this.markFor(habit) ? `habit-feedback-${habit.id}` : undefined;
+  }
+
   toggle(habit: Habit): void {
     if (this.busyCheck(habit)) return;
+    const started = performance.now();
     const next = !this.pressed(habit);
     const day = this.data().town.today;
     const epoch = this.actionEpoch;
     const owner = this.ownerId;
+    const ownerForMark = this.ownerNow();
     this.pending.update(state => ({ ...state, [habit.id]: next }));
     this.inflight.update(state => ({ ...state, [habit.id]: true }));
     this.focusHabit.set(habit.id);
+    if (ownerForMark != null) {
+      const subject = { habitId: habit.id, day, ownerId: ownerForMark, style: habit.building_style };
+      this.publish(next ? armCheck(this.book, subject) : armUndo(this.book, subject));
+    }
+    this.pendingMs.set(performance.now() - started);
     const request = next ? this.api.checkin(habit.id, day) : this.api.undoCheckin(habit.id, day);
     request.pipe(takeUntilDestroyed(this.destroy)).subscribe({
       next: result => {
         this.clearInflight(habit.id);
         if (epoch !== this.actionEpoch || owner !== this.ownerId) return;
+        if (result.day !== day || this.data().town.today !== day) {
+          this.clearOptimistic(habit.id);
+          this.publish(dropHabit(this.book, habit.id));
+          return;
+        }
+        if (next) {
+          if (ownerForMark != null) {
+            const committed = commitCheck(this.book, { habitId: habit.id, day, ownerId: ownerForMark });
+            if (!committed.celebrated) {
+              this.clearOptimistic(habit.id);
+              return;
+            }
+            this.publish(committed.book);
+          }
+        } else if (ownerForMark != null) {
+          this.publish(commitUndo(this.book, { habitId: habit.id, day, ownerId: ownerForMark }));
+        }
         this.settled.emit(result);
       },
       error: (error: unknown) => {
@@ -203,12 +269,25 @@ export class TownTodayComponent {
     });
   }
 
+  private ownerNow(): number | null {
+    return this.ownerId === undefined ? (this.session.currentUser?.id ?? null) : this.ownerId;
+  }
+
+  private publish(book: FeedbackBook): void {
+    if (book === this.book) return;
+    this.book = book;
+    this.feedbackBook.set(book);
+    this.feedback.emit(book);
+  }
+
+  /** Owner, session, and day changes drop every in-flight check before a late response can celebrate. */
   private dropPending(): void {
     this.actionEpoch += 1;
     this.pending.set({});
     this.inflight.set({});
     this.focusHabit.set(null);
     this.focusBaseline = null;
+    this.publish(dropAll(this.book));
   }
 
   private clearInflight(id: number): void {
@@ -220,17 +299,25 @@ export class TownTodayComponent {
     });
   }
 
-  private fail(id: number, issue: { code?: string; message: string }): void {
+  private clearOptimistic(id: number): void {
     this.pending.update(state => {
+      if (!(id in state)) return state;
       const copy = { ...state };
       delete copy[id];
       return copy;
     });
+  }
+
+  private fail(id: number, issue: { code?: string; message: string }): void {
     if (issue.code === 'day_out_of_window') {
+      this.dropPending();
       this.toast.error('The day changed. Try again.');
       this.dayChanged.emit();
       return;
     }
+    this.clearOptimistic(id);
+    const mark = this.book.marks[id];
+    this.publish(mark?.intent === 'undo' ? failUndo(this.book, id) : failCheck(this.book, id));
     this.focusHabit.set(null);
     this.toast.error(issue.message);
   }

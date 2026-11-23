@@ -42,11 +42,11 @@
     }
     <div class="town-layout">
       <app-town-exterior [data]="data" [treasury]="treasury()" [vaultPresent]="financeVaultPresent()" [health]="health()"
-        [swaps]="swapping()" (openHabit)="openHabitDialog($event.slot, $event.habitId)" (openHistory)="openHistory()" />
+        [swaps]="swapping()" [feedback]="habitFeedback()" (openHabit)="openHabitDialog($event.slot, $event.habitId)" (openHistory)="openHistory()" />
       <ui-card><h2>Today</h2>
         <app-town-today [data]="data" [live]="live()" [vaultPresent]="financeVaultPresent()" [treasury]="treasury()"
           (newHabit)="openHabitDialog(null, null)" (history)="openHistory()"
-          (settled)="onSettled($event)" (dayChanged)="reload()" />
+          (settled)="onSettled($event)" (feedback)="onFeedback($event)" (dayChanged)="reload()" />
       </ui-card>
     </div>
     @if (edit(); as edit) {

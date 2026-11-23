@@ -137,6 +137,55 @@ button.action { cursor: pointer; }
   pointer-events: none;
 }
 .piece.selected { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: 1px; }
+.habit-mark {
+  position: absolute;
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  opacity: 1;
+}
+.habit-mark[data-habit-feedback="pending"] {
+  top: 6px;
+  right: 6px;
+  box-sizing: border-box;
+  border: 2px solid var(--text);
+  border-radius: 50%;
+  background: transparent;
+  animation: habit-pending 900ms ease-in-out infinite alternate;
+}
+.habit-mark[data-habit-feedback="garden"] {
+  top: 8px;
+  left: 8px;
+  border-radius: 50% 0;
+  background: #3d8a5a;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 70%, transparent), 7px 0 0 #e07a8a, -2px 6px 0 #f0c14a;
+  animation: habit-grow 280ms ease-out both;
+}
+.habit-mark[data-habit-feedback="light"] {
+  top: 10px;
+  right: 12px;
+  border: 2px solid #8a6a1f;
+  border-radius: 2px;
+  background: #f0c14a;
+  box-shadow: 0 0 10px 3px rgb(240 193 74 / 75%);
+  animation: habit-light 320ms ease-out both;
+}
+.viewport[data-day="night"] .habit-mark[data-habit-feedback="light"] {
+  box-shadow: 0 0 12px 5px rgb(240 193 74 / 90%);
+}
+.habit-mark[data-habit-feedback="smoke"] {
+  top: 4px;
+  left: 46%;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 55%, transparent);
+  animation: habit-smoke 400ms ease-out both;
+}
+.habit-response { color: var(--text); font-size: 0.75rem; font-weight: 700; }
+@keyframes habit-pending { from { opacity: 0.45; } to { opacity: 1; } }
+@keyframes habit-grow { from { transform: scale(0.4); opacity: 0.4; } to { transform: none; opacity: 1; } }
+@keyframes habit-light { from { opacity: 0.2; } to { opacity: 1; } }
+@keyframes habit-smoke { from { transform: translateY(6px); opacity: 0.2; } to { transform: none; opacity: 0.9; } }
 .inspector {
   box-sizing: border-box;
   min-width: 0;
@@ -160,4 +209,9 @@ button.action { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .piece .old { display: none; }
   .viewport[data-ambience="live"] .idle-mark { animation: none; }
+  .habit-mark {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
 }

@@ -38,6 +38,14 @@
             }
             <img [src]="building.sprite" alt="" width="32" height="32">
             <span class="caption">{{ building.name }}</span>
+            @if (habitMark(building.habitId); as mark) {
+              @if (mark.celebration !== null) {
+                <span class="habit-mark" aria-hidden="true" [attr.data-habit-feedback]="responseKind(mark.style)" [attr.data-celebration]="mark.celebration"></span>
+              }
+              @if (mark.phase === 'pending') {
+                <span class="habit-mark" aria-hidden="true" data-habit-feedback="pending"></span>
+              }
+            }
           </div>
         }
       </div>
@@ -68,7 +76,13 @@
         } @else if (building.control === 'habit' || building.control === 'select') {
           <button type="button" class="action" [attr.data-building]="building.id" [attr.aria-current]="inspected() === building.id ? 'true' : null" (click)="choose(building)">
             <img [src]="building.sprite" alt="" width="32" height="32">
-            <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
+            <span class="copy">
+              <span class="name">{{ building.name }}</span>
+              <span class="sub-label">{{ building.label }}</span>
+              @if (habitMark(building.habitId); as mark) {
+                <span class="habit-response" [attr.data-habit-feedback]="feedbackAttr(mark)" [attr.data-celebration]="mark.celebration">{{ feedbackLabel(mark) }}</span>
+              }
+            </span>
           </button>
         } @else {
           <button type="button" class="action" [attr.data-building]="building.id" [attr.aria-current]="inspected() === building.id ? 'true' : null" (click)="choose(building)">
@@ -98,6 +112,9 @@
     @if (place(); as place) {
       <h2>{{ place.name }}</h2>
       <p>{{ place.detail }}</p>
+      @if (habitMark(place.habitId); as mark) {
+        <p class="habit-response" [attr.data-habit-feedback]="feedbackAttr(mark)" [attr.data-celebration]="mark.celebration">{{ feedbackLabel(mark) }}</p>
+      }
       @if (place.action) {
         <button type="button" class="action" (click)="invoke(place)">{{ place.action }}</button>
       }
