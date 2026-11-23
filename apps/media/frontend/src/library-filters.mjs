@@ -59,7 +59,7 @@ export function collectionKey(kind) {
 export function collectionSummary(kind) {
   switch (kind) {
     case "movie":
-      return "Movies. Films you want to watch, are watching, or have watched. A date is shown only when you recorded one.";
+      return "Movies. Films you want to watch, are watching, or have watched. A date is shown only when you recorded one. The Theater lobby, poster corridor, auditorium, and ticket desk open those saved films and do not play them.";
     case "tv":
       return "Series. Shows and the episodes you are watching. Caught up and ended stay different facts.";
     case "book":
