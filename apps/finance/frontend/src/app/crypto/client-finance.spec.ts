@@ -1,7 +1,9 @@
 import {
   FLAG_DISALLOWED_TRANSACTION_SIGNS,
+  commitmentFacts,
   computeCashflowSummary,
   computeNetWorth,
+  unmatchedScheduledExpenses,
   enrichFixedExpense,
   enrichHolding,
   enrichJobIncome,
@@ -409,6 +411,25 @@ describe('client-finance', () => {
     expect(summary.total_expenses).toBe(1040);
     expect(summary.counted_occurrences).toEqual([]);
     expect(summary.net_cashflow).toBeCloseTo(2015.44, 2);
+  });
+
+  it('pairs a near posted payment with one scheduled bill', () => {
+    const bill = enrichFixedExpense({
+      id: 80, name: 'Harbor rent', category: 'Rent', amount: 1200, frequency: 'monthly',
+      start_date: '2026-01-05', due_day: 5, autopay: true, is_active: true, next_due_date: null,
+      monthly_amount: 0, annual_amount: 0, created_at: '', updated_at: '',
+    } as FixedExpense);
+    const txs = [{ id: 82, date: '2026-10-06', type: 'expense', amount: 1180 } as Transaction];
+    const facts = commitmentFacts('2026-10-01', '2026-10-31', txs, [bill], []);
+    expect(facts.map(row => ({ key: row.key, actual: row.actual, projected: row.projected, actualDate: row.actualDate }))).toEqual([
+      { key: 'bill:80:2026-10-05', actual: 1180, projected: 1200, actualDate: '2026-10-06' },
+    ]);
+    expect(unmatchedScheduledExpenses(
+      txs,
+      facts.map(row => ({ date: row.date, name: row.name, category: row.category, amount: row.projected })),
+      '2026-10-01',
+      '2026-10-31',
+    )).toEqual([]);
   });
 
   it('flags no income overlap when only one plane has income', () => {

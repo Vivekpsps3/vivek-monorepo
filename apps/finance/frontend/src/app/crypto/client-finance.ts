@@ -382,19 +382,28 @@ export function incomeStreamsMatch(observed: number, scheduled: number): boolean
   return Math.abs(observed - scheduled) / Math.max(observed, scheduled) <= SAME_PAY_STREAM;
 }
 
-/** Bills already posted as a transaction within four days and 2% (or $1). Each posted row matches at most one bill. */
-export function unmatchedScheduledExpenses<T extends CashflowOccurrence>(
+interface ScheduledExpenseMatch<T extends CashflowOccurrence> {
+  occurrence: T;
+  /** Posted spending from the same four-day, 2% match. Null when nothing posted matches. */
+  actual: number | null;
+  actualDate: string | null;
+}
+
+/**
+ * Pair each scheduled occurrence with at most one posted payment.
+ * The window and the amount rule are the cashflow owner's. Each posted row matches once.
+ */
+function matchScheduledExpenses<T extends CashflowOccurrence>(
   transactions: Transaction[],
-  occurrences: T[],
+  occurrences: readonly T[],
   start: string,
   end: string,
-): T[] {
+): ScheduledExpenseMatch<T>[] {
   const posted = transactions
     .filter(tx => tx.date >= start && tx.date <= end)
     .map(tx => ({ date: tx.date, spending: transactionEffects(tx).spending, used: false }))
     .filter(tx => tx.spending > 0);
-  const unmatched: T[] = [];
-  for (const occurrence of occurrences) {
+  return occurrences.map(occurrence => {
     let best = -1;
     let bestScore = Number.POSITIVE_INFINITY;
     posted.forEach((tx, index) => {
@@ -407,10 +416,23 @@ export function unmatchedScheduledExpenses<T extends CashflowOccurrence>(
         best = index;
       }
     });
-    if (best >= 0) posted[best].used = true;
-    else unmatched.push(occurrence);
-  }
-  return unmatched;
+    if (best < 0) return { occurrence, actual: null, actualDate: null };
+    const match = posted[best];
+    match.used = true;
+    return { occurrence, actual: match.spending, actualDate: match.date };
+  });
+}
+
+/** Bills already posted as a transaction within four days and 2% (or $1). Each posted row matches at most one bill. */
+export function unmatchedScheduledExpenses<T extends CashflowOccurrence>(
+  transactions: Transaction[],
+  occurrences: T[],
+  start: string,
+  end: string,
+): T[] {
+  return matchScheduledExpenses(transactions, occurrences, start, end)
+    .filter(row => row.actual == null)
+    .map(row => row.occurrence);
 }
 
 function commitmentOccurrences(
@@ -439,6 +461,57 @@ export function possiblyOverdueCommitments(
   const unmatched = unmatchedScheduledExpenses(transactions, recent, addDays(start, -BILL_MATCH_DAYS), today);
   // Occurrences for each commitment are in date order. Keep its latest unmatched date.
   return new Map(unmatched.map(item => [item.key, item.date]));
+}
+
+export interface CommitmentFact {
+  key: string;
+  kind: 'bill' | 'subscription';
+  id: number;
+  name: string;
+  category: string;
+  date: string;
+  /** Scheduled occurrence from the cashflow owner. */
+  projected: number;
+  /** Posted payment matched to that occurrence, when one exists. */
+  actual: number | null;
+  actualDate: string | null;
+}
+
+/** Scheduled bills and subscriptions in a range, each paired with a posted payment when the cashflow rule matches one. */
+export function commitmentFacts(
+  start: string,
+  end: string,
+  transactions: Transaction[],
+  bills: readonly FixedExpense[],
+  subscriptions: readonly Subscription[],
+): CommitmentFact[] {
+  const rows = [
+    ...bills.flatMap(row => commitmentOccurrences(row, start, end, row.start_date, row.due_day).map(item => ({
+      ...item,
+      kind: 'bill' as const,
+      id: row.id,
+      key: `bill:${row.id}:${item.date}`,
+    }))),
+    ...subscriptions.flatMap(row => commitmentOccurrences(row, start, end, row.next_bill_date).map(item => ({
+      ...item,
+      kind: 'subscription' as const,
+      id: row.id,
+      key: `subscription:${row.id}:${item.date}`,
+    }))),
+  ];
+  return matchScheduledExpenses(transactions, rows, start, end)
+    .map(row => ({
+      key: row.occurrence.key,
+      kind: row.occurrence.kind,
+      id: row.occurrence.id,
+      name: row.occurrence.name,
+      category: row.occurrence.category,
+      date: row.occurrence.date,
+      projected: row.occurrence.amount,
+      actual: row.actual,
+      actualDate: row.actualDate,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
 }
 
 export function computeCashflowSummary(
