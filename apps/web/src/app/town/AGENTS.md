@@ -20,6 +20,4 @@ Do not duplicate conversion or XP math.
 Town reset fixtures and worker clock stay deterministic.
 See [scene-appearance](../platform/scene-appearance.ts). Gym objects open that dialog.
 
-The Town exterior, Reading Hall, Hall, and [cosmetic catalog](cosmetic-catalog.ts) share the y-down [frame](library-room.scene.ts).
-Higher layer wins. `/town/home` opens living room, study, bedroom, and courtyard with cutaway floors and no Stamp gate. `/town/hall` shows rules and history. `/town/cosmetics` lists the catalog. `/town/memory` is untimed six-pair score with no Stamps.
-Locked, empty, and archived lots clear check-in marks on Undo, owner, or day change. The keepsake shelf stores nothing. Clinic and Gym read [loadTownHealthStages](health/index.ts).
+The Town exterior, Reading Hall, Hall, and [cosmetic catalog](cosmetic-catalog.ts) share the y-down [frame](library-room.scene.ts). Higher layer wins. `/town/home` has no Stamp gate. `/town/memory` awards no Stamps. The [Stamp wallet](stamp-wallet.component.ts) starts at zero and records market, quest, and minigame receipts only. Locked, empty, and archived lots clear check-in marks on Undo, owner, or day change. The keepsake shelf stores nothing. Clinic and Gym read [loadTownHealthStages](health/index.ts).

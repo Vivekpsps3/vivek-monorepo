@@ -19,6 +19,7 @@
         <a class="explore-world" routerLink="/town/hall">Visit the Hall</a>
         <a class="explore-world" routerLink="/town/memory">Memory Shelves</a>
         <a class="explore-world" routerLink="/town/cosmetics">Cosmetic catalog</a>
+        <button type="button" class="explore-world" (click)="openStamps()">Stamps</button>
         <a class="explore-world" href="/town/world">{{ exploreWorld }}</a>
       }
     }
@@ -60,6 +61,9 @@
     }
     @if (historyOpen()) {
       <app-history-dialog [data]="data" (dirty)="reload()" (closed)="closeHistory($event)" />
+    }
+    @if (stampsOpen()) {
+      <app-stamp-wallet (closed)="closeStamps()" />
     }
   }
 </main>

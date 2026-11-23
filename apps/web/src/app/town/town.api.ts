@@ -19,6 +19,36 @@ export interface CheckinResult {
   habit: Habit;
   town: Pick<TownResponse['town'], 'xp' | 'level' | 'level_xp_start' | 'next_level_xp'>;
 }
+export interface StampConsumer {
+  id: 'market' | 'quest' | 'minigame';
+  name: string;
+  detail: string;
+}
+export interface StampReceipt {
+  id: number;
+  grant_key: string;
+  consumer: StampConsumer['id'];
+  kind: 'grant' | 'spend' | 'refund';
+  amount: number;
+  catalog_id: string | null;
+  created_at: string;
+}
+export interface StampEntitlement {
+  catalog_id: string;
+  active: boolean;
+  amount: number;
+  spend_receipt_id: number;
+}
+export interface StampWallet {
+  balance: number;
+  consumers: StampConsumer[];
+  receipts: StampReceipt[];
+  entitlements: StampEntitlement[];
+}
+export interface StampRefund {
+  grant_key: string;
+  catalog_id: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class TownApiService {
@@ -51,5 +81,11 @@ export class TownApiService {
   }
   getCheckins(id: number, from: string, to: string) {
     return this.http.get<{ days: string[] }>(`/api/town/habits/${id}/checkins`, this.options({ from, to }));
+  }
+  getStamps() {
+    return this.http.get<StampWallet>('/api/town/stamps', this.options());
+  }
+  refundStamps(body: StampRefund) {
+    return this.http.post<StampWallet>('/api/town/stamps/refunds', body, this.options());
   }
 }

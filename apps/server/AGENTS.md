@@ -6,12 +6,12 @@ engine/session lifecycle; [identity](identity/) owns auth/session/credentials.
 owns hash-only capabilities and owner-scoped management. URL query tokens must be
 redacted, including exception messages. Reauthorize conditional reads after revocation.
 Town, Pixels and search are server projections. Day facts and keepsakes project existing
-rows and leave score counts unchanged. Finance, Travel and Media rules
+rows and leave score counts unchanged. Stamp wallets start at zero and store game receipts only. Finance, Travel and Media rules
 remain in their own app directories.
 
-Keep dependency direction explicit: shared transport/persistence machinery must not
-import app business rules. Prefer existing request/session helpers over a new generic
-repository or unit-of-work hierarchy.
+Keep dependency direction explicit: shared transport must not
+import app business rules. Prefer existing request helpers over a new
+repository.
 
 Preserve owner scoping, atomic challenge consumption, canonical origin/purpose,
 commit-before-cookie/response and no sensitive SQL parameters in logs. Credential
@@ -24,9 +24,9 @@ database transaction ownership before waiting.
 [alembic/versions](alembic/versions/) and helpers imported by applied revisions are
 historical behavior, not dead code. Schema changes extend the actual single head;
 read [MIGRATIONS](../../docs/MIGRATIONS.md) and prove upgrade/data preservation.
-A domain reset must not delete another domain or unknown supported ciphertext.
-Password-only migration endpoints are retired (404); stored migration-only
-sessions must remain denied normal app access.
+A domain reset must not delete another domain or unknown ciphertext.
+Password-only migration endpoints are retired (404). Stored migration-only
+sessions stay denied.
 
 The maintenance monitor classifies readiness, TLS expiry, and backup age once.
 Local `/metrics` probes and independent webhook/heartbeat delivery do not share

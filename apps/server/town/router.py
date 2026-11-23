@@ -24,9 +24,11 @@ from apps.server.town.schemas import (
     HabitList,
     HubTownSummary,
     Keepsakes,
+    StampWalletView,
     Town,
 )
 from apps.server.town.service import read_checkins, read_habits, read_town, read_town_summary
+from apps.server.town.stamps import grant_stamps, purchase_stamps, read_wallet, refund_stamps
 from packages.time.today import today_in_zone
 
 router = APIRouter(prefix="/town", tags=["town"])
@@ -213,3 +215,53 @@ def delete_checkin(
     zone, today = _zone(tz, now)
     payload = writes.delete_checkin(db, user.id, habit_id, day, today, zone, now)
     return CheckinResult.model_validate(payload)
+
+
+@router.get("/stamps", response_model=StampWalletView)
+def get_stamps(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+) -> StampWalletView:
+    return StampWalletView.model_validate(read_wallet(db, principal.id))
+
+
+@router.post("/stamps/grants", response_model=StampWalletView)
+async def post_stamp_grant(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db, scope="function"),
+    user: User = Depends(get_current_user),
+    now: datetime = Depends(get_town_clock),
+) -> StampWalletView:
+    payload = await writes.json_object(request)
+    wallet, created = grant_stamps(db, user.id, payload, now)
+    response.status_code = 201 if created else 200
+    return StampWalletView.model_validate(wallet)
+
+
+@router.post("/stamps/purchases", response_model=StampWalletView)
+async def post_stamp_purchase(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db, scope="function"),
+    user: User = Depends(get_current_user),
+    now: datetime = Depends(get_town_clock),
+) -> StampWalletView:
+    payload = await writes.json_object(request)
+    wallet, created = purchase_stamps(db, user.id, payload, now)
+    response.status_code = 201 if created else 200
+    return StampWalletView.model_validate(wallet)
+
+
+@router.post("/stamps/refunds", response_model=StampWalletView)
+async def post_stamp_refund(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db, scope="function"),
+    user: User = Depends(get_current_user),
+    now: datetime = Depends(get_town_clock),
+) -> StampWalletView:
+    payload = await writes.json_object(request)
+    wallet, created = refund_stamps(db, user.id, payload, now)
+    response.status_code = 201 if created else 200
+    return StampWalletView.model_validate(wallet)

@@ -1,0 +1,11 @@
+:host { display: block; color: var(--text); }
+h2, h3 { margin: 0 0 8px; }
+.balance { margin: 0 0 16px; font-size: 1.25rem; }
+.muted { color: var(--text-muted); }
+.error { color: var(--danger); }
+.uses, .receipts, .unlocks { margin: 0 0 16px; padding: 0; list-style: none; }
+.uses li, .unlocks li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.uses a { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; }
+label { display: block; margin-bottom: 8px; }
+input { min-height: 44px; width: 100%; box-sizing: border-box; margin-bottom: 8px; color: var(--text); background: transparent; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }

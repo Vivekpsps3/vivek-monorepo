@@ -49,6 +49,13 @@ LATER_THAN_BIRTHDAY = {
     "add_index:ix_trip_draft_legs_draft_id",
     "add_table:trip_draft_proposals",
     "add_index:ix_trip_draft_proposals_draft_id",
+    "add_table:town_stamp_wallets",
+    "add_table:town_stamp_receipts",
+    "add_index:ix_town_stamp_receipts_user_id",
+    "add_index:uq_town_stamp_receipt_grant",
+    "add_table:town_stamp_entitlements",
+    "add_index:ix_town_stamp_entitlements_user_id",
+    "add_index:uq_town_stamp_entitlement_item",
 }
 
 
