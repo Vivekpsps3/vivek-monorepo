@@ -13,7 +13,7 @@ import {
   type VaultRecordEnvelope,
 } from '../../../../../finance/frontend/src/public-api';
 import { SessionService } from '../../platform/session.service';
-import { healthDeletePhrase } from './health-entry';
+import { healthDeletePhrase, healthPrDeletePhrase } from './health-entry';
 import { e1RM } from './health-math';
 import { displayWeight, lbToKg, milesToMetres } from './health-units';
 import { bestHistory, type WorkoutSession } from './workout';
@@ -2251,6 +2251,216 @@ describe('Health room shell', () => {
     const reloaded = fake.rows.find(item => item.client_id === exerciseId);
     expect(decode(reloaded?.ciphertext_b64 ?? '')).toEqual(jasmine.objectContaining({ archived: false, name: 'Synthetic press' }));
     expect(stored.ciphertext_b64).toBe(sessionCipher);
+  });
+
+  it('combines a session best with legacy records and restores the previous result', async () => {
+    unlock();
+    seed();
+    const olderId = 'hlt_SyntheticOlderLiftABCD';
+    const sessionId = 'hlt_SyntheticSessionBestAB';
+    fake.rows.push(
+      row('health_prs', olderId, {
+        v: 1, kind: 'lift', measured_on: '2026-10-01', logged_on: '2026-10-01', exercise: 'Squat', kg: 90, reps: 1,
+      }),
+      row('health_workouts', sessionId, {
+        v: 1,
+        kind: 'session',
+        measured_on: '2026-10-29',
+        logged_on: '2026-10-29',
+        state: 'completed',
+        exercises: [{
+          id: 'wex_progress1',
+          exercise_id: 'static:squat',
+          exercise_type: 'load-reps',
+          name: 'Squat',
+          sets: [
+            { id: 'wst_warmup001', set_type: 'warmup', completed: true, kg: 200, reps: 1 },
+            { id: 'wst_progress01', set_type: 'work', completed: true, kg: 140, reps: 1 },
+          ],
+        }],
+      }),
+    );
+    route.routeData.next({ healthRoom: 'gym' });
+    route.query.next(convertToParamMap({}));
+    const { fixture, el } = await show();
+    const prRows = () => fake.rows.filter(item => item.collection === 'health_prs');
+    expect(prRows()).toHaveSize(2);
+    expect(el.textContent).toContain(`Current · Squat · ${displayWeight(140, 'lb')} lb × 1`);
+    expect(el.textContent).toContain('Previous best');
+    expect(el.textContent).toContain('220.5 lb');
+    expect(el.textContent).not.toContain('176.4');
+    expect(el.textContent).not.toContain('64.25');
+    const ids = [...el.querySelectorAll('[id]')].map(node => node.id).filter(id => id !== '');
+    expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([]);
+
+    const liftRow = fake.rows.find(item => item.client_id === LIFT_ID);
+    const olderRow = fake.rows.find(item => item.client_id === olderId);
+    if (!liftRow || !olderRow) throw new Error('missing records');
+    const originalCipher = liftRow.ciphertext_b64;
+    const olderCipher = olderRow.ciphertext_b64;
+    button(el, 'Kilograms').click();
+    fixture.detectChanges();
+    expect(liftRow.ciphertext_b64).toBe(originalCipher);
+    expect(olderRow.ciphertext_b64).toBe(olderCipher);
+    expect(el.textContent).toContain('100.0 kg');
+    expect(el.textContent).toContain('140.0 kg');
+
+    const edit = el.querySelector<HTMLButtonElement>(`#health-edit-${LIFT_ID} button`);
+    if (!edit) throw new Error('missing lift edit');
+    edit.click();
+    fixture.detectChanges();
+    expect(el.querySelector('#health-entry-title')?.textContent).toBe('Edit lift');
+    expect(el.querySelector('.logged-on time')?.getAttribute('datetime')).toBe(DAY);
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('100.0');
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fake.encryptCalls).toEqual([]);
+    expect(liftRow.ciphertext_b64).toBe(originalCipher);
+    expect(prRows()).toHaveSize(2);
+
+    edit.click();
+    fixture.detectChanges();
+    typeInto(el, '#health-measured-on', '1899-01-01');
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#health-measured-on')?.value).toBe('1899-01-01');
+    expect(document.activeElement).toBe(el.querySelector('#health-measured-on'));
+    expect(el.textContent).toContain('Use a real date from 1900 through today.');
+    expect(liftRow.ciphertext_b64).toBe(originalCipher);
+    expect(fake.encryptCalls).toEqual([]);
+
+    typeInto(el, '#health-measured-on', DAY);
+    typeInto(el, '#health-reps', '4');
+    fixture.detectChanges();
+    fake.failUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(el.textContent).toContain('Could not save this entry. Try again.');
+    expect(el.querySelector<HTMLInputElement>('#health-reps')?.value).toBe('4');
+    expect(document.activeElement).toBe(el.querySelector('#health-form-error'));
+    expect(liftRow.ciphertext_b64).toBe(originalCipher);
+
+    fake.failUpsert = false;
+    fake.conflict = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(el.textContent).toContain(HEALTH_CONFLICT_MESSAGE);
+    expect(el.querySelector<HTMLInputElement>('#health-reps')?.value).toBe('4');
+    expect(el.querySelector<HTMLInputElement>('#health-weight')?.value).toBe('100.0');
+    expect(document.activeElement).toBe(el.querySelector('#health-form-error'));
+    expect(decode(liftRow.ciphertext_b64)).toEqual(jasmine.objectContaining({ kg: 100, reps: 5, logged_on: DAY }));
+
+    fake.conflict = false;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await new Promise(resolve => setTimeout(resolve));
+    const savedLift = fake.rows.find(item => item.client_id === LIFT_ID);
+    if (!savedLift) throw new Error('missing edited lift');
+    const edited = decode(savedLift.ciphertext_b64) as { kg: number; reps: number; logged_on: string; kind: string };
+    expect(edited).toEqual(jasmine.objectContaining({ kind: 'lift', kg: 100, reps: 4, logged_on: DAY, measured_on: DAY }));
+    expect(prRows()).toHaveSize(2);
+    expect(document.activeElement).toBe(el.querySelector(`#health-edit-${LIFT_ID} button`));
+    const editedCipher = savedLift.ciphertext_b64;
+
+    const sessionEdit = el.querySelector<HTMLButtonElement>(`#health-edit-${sessionId} button`);
+    if (!sessionEdit) throw new Error('missing session edit');
+    sessionEdit.click();
+    fixture.detectChanges();
+    const box = el.querySelector<HTMLInputElement>('#health-set-completed-wst_progress01');
+    if (!box) throw new Error('missing set count');
+    expect(box.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(box.checked).toBeTrue();
+    box.checked = false;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.detectChanges();
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const sessionRow = fake.rows.find(item => item.client_id === sessionId);
+    const sessionValue = decode(sessionRow?.ciphertext_b64 ?? '') as {
+      exercises: Array<{ sets: Array<{ id: string; completed: boolean }> }>;
+    };
+    expect(sessionValue.exercises[0].sets.find(item => item.id === 'wst_progress01')?.completed).toBeFalse();
+    expect(sessionValue.exercises[0].sets.find(item => item.id === 'wst_warmup001')?.completed).toBeTrue();
+    expect(el.textContent).toContain('Current · Squat · 100.0 kg × 4');
+    expect(el.textContent).toContain('Previous best · Squat · 90.0 kg × 1');
+    expect(el.textContent).not.toContain('140.0 kg');
+    const keptLift = fake.rows.find(item => item.client_id === LIFT_ID);
+    expect(keptLift?.ciphertext_b64).toBe(editedCipher);
+    expect(olderRow.ciphertext_b64).toBe(olderCipher);
+    expect(prRows()).toHaveSize(2);
+
+    const remove = el.querySelector<HTMLButtonElement>(`#health-delete-${LIFT_ID} button`);
+    if (!remove) throw new Error('missing delete');
+    remove.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain(healthPrDeletePhrase('lift'));
+    expect(fixture.nativeElement.textContent).toContain(`measured on ${DAY}`);
+    clickConfirm(fixture, 'delete lift', 'Delete lift');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(prRows()).toHaveSize(2);
+    clickConfirm(fixture, healthPrDeletePhrase('lift'), 'Delete lift');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await new Promise(resolve => setTimeout(resolve));
+    expect(prRows()).toHaveSize(1);
+    expect(el.textContent).toContain('Current · Squat · 90.0 kg × 1');
+    expect(el.textContent).not.toContain('100.0 kg');
+    expect(document.activeElement).toBe(el.querySelector('#health-add-lift button'));
+    expect(el.querySelector('.health-room')?.scrollWidth ?? 0).toBeLessThanOrEqual((el.querySelector('.health-room')?.clientWidth ?? 0) + 1);
+  });
+
+  it('drops a personal-record draft when the owner changes during save', async () => {
+    unlock();
+    seed();
+    route.routeData.next({ healthRoom: 'gym' });
+    route.query.next(convertToParamMap({}));
+    const { fixture, el } = await show();
+    const stored = fake.rows.find(item => item.client_id === LIFT_ID);
+    if (!stored) throw new Error('missing lift');
+    const cipher = stored.ciphertext_b64;
+    const edit = el.querySelector<HTMLButtonElement>(`#health-edit-${LIFT_ID} button`);
+    if (!edit) throw new Error('missing edit');
+    edit.click();
+    fixture.detectChanges();
+    typeInto(el, '#health-reps', '8');
+    fixture.detectChanges();
+    fake.holdUpsert = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await until(() => fake.upsertRelease.length === 1);
+    fake.holdList = true;
+    session.users.next({ id: 8 });
+    fixture.detectChanges();
+    await until(() => el.getAttribute('data-health-state') === 'loading');
+    expect(el.querySelector('#health-reps')).toBeNull();
+    expect(visible(el)).not.toContain('8 reps');
+    fake.upsertRelease.shift()?.();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(stored.ciphertext_b64).toBe(cipher);
+    fake.listRelease.splice(0).forEach(release => release());
+    await settle(fixture);
+    expect(el.querySelector('#health-reps')).toBeNull();
+    expect(visible(el)).not.toContain('8 reps');
+    expect(decode(stored.ciphertext_b64)).toEqual(jasmine.objectContaining({ reps: 5, kg: 100 }));
   });
 });
 

@@ -61,6 +61,13 @@
                   @if (storedLabel(set)) {
                     <span class="canonical-preview" data-canonical-preview>{{ storedLabel(set) }}</span>
                   }
+                  @if (local().kind === 'session' && local().state === 'completed') {
+                    <label class="set-count">
+                      <input type="checkbox" [id]="'health-set-completed-' + set.id"
+                        [checked]="set.count !== false" (change)="onCount(set.id, $event)" />
+                      <span>Count set {{ index + 1 }} on exercise {{ lineIndex + 1 }} toward progress</span>
+                    </label>
+                  }
                   <label class="set-role">
                     <span class="role-name">Role</span>
                     <select [attr.aria-label]="'Set ' + (index + 1) + ' role on exercise ' + (lineIndex + 1)"
