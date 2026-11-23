@@ -23,6 +23,7 @@ import {
 import { BookShelfComponent } from "./book-shelf.component";
 import { EpisodeLoungeComponent } from "./episode-lounge.component";
 import { GameCabinetComponent } from "./game-cabinet.component";
+import { MusicRoomsComponent, MusicStageComponent } from "./music-bar.component";
 import { TheaterComponent } from "./theater.component";
 import { noteExcerpt } from "./books.mjs";
 import { MediaCardComponent } from "./media-card.component";
@@ -76,6 +77,8 @@ const LIBRARY = "/media/library";
     BookShelfComponent,
     EpisodeLoungeComponent,
     GameCabinetComponent,
+    MusicRoomsComponent,
+    MusicStageComponent,
     TheaterComponent,
     MediaCardComponent,
     UiButtonComponent,
@@ -222,6 +225,9 @@ const LIBRARY = "/media/library";
     @if (loading()) {
       <p role="status">Loading your library…</p>
     }
+    @if (collection === "music") {
+      <media-music-stage />
+    }
     @if (data(); as library) {
       <p class="muted">
         @if (kind === "artist") {
@@ -230,101 +236,25 @@ const LIBRARY = "/media/library";
           {{ library.total }} saved {{ library.total === 1 ? "item" : "items" }}
         }
       </p>
-      @if (kind === "artist") {
-        <div class="media-grid" [attr.aria-busy]="refreshing()">
-          @if (offPageGroup()) {
-            @if (groupLoading()) {
-              <p role="status">Loading saved music…</p>
-            }
-            @if (groupError()) {
-              <p role="alert">{{ groupError() }}</p>
-              <ui-button variant="ghost" (click)="reloadGroup()">Retry saved music</ui-button>
-            }
-          }
-          @for (group of visibleGroups(); track group.catalog_id) {
-            <section
-              class="artist-group"
-              [attr.data-artist-group]="group.catalog_id"
-            >
-              <h2>
-                @if (group.entry_id) {
-                  <a
-                    [attr.data-media-item]="group.entry_id"
-                    [routerLink]="['/media/item', group.entry_id]"
-                    [state]="source()"
-                    >{{ group.title }}</a
-                  >
-                } @else {
-                  {{ group.title }}
-                }
-              </h2>
-              <p class="muted">
-                {{ group.followed ? "Following" : "Not followed" }}
-                @if (group.rating !== null && group.rating !== undefined) {
-                  · {{ group.rating }} / 10
-                }
-              </p>
-              <ui-button
-                variant="ghost"
-                [ariaExpanded]="expandedGroup() === group.catalog_id"
-                [ariaControls]="'group-' + group.catalog_id"
-                (click)="expandGroup(group)"
-              >
-                {{ expandedGroup() === group.catalog_id ? "Hide" : "Show" }}
-                saved albums and songs ({{ group.saved_count || 0 }})
-              </ui-button>
-              @if (expandedGroup() === group.catalog_id) {
-                <div [id]="'group-' + group.catalog_id" class="saved-children">
-                  @for (album of group.albums || []; track album.id) {
-                    <div class="saved-album">
-                      <media-card [item]="album" [source]="source()" />
-                      <div class="saved-songs">
-                        @for (song of album.songs || []; track song.id) {
-                          <media-card [item]="song" [source]="source()" />
-                        } @empty {
-                          <p>No saved songs on this album.</p>
-                        }
-                      </div>
-                    </div>
-                  }
-                  @if (group.songs?.length) {
-                    <h3 class="loose-songs">Saved without an album</h3>
-                    @for (song of group.songs || []; track song.id) {
-                      <media-card [item]="song" [source]="source()" />
-                    }
-                  }
-                  @if (!group.albums?.length && !group.songs?.length && !groupLoading()) {
-                    <p>No saved albums or songs for this artist.</p>
-                  }
-                  @if (group.entry_id && group.source === "musicbrainz") {
-                    <a
-                      class="discography-link"
-                      [routerLink]="['/media/item', group.entry_id, 'discography']"
-                      [state]="source()"
-                      >Browse discography</a
-                    >
-                  }
-                </div>
-              }
-            </section>
-          } @empty {
-            <ui-empty-state [title]="emptyTitle" [message]="emptyMessage">
-              @if (filtered) {
-                <ui-button variant="ghost" (click)="clearAllFilters()">
-                  Clear filters
-                </ui-button>
-              } @else {
-                <ui-button variant="ghost" href="/media/library" label="All items" />
-              }
-              <ui-button
-                variant="primary"
-                href="/media/search"
-                [queryParams]="captureParams()"
-                label="Search Media"
-              />
-            </ui-empty-state>
-          }
-        </div>
+      @if (collection === "music") {
+        <media-music-rooms
+          [kind]="kind"
+          [groups]="visibleGroups()"
+          [items]="library.items"
+          [source]="source()"
+          [expandedGroup]="expandedGroup()"
+          [groupLoading]="groupLoading()"
+          [groupError]="groupError()"
+          [offPage]="offPageGroup()"
+          [refreshing]="refreshing()"
+          [filters]="currentFilters()"
+          [emptyTitle]="emptyTitle"
+          [emptyMessage]="emptyMessage"
+          [filtered]="filtered"
+          (expandGroup)="expandGroup($event)"
+          (reloadGroup)="reloadGroup()"
+          (clearFilters)="clearAllFilters()"
+        />
       } @else if (collection === "book") {
         <nav class="book-signs" aria-label="Book shelves">
           @for (sign of bookSigns; track sign.status) {
@@ -584,7 +514,7 @@ export class LibraryComponent {
   readonly refreshing = signal(false);
   readonly filtersOpen = signal(false);
   readonly availableTags = signal<string[]>([]);
-  private currentFilters(): LibraryFilters {
+  currentFilters(): LibraryFilters {
     return {
       q: this.q,
       kind: this.kind,
@@ -1159,7 +1089,7 @@ export class LibraryComponent {
       const section = this.host.nativeElement.querySelector<HTMLElement>(
         `[data-artist-group="${catalogId}"]`,
       );
-      section?.querySelector<HTMLElement>("h2 a, button")?.focus({ preventScroll: true });
+      section?.querySelector<HTMLElement>("h2 a, .group-toggle button")?.focus({ preventScroll: true });
     });
   }
   private loadGroup(catalogId: number): void {

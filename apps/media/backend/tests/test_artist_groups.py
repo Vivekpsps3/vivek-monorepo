@@ -877,6 +877,8 @@ def test_default_collection_nests_one_album_without_following(client, monkeypatc
     other = next(item for item in only_groups if item is not pressing)
     assert pressing["followed"] is False
     assert pressing["entry_id"] is None
+    assert pressing["rating"] is None
+    assert pressing["artwork_url"] is None
     assert [album["title"] for album in pressing["albums"]] == ["Only Pressing"]
     assert pressing["albums"][0]["id"] == album.json()["id"]
     assert pressing["albums"][0]["rating"] == 8
@@ -924,3 +926,86 @@ def test_default_collection_nests_one_album_without_following(client, monkeypatc
         )
     assert hidden == []
     assert hidden_total == 0
+
+
+def test_unfollow_and_delete_keep_the_independently_saved_album(client):
+    """An album saved first keeps its rating when the artist is followed, unfollowed, or removed."""
+    identity = {
+        "source": "manual",
+        "source_id": "person-lantern-voice",
+        "name": "Lantern Voice",
+    }
+    cover = "https://example.com/lantern-cover.png"
+    album = client.post(
+        "/api/library",
+        json={
+            "kind": "album",
+            "title": "Lantern Pressing",
+            "artwork_url": cover,
+            "rating": 6,
+            "artist_identity": identity,
+        },
+    )
+    assert album.status_code == 200, album.text
+    album_id = album.json()["id"]
+    assert album.json()["rating"] == 6
+
+    def wall():
+        items = _groups(client, sort="title")["items"]
+        assert [item["title"] for item in items] == ["Lantern Voice"]
+        return items[0]
+
+    group = wall()
+    assert group["followed"] is False
+    assert group["entry_id"] is None
+    assert group["rating"] is None
+    assert group["artwork_url"] is None
+    assert [row["title"] for row in group["albums"]] == ["Lantern Pressing"]
+    assert group["albums"][0]["id"] == album_id
+    assert group["albums"][0]["rating"] == 6
+    assert group["albums"][0]["artwork_url"] == cover
+
+    followed = client.post(
+        "/api/library",
+        json={
+            "kind": "artist",
+            "title": "Lantern Voice",
+            "status": "following",
+            "artist_identity": identity,
+        },
+    )
+    assert followed.status_code == 200, followed.text
+    artist_id = followed.json()["id"]
+    assert followed.json()["rating"] is None
+    group = wall()
+    assert group["followed"] is True
+    assert group["entry_id"] == artist_id
+    assert group["rating"] is None
+    assert group["artwork_url"] is None
+    assert group["albums"][0]["rating"] == 6
+
+    unfollowed = client.patch(f"/api/entries/{artist_id}", json={"status": "unfollowed"})
+    assert unfollowed.status_code == 200, unfollowed.text
+    assert unfollowed.json()["status"] == "unfollowed"
+    assert unfollowed.json()["rating"] is None
+    group = wall()
+    assert group["followed"] is False
+    assert group["entry_id"] == artist_id
+    assert group["rating"] is None
+    assert group["albums"][0]["rating"] == 6
+    assert client.get(f"/api/entries/{album_id}").json()["rating"] == 6
+
+    removed = client.delete(f"/api/entries/{artist_id}")
+    assert removed.status_code == 200, removed.text
+    assert client.get(f"/api/entries/{artist_id}").status_code == 404
+    kept = client.get(f"/api/entries/{album_id}")
+    assert kept.status_code == 200, kept.text
+    assert kept.json()["rating"] == 6
+    assert kept.json()["artwork_url"] == cover
+    group = wall()
+    assert group["entry_id"] is None
+    assert group["followed"] is False
+    assert group["rating"] is None
+    assert group["artwork_url"] is None
+    assert group["albums"][0]["id"] == album_id
+    assert group["albums"][0]["rating"] == 6
