@@ -61,7 +61,7 @@ Commands ran in `/tmp/vivek-heal-05` against the working tree that became `285d2
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): after the pull request is opened (`Closes #436` only).
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/568 (`Closes #436` only).
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: #304, #256, #257, #90, #134, and #277 stay open. This leaf does not deploy.
