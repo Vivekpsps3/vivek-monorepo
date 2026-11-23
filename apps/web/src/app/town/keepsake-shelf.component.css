@@ -1,0 +1,44 @@
+:host { display: block; min-width: 0; max-width: 100%; color: var(--text); }
+.keepsake-shelf { min-width: 0; }
+.keepsake-shelf h2,
+.keepsake-shelf h3,
+.keepsake-shelf h4,
+.keepsake-shelf p,
+.keepsake-shelf li { overflow-wrap: anywhere; }
+.find { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 12px 0; }
+.find input,
+.shelf-control,
+.card a {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+  color: var(--text);
+  font: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+}
+.find input { width: min(100%, 420px); }
+.card a { color: var(--accent); text-decoration: underline; }
+.cards { display: grid; gap: 12px; }
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+}
+.keepsake-shelf :focus-visible {
+  outline: var(--focus-ring-width, 2px) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+@media (min-width: 800px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

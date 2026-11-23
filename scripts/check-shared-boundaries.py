@@ -82,6 +82,7 @@ SERVER_COMPOSITION = {
     "apps/server/search.py": "search aggregation reads travel and media models",
     "apps/server/calendar.py": "calendar feed composes existing Travel and Media dated projections",
     "apps/server/world/read.py": "world read model reads media, travel, and town tables",
+    "apps/server/town/keepsakes.py": "town keepsakes read media and travel rows without a second ledger",
     "apps/server/migrate.py": "offline migrate dynamically loads finance, travel, and media models",
     "apps/server/alembic/versions/site_media_membership_v1.py": (
         "migration backfill calls media membership helpers"
@@ -233,6 +234,21 @@ REVIEWED: tuple[Reviewed, ...] = (
         "apps/web/src/app/town/date-visit.component.ts",
         "apps/web/src/app/pixels/pixels-data.service.ts",
         "web-town",
+    ),
+    Reviewed(
+        "apps/web/src/app/town/keepsake-view.ts",
+        "apps/web/src/app/world/engine/normalize.ts",
+        "web-town",
+    ),
+    Reviewed(
+        "apps/web/src/app/town/keepsake-view.ts",
+        "apps/web/src/app/world/engine/constants.ts",
+        "web-town",
+    ),
+    Reviewed(
+        "apps/web/src/app/pixels/day-page.component.ts",
+        "apps/web/src/app/town/keepsake-shelf.component.ts",
+        "web-pixels",
     ),
 )
 _REVIEWED_INDEX = {(item.source, item.target): item.removal_owner for item in REVIEWED}

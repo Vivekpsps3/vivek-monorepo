@@ -21,6 +21,7 @@ export const routes: Routes = [
       { path: '', loadComponent: () => import('./town/town.component').then(m => m.TownComponent) },
       { path: 'library', title: 'Town · Reading Hall', loadComponent: () => import('./town/library-room.component').then(m => m.LibraryRoomComponent) },
       { path: 'hall', title: 'Town · Hall', loadComponent: () => import('./town/hall-room.component').then(m => m.HallRoomComponent) },
+      { path: 'keepsakes', title: 'Town · Keepsakes', loadComponent: () => import('./town/keepsake-page.component').then(m => m.KeepsakePageComponent) },
       { path: 'clinic', title: 'Town · Clinic', data: { healthRoom: 'clinic' }, loadComponent: () => import('./town/health/health-room.component').then(m => m.HealthRoomComponent) },
       { path: 'gym', title: 'Town · Gym', data: { healthRoom: 'gym' }, loadComponent: () => import('./town/health/health-room.component').then(m => m.HealthRoomComponent) },
       { path: 'world', title: 'World', loadComponent: () => import('./world/ui/world.component').then(m => m.WorldComponent) },
