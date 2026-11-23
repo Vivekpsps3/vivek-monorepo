@@ -108,3 +108,93 @@ export function showContinuation(card) {
   if (!row || typeof row !== "object") return null;
   return row;
 }
+
+/** The progress stamp shared by a library card and the show payload it came from. */
+export function progressKey(card) {
+  const row = card?.continuation;
+  return [
+    card?.watched_count ?? "",
+    card?.caught_up === true ? "1" : "0",
+    row?.episode_id ?? "",
+    row?.state ?? "",
+    row?.season ?? "",
+    row?.episode ?? "",
+  ].join(":");
+}
+
+/** The same stamp, read from a detail show without a second next-episode rule. */
+export function progressKeyFromShow(show) {
+  return progressKey({
+    watched_count: show?.watched_count,
+    caught_up: show?.caught_up === true,
+    continuation: continuationFromShow(show),
+  });
+}
+
+const SEAT_LABEL = {
+  watched: "Watched",
+  next: "Next",
+  aired: "Aired",
+  future: "Future",
+  unknown: "Air date unknown",
+  special: "Special",
+};
+
+function seatAirDate(value) {
+  if (typeof value !== "string") return null;
+  const day = value.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+}
+
+/**
+ * One saved episode in the lounge.
+ * Future and unknown air dates are not watched and are not the series lifecycle.
+ * The next seat is the show's next aired episode, not a new calculation.
+ */
+export function episodeSeat(episode, nextId) {
+  if (!episode || typeof episode !== "object") return null;
+  const season = Number(episode.season_number);
+  const number = Number(episode.episode_number);
+  const id = Number(episode.id);
+  if (!Number.isInteger(season) || !Number.isInteger(number) || !Number.isInteger(id)) return null;
+  const airDate = seatAirDate(episode.air_date);
+  const watchedOn = seatAirDate(episode.watched_on);
+  const watched = episode.watched === true;
+  const released = episode.released === true;
+  let place = "aired";
+  if (watched) place = "watched";
+  else if (airDate == null) place = "unknown";
+  else if (!released) place = "future";
+  else if (season <= 0) place = "special";
+  else if (nextId != null && id === Number(nextId)) place = "next";
+  return {
+    id,
+    season,
+    episode: number,
+    title: episode.title == null ? null : String(episode.title),
+    airDate,
+    watchedOn: watched ? watchedOn : null,
+    place,
+    label: SEAT_LABEL[place],
+    code: episodeLabel(season, number),
+  };
+}
+
+/** Seasons in saved order. Season 0 stays the specials row. */
+export function seatingRows(episodes, nextId) {
+  const grouped = new Map();
+  for (const episode of episodes || []) {
+    const seat = episodeSeat(episode, nextId);
+    if (!seat) continue;
+    const row = grouped.get(seat.season) || [];
+    row.push(seat);
+    grouped.set(seat.season, row);
+  }
+  return [...grouped.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([season, seats]) => ({
+      season,
+      label: season <= 0 ? "Specials" : `Season ${season}`,
+      seats: seats.sort((left, right) => left.episode - right.episode || left.id - right.id),
+    }));
+}
