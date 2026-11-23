@@ -17,7 +17,12 @@ import { SessionService } from '../../platform/session.service';
 import { HealthEntryDialogComponent, type HealthEntryValue } from './health-entry-dialog.component';
 import { HealthWorkoutDialogComponent } from './health-workout-dialog.component';
 import { HEALTH_HISTORY_PAGE, buildClinicSeries, pageClinicSeries } from './health-history';
-import { EMPTY_HEALTH_PROGRESS, projectHealthProgress } from './health-progress';
+import {
+  EMPTY_HEALTH_PROGRESS,
+  GAME_MEDAL_EXPLANATION,
+  projectHealthProgress,
+  type GameMedalInput,
+} from './health-progress';
 import { HealthSparklineComponent } from './health-sparkline.component';
 import {
   DEFAULT_HEALTH_UNITS,
@@ -210,6 +215,9 @@ function isStat(value: HealthStat | HealthPr): value is HealthStat {
   },
 })
 export class HealthRoomComponent implements OnInit {
+  /** Minigame results to show apart from Health trophies. Earned medals are not invented here. */
+  readonly gameMedals = input<readonly GameMedalInput[]>([]);
+  protected readonly medalNote = GAME_MEDAL_EXPLANATION;
   private readonly route = inject(ActivatedRoute);
   private readonly session = inject(SessionService);
   private readonly store = inject(HealthStoreService);
@@ -330,6 +338,7 @@ export class HealthRoomComponent implements OnInit {
       this.units(),
       this.today(),
       this.store.statsSnapshot.map(entry => entry.value),
+      this.gameMedals(),
     );
   });
   protected readonly workoutRows = computed(() => this.workouts().map(entry => ({

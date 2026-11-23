@@ -13,6 +13,7 @@ import {
   type VaultRecordEnvelope,
 } from '../../../../../finance/frontend/src/public-api';
 import { SessionService } from '../../platform/session.service';
+import { HEALTH_BADGES, HEALTH_BADGE_EXPLANATIONS } from './health.constants';
 import { healthDeletePhrase, healthPrDeletePhrase } from './health-entry';
 import { e1RM } from './health-math';
 import { displayWeight, lbToKg, milesToMetres } from './health-units';
@@ -199,9 +200,11 @@ class FakeVault implements VaultRecordCapability {
 
 @Component({
   imports: [HealthRoomComponent, UiConfirmDialogComponent],
-  template: '<app-health-room /><ui-confirm-dialog />',
+  template: '<app-health-room [gameMedals]="medals" /><ui-confirm-dialog />',
 })
-class HealthRoomSpecHost {}
+class HealthRoomSpecHost {
+  medals: readonly { id: string; name: string }[] = [];
+}
 
 class SessionDouble {
   readonly users = new BehaviorSubject<{ id: number } | null>({ id: 7 });
@@ -402,6 +405,10 @@ describe('Health room shell', () => {
     expect(gym.getAttribute('data-health-state')).toBe('locked');
     expect(visible(gym)).not.toMatch(/\d/);
     expect(visible(gym)).not.toContain('Squat');
+    expect(visible(gym)).not.toContain('First lift PR');
+    expect(visible(gym)).not.toContain('Two plates');
+    expect(gym.querySelector('[data-award="badge"]')).toBeNull();
+    expect(gym.querySelector('[data-award="medal"]')).toBeNull();
     const setup = new URL(href(gym, 'Unlock'), 'http://localhost');
     expect(setup.searchParams.get('next')).toBe(`/town/gym?entry=${LIFT_ID}`);
   });
@@ -2462,7 +2469,129 @@ describe('Health room shell', () => {
     expect(visible(el)).not.toContain('8 reps');
     expect(decode(stored.ciphertext_b64)).toEqual(jasmine.objectContaining({ reps: 5, kg: 100 }));
   });
+
+  it('renders every settled badge at the same thresholds and keeps a medal separate', async () => {
+    unlock();
+    const today = localTodayIso();
+    const days = awardMondays(today, 52);
+    fake.rows = [
+      ...days.map((day, index) => row('health_prs', awardId('BadgeLift', index), {
+        v: 1,
+        kind: 'lift',
+        measured_on: day,
+        logged_on: day,
+        exercise: 'Squat',
+        kg: index === days.length - 1 ? 183.7 : 20 + index,
+        reps: 1,
+      })),
+      row('health_prs', awardId('BadgeRun', 0), {
+        v: 1,
+        kind: 'run',
+        measured_on: days[days.length - 1],
+        logged_on: days[days.length - 1],
+        distance_m: 42195,
+        seconds: 14400,
+      }),
+      row('health_prs', awardId('BadgeOther', 0), {
+        v: 1,
+        kind: 'other',
+        measured_on: days[days.length - 1],
+        logged_on: days[days.length - 1],
+        name: 'Count',
+        value: 3,
+        unit: 'count',
+        direction: 'higher',
+      }),
+    ];
+    route.routeData.next({ healthRoom: 'gym' });
+    route.query.next(convertToParamMap({}));
+    const fixture = TestBed.createComponent(HealthRoomSpecHost);
+    fixture.componentInstance.medals = [
+      { id: 'memory_shelves', name: 'Memory Shelves' },
+      { id: 'plate_225', name: 'Two plates' },
+      { id: 'fast_run', name: 'Fastest run' },
+    ];
+    await settle(fixture);
+    const el = fixture.nativeElement.querySelector('app-health-room');
+    if (!(el instanceof HTMLElement)) throw new Error('missing health room');
+    expect(el.textContent).toContain('New PR in the last 7 days');
+    expect(el.textContent).toContain('Squat');
+    const trophies = [...el.querySelectorAll<HTMLElement>('[data-trophy]')];
+    expect(trophies.map(item => item.dataset['trophy'])).toEqual(Object.keys(HEALTH_BADGES));
+    for (const item of trophies) {
+      const id = item.dataset['trophy'] as keyof typeof HEALTH_BADGES;
+      expect(item.textContent).toContain(HEALTH_BADGES[id]);
+      expect(item.textContent).toContain(HEALTH_BADGE_EXPLANATIONS[id]);
+      expect(item.textContent).toContain('Health');
+      expect(item.textContent).not.toContain('Minigame');
+      expect(getComputedStyle(item).borderLeftStyle).toBe('solid');
+    }
+    const medals = el.querySelector('[data-award="medal"]');
+    if (!(medals instanceof HTMLElement)) throw new Error('missing medal cabinet');
+    expect(getComputedStyle(medals).borderTopStyle).toBe('dashed');
+    expect(medals.textContent).toContain('Memory Shelves');
+    expect(medals.textContent).toContain('Minigame');
+    expect(medals.textContent).toContain('does not record a lift, a run, or a medical result');
+    expect(medals.querySelector('[data-medal="memory_shelves"]')).not.toBeNull();
+    expect(medals.querySelector('[data-medal="plate_225"]')).toBeNull();
+    expect(medals.querySelector('[data-medal="fast_run"]')).toBeNull();
+    for (const name of Object.values(HEALTH_BADGES)) expect(medals.textContent).not.toContain(name);
+    const kind = medals.querySelector('.award-kind');
+    expect(kind?.getBoundingClientRect().height ?? 0).toBeGreaterThanOrEqual(44);
+    const badge = el.querySelector('[data-award="badge"]');
+    expect(badge?.textContent).not.toContain('Memory Shelves');
+    expect(badge?.textContent).toContain('Two plates');
+  });
+
+  it('clears trophy names when the owner changes during a held load', async () => {
+    unlock();
+    seed();
+    route.routeData.next({ healthRoom: 'gym' });
+    route.query.next(convertToParamMap({}));
+    const { fixture, el } = await show();
+    expect(el.textContent).toContain('First lift PR');
+    expect(el.textContent).toContain('Two plates');
+    button(el, 'Add lift').click();
+    fixture.detectChanges();
+    typeInto(el, '#health-weight', '155.5');
+    fixture.detectChanges();
+    fake.holdList = true;
+    session.users.next({ id: 9 });
+    fixture.detectChanges();
+    await until(() => el.getAttribute('data-health-state') === 'loading');
+    expect(visible(el)).not.toContain('First lift PR');
+    expect(visible(el)).not.toContain('Two plates');
+    expect(visible(el)).not.toContain('155.5');
+    expect(visible(el)).not.toContain('Squat');
+    expect(visible(el)).not.toMatch(/\d/);
+    expect(el.querySelector('[data-award="badge"]')).toBeNull();
+    fake.rows = fake.rows.filter(item => item.collection !== 'health_prs');
+    fake.listRelease.splice(0).forEach(release => release());
+    await settle(fixture);
+    expect(el.getAttribute('data-health-state')).toBe('ready');
+    expect(visible(el)).not.toContain('First lift PR');
+    expect(visible(el)).not.toContain('Two plates');
+    expect(visible(el)).not.toContain('220.5');
+    expect(visible(el)).not.toContain('155.5');
+    expect(fake.upserted).toEqual([]);
+  });
 });
+
+function awardId(prefix: string, index: number): string {
+  const body = `${prefix}${String(index).padStart(22 - prefix.length, '0')}`;
+  if (body.length !== 22) throw new Error(body);
+  return `hlt_${body}`;
+}
+
+function awardMondays(today: string, count: number): string[] {
+  const time = Date.parse(`${today}T00:00:00Z`);
+  const weekday = new Date(time).getUTCDay();
+  const end = time - ((weekday + 6) % 7) * 86_400_000;
+  return Array.from({ length: count }, (_, index) => {
+    const back = count - 1 - index;
+    return new Date(end - back * 7 * 86_400_000).toISOString().slice(0, 10);
+  });
+}
 
 function historyId(mark: string, index: number): string {
   return `hlt_${mark}${String(index).padStart(21, '0')}`;
