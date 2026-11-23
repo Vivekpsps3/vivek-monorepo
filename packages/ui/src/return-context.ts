@@ -54,6 +54,10 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/town': {},
   '/town/library': {},
   '/town/hall': { object: ['rules', 'progress', 'archive'] },
+  '/town/cosmetics': {
+    item: (value: string) => /^[a-z][a-z0-9-]{0,39}$/.test(value),
+    part: ['day', 'night'],
+  },
   '/town/clinic': { entry: isHealthEntryId },
   '/town/gym': { entry: isHealthEntryId },
   '/town/world': { day: isReturnDate, week: isReturnDate },
