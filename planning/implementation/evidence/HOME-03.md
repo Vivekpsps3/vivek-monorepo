@@ -51,7 +51,7 @@ Commands ran in `/tmp/vivek-home-03`. `make test-fast` used `PATH="/tmp/vivek-ho
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded when the pull request opens. The body is only `Closes #450`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/596. The body is only `Closes #450`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet.
 - Remaining external prerequisites or approved scope decisions: HOME-01 owns saved layout persistence. HOME-04 owns place, rotate, recolor, and Save. GAME-02 owns buy and refund. No deployment.
