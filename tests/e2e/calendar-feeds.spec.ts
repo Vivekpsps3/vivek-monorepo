@@ -30,6 +30,7 @@ for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const)
     await page.getByRole('button', {name: 'Create subscription'}).click();
     const field = page.getByLabel('One-time calendar URL');
     await expect(field).toBeFocused();
+    await expect.poll(() => urls[0]).toBeTruthy();
     await expect(field).toHaveValue(urls[0]);
     await page.getByRole('button', {name: 'Copy URL', exact: true}).click();
     // HTTP fixture origins may deny clipboard permissions; manual-selection fallback is supported.
@@ -44,6 +45,7 @@ for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const)
     await expect(page.getByLabel('Calendar', {exact: true})).toBeFocused();
     await page.getByRole('button', {name: 'Rotate URL for media'}).click();
     await page.getByRole('dialog', {name: 'Rotate calendar URL?'}).getByRole('button', {name: 'Rotate URL', exact: true}).click();
+    await expect.poll(() => urls[1]).toBeTruthy();
     await expect(field).toHaveValue(urls[1]);
     expect(urls[1]).not.toBe(urls[0]);
     await page.getByRole('button', {name: 'Revoke URL for media'}).click();
