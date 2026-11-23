@@ -21,7 +21,7 @@ describe('AssetsLiabilitiesComponent balance editing', () => {
     finance.updateAsset.and.callFake((_id: number, body: unknown) => of(body));
     finance.updateLiability.and.callFake((_id: number, body: unknown) => of(body));
     const toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
-    TestBed.configureTestingModule({ providers: [{ provide: VaultService, useValue: { isUnlocked: true } }] });
+    TestBed.configureTestingModule({ providers: [{ provide: VaultService, useValue: { isUnlocked: true, unlocked$: of(true) } }] });
     const component = TestBed.runInInjectionContext(() => new AssetsLiabilitiesComponent(
       finance, toast, new ConfirmService(), { markForCheck: () => {} } as any,
     ));

@@ -1,0 +1,105 @@
+<ui-page-header title="Accounts hall" titleId="accounts-hall-heading">
+  <div uiPageActions>
+    <ui-button variant="ghost" href="/finance/have" label="Accounts list" />
+  </div>
+</ui-page-header>
+
+<div class="room-layout">
+  <div class="composition">
+    <div class="counter">
+      @if (loadFailed()) {
+        <div class="load-error">
+          <p role="alert">Couldn't load all balances.</p>
+          <ui-button variant="secondary" (clicked)="loadBalances()">Try again</ui-button>
+        </div>
+      } @else if (loading()) {
+        <p role="status">Loading balances…</p>
+      }
+
+      <ul class="drawers" aria-label="Account drawers">
+        @for (drawer of projection().drawers; track drawer.key) {
+          <li>
+            <button
+              type="button"
+              class="drawer"
+              [class.revealed]="drawer.revealed"
+              [attr.data-drawer]="drawer.key"
+              [attr.aria-current]="drawer.revealed ? 'true' : null"
+              (click)="unlock(drawer.key)"
+            >
+              <span class="drawer-name">{{ drawer.name }}</span>
+              <span class="drawer-meta">{{ drawer.category | formatCategory }}</span>
+              @let date = drawer.asOf | appDate;
+              <span class="drawer-meta">{{ date === 'No date' ? 'No source date' : 'As of ' + date }}</span>
+              @if (drawer.revealed && drawer.amount !== null) {
+                <strong class="money drawer-amount" data-hall-amount>{{ drawer.amount | money }}</strong>
+              } @else if (drawer.revealed && drawer.problem) {
+                <span class="drawer-amount">Needs fixing</span>
+              } @else {
+                <span class="drawer-amount">Hidden</span>
+              }
+            </button>
+          </li>
+        } @empty {
+          @if (!loading() && !loadFailed()) {
+            <li class="empty-counter">
+              <p>No accounts on this counter yet.</p>
+              <p>Add one from the accounts list. This room does not keep a separate ledger.</p>
+            </li>
+          }
+        }
+      </ul>
+    </div>
+
+    <section class="plaque" aria-labelledby="hall-net-worth">
+      <h2 id="hall-net-worth">Net worth</h2>
+      <p>
+        Net worth adds accounts to investments, then subtracts debts.
+        These figures are the published balances. This room does not keep another ledger.
+      </p>
+      <p data-hall-total aria-live="polite">
+        @if (projection().total !== null) {
+          <span class="money">{{ projection().total | money }}</span>
+        } @else {
+          Hidden until you unlock one drawer.
+        }
+      </p>
+      @if (projection().total !== null) {
+        <p class="figures">
+          <span>Assets <strong class="money">{{ projection().accounts | money }}</strong></span>
+          <span>Investments <strong class="money">{{ projection().investments | money }}</strong></span>
+          <span>Debts <strong class="money">{{ projection().debts | money }}</strong></span>
+        </p>
+        @if (projection().excludedNote; as note) {
+          <p>{{ note }}</p>
+        }
+      }
+      @if (balanceDates()) {
+        <p class="source-dates">Balances as of <strong>{{ balanceDates() }}</strong></p>
+      }
+    </section>
+  </div>
+
+  <aside class="inspector" [attr.data-inspector]="revealedDrawer() ? 'ready' : 'empty'" aria-label="Account drawer">
+    @if (revealedDrawer(); as drawer) {
+      <h2>{{ drawer.name }}</h2>
+      <p>{{ drawer.category | formatCategory }}</p>
+      @let date = drawer.asOf | appDate;
+      <p>{{ date === 'No date' ? 'No source date' : 'As of ' + date }}</p>
+      @if (drawer.amount !== null) {
+        <p class="money">{{ drawer.amount | money }}</p>
+      } @else if (drawer.problem) {
+        <p>Needs fixing</p>
+      }
+      <p>The same account editor is open. Saving writes this balance once.</p>
+      @if (balanceEditor.draft === null) {
+        <ui-button variant="secondary" (clicked)="lockBalances()">Lock balances</ui-button>
+      }
+    } @else {
+      <h2>Counter</h2>
+      <p>Choose an account drawer. Its amount stays hidden until you unlock that drawer.</p>
+    }
+  </aside>
+</div>
+
+<app-account-balance-editor [editor]="balanceEditor" [showLock]="true" (locked)="lockBalances()" />
