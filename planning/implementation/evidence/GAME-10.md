@@ -51,7 +51,7 @@ Commands ran in `/tmp/vivek-game-10` on `4aa311b1`. `make test-fast` used `PATH=
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded after open. The body is only `Closes #478`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/598. The body is only `Closes #478`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet.
 - Remaining external prerequisites or approved scope decisions: no receipt integration, so this game grants no currency and no Stamps. No deployment.
