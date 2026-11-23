@@ -2,6 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { SessionService } from '../platform/session.service';
+import { sceneAudio } from './scene-audio';
+import { scenePreferenceKey } from '../platform/scene-appearance';
+import { SceneAppearanceService } from '../platform/scene-appearance.service';
 import { frontObject, REST_CAMERA, type RoomRect } from './library-room.scene';
 import { LOT_UNLOCK_LV } from './town.constants';
 import { TownExteriorComponent } from './town-exterior.component';
@@ -222,6 +225,9 @@ describe('Town exterior scene', () => {
   let user: BehaviorSubject<{ id: number } | null>;
 
   beforeEach(() => {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('town.scene.v1.')) localStorage.removeItem(key);
+    }
     user = new BehaviorSubject<{ id: number } | null>({ id: 7 });
     TestBed.configureTestingModule({
       imports: [TownExteriorComponent],
@@ -459,5 +465,162 @@ describe('Town exterior scene', () => {
     const shown = render(town('founded'), { swaps: { library: 1 } });
     expect(shown.el.querySelector('.old')).toBeNull();
     expect(shown.el.querySelector('[data-scene-object="library"] img')?.getAttribute('src')).toContain('/town/library-');
+  });
+
+  it('resolves automatic seasons across a month boundary and drops a preview on owner change', () => {
+    localStorage.setItem(scenePreferenceKey(8), JSON.stringify({ season: 'spring', sound: true }));
+    const { fixture, el } = render(town('founded'));
+    const service = TestBed.inject(SceneAppearanceService);
+    service.at.set(new Date(2026, 4, 31, 17));
+    fixture.detectChanges();
+    const viewport = el.querySelector('.viewport') as HTMLElement;
+    expect(viewport.getAttribute('data-season')).toBe('spring');
+    expect(viewport.getAttribute('data-day')).toBe('day');
+    expect(viewport.getAttribute('data-weather')).toBe('rain');
+    expect(el.querySelector('[data-scene-presentation]')?.textContent).toContain('Blossoms along the garden path');
+    expect(el.textContent).toContain('Presentation only');
+    service.at.set(new Date(2026, 5, 1, 5));
+    fixture.detectChanges();
+    expect(viewport.getAttribute('data-season')).toBe('summer');
+    expect(viewport.getAttribute('data-day')).toBe('night');
+    expect(localStorage.getItem(scenePreferenceKey(7))).toBeNull();
+    service.preview({ season: 'winter' });
+    fixture.detectChanges();
+    expect(viewport.getAttribute('data-season')).toBe('winter');
+    expect(el.textContent).toContain('Unsaved preview');
+    user.next({ id: 8 });
+    fixture.detectChanges();
+    expect(viewport.getAttribute('data-season')).toBe('spring');
+    expect(el.textContent).not.toContain('Unsaved preview');
+    expect(el.textContent).toContain('Town sound is on');
+    expect(JSON.parse(localStorage.getItem(scenePreferenceKey(8))!).season).toBe('spring');
+  });
+});
+
+describe('Town scene ambience work', () => {
+  let user: BehaviorSubject<{ id: number } | null>;
+  let originalObserver: typeof IntersectionObserver;
+
+  class FakeObserver {
+    static last: FakeObserver | null = null;
+    disconnected = false;
+    constructor(private readonly callback: IntersectionObserverCallback) {
+      FakeObserver.last = this;
+    }
+    observe(): void { /* the test emits entries */ }
+    unobserve(): void { /* unused */ }
+    disconnect(): void { this.disconnected = true; }
+    takeRecords(): IntersectionObserverEntry[] { return []; }
+    emit(onScreen: boolean): void {
+      this.callback([{
+        isIntersecting: onScreen,
+        intersectionRatio: onScreen ? 1 : 0,
+      } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
+    }
+  }
+
+  beforeEach(() => {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('town.scene.v1.')) localStorage.removeItem(key);
+    }
+    originalObserver = window.IntersectionObserver;
+    window.IntersectionObserver = FakeObserver as unknown as typeof IntersectionObserver;
+    FakeObserver.last = null;
+    user = new BehaviorSubject<{ id: number } | null>({ id: 7 });
+    TestBed.configureTestingModule({
+      imports: [TownExteriorComponent],
+      providers: [
+        provideRouter([]),
+        { provide: SessionService, useValue: { user$: user } },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    window.IntersectionObserver = originalObserver;
+  });
+
+  function motion(reduce: boolean): void {
+    spyOn(window, 'matchMedia').and.callFake((query: string) => ({
+      matches: reduce && query.includes('prefers-reduced-motion'),
+      media: query,
+      addEventListener(): void { /* test double */ },
+      removeEventListener(): void { /* test double */ },
+      addListener(): void { /* test double */ },
+      removeListener(): void { /* test double */ },
+      dispatchEvent(): boolean { return false; },
+      onchange: null,
+    } as MediaQueryList));
+  }
+
+  async function shown(reduce: boolean) {
+    motion(reduce);
+    const fixture = TestBed.createComponent(TownExteriorComponent);
+    fixture.componentRef.setInput('data', town('founded'));
+    fixture.componentRef.setInput('treasury', { status: 'locked' });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function playButton(el: HTMLElement): HTMLButtonElement {
+    const found = [...el.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Play Town sound');
+    if (!(found instanceof HTMLButtonElement)) throw new Error('missing play');
+    return found;
+  }
+
+  it('does no live animation or audio while motion is reduced', async () => {
+    const play = spyOn(sceneAudio, 'play').and.resolveTo();
+    localStorage.setItem(scenePreferenceKey(7), JSON.stringify({ season: 'winter', sound: true }));
+    const fixture = await shown(true);
+    const el = fixture.nativeElement as HTMLElement;
+    FakeObserver.last?.emit(true);
+    fixture.detectChanges();
+    const viewport = el.querySelector('.viewport') as HTMLElement;
+    expect(viewport.getAttribute('data-ambience')).toBe('still');
+    expect(getComputedStyle(el.querySelector('.idle-mark')!).animationName).toBe('none');
+    playButton(el).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(play).not.toHaveBeenCalled();
+    expect(el.textContent).toContain('stays quiet');
+    fixture.destroy();
+    expect(FakeObserver.last?.disconnected).toBeTrue();
+  });
+
+  it('animates only while the scene is on screen and plays one tone', async () => {
+    const play = spyOn(sceneAudio, 'play').and.resolveTo();
+    localStorage.setItem(scenePreferenceKey(7), JSON.stringify({ season: 'winter', sound: true }));
+    const fixture = await shown(false);
+    const el = fixture.nativeElement as HTMLElement;
+    FakeObserver.last?.emit(false);
+    fixture.detectChanges();
+    expect(el.querySelector('.viewport')?.getAttribute('data-ambience')).toBe('still');
+    FakeObserver.last?.emit(true);
+    fixture.detectChanges();
+    expect(el.querySelector('.viewport')?.getAttribute('data-ambience')).toBe('live');
+    expect(getComputedStyle(el.querySelector('.idle-mark')!).animationName).toContain('scene-idle');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    fixture.detectChanges();
+    expect(el.querySelector('.viewport')?.getAttribute('data-ambience')).toBe('still');
+    playButton(el).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(play).not.toHaveBeenCalled();
+    expect(el.textContent).toContain('stays quiet');
+    Reflect.deleteProperty(document, 'visibilityState');
+    document.dispatchEvent(new Event('visibilitychange'));
+    FakeObserver.last?.emit(true);
+    fixture.detectChanges();
+    expect(el.querySelector('.viewport')?.getAttribute('data-ambience')).toBe('live');
+    playButton(el).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(el.textContent).toContain('Played one Town tone.');
+    fixture.destroy();
+    expect(FakeObserver.last?.disconnected).toBeTrue();
   });
 });

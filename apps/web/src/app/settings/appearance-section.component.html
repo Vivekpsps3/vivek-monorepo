@@ -19,3 +19,46 @@
     }
   </fieldset>
 </ui-card>
+<ui-card>
+  <fieldset class="theme-choices" data-town-season>
+    <legend>Town season</legend>
+    <p id="town-season-help">Automatic follows this device’s month: March through May, June through August, September through November, and December through February. It does not use your location. An explicit season wins.</p>
+    @if (scene.owner() === null) {
+      <p>Sign in to save a Town season on this device.</p>
+    } @else {
+      @for (choice of seasonChoices; track choice.value) {
+        <label class="theme-choice">
+          <input
+            type="radio"
+            name="town-season"
+            [value]="choice.value"
+            [checked]="scene.effective().season === choice.value"
+            [attr.aria-describedby]="'town-season-help'"
+            (change)="previewSeason(choice.value)" />
+          <span>{{ choice.label }}</span>
+        </label>
+      }
+      <label class="theme-choice">
+        <input
+          type="checkbox"
+          name="town-sound"
+          [checked]="scene.effective().sound"
+          aria-describedby="town-sound-help"
+          (change)="previewSoundFrom($event)" />
+        <span>Town sound</span>
+      </label>
+      <p id="town-sound-help">Sound stays off until you turn it on. Nothing plays by itself.</p>
+    }
+    <p data-season-preview>{{ scene.presentation().label }} Presentation only. It does not change today’s Town date.</p>
+    @if (scene.dirty()) {
+      <p data-season-draft>Unsaved preview</p>
+    }
+    <p #savedNote tabindex="-1" role="status" [hidden]="!notice()">{{ notice() }}</p>
+    <p #saveError tabindex="-1" [attr.role]="scene.saveError() ? 'alert' : null" [hidden]="!scene.saveError()">{{ scene.saveError() }}</p>
+    <div class="season-actions">
+      <button type="button" class="season-action" (click)="save()" [disabled]="scene.owner() === null || !scene.dirty()">Save season</button>
+      <button type="button" class="season-action" (click)="discard()" [disabled]="!scene.dirty()">Discard preview</button>
+      <a class="season-action" routerLink="/town">See on Town</a>
+    </div>
+  </fieldset>
+</ui-card>

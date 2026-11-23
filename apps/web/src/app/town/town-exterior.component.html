@@ -5,11 +5,21 @@
       <button type="button" class="action" [attr.aria-pressed]="framed() === district.id" (click)="showDistrict(district.id)">{{ district.label }}</button>
     }
   </div>
+  <p class="scene-presentation" data-scene-presentation>
+    <span class="scene-label">{{ presentation().label }}</span>
+    <span class="scene-note">Presentation only. It does not change today’s Town date.</span>
+    @if (seasonDirty()) { <span class="scene-draft">Unsaved preview</span> }
+  </p>
   <div #viewport class="viewport" role="group" aria-label="Town exterior"
+    [attr.data-season]="presentation().season"
+    [attr.data-day]="presentation().dayPart"
+    [attr.data-weather]="presentation().weather"
+    [attr.data-ambience]="ambience()"
     (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
     (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
     <div class="stage" [style.transform]="cameraTransform()">
       <div class="scene">
+        <div class="sky" aria-hidden="true"><span class="idle-mark"></span></div>
         @for (plate of plates; track plate.id) {
           <div class="plate {{ plate.id }}" aria-hidden="true"
             [style.left.%]="plate.frame.left" [style.top.%]="plate.frame.top"
@@ -38,7 +48,10 @@
     <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
     <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
     <button type="button" class="action" (click)="resetView()">Reset view</button>
+    <a class="action" routerLink="/settings/appearance">Town season</a>
+    <button type="button" class="action" (click)="playSound()">Play Town sound</button>
   </div>
+  <p class="sound-status" role="status">{{ soundStatus() }}</p>
   <ul class="buildings" role="list" aria-label="Town buildings">
     @for (building of buildings(); track building.id) {
       <li role="listitem" [attr.data-district]="building.district">
