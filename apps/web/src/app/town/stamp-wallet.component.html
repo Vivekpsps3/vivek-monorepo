@@ -1,0 +1,54 @@
+<ui-dialog [open]="true" labelledBy="stamp-wallet-title" (closed)="close()">
+  <h2 id="stamp-wallet-title" tabindex="-1" data-dialog-initial-focus>Stamps</h2>
+  <p class="balance" aria-live="polite">{{ balanceLabel() }}</p>
+  @if (loadError()) {
+    <p role="alert">Stamps are unavailable right now.</p>
+    <ui-button type="button" (clicked)="load()">Retry</ui-button>
+  }
+  @if (wallet(); as wallet) {
+    <h3>Uses</h3>
+    <ul class="uses">
+      @for (consumer of wallet.consumers; track consumer.id) {
+        <li>
+          @if (consumer.id === 'market') {
+            <a routerLink="/town/cosmetics">{{ consumer.name }}</a>
+          } @else if (consumer.id === 'minigame') {
+            <a routerLink="/town/memory">{{ consumer.name }}</a>
+          } @else {
+            <span>{{ consumer.name }}</span>
+          }
+          <span class="muted">{{ consumer.detail }}</span>
+        </li>
+      }
+    </ul>
+    <h3>Receipts</h3>
+    @if (wallet.receipts.length === 0) { <p>No receipts yet.</p> }
+    <ul class="receipts">
+      @for (receipt of wallet.receipts; track receipt.id) {
+        <li>{{ receipt.amount }} {{ receipt.kind }} · {{ label(receipt.catalog_id) }}</li>
+      }
+    </ul>
+    <h3>Unlocks</h3>
+    @if (active().length === 0) { <p>No unlocks yet.</p> }
+    <ul class="unlocks">
+      @for (item of active(); track item.catalog_id) {
+        <li>
+          <span>{{ label(item.catalog_id) }} · {{ item.amount }} {{ item.amount === 1 ? 'Stamp' : 'Stamps' }}</span>
+          <ui-button type="button" (clicked)="choose(item)">Refund</ui-button>
+        </li>
+      }
+    </ul>
+    @if (chosen(); as item) {
+      <form (submit)="submitRefund($event)">
+        <p>Refund returns the full Stamp price for this unlock.</p>
+        <label for="stamp-refund-phrase">Type refund to return {{ item.amount }} {{ item.amount === 1 ? 'Stamp' : 'Stamps' }}</label>
+        <input id="stamp-refund-phrase" [value]="phrase()" (input)="onPhrase($event)" autocapitalize="none" autocomplete="off" spellcheck="false" [attr.aria-invalid]="formError() ? 'true' : null" [attr.aria-describedby]="formError() ? 'stamp-refund-error' : null">
+        @if (formError()) { <p id="stamp-refund-error" class="error" role="alert">{{ formError() }}</p> }
+        <ui-button type="submit" [disabled]="busy() || phrase() !== 'refund'">Return Stamps</ui-button>
+      </form>
+    }
+  }
+  <div class="actions">
+    <ui-button type="button" variant="secondary" (clicked)="close()">Close</ui-button>
+  </div>
+</ui-dialog>

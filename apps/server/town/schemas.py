@@ -264,3 +264,37 @@ class Keepsakes(_Shape):
     planned: list[TripKeepsake]
     ineligible: list[TripKeepsake]
     differences: list[KeepsakeDifference]
+
+
+StampConsumerId = Literal["market", "quest", "minigame"]
+StampKind = Literal["grant", "spend", "refund"]
+
+
+class StampConsumer(_Shape):
+    id: StampConsumerId
+    name: str
+    detail: str
+
+
+class StampReceiptView(_Shape):
+    id: int
+    grant_key: str
+    consumer: StampConsumerId
+    kind: StampKind
+    amount: int
+    catalog_id: str | None
+    created_at: str
+
+
+class StampEntitlementView(_Shape):
+    catalog_id: str
+    active: bool
+    amount: int
+    spend_receipt_id: int
+
+
+class StampWalletView(_Shape):
+    balance: int
+    consumers: list[StampConsumer]
+    receipts: list[StampReceiptView]
+    entitlements: list[StampEntitlementView]

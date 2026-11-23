@@ -14,6 +14,16 @@ from apps.server.migrations import (
 
 PARENT = "site_flight_occurrence_v1"
 REVISION = "site_trip_draft_v1"
+HEAD = "site_town_stamps_v1"
+STAMP_GAP = {
+    "add_index:town_stamp_entitlements:ix_town_stamp_entitlements_user_id",
+    "add_index:town_stamp_entitlements:uq_town_stamp_entitlement_item",
+    "add_index:town_stamp_receipts:ix_town_stamp_receipts_user_id",
+    "add_index:town_stamp_receipts:uq_town_stamp_receipt_grant",
+    "add_table:None:town_stamp_entitlements",
+    "add_table:None:town_stamp_receipts",
+    "add_table:None:town_stamp_wallets",
+}
 KEPT = (
     "trips",
     "stays",
@@ -31,6 +41,16 @@ def _rows(db, table):
 
 def _snapshot(db):
     return {table: _rows(db, table) for table in KEPT}
+
+
+def _label(item) -> str:
+    kind = item[0]
+    if kind == "add_column":
+        return f"add_column:{item[2]}.{item[3].name}"
+    subject = item[1]
+    table = getattr(subject, "table", None)
+    table_name = getattr(table, "name", None)
+    return f"{kind}:{table_name}:{getattr(subject, 'name', None)}"
 
 
 def test_upgrade_keeps_trip_dates_children_costs_and_allocations(tmp_path):
@@ -81,8 +101,8 @@ def test_upgrade_keeps_trip_dates_children_costs_and_allocations(tmp_path):
 
     command.upgrade(config, REVISION)
     assert current_revision(database) == REVISION
-    assert head_revision() == REVISION
-    assert model_diff(database) == []
+    assert head_revision() == HEAD
+    assert {_label(item) for item in model_diff(database)} == STAMP_GAP
     with sqlite3.connect(database) as db:
         assert _snapshot(db) == before
         trip = db.execute(

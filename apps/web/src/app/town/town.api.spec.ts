@@ -35,6 +35,18 @@ describe('TownApiService', () => {
     expect(open.request.params.has('on')).toBeFalse();
     open.flush({});
   });
+  it('reads the stamp wallet and posts a refund without a life metric', () => {
+    api.getStamps().subscribe();
+    const read = http.expectOne(request => request.url === '/api/town/stamps');
+    expect(read.request.method).toBe('GET');
+    expect(read.request.params.get('tz')).toBeTruthy();
+    read.flush({ balance: 0, consumers: [], receipts: [], entitlements: [] });
+    api.refundStamps({ grant_key: 'market:refund:tile-fountain:4', catalog_id: 'tile-fountain' }).subscribe();
+    const refund = http.expectOne(request => request.url === '/api/town/stamps/refunds');
+    expect(refund.request.method).toBe('POST');
+    expect(refund.request.body).toEqual({ grant_key: 'market:refund:tile-fountain:4', catalog_id: 'tile-fountain' });
+    refund.flush({ balance: 10, consumers: [], receipts: [], entitlements: [] });
+  });
   it('preserves authentication errors for the expired state', () => {
     const error = jasmine.createSpy('error');
     api.getTown().subscribe({ error });
