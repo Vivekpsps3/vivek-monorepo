@@ -63,7 +63,7 @@ export function collectionSummary(kind) {
     case "tv":
       return "Series. Shows and the episodes you are watching. Caught up and ended stay different facts. The episode lounge continues the next aired episode and does not play the series.";
     case "book":
-      return "Books. Current, read, and to-read shelves, as covers and spines or as a text list. A page or percent appears only when you record one.";
+      return "Books. Current, read, and to-read shelves, as covers and spines or as a text list. Shelf signs choose a shelf. A spine shows the title and opens the book. The reading desk saves the same progress and note. A page or percent appears only when you record one. Undoing a completion retracts the derived keepsake and keeps the book and note.";
     case "artist":
       return "Music. Artists you have saved, with their albums and then their songs. Saving music does not follow the artist. The artist wall, album racks, and songbook use that grouping. Harbor Rhythm stays separate from a music link, and this bar does not play audio.";
     case "album":
