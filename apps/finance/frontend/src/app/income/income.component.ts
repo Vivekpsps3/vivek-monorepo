@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  Input,
   OnDestroy,
   OnInit,
 } from '@angular/core';
@@ -86,6 +87,8 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IncomeComponent implements OnInit, OnDestroy {
+  /** The planning study opens this editor without the jobs table. */
+  @Input() dialogOnly = false;
   isCurrentJob = isCurrentJob;
   stockSnapshotAt = stockSnapshotAt;
   stockGrantSnapshot = stockGrantSnapshot;
@@ -312,6 +315,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.historyOptionsOpen = false;
     this.taxEstimator = { state: 'average', filingStatus: 'single', preTaxDeductionsPerPeriod: 0 };
     this.showModal = true;
+    this.cdr.markForCheck();
   }
 
   openEditModal(row: JobIncome): void {
@@ -357,6 +361,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
     };
     this.syncOptionSections();
     this.showModal = true;
+    this.cdr.markForCheck();
   }
 
   setBasePayUnit(unit: string): void {
@@ -640,6 +645,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.taxOptionsOpen = false;
     this.historyOptionsOpen = false;
     this.form = this.emptyForm();
+    this.cdr.markForCheck();
   }
 
   revalidate(): void {

@@ -1,0 +1,209 @@
+<ui-page-header title="Planning study" titleId="planning-study-heading">
+  <div uiPageActions>
+    <ui-button variant="ghost" href="/finance/have" label="Accounts" />
+    <ui-button variant="ghost" href="/finance/bills" label="Bills" />
+    <ui-button variant="ghost" href="/finance/pay" label="Pay" />
+    <ui-button variant="ghost" href="/finance/planning" label="Planning" />
+  </div>
+</ui-page-header>
+
+<p class="room-note">This room reads published bills, pay, and the planning model and does not keep another ledger.</p>
+
+@if (!exposed()) {
+  <p role="status">Finance is locked. Bills and pay stay hidden.</p>
+} @else {
+  @if (loadFailed()) {
+    <div class="load-error">
+      <p role="alert">Couldn't load bills and pay.</p>
+      <ui-button variant="secondary" (clicked)="loadRecords()">Try again</ui-button>
+    </div>
+  } @else if (loading()) {
+    <p role="status">Loading the study…</p>
+  }
+
+  <div class="room-layout">
+    <aside class="inspector" aria-label="Planning inspector" data-study-inspector>
+      <h2>Inspector</h2>
+      @if (projection().openedBill; as bill) {
+        <div data-study-bill>
+          <p class="line-title">{{ bill.name }}</p>
+          @let openedDue = bill.date | appDate;
+          <p class="line-meta">{{ openedDue === 'No date' ? 'No due date' : openedDue }}</p>
+          <p data-bill-actual>
+            <span class="fact-label">{{ actualLabel }}</span>
+            @if (bill.actual === null) {
+              <span>No posted payment</span>
+            } @else {
+              <span class="money">{{ bill.actual | money }}</span>
+              <span class="line-meta">Posted payment</span>
+            }
+          </p>
+          <p data-bill-projected>
+            <span class="projection-label">{{ projectedLabel }}</span>
+            @if (bill.projected === null) {
+              <span>No scheduled commitment</span>
+            } @else {
+              <span class="money">{{ bill.projected | money }}</span>
+              <span class="line-meta">Scheduled commitment</span>
+            }
+          </p>
+        </div>
+      } @else if (projection().bills[0]; as preview) {
+        <p data-study-bill><span class="line-title">{{ preview.name }}</span> <span>Hidden</span></p>
+      } @else {
+        <p data-study-bill>No bill this month.</p>
+      }
+
+      @if (projection().openedPay; as drawer) {
+        <div data-study-pay>
+          <p class="line-title">{{ drawer.name }}</p>
+          <p data-pay-actual>
+            <span class="fact-label">{{ actualLabel }}</span>
+            @if (drawer.actual === null) {
+              <span>No recorded deposits</span>
+            } @else {
+              <span class="money">{{ drawer.actual | money }}</span>
+              <span class="line-meta">Recorded deposits</span>
+            }
+          </p>
+          <p data-pay-projected>
+            <span class="projection-label">{{ projectedLabel }}</span>
+            @if (drawer.projected === null) {
+              <span>No projected paycheck</span>
+            } @else {
+              <span class="money">{{ drawer.projected | money }}</span>
+              <span class="line-meta">Scheduled paycheck</span>
+            }
+          </p>
+        </div>
+      } @else if (projection().pay[0]; as preview) {
+        <p data-study-pay><span class="line-title">{{ preview.name }}</span> <span>Hidden</span></p>
+      } @else {
+        <p data-study-pay>No job yet.</p>
+      }
+
+      @if (projection().openedModel; as model) {
+        <div data-study-model>
+          <p class="line-title">{{ model.label }}</p>
+          <p class="line-meta">{{ model.detail }}</p>
+          @if (model.id === 'simulation') {
+            <p data-model-actual>
+              <span class="fact-label">{{ actualLabel }}</span>
+              @if (projection().actualBalance === null) {
+                <span>No published net worth</span>
+              } @else {
+                <span class="money">{{ projection().actualBalance | money }}</span>
+                <span class="line-meta">Current net worth</span>
+              }
+            </p>
+            <p data-model-projected>
+              <span class="projection-label">{{ projectedLabel }}</span>
+              @if (projection().projectedBalance !== null) {
+                <span class="money">{{ projection().projectedBalance | money }}</span>
+                <span class="line-meta">{{ projectedNote }}</span>
+              } @else if (projectionState() === 'running') {
+                <span role="status">Running the planning model…</span>
+              } @else if (projectionState() === 'failed') {
+                <span role="alert">Couldn't project this model.</span>
+              } @else {
+                <span>No projected median</span>
+              }
+            </p>
+            @if (projectionState() === 'failed') {
+              <ui-button variant="secondary" (clicked)="retryProjection()">Try again</ui-button>
+            }
+          }
+          <ui-button variant="secondary" [href]="model.path" [label]="'Open ' + model.label" />
+        </div>
+      } @else {
+        <p data-study-model><span class="line-title">Planning model</span> <span>Hidden</span></p>
+      }
+    </aside>
+
+    <div class="study-main">
+      <section class="panel" aria-labelledby="study-bills-heading">
+        <h2 id="study-bills-heading">Bill calendar</h2>
+        <label class="month-field">
+          <span>Bill month</span>
+          <input type="month" aria-label="Bill month" [value]="projection().month" (change)="setMonth(inputValue($event))" />
+        </label>
+        @if (projection().bills.length === 0) {
+          <p class="empty-note">No bills this month.</p>
+        } @else {
+          <ul class="row-list" aria-label="Bill calendar">
+            @for (bill of projection().bills; track bill.key) {
+              <li>
+                <button
+                  type="button"
+                  class="study-row"
+                  [class.opened]="bill.opened"
+                  [attr.data-bill]="bill.key"
+                  [attr.aria-current]="bill.opened ? 'true' : null"
+                  (click)="openBill(bill.key)"
+                >
+                  <span class="line-title">{{ bill.name }}</span>
+                  @let rowDue = bill.date | appDate;
+                  <span class="line-meta">{{ rowDue === 'No date' ? 'No due date' : rowDue }}</span>
+                  <span>{{ bill.opened ? 'Opened' : 'Hidden' }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <section class="panel" aria-labelledby="study-pay-heading">
+        <h2 id="study-pay-heading">Pay drawer</h2>
+        @if (projection().pay.length === 0) {
+          <p class="empty-note">No jobs yet.</p>
+        } @else {
+          <ul class="row-list" aria-label="Pay drawer">
+            @for (drawer of projection().pay; track drawer.id) {
+              <li>
+                <button
+                  type="button"
+                  class="study-row"
+                  [class.opened]="drawer.opened"
+                  [attr.data-pay]="drawer.id"
+                  [attr.aria-current]="drawer.opened ? 'true' : null"
+                  (click)="openPay(drawer.id)"
+                >
+                  <span class="line-title">{{ drawer.name }}</span>
+                  <span>{{ drawer.opened ? 'Opened' : 'Hidden' }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <section class="panel" aria-labelledby="study-models-heading">
+        <h2 id="study-models-heading">Planning models</h2>
+        <ul class="row-list" aria-label="Planning models">
+          @for (model of projection().models; track model.id) {
+            <li>
+              <button
+                type="button"
+                class="study-row"
+                [class.opened]="model.opened"
+                [attr.data-model]="model.id"
+                [attr.aria-current]="model.opened ? 'true' : null"
+                (click)="openModel(model.id)"
+              >
+                <span class="line-title">{{ model.label }}</span>
+                <span class="line-meta">{{ model.detail }}</span>
+                <span>{{ model.opened ? 'Opened' : 'Hidden' }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  <div class="editors">
+    <app-fixed-expenses #billEditor />
+    <app-subscriptions #subscriptionEditor />
+    <app-income #jobEditor [dialogOnly]="true" />
+  </div>
+}

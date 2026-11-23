@@ -1,3 +1,4 @@
+@if (!dialogOnly) {
 @if (incomes.length) {
   <section class="income-summary" aria-label="Pay summary">
     <p class="income-summary__headline">Yearly pay <strong class="money">{{ activeAnnualTotal | money }}</strong> before taxes</p>
@@ -160,6 +161,7 @@
       </ui-empty-state>
     }
 </ui-card>
+}
 
 <ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="income-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeModal()">
       <h3 id="income-modal-title">{{ editingId ? 'Edit job' : 'Add job' }}</h3>

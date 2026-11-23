@@ -15,6 +15,8 @@ export { projectAccountHall, accountHallKey } from './app/accounts-hall/account-
 export type { AccountHallDrawer, AccountHallProjection, AccountHallRecord } from './app/accounts-hall/account-hall';
 export { projectTreasuryGallery, galleryGain } from './app/treasury-gallery/treasury-gallery';
 export type { TreasuryGalleryProjection, TreasuryPlaque, TreasuryLedgerLine } from './app/treasury-gallery/treasury-gallery';
+export { projectPlanningStudy } from './app/planning-study/planning-study';
+export type { PlanningStudyProjection, StudyBill, StudyModel, StudyPayDrawer } from './app/planning-study/planning-study';
 export type { PortfolioAccount, PositionHighlight } from './app/hub/finance-hub-snapshot';
 export async function loadFinanceRoutes(): Promise<Routes> { return (await import('./app/app.routes')).routes; }
 export async function createFinanceVaultMaterial(passphrase: string) { return (await import('./app/crypto/vault-crypto')).createVaultMaterial(passphrase); }

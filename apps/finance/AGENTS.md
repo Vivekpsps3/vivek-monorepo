@@ -26,11 +26,11 @@ Start with the existing owner:
 Decrypted financial data stays in the browser. Preserve owner/session/collection
 eligibility at publication, immediate lock clearing, expected revisions and encrypted
 format/AAD compatibility. A timeout or an entry-time unlock check alone is insufficient.
-Keep one authoritative record store and calculation/import engine. Name search, the accounts hall, and the treasury gallery read published views and do not rebuild the dashboard or price a quote.
+Keep one authoritative record store and calculation/import engine. Name search, the accounts hall, the treasury gallery, and planning study read published views and do not rebuild the dashboard, keep another ledger, or price a quote.
 
 Before extracting a service, identify duplicated decisions and actual consumers.
-Delete replaced paths in the same change. Distinct filtered/dashboard views and
-revision guards are not redundant merely because their fields resemble each other.
+Delete replaced paths in the same change. Distinct views and revision guards
+are not redundant because their fields match.
 
 Use [DATA_MODEL](../../docs/DATA_MODEL.md) for money/cashflow semantics,
 [SECURITY_MODEL](../../docs/SECURITY_MODEL.md) for vault changes and

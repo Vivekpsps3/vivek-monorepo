@@ -4,13 +4,14 @@ import { ActivatedRoute } from '@angular/router';
 import { AccountsHallComponent } from '../accounts-hall/accounts-hall.component';
 import { AssetsLiabilitiesComponent } from '../assets-liabilities/assets-liabilities.component';
 import { PortfolioComponent } from '../portfolio/portfolio.component';
+import { PlanningStudyComponent } from '../planning-study/planning-study.component';
 import { TreasuryGalleryComponent } from '../treasury-gallery/treasury-gallery.component';
 import { UiPageHeaderComponent } from '@vivek/ui';
 
 @Component({
   selector: 'app-have-hub',
   standalone: true,
-  imports: [AssetsLiabilitiesComponent, AccountsHallComponent, PortfolioComponent, TreasuryGalleryComponent, UiPageHeaderComponent],
+  imports: [AssetsLiabilitiesComponent, AccountsHallComponent, PortfolioComponent, TreasuryGalleryComponent, PlanningStudyComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
       @if (tab === 'holdings') {
@@ -20,6 +21,8 @@ import { UiPageHeaderComponent } from '@vivek/ui';
         <app-accounts-hall />
       } @else if (tab === 'gallery') {
         <app-treasury-gallery />
+      } @else if (tab === 'study') {
+        <app-planning-study />
       } @else {
         <app-assets-liabilities />
       }
@@ -39,7 +42,8 @@ import { UiPageHeaderComponent } from '@vivek/ui';
     app-assets-liabilities,
     app-accounts-hall,
     app-portfolio,
-    app-treasury-gallery {
+    app-treasury-gallery,
+    app-planning-study {
       display: block;
       min-width: 0;
       max-width: 100%;
@@ -56,7 +60,7 @@ export class HaveHubComponent implements OnInit {
   ngOnInit(): void {
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroy)).subscribe(params => {
       const requested = params.get('t');
-      const tab = requested === 'holdings' || requested === 'hall' || requested === 'gallery' ? requested : 'assets';
+      const tab = requested === 'holdings' || requested === 'hall' || requested === 'gallery' || requested === 'study' ? requested : 'assets';
       this.tab = tab;
       this.cdr.markForCheck();
     });
