@@ -225,8 +225,8 @@ describe('Home room ownership', () => {
     const host = harness.routeNativeElement as HTMLElement;
     harness.detectChanges();
     expect(host.querySelector('.stage')?.getAttribute('style')).toContain('scale(1.5)');
-    expect(host.querySelector('.room')?.classList.contains('cutaway')).toBeTrue();
-    expect(host.querySelector('[data-cutaway="floor-walls"]')?.classList.contains('cutaway')).toBeTrue();
+    expect(host.querySelector('.room')?.getAttribute('src')).toBe('/town/home/living.svg');
+    expect(host.querySelector('[data-placement-grid]')).toBeNull();
     expect(host.querySelector('.inspector.sheet')).not.toBeNull();
     expect(host.querySelector('[aria-modal]')).toBeNull();
     expect(host.textContent).toContain('Sample coastal print');
