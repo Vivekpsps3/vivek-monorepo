@@ -1,5 +1,7 @@
 /** One cosmetic catalog: twelve free starters and twelve priced shop items. */
 
+import { HOME_MILESTONES } from './home-milestones';
+
 export const COSMETIC_CATALOG_VERSION = 1;
 export const COSMETIC_CELL_PX = 56;
 export const COSMETIC_ROOM_CELLS = 12;
@@ -121,11 +123,9 @@ const catalogById = new Map(cosmeticCatalog.map(item => [item.id, item]));
  * The nine existing milestone ornament identities. They stay outside this catalog:
  * no price, no artwork, and no starter or shop group.
  */
-export const MILESTONE_ORNAMENT_IDS: readonly string[] = Object.freeze([
-  'stepping-stone', 'small-planter', 'wooden-lantern',
-  'wind-vane', 'shell-marker', 'path-lamp',
-  'bench', 'bird-bath', 'civic-pennant',
-]);
+export const MILESTONE_ORNAMENT_IDS: readonly string[] = Object.freeze(
+  HOME_MILESTONES.flatMap(milestone => milestone.options.map(option => option.id)),
+);
 
 export const SAMPLE_COSMETIC_LAYOUT: readonly CosmeticPlacement[] = Object.freeze([
   Object.freeze({ instanceId: 'sample-oak-seat', catalogId: 'oak-seat', column: 1, row: 2, orientation: 0 as const }),
@@ -148,6 +148,11 @@ export function copyCosmeticLayout(layout: readonly CosmeticPlacement[]): Cosmet
     row: item.row,
     orientation: item.orientation,
   }));
+}
+
+export function footprintAtTurn(asset: CosmeticAsset | null, orientation: CosmeticPlacement['orientation']) {
+  const footprint = asset?.footprint ?? { columns: 1, rows: 1 };
+  return orientation % 2 === 0 ? footprint : { columns: footprint.rows, rows: footprint.columns };
 }
 
 export function footprintFits(asset: CosmeticAsset, column: number, row: number): boolean {

@@ -157,13 +157,14 @@ test.describe('Home rooms', () => {
   });
 
   for (const [width, theme] of [[390, 'light'], [390, 'dark'], [1280, 'light'], [1280, 'dark']] as const) {
-    test(`saves a layout and rejects an older revision at ${width} ${theme}`, async ({ page }, info) => {
+    test(`previews and saves a room edit at ${width} ${theme}`, async ({ page }, info) => {
       test.setTimeout(120_000);
       await prepare(page, width, theme);
       let failed = false;
-      const saved: string[] = [];
+      const writes: string[] = [];
       await page.route('**/api/town/layouts/**', async route => {
         const request = route.request();
+        if (request.method() === 'PUT') writes.push(request.postData() ?? '');
         if (request.method() === 'PUT' && !failed) {
           failed = true;
           await route.fulfill({
@@ -173,57 +174,177 @@ test.describe('Home rooms', () => {
           });
           return;
         }
-        if (request.method() === 'PUT') saved.push(request.postData() ?? '');
         await route.continue();
       });
       await page.goto('/town/home/study?object=study-desk');
       const home = page.locator('app-town-home');
       const status = home.locator('[data-layout-status]');
-      await expect(status).toHaveText('Nothing is saved yet. Revision 0.');
-      const note = home.locator('#home-note');
-      await note.fill('Harbor draft stays');
+      await home.locator('#home-note').fill('Harbor draft stays');
       const touch = width === 390;
-      await activate(page, home.getByRole('button', { name: 'Palette 2' }), touch);
-      await expect(home.getByRole('button', { name: 'Palette 2' })).toHaveAttribute('aria-pressed', 'true');
-      const save = home.getByRole('button', { name: 'Save layout', exact: true });
-      const saveBox = await save.boundingBox();
-      expect(saveBox?.width).toBeGreaterThanOrEqual(44);
-      expect(saveBox?.height).toBeGreaterThanOrEqual(44);
-      await activate(page, save, touch);
-      await expect(status).toHaveText('The layout was not saved. Your palette choice is still here.');
-      await expect(home).not.toContainText('layout service');
-      await expect(note).toHaveValue('Harbor draft stays');
-      await expect(home.getByRole('button', { name: 'Palette 2' })).toHaveAttribute('aria-pressed', 'true');
-      await activate(page, save, touch);
-      await expect(status).toHaveText('Saved. Revision 1.');
-      expect(saved[0]).toContain('"catalog_id":"desk"');
-      expect(saved[0]).toContain('"palette":2');
-      expect(saved[0]).not.toContain('Harbor');
-      expect(saved[0]).not.toContain('note');
-      const older = home.getByRole('button', { name: 'Save the older revision' });
-      const olderBox = await older.boundingBox();
-      expect(olderBox?.width).toBeGreaterThanOrEqual(44);
-      expect(olderBox?.height).toBeGreaterThanOrEqual(44);
-      await activate(page, older, touch);
-      await expect(status).toHaveText('This room was saved at revision 1. The older revision was not written.');
-      await expect(note).toHaveValue('Harbor draft stays');
-      await expect(home.getByRole('button', { name: 'Palette 2' })).toHaveAttribute('aria-pressed', 'true');
-      const read = await page.request.get('/api/town/layouts/study');
-      expect(read.ok()).toBeTruthy();
-      const body = await read.json() as { revision: number; items: { catalog_id: string; palette: number }[] };
-      expect(body.revision).toBe(1);
-      expect(body.items.map(item => item.catalog_id)).toEqual(['desk', 'desk-lamp', 'bookshelf']);
-      expect(body.items.every(item => item.palette === 2)).toBeTruthy();
-      expect(JSON.stringify(body)).not.toContain('Harbor');
-      await expect(home).not.toContainText('Stamps');
-      await expect(home).not.toContainText('Buy');
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
-      expect(await home.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+      const decorate = home.getByRole('button', { name: 'Decorate room' });
+      await activate(page, decorate, touch);
+      const inventory = home.getByLabel('Add furniture');
+      await expect(inventory).toBeFocused();
+      await inventory.selectOption('low-table');
+      const column = home.getByLabel('Column', { exact: true });
+      const row = home.getByLabel('Row', { exact: true });
+      const place = home.getByRole('button', { name: 'Place item' });
+      const preview = home.locator('[data-placement-status]');
+
+      await column.selectOption({ value: '2' });
+      await row.selectOption({ value: '5' });
+      await expect(preview).toHaveText('That space is occupied.');
+      await expect(place).toBeDisabled();
+      await activate(page, home.getByRole('button', { name: 'Cancel placement' }), touch);
+      await expect(inventory).toBeFocused();
+      await expect(home.getByRole('button', { name: 'Save layout' })).toBeDisabled();
+
+      await inventory.selectOption('low-table');
+      if (touch) {
+        const viewport = home.getByRole('group', { name: 'Study', exact: true });
+        await viewport.scrollIntoViewIfNeeded();
+        const scene = await viewport.boundingBox();
+        if (!scene) throw new Error('Study scene is missing');
+        await page.touchscreen.tap(scene.x + scene.width * 5.5 / 12, scene.y + scene.height * 13.5 / 15);
+      } else {
+        await column.selectOption({ value: '5' });
+        await row.selectOption({ value: '10' });
+      }
+      await expect(column).toHaveValue('5');
+      await expect(row).toHaveValue('10');
+      await expect(preview).toHaveText('Keep the doorway clear.');
+      await expect(place).toBeDisabled();
+
+      await column.selectOption({ value: '6' });
+      if (touch) await row.selectOption({ value: '1' });
+      else {
+        await row.press('Home');
+        await row.press('ArrowDown');
+        await expect(row).toHaveValue('1');
+      }
+      await activate(page, home.getByRole('button', { name: 'Rotate 90°' }), touch);
+      await activate(page, home.getByRole('button', { name: 'Rose' }), touch);
+      await expect(home.getByRole('button', { name: 'Rose' })).toHaveAttribute('aria-pressed', 'true');
+      await expect(preview).toHaveText('Preview ready.');
       const scan = await new AxeBuilder({ page }).include('app-town-home').analyze();
       expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
-      await info.attach(`layout-${width}-${theme}`, { body: await home.screenshot(), contentType: 'image/png' });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+      expect(await home.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+      await info.attach(`preview-${width}-${theme}`, { body: await home.screenshot(), contentType: 'image/png' });
+
+      await activate(page, place, touch);
+      const save = home.getByRole('button', { name: 'Save layout', exact: true });
+      for (const target of [save, inventory]) {
+        const box = await target.boundingBox();
+        expect(box?.width).toBeGreaterThanOrEqual(44);
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+      }
+      await activate(page, save, touch);
+      await expect(status).toHaveText('The layout was not saved. Your changes are still here.');
+      await expect(home.getByLabel('Move or recolor furniture')).toContainText('Low table');
+      await expect(home).not.toContainText('layout service');
+      await activate(page, save, touch);
+      await expect(status).toHaveText('Layout saved · Revision 1');
+      await expect(decorate).toBeFocused();
+      await expect(home.locator('#home-note')).toHaveValue('Harbor draft stays');
+      expect(writes).toHaveLength(2);
+      expect(writes[0]).toBe(writes[1]);
+      expect(writes[1]).not.toContain('Harbor');
+      expect(writes[1]).not.toContain('note');
+
+      const read = await page.request.get('/api/town/layouts/study');
+      expect(read.ok()).toBeTruthy();
+      const body = await read.json() as { revision: number; items: { instance_id: string; catalog_id: string; palette: number }[] };
+      expect(body.revision).toBe(1);
+      expect(body.items.map(item => item.catalog_id)).toEqual(['desk', 'desk-lamp', 'bookshelf', 'low-table']);
+      const saved = body.items.at(-1)!;
+      expect(saved).toMatchObject({ palette: 2, orientation: 1, column: 6, row: 1 });
+      await page.reload();
+      const item = home.locator(`[data-scene-object="${saved.instance_id}"] img`);
+      await expect(item).toBeVisible();
+      await expect(item).toHaveAttribute('data-palette', '2');
+      await expect(item).toHaveCSS('--turn', '90deg');
+      await expect(home.locator('#home-note')).toBeEnabled();
     });
   }
+
+  test('brings a saved milestone ornament back when corrected eligibility returns', async ({ page }) => {
+    await prepare(page, 1280, 'light');
+    expect((await page.request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
+    const setDay = async (day: string) => {
+      expect((await page.request.post('/e2e/town/clock', { data: { iso: `${day}T19:00:00Z` } })).ok()).toBeTruthy();
+    };
+    await setDay('2026-10-08');
+    await page.goto('/town/home/courtyard');
+    const home = page.locator('app-town-home');
+    await home.getByRole('button', { name: 'Decorate room' }).click();
+    await home.getByLabel('Building level 2', { exact: true }).selectOption('small-planter');
+    await home.getByRole('button', { name: 'Place item' }).click();
+    await home.getByRole('button', { name: 'Save layout' }).click();
+    const ornament = home.locator('[data-scene-object="habit-level-2"]');
+    await expect(ornament).toBeVisible();
+    await expect(ornament.locator('img')).toHaveAttribute('src', /milestones\.svg#planter/);
+    const town = await (await page.request.get('/api/town')).json() as { habits: { id: number; level: number }[] };
+    const habit = town.habits.find(item => item.level === 2)!;
+    const headers = { 'X-CSRF-Token': 'synthetic-csrf', Origin: new URL(page.url()).origin };
+    const checkins = `/api/town/habits/${habit.id}/checkins`;
+    expect((await page.request.delete(`${checkins}/2026-10-08`, { headers })).ok()).toBeTruthy();
+    await page.reload();
+    await expect(ornament).toHaveCount(0);
+    await expect(home.locator('[data-dormant-milestone="habit-level-2"]')).toBeVisible();
+    await home.getByRole('button', { name: 'Decorate room' }).click();
+    await expect(home.getByText('Your choice will return when eligible.')).toBeVisible();
+    const saved = await (await page.request.get('/api/town/layouts/courtyard')).json() as {
+      items: { instance_id: string; catalog_id: string }[];
+    };
+    expect(saved.items).toContainEqual(expect.objectContaining({ instance_id: 'habit-level-2', catalog_id: 'small-planter' }));
+    expect((await page.request.post(checkins, { headers, data: { day: '2026-10-08' } })).ok()).toBeTruthy();
+    await page.reload();
+    await expect(ornament).toBeVisible();
+    await expect(ornament).toHaveAccessibleName('Small planter');
+  });
+
+  test('drops the editor and a held save on a cross-tab vault lock', async ({ page }) => {
+    await prepare(page, 1280, 'dark');
+    let release: () => void = () => undefined;
+    const waiting = new Promise<void>(resolve => { release = resolve; });
+    await page.route(/\/api\/town\/layouts\/study(?:\?|$)/, async route => {
+      if (route.request().method() !== 'PUT') return route.continue();
+      await waiting;
+      await route.fulfill({
+        status: 200,
+        json: { room_id: 'study', revision: 4, items: route.request().postDataJSON().items },
+      });
+    });
+    try {
+      await page.goto('/town/home/study?object=study-desk');
+      const home = page.locator('app-town-home');
+      const note = home.locator('#home-note');
+      await note.fill('Synthetic note clears on lock');
+      const decorate = home.getByRole('button', { name: 'Decorate room' });
+      await decorate.click();
+      await home.getByLabel('Add furniture').selectOption('oak-seat');
+      await home.getByRole('button', { name: 'Place item' }).click();
+      const issued = page.waitForRequest(request => request.method() === 'PUT' && request.url().includes('/layouts/study'));
+      await home.getByRole('button', { name: 'Save layout' }).click();
+      await issued;
+      await page.evaluate(() => {
+        const remote = new BroadcastChannel('finance-vault-sync-v1');
+        remote.postMessage({ version: 1, userId: 1, kind: 'lock', tabId: 'synthetic-other-tab' });
+        remote.close();
+      });
+      await expect(decorate).toBeEnabled();
+      await expect(note).toHaveValue('');
+      const delivered = page.waitForResponse(response =>
+        response.request().method() === 'PUT' && response.url().includes('/layouts/study'));
+      release();
+      await delivered;
+      await expect(home.locator('[data-layout-status]')).toHaveAttribute('data-layout-revision', '0');
+      await expect(home.getByRole('link', { name: 'Oak seat' })).toHaveCount(0);
+    } finally {
+      release();
+    }
+  });
 
   test('returns focus to Visit Home', async ({ page }) => {
     await prepare(page, 1280, 'light');

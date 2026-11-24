@@ -1,12 +1,14 @@
 /** Four Home rooms. Floor cells and wall slots share the Town y-down frame. */
 
 import {
-  COSMETIC_LAYOUT_CAP,
   COSMETIC_ROOM_CELLS,
   LAYOUT_CELL_PX,
   cosmeticById,
+  footprintAtTurn,
   type CosmeticAsset,
 } from './cosmetic-catalog';
+import type { HomeLayoutItem, HomePalette, HomeTurn } from './home-layout';
+import { homeMilestoneOption } from './home-milestones';
 import { roomRect, sceneFrame, type ScenePlacement } from './library-room.scene';
 
 export const HOME_CELL = LAYOUT_CELL_PX;
@@ -49,7 +51,6 @@ export interface HomeObject {
   readonly detail: string;
   readonly primary: boolean;
   readonly action: HomeAction;
-  readonly slotLabel: string;
   readonly floor: { readonly column: number; readonly row: number } | null;
   readonly wallSlot: string | null;
 }
@@ -63,6 +64,9 @@ export interface HomeSceneObject extends ScenePlacement {
   readonly primary: boolean;
   readonly action: HomeAction;
   readonly slotLabel: string;
+  readonly orientation: HomeTurn;
+  readonly palette: HomePalette;
+  readonly ornamentArt: string | null;
   readonly left: number;
   readonly top: number;
   readonly width: number;
@@ -108,9 +112,6 @@ function place(spec: ObjectSpec): HomeObject {
   const floor = spec.floor ?? null;
   const wallSlot = spec.wallSlot ?? null;
   if ((floor == null) === (wallSlot == null)) throw new Error(`${spec.id} needs one floor cell or one wall slot`);
-  const slotLabel = floor
-    ? `Floor column ${floor.column}, row ${floor.row}`
-    : `Wall slot ${wallSlot}`;
   return Object.freeze({
     id: spec.id,
     room: spec.room,
@@ -119,7 +120,6 @@ function place(spec: ObjectSpec): HomeObject {
     detail: spec.detail,
     primary: spec.primary === true,
     action: spec.action,
-    slotLabel,
     floor,
     wallSlot,
   });
@@ -248,113 +248,69 @@ export function homePrimary(room: HomeRoomId): HomeObject {
   return primary;
 }
 
-function footprint(asset: CosmeticAsset, column: number, row: number): readonly string[] {
-  const cells: string[] = [];
-  for (let y = 0; y < asset.footprint.rows; y += 1) {
-    for (let x = 0; x < asset.footprint.columns; x += 1) cells.push(`${column + x},${row + y}`);
-  }
-  return cells;
+export function homeSceneItem(room: HomeRoomId, item: HomeLayoutItem): HomeSceneObject | null {
+  const catalog = cosmeticById(item.catalog_id);
+  const ornament = homeMilestoneOption(item.catalog_id, item.instance_id);
+  if (!catalog && !ornament) return null;
+  const authored = homeObjects(room).find(object => object.id === item.instance_id && object.catalogId === item.catalog_id);
+  return scenePlacement(room, item, catalog, authored, ornament?.label, ornament?.art);
 }
 
-function doorwayCells(): ReadonlySet<string> {
-  const cells = new Set<string>();
-  for (let y = 0; y < HOME_DOORWAY.rows; y += 1) {
-    for (let x = 0; x < HOME_DOORWAY.columns; x += 1) cells.add(`${HOME_DOORWAY.column + x},${HOME_DOORWAY.row + y}`);
-  }
-  return cells;
-}
-
-/** Problems in the starter layout. An empty list is the furnished home. */
-export function homeLayoutProblems(): readonly string[] {
-  const problems: string[] = [];
-  const door = doorwayCells();
-  const seen = new Set<string>();
-  for (const room of HOME_ROOM_IDS) {
-    const objects = homeObjects(room);
-    if (objects.length < 3) problems.push(`${room} has ${objects.length} objects`);
-    if (objects.filter(object => object.primary).length !== 1) problems.push(`${room} primary`);
-    const wallCount = objects.filter(object => object.wallSlot).length;
-    const floorCount = objects.filter(object => object.floor).length;
-    if (wallCount > HOME_WALL_CAP) problems.push(`${room} wall cap`);
-    if (floorCount > COSMETIC_LAYOUT_CAP) problems.push(`${room} floor cap`);
-    const cells = new Map<string, HomeObject>();
-    for (const object of objects) {
-      if (seen.has(object.id)) problems.push(`duplicate ${object.id}`);
-      seen.add(object.id);
-      const asset = cosmeticById(object.catalogId);
-      if (!asset || asset.group !== 'starter' || asset.priceStamps !== 0) {
-        problems.push(`${object.id} is not a free starter`);
-        continue;
-      }
-      if (object.floor) {
-        if (object.floor.column < 0 || object.floor.row < 0
-          || object.floor.column + asset.footprint.columns > HOME_FLOOR_CELLS
-          || object.floor.row + asset.footprint.rows > HOME_FLOOR_CELLS) {
-          problems.push(`${object.id} leaves the floor`);
-        }
-        for (const cell of footprint(asset, object.floor.column, object.floor.row)) {
-          if (door.has(cell)) problems.push(`${object.id} blocks the doorway`);
-          const other = cells.get(cell);
-          if (other) {
-            const otherAsset = cosmeticById(other.catalogId);
-            const stacked = otherAsset != null && (
-              (asset.stackable && otherAsset.surface) || (otherAsset.stackable && asset.surface)
-            );
-            if (!stacked) problems.push(`${object.id} overlaps ${other.id}`);
-          } else {
-            cells.set(cell, object);
-          }
-        }
-      }
-      if (object.wallSlot) {
-        const slot = slotById.get(object.wallSlot);
-        if (!slot || slot.room !== room) problems.push(`${object.id} wall slot`);
-        else if (slot.column < 0 || slot.column + asset.footprint.columns > HOME_FLOOR_CELLS) problems.push(`${object.id} wall column`);
-        else if (slot.top < 0 || slot.top + asset.footprint.rows * HOME_CELL > HOME_WALL_PX) problems.push(`${object.id} wall height`);
-      }
-    }
-  }
-  for (const slot of HOME_WALL_SLOTS) {
-    if (HOME_WALL_SLOTS.filter(item => item.id === slot.id).length !== 1) problems.push(`slot ${slot.id}`);
-  }
-  return problems;
-}
-
-function scenePlacement(object: HomeObject, asset: CosmeticAsset): HomeSceneObject {
-  const width = asset.footprint.columns * HOME_CELL;
-  const height = asset.footprint.rows * HOME_CELL;
-  const anchor = { x: width / 2, y: asset.anchor === 'floor' ? height : 0 };
-  const slot = object.wallSlot ? slotById.get(object.wallSlot) : null;
-  const x = object.floor
-    ? (object.floor.column + asset.footprint.columns / 2) * HOME_CELL
-    : ((slot?.column ?? 0) + asset.footprint.columns / 2) * HOME_CELL;
-  const y = object.floor
-    ? HOME_WALL_PX + (object.floor.row + asset.footprint.rows) * HOME_CELL
-    : slot?.top ?? 0;
+function scenePlacement(
+  room: HomeRoomId,
+  item: HomeLayoutItem,
+  asset: CosmeticAsset | null,
+  authored?: HomeObject,
+  ornamentLabel?: string,
+  ornamentArt?: string,
+): HomeSceneObject | null {
+  const dimensions = footprintAtTurn(asset, item.orientation);
+  const width = dimensions.columns * HOME_CELL;
+  const height = dimensions.rows * HOME_CELL;
+  const anchor = { x: width / 2, y: item.anchor === 'floor' ? height : 0 };
+  const wall = item.slot ? slotById.get(item.slot) : null;
+  const column = item.column ?? wall?.column;
+  const top = item.row != null ? HOME_WALL_PX + item.row * HOME_CELL : wall?.top;
+  if (column == null || top == null) return null;
   const placedObject = {
-    id: object.id,
-    room: object.room,
-    catalogId: object.catalogId,
-    label: object.label,
-    detail: object.detail,
-    primary: object.primary,
-    action: object.action,
-    slotLabel: object.slotLabel,
-    x,
-    y,
-    asset: { id: object.id, layer: asset.layer, bounds: { width, height }, anchor },
+    id: item.instance_id,
+    room,
+    catalogId: item.catalog_id,
+    label: authored?.label ?? asset?.label ?? ornamentLabel ?? '',
+    detail: authored?.detail ?? 'A decoration for this room.',
+    primary: authored?.primary ?? false,
+    action: authored?.action ?? { kind: 'placed' as const },
+    slotLabel: item.row != null ? `Floor column ${column + 1}, row ${item.row + 1}` : `Wall slot ${wall?.id}`,
+    x: column * HOME_CELL + anchor.x,
+    y: top + anchor.y,
+    asset: { id: item.instance_id, layer: asset?.layer ?? 3, bounds: { width, height }, anchor },
+    orientation: item.orientation,
+    palette: item.palette,
+    ornamentArt: ornamentArt ?? null,
   };
   return { ...placedObject, ...sceneFrame(roomRect(placedObject), HOME_ROOM_BOUNDS) };
 }
 
-export function homeSceneObjects(room: HomeRoomId): readonly HomeSceneObject[] {
-  return homeObjects(room).flatMap(object => {
-    const asset = cosmeticById(object.catalogId);
-    return asset ? [scenePlacement(object, asset)] : [];
-  }).sort((a, b) => a.asset.layer - b.asset.layer || a.id.localeCompare(b.id));
+export function starterHomeLayout(room: HomeRoomId): HomeLayoutItem[] {
+  return homeObjects(room).map(object => ({
+    instance_id: object.id,
+    catalog_id: object.catalogId,
+    anchor: object.wallSlot ? 'wall' : 'floor',
+    column: object.floor?.column ?? null,
+    row: object.floor?.row ?? null,
+    slot: object.wallSlot,
+    orientation: 0,
+    palette: 0,
+  }));
 }
 
-export function wallSlotLine(room: HomeRoom): string {
-  const used = new Map(homeObjects(room.id).filter(object => object.wallSlot).map(object => [object.wallSlot, object.label]));
-  return room.wallSlots.map(id => `${id} (${used.get(id) ?? 'open'})`).join(', ');
+export function homeSceneObjects(room: HomeRoomId, items?: readonly HomeLayoutItem[]): readonly HomeSceneObject[] {
+  return (items ?? starterHomeLayout(room)).flatMap(item => homeSceneItem(room, item) ?? [])
+    .sort((a, b) => a.asset.layer - b.asset.layer || a.id.localeCompare(b.id));
+}
+
+
+export function wallSlotLabel(slot: string): string {
+  const direction = slot.split('-').at(-1) ?? slot;
+  return `${direction[0]?.toUpperCase() ?? ''}${direction.slice(1)} wall`;
 }

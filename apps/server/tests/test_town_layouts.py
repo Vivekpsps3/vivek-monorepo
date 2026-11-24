@@ -6,7 +6,7 @@ import json
 import re
 import sqlite3
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -32,12 +32,12 @@ from apps.server.migrations import (
     sqlite_url,
 )
 from apps.server.tests.test_composition import _app, _user
-from apps.server.tests.test_town_api_read import _open
+from apps.server.tests.test_town_api_read import _add, _open
 from apps.server.tests.test_town_api_write import _call, _quiet
 from apps.server.town import layouts
 from apps.server.town.clock import get_town_clock
 from apps.server.town.layouts import read_layout, save_layout
-from apps.server.town.models import RoomLayout, TownBase
+from apps.server.town.models import HabitCheckin, RoomLayout, TownBase
 from apps.server.town.stamps import grant_stamps, purchase_stamps, refund_stamps
 
 PARENT = "site_town_stamps_v1"
@@ -888,3 +888,80 @@ def test_upgrade_preserves_other_domains_and_unknown_layout_rows(tmp_path, monke
     finally:
         session.close()
         opened.engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("milestone", "option", "threshold"),
+    [
+        ("habit-level-2", "small-planter", 50),
+        ("town-level-3", "wind-vane", 250),
+        ("town-level-5", "bench", 900),
+    ],
+)
+def test_milestone_choice_uses_existing_public_levels(api, milestone, option, threshold):
+    client, database, _ = api
+    first = date(2023, 1, 1)
+    last = first + timedelta(days=2 * (threshold // 10 - 1))
+    with database.sessionmaker.begin() as db:
+        habit = _add(
+            db,
+            1,
+            "Milestone habit",
+            0,
+            "garden",
+            7,
+            first,
+            [first + timedelta(days=2 * index) for index in range(threshold // 10 - 1)],
+        )
+        habit_id = habit.id
+    path = "/api/town/layouts/courtyard"
+    choice = _piece(milestone, option)
+    before = client.put(path, json=_body([choice]))
+    assert before.status_code == 409 and before.json()["code"] == "layout_entitlement"
+    with database.sessionmaker.begin() as db:
+        db.add(HabitCheckin(user_id=1, habit_id=habit_id, day=last, created_at=WHEN))
+    at = client.put(path, json=_body([choice]))
+    assert at.status_code == 201 and at.json()["items"] == [choice]
+    assert client.put("/api/town/layouts/study", json=_body([choice])).status_code == 422
+    assert client.put(path, json=_body([choice, choice], 1)).status_code == 422
+    unearned = client.put(path, json=_body([{**choice, "instance_id": "extra-choice"}], 1))
+    assert unearned.status_code == 409 and unearned.json()["code"] == "layout_entitlement"
+    with database.sessionmaker.begin() as db:
+        db.add(
+            HabitCheckin(
+                user_id=1, habit_id=habit_id, day=last + timedelta(days=2), created_at=WHEN
+            )
+        )
+    after = {**choice, "palette": 1}
+    assert client.put(path, json=_body([after], 1)).json()["items"] == [after]
+    with database.sessionmaker.begin() as db:
+        db.query(HabitCheckin).filter(
+            HabitCheckin.habit_id == habit_id, HabitCheckin.day >= last
+        ).delete()
+    decor = _piece("extra-seat", "oak-seat", column=1)
+    assert client.put(path, json=_body([after, decor], 2)).json()["items"] == [after, decor]
+    changed = client.put(path, json=_body([choice, decor], 3))
+    assert changed.status_code == 409 and changed.json()["code"] == "layout_entitlement"
+    assert client.get(path).json()["items"] == [after, decor]
+
+
+def test_maximum_town_level_retains_milestone_options(api):
+    client, database, _ = api
+    first = date(2023, 1, 1)
+    with database.sessionmaker.begin() as db:
+        _add(
+            db,
+            1,
+            "Veteran habit",
+            0,
+            "garden",
+            7,
+            first,
+            [first + timedelta(days=2 * index) for index in range(500)],
+        )
+    assert client.get("/api/town").json()["town"]["level"] == 10
+    choices = [
+        _piece("town-level-3", "path-lamp"),
+        _piece("town-level-5", "civic-pennant", column=1),
+    ]
+    assert client.put("/api/town/layouts/courtyard", json=_body(choices)).json()["items"] == choices

@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="288" height="32" viewBox="0 0 288 32">
+  <title>Original milestone ornament artwork for Terraria-on-Sea</title>
+  <style>
+    :root { color-scheme:light dark; --ink:#503b32; --wood:#b17855; --sand:#eec993; --water:#55938f; --glow:#ffdc82; --coral:#b65a57; }
+    @media (prefers-color-scheme:dark) {
+      :root { --ink:#171b24; --wood:#a07b6a; --sand:#dcb793; --water:#5ca7a0; --glow:#ffd987; --coral:#d98a84; }
+    }
+    g { stroke:var(--ink); stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  </style>
+  <view id="stone" viewBox="0 0 32 32"/>
+  <view id="planter" viewBox="32 0 32 32"/>
+  <view id="lantern" viewBox="64 0 32 32"/>
+  <view id="vane" viewBox="96 0 32 32"/>
+  <view id="shell" viewBox="128 0 32 32"/>
+  <view id="lamp" viewBox="160 0 32 32"/>
+  <view id="bench" viewBox="192 0 32 32"/>
+  <view id="bath" viewBox="224 0 32 32"/>
+  <view id="pennant" viewBox="256 0 32 32"/>
+  <g>
+    <path fill="var(--water)" d="m4 23 4-7 13-3 7 6-3 6-14 3Z"/>
+    <path fill="var(--sand)" d="m4 23 15-4 9 0-3 6-14 3Z"/>
+  </g>
+  <g transform="translate(32)">
+    <path fill="var(--water)" d="M16 19Q7 16 8 9q6 1 8 7Q15 8 22 5q2 10-6 14Z"/>
+    <path fill="var(--coral)" d="M8 19h16l-3 9H11Z"/>
+    <path fill="var(--sand)" d="M7 18h18v3H7Z"/>
+  </g>
+  <g transform="translate(64)">
+    <path fill="var(--wood)" d="M7 10h18l-3 4H10ZM8 24h16l2 4H6Z"/>
+    <path fill="var(--glow)" d="M10 14h12v10H10Z"/>
+    <path fill="none" d="M13 10V7q3-4 6 0v3m-3 4v10"/>
+  </g>
+  <g transform="translate(96)">
+    <path fill="var(--wood)" d="M15 9h3v17h5v2H9v-2h6Z"/>
+    <path fill="var(--coral)" d="m5 12 6 2h12l-2 2 7-3-7-3 2 2H11l-6-4Z"/>
+  </g>
+  <g transform="translate(128)">
+    <path fill="var(--sand)" d="M13 27C8 25 3 20 5 15c2-5 6-4 7-6 3-4 6-4 9-1 3 2 7 3 7 8 0 5-5 8-9 11Z"/>
+    <path fill="none" d="m11 14 4 9m1-12 1 11m6-10-4 11"/>
+  </g>
+  <g transform="translate(160)">
+    <path fill="var(--water)" d="M15 13h3v13h5v2H9v-2h6Z"/>
+    <path fill="var(--glow)" d="M12 7h9v9h-9Z"/>
+    <path fill="var(--water)" d="m10 8 3-5h7l3 5Z"/>
+  </g>
+  <g transform="translate(192)">
+    <path fill="var(--wood)" d="M5 12h22v7H5ZM7 23h3v5H7Zm15 0h3v5h-3Z"/>
+    <path fill="var(--sand)" d="m4 19 4-4h17l3 4-2 4H6Z"/>
+  </g>
+  <g transform="translate(224)">
+    <path fill="var(--wood)" d="M13 15h6l-1 9 5 4H9l5-4Z"/>
+    <path fill="var(--water)" d="M4 12h24l-4 6H8Z"/>
+    <ellipse fill="var(--sand)" cx="16" cy="12" rx="12" ry="3"/>
+    <path fill="none" d="m10 12 5-1 5 1"/>
+  </g>
+  <g transform="translate(256)">
+    <path fill="var(--wood)" d="M9 5h3v21h5v2H5v-2h4Z"/>
+    <path fill="var(--coral)" d="M12 7h14l-4 4 4 4H12Z"/>
+    <path fill="var(--sand)" d="M12 9h10l-2 2 2 2H12Z"/>
+  </g>
+</svg>

@@ -1,18 +1,24 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { EMPTY, Subject, catchError, distinctUntilChanged, map, of, startWith, switchMap } from 'rxjs';
+import { EMPTY, Subject, catchError, distinctUntilChanged, map, of, skip, startWith, switchMap } from 'rxjs';
 import { ThemeService, UiButtonComponent } from '@vivek/ui';
+import { bindLockNotices, bindLockSnapshots } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
-import { cosmeticById, variantSrc, type CosmeticPart } from './cosmetic-catalog';
+import { cosmeticById, cosmeticCatalog, variantSrc, type CosmeticAsset, type CosmeticPart } from './cosmetic-catalog';
 import {
+  HOME_CELL,
+  HOME_FLOOR_CELLS,
   HOME_NOTE_LIMIT,
   HOME_ROOMS,
-  homeLayoutProblems,
+  HOME_WALL_PX,
+  HOME_WALL_SLOTS,
   homeObjects,
   homeRoom,
+  homeSceneItem,
   homeSceneObjects,
-  wallSlotLine,
+  starterHomeLayout,
+  wallSlotLabel,
   type HomeRoom,
   type HomeSceneObject,
 } from './home-rooms';
@@ -31,7 +37,8 @@ import {
   zoomToward,
   type SceneCamera,
 } from './library-room.scene';
-import { homeLayoutWrite, type HomePalette } from './home-layout';
+import { homeFloorPoint, homeItemLabel, homePlacementProblem, withHomeItem, type HomeLayoutItem } from './home-layout';
+import { HOME_MILESTONES, homeMilestoneEligible, type HomeMilestone } from './home-milestones';
 import { TownApiService, type RoomLayout } from './town.api';
 import { TownPlaceComponent, type PlaceCrumb } from './town-place.component';
 import { formatTownDay } from './town-text';
@@ -79,19 +86,17 @@ export class HomeRoomComponent {
   private readonly themeService = inject(ThemeService);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
   private readonly retry = new Subject<void>();
   private readonly layoutRequest = new Subject<void>();
   private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
   private readonly attempts = signal<Partial<Record<string, number>>>({});
-  private readonly notes = new Map<number, string>();
-  private readonly gardens = new Map<number, ReadonlySet<string>>();
   private resizeObserver: ResizeObserver | null = null;
   private gesture: SceneGesture | null = null;
   private owner: number | null = null;
   private alive = true;
 
   protected readonly rooms = HOME_ROOMS;
-  protected readonly layoutReady = homeLayoutProblems().length === 0;
   protected readonly painted = signal<readonly string[]>([]);
   protected readonly failed = signal<readonly string[]>([]);
   protected readonly note = signal('');
@@ -99,14 +104,32 @@ export class HomeRoomComponent {
   protected readonly watered = signal<ReadonlySet<string>>(new Set());
   protected readonly town = signal<TownResponse | null>(null);
   protected readonly townState = signal<'loading' | 'ready' | 'unavailable'>('loading');
-  protected readonly palettes = [0, 1, 2, 3] as const;
-  protected readonly palette = signal<HomePalette>(0);
+  protected readonly palettes = ['Original', 'Coastal', 'Rose', 'Golden'];
+  protected readonly cells = Array.from({ length: HOME_FLOOR_CELLS }, (_, index) => index);
+  protected readonly milestones = HOME_MILESTONES;
+  protected readonly milestoneEligible = (id: HomeMilestone['id']): boolean => homeMilestoneEligible(id, this.town());
+  protected readonly itemLabel = homeItemLabel;
+  protected readonly wallLabel = wallSlotLabel;
+  protected slots(room: HomeRoom): string {
+    return room.wallSlots.map(slot => `${wallSlotLabel(slot)} (${
+      this.baseItems().some(item => item.slot === slot) ? 'occupied' : 'open'
+    })`).join(', ');
+  }
+  protected readonly savedItems = signal<readonly HomeLayoutItem[] | null>(null);
+  protected readonly draft = signal<readonly HomeLayoutItem[] | null>(null);
+  protected readonly candidate = signal<HomeLayoutItem | null>(null);
+  protected readonly unlocked = signal<ReadonlySet<string> | null>(null);
+  protected readonly inventory = computed(() => cosmeticCatalog.filter(asset =>
+    asset.group === 'starter' || this.unlocked()?.has(asset.id),
+  ));
+  protected readonly inventoryUnavailable = signal(false);
+  protected readonly layoutConflict = signal(false);
+  private editEpoch = 0;
   protected readonly layoutRevision = signal(0);
   protected readonly layoutStatus = signal('');
   protected readonly layoutLoading = signal(false);
   protected readonly layoutBusy = signal(false);
   private layoutEpoch = 0;
-  private loadedKey = '';
   protected readonly camera = signal<SceneCamera>(REST_CAMERA);
   private readonly narrow = signal(false);
   protected readonly lotSlots = [0, 1, 2, 3, 4, 5];
@@ -114,11 +137,59 @@ export class HomeRoomComponent {
   private readonly params = toSignal(this.route.paramMap, { requireSync: true });
   private readonly query = toSignal(this.route.queryParamMap, { requireSync: true });
   protected readonly room = computed(() => homeRoom(this.params().get('room')));
+  private readonly baseItems = computed(() => {
+    const room = this.room();
+    return room ? this.savedItems() ?? starterHomeLayout(room.id) : [];
+  });
+  protected readonly editableItems = computed(() => this.draft()?.filter(item =>
+    cosmeticById(item.catalog_id) || this.milestones.some(milestone =>
+      item.instance_id === milestone.id && this.milestoneEligible(milestone.id)),
+  ) ?? []);
+  protected readonly changed = computed(() => JSON.stringify(this.draft()) !== JSON.stringify(this.baseItems()));
+  protected readonly draftProblem = computed(() => {
+    const room = this.room();
+    const draft = this.draft();
+    return room && draft ? homePlacementProblem(room.id, draft) : null;
+  });
+  protected readonly candidateProblem = computed(() => {
+    const room = this.room();
+    const draft = this.draft();
+    const item = this.candidate();
+    if (!room || !draft || !item) return null;
+    const milestone = this.milestones.find(entry => entry.id === item.instance_id);
+    if (milestone && !this.milestoneEligible(milestone.id)) return milestone.requirement;
+    return homePlacementProblem(room.id, withHomeItem(draft, item));
+  });
+  protected readonly preview = computed(() => {
+    const room = this.room();
+    const item = this.candidate();
+    return room && item ? homeSceneItem(room.id, item) : null;
+  });
   protected readonly objects = computed(() => {
     const room = this.room();
-    return room ? homeSceneObjects(room.id) : [];
+    if (!room) return [];
+    const draft = this.draft();
+    const candidate = this.candidate();
+    const visible = (draft ?? this.baseItems()).filter(item => !this.unavailableMilestone(item));
+    const shown = candidate && !this.candidateProblem() ? withHomeItem(visible, candidate) : visible;
+    return homeSceneObjects(room.id, shown);
   });
-  protected readonly selected = computed(() => this.objects().find(object => object.id === this.query().get('object')) ?? null);
+  protected readonly dormantMilestones = computed(() => {
+    if (this.room()?.id !== 'courtyard') return [];
+    return (this.draft() ?? this.baseItems())
+      .filter(item => this.unavailableMilestone(item))
+      .flatMap(item => homeSceneItem('courtyard', item) ?? []);
+  });
+  protected readonly practical = computed(() => {
+    const room = this.room();
+    if (!room) return [];
+    const visible = this.objects();
+    const actions = homeSceneObjects(room.id).filter(object => object.action.kind !== 'placed' &&
+      !visible.some(item => item.id === object.id && item.action.kind !== 'placed'));
+    return [...visible.filter(item => !actions.some(action => action.id === item.id)), ...actions];
+  });
+  protected readonly selected = computed(() => this.draft() ? null :
+    this.practical().find(object => object.id === this.query().get('object')) ?? null);
   protected readonly sheet = computed(() => this.narrow() && this.selected() != null);
   protected readonly occluded = computed(() => new Set(occludingIds(this.objects(), this.selected()?.id ?? null)));
   protected readonly cameraTransform = computed(() => {
@@ -157,6 +228,8 @@ export class HomeRoomComponent {
       this.gesture = null;
       this.resizeObserver?.disconnect();
     });
+    this.destroyRef.onDestroy(bindLockSnapshots(() => this.invalidateForLock()));
+    this.destroyRef.onDestroy(bindLockNotices(() => this.invalidateForLock()));
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => this.syncQuery(params));
     this.layoutRequest.pipe(
       switchMap(() => {
@@ -188,7 +261,7 @@ export class HomeRoomComponent {
       }),
       takeUntilDestroyed(),
     ).subscribe(result => this.publishTown(result));
-    this.route.paramMap.pipe(takeUntilDestroyed()).subscribe(() => this.onRoomChange());
+    this.route.paramMap.pipe(skip(1), takeUntilDestroyed()).subscribe(() => this.onRoomChange());
     afterNextRender(() => {
       this.host.nativeElement.querySelector<HTMLElement>('.objects [aria-current="true"]')?.focus({ preventScroll: true });
       const element = this.viewport()?.nativeElement;
@@ -208,10 +281,6 @@ export class HomeRoomComponent {
     return this.room()?.label ?? 'Home';
   }
 
-  protected slots(room: HomeRoom): string {
-    return wallSlotLine(room);
-  }
-
   protected part(): CosmeticPart {
     return this.theme() === 'dark' ? 'night' : 'day';
   }
@@ -223,7 +292,7 @@ export class HomeRoomComponent {
 
   protected objectSrc(object: HomeSceneObject): string {
     const asset = cosmeticById(object.catalogId);
-    if (!asset) return '';
+    if (!asset) return `/town/home/milestones.svg#${object.ornamentArt ?? ''}`;
     return variantSrc(asset, this.part(), this.attempts()[object.id] ?? 0);
   }
 
@@ -256,8 +325,9 @@ export class HomeRoomComponent {
   }
 
   protected onEscape(): void {
-    if (!this.sheet() || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
-    this.closeSheet();
+    if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+    if (this.candidate() && !this.layoutBusy()) this.cancelCandidate();
+    else if (this.sheet()) this.closeSheet();
   }
 
   protected closeSheet(): void {
@@ -271,7 +341,6 @@ export class HomeRoomComponent {
     if (owner == null || !(field instanceof HTMLTextAreaElement)) return;
     const value = field.value.slice(0, HOME_NOTE_LIMIT);
     if (value !== field.value) field.value = value;
-    this.notes.set(owner, value);
     this.note.set(value);
   }
 
@@ -279,7 +348,6 @@ export class HomeRoomComponent {
     const owner = this.owner;
     if (owner == null || object.action.kind !== 'garden' || this.watered().has(object.id)) return;
     const next = new Set(this.watered()).add(object.id);
-    this.gardens.set(owner, next);
     this.watered.set(next);
   }
 
@@ -292,21 +360,186 @@ export class HomeRoomComponent {
     return habit ? habit.name : `Lot ${slot + 1}`;
   }
 
-  protected saveDisabled(): boolean {
-    return !this.signedIn() || this.layoutLoading() || this.layoutBusy() || this.room() == null;
+  protected startEditing(): void {
+    if (!this.signedIn() || !this.savedItems() || this.draft()) return;
+    this.draft.set(this.baseItems());
+    this.layoutConflict.set(false);
+    this.loadInventory();
+    this.focusLayout('#home-inventory');
   }
 
-  protected choosePalette(swatch: HomePalette): void {
-    if (!this.signedIn()) return;
-    this.palette.set(swatch);
+  protected loadInventory(): void {
+    const epoch = ++this.editEpoch;
+    this.inventoryUnavailable.set(false);
+    this.api.getStamps().pipe(
+      map(wallet => wallet.entitlements.filter(item => item.active).map(item => item.catalog_id)),
+      catchError(() => of(null)),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(ids => {
+      if (!this.alive || epoch !== this.editEpoch || !this.draft()) return;
+      this.unlocked.set(ids && new Set(ids));
+      this.inventoryUnavailable.set(ids == null);
+    });
+  }
+
+  protected pickInventory(id: string): void {
+    const asset = this.inventory().find(item => item.id === id);
+    if (!asset || !this.draft() || this.layoutBusy()) return;
+    this.candidate.set(this.newItem(asset.id, asset));
+    this.focusLayout('#home-preview');
+  }
+
+  protected pickPlaced(id: string): void {
+    const item = this.editableItems().find(entry => entry.instance_id === id);
+    if (!item || this.layoutBusy()) return;
+    this.candidate.set(item);
+    this.focusLayout('#home-preview');
+  }
+
+  protected pickMilestone(milestone: HomeMilestone, id: string): void {
+    const prior = this.milestoneChoice(milestone.id);
+    if (!this.milestoneEligible(milestone.id) || !milestone.options.some(option => option.id === id) || this.layoutBusy()) return;
+    this.candidate.set({ ...(prior ?? this.newItem(id, null)), catalog_id: id, instance_id: milestone.id });
+    this.focusLayout('#home-preview');
+  }
+
+  protected milestoneChoice(id: string): HomeLayoutItem | undefined {
+    return (this.draft() ?? this.baseItems()).find(item => item.instance_id === id);
+  }
+
+  protected placeOnAxis(axis: 'column' | 'row', value: string): void {
+    const number = Number(value);
+    if (Number.isInteger(number) && homeFloorPoint(number, number)) this.updateCandidate({ [axis]: number });
+  }
+
+  protected placeOnWall(slot: string): void {
+    this.updateCandidate({ slot });
+  }
+
+  protected rotateCandidate(): void {
+    const current = this.candidate();
+    if (!current || current.anchor !== 'floor') return;
+    const turns = [1, 2, 3, 0] as const;
+    this.updateCandidate({ orientation: turns[current.orientation] });
+  }
+
+  protected recolorCandidate(palette: number): void {
+    if (palette === 0 || palette === 1 || palette === 2 || palette === 3) this.updateCandidate({ palette });
+  }
+
+  protected applyCandidate(): void {
+    const item = this.candidate();
+    const draft = this.draft();
+    if (!item || !draft || this.candidateProblem() || this.layoutBusy()) return;
+    this.draft.set(withHomeItem(draft, item));
+    this.candidate.set(null);
+    this.focusLayout('#home-inventory');
+  }
+
+  protected removeCandidate(): void {
+    const item = this.candidate();
+    const draft = this.draft();
+    if (!item || !draft || !this.removable(item) || this.layoutBusy()) return;
+    this.draft.set(draft.filter(entry => entry.instance_id !== item.instance_id));
+    this.cancelCandidate();
+  }
+
+  protected removable(item: HomeLayoutItem): boolean {
+    const room = this.room();
+    return room != null &&
+      !homeObjects(room.id).some(entry => entry.id === item.instance_id && entry.action.kind !== 'placed') &&
+      !!this.draft()?.some(entry => entry.instance_id === item.instance_id);
+  }
+
+  protected cancelCandidate(): void {
+    this.candidate.set(null);
+    this.focusLayout('#home-inventory');
+  }
+
+  protected cancelEditing(): void {
+    if (this.layoutBusy()) return;
+    const conflict = this.layoutConflict();
+    this.endEditing();
+    if (conflict) {
+      this.layoutEpoch += 1;
+      this.requestLayout();
+    }
+    this.focusLayout('#home-decorate');
+  }
+
+  protected retryLayout(): void {
+    this.layoutEpoch += 1;
+    this.requestLayout();
+  }
+
+  protected saveDisabled(): boolean {
+    return !this.draft() || !this.changed() || !!this.candidate() ||
+      !!this.draftProblem() || this.layoutBusy() || this.layoutConflict();
   }
 
   protected saveCurrent(): void {
-    this.writeLayout(this.layoutRevision());
+    const room = this.room();
+    const owner = this.owner;
+    const draft = this.draft();
+    if (!room || owner == null || !draft || this.saveDisabled()) return;
+    const epoch = ++this.layoutEpoch;
+    this.layoutBusy.set(true);
+    this.layoutStatus.set('Saving layout…');
+    this.api.saveLayout(room.id, { expected_revision: this.layoutRevision(), items: [...draft] }).pipe(
+      map(data => ({ ok: true as const, data })),
+      catchError((error: { error?: { code?: unknown } }) => of({ ok: false as const, error })),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(result => {
+      if (!this.alive || epoch !== this.layoutEpoch || owner !== this.owner || this.room()?.id !== room.id) return;
+      this.layoutBusy.set(false);
+      if (!result.ok) {
+        if (result.error.error?.code === 'layout_conflict') {
+          this.layoutConflict.set(true);
+          this.layoutStatus.set('This room was saved elsewhere. Your changes are still here.');
+        } else if (result.error.error?.code === 'layout_entitlement') {
+          this.layoutStatus.set('An item is no longer unlocked. Your changes are still here.');
+          this.retry.next();
+          this.loadInventory();
+        } else {
+          this.layoutStatus.set('The layout was not saved. Your changes are still here.');
+        }
+        return;
+      }
+      this.adoptLayout(result.data);
+      this.endEditing();
+      this.focusLayout('#home-decorate');
+    });
   }
 
-  protected saveOlder(): void {
-    this.writeLayout(Math.max(0, this.layoutRevision() - 1));
+  private unavailableMilestone(item: HomeLayoutItem): boolean {
+    const milestone = this.milestones.find(entry => entry.id === item.instance_id);
+    return !!milestone && !this.milestoneEligible(milestone.id);
+  }
+
+  private newItem(id: string, asset: CosmeticAsset | null): HomeLayoutItem {
+    const wallSlots = this.room()?.wallSlots ?? [];
+    const instanceId = `piece-${globalThis.crypto.randomUUID()}`;
+    const item: HomeLayoutItem = {
+      instance_id: instanceId,
+      catalog_id: id,
+      anchor: asset?.anchor ?? 'floor',
+      column: null, row: null, slot: null, orientation: 0, palette: 0,
+    };
+    if (item.anchor === 'wall') return { ...item, slot: wallSlots[0] ?? null };
+    return { ...item, column: 0, row: 0 };
+  }
+
+  private updateCandidate(change: Partial<HomeLayoutItem>): void {
+    const item = this.candidate();
+    if (!item || this.layoutBusy()) return;
+    this.candidate.set({ ...item, ...change });
+  }
+
+  private focusLayout(selector: string): void {
+    const epoch = this.layoutEpoch;
+    afterNextRender(() => {
+      if (this.alive && this.layoutEpoch === epoch) this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus();
+    }, { injector: this.injector });
   }
 
   protected retryTown(): void {
@@ -364,6 +597,18 @@ export class HomeRoomComponent {
       { width: rect.width, height: rect.height },
       room.bounds,
     );
+    const candidate = this.candidate();
+    if (candidate && this.draft()) {
+      const column = Math.floor(point.x / HOME_CELL);
+      const row = Math.floor((point.y - HOME_WALL_PX) / HOME_CELL);
+      if (candidate.anchor === 'floor' && homeFloorPoint(column, row)) this.updateCandidate({ column, row });
+      else if (candidate.anchor === 'wall' && point.y < HOME_WALL_PX) {
+        const slot = HOME_WALL_SLOTS.find(entry => entry.room === room.id && entry.column === column);
+        if (slot) this.updateCandidate({ slot: slot.id });
+      }
+      return;
+    }
+    if (this.draft()) return;
     const visible = this.objects().filter(object => this.painted().includes(object.id));
     const hit = frontObject(visible, point);
     if (hit) this.selectObject(hit.asset.id);
@@ -404,100 +649,65 @@ export class HomeRoomComponent {
   private adoptOwner(owner: number | null): void {
     this.owner = owner;
     this.dropUncommittedGesture();
+    this.note.set('');
+    this.watered.set(new Set());
     this.town.set(null);
     this.townState.set(owner == null ? 'unavailable' : 'loading');
     this.signedIn.set(owner != null);
-    this.palette.set(0);
-    this.layoutBusy.set(false);
-    this.layoutEpoch += 1;
-    this.loadedKey = '';
-    if (owner == null) {
-      this.notes.clear();
-      this.gardens.clear();
-      this.note.set('');
-      this.watered.set(new Set());
-    } else {
-      this.note.set(this.notes.get(owner) ?? '');
-      this.watered.set(new Set(this.gardens.get(owner) ?? []));
-    }
-    this.requestLayout();
+    this.onRoomChange();
+  }
+
+  private invalidateForLock(): void {
+    this.note.set('');
+    this.dropUncommittedGesture();
+    if (this.draft()) this.onRoomChange();
+  }
+
+  private endEditing(): void {
+    this.editEpoch += 1;
+    this.draft.set(null);
+    this.candidate.set(null);
+    this.unlocked.set(null);
+    this.layoutConflict.set(false);
   }
 
   private onRoomChange(): void {
     this.layoutEpoch += 1;
     this.layoutBusy.set(false);
-    this.loadedKey = '';
+    this.endEditing();
     this.requestLayout();
   }
 
   private requestLayout(): void {
     const room = this.room();
-    if (this.owner == null) {
-      this.layoutLoading.set(false);
-      this.layoutRevision.set(0);
-      this.layoutStatus.set(room ? 'Sign in to save this room.' : '');
-      return;
-    }
-    if (room == null) {
-      this.layoutLoading.set(false);
-      this.layoutStatus.set('');
-      return;
-    }
-    const key = `${this.owner}:${room.id}`;
-    if (key === this.loadedKey) return;
+    this.savedItems.set(null);
     this.layoutRevision.set(0);
-    this.layoutStatus.set('');
+    if (this.owner == null || room == null) {
+      this.layoutLoading.set(false);
+      this.layoutStatus.set(room ? 'Sign in to decorate this room.' : '');
+      return;
+    }
+    this.layoutStatus.set('Loading saved layout…');
     this.layoutRequest.next();
+  }
+
+  private adoptLayout(data: RoomLayout): void {
+    const room = this.room();
+    if (!room || room.id !== data.room_id) return;
+    this.savedItems.set(data.revision > 0 ? data.items : starterHomeLayout(room.id));
+    this.layoutRevision.set(data.revision);
+    this.layoutStatus.set(data.revision === 0 ? '' : `Layout saved · Revision ${data.revision}`);
   }
 
   private publishLayout(result: LayoutLoad): void {
     if (!this.alive || result.epoch !== this.layoutEpoch || result.owner !== this.owner) return;
     if (this.room()?.id !== result.roomId) return;
     this.layoutLoading.set(false);
-    if (result.failed || result.data == null) {
-      this.layoutStatus.set('The saved layout could not be loaded. Your palette choice is still here.');
+    if (result.failed || result.data?.room_id !== result.roomId) {
+      this.layoutStatus.set('The saved layout could not be loaded.');
       return;
     }
-    this.loadedKey = `${result.owner}:${result.roomId}`;
-    this.layoutRevision.set(result.data.revision);
-    this.layoutStatus.set(result.data.revision === 0
-      ? 'Nothing is saved yet. Revision 0.'
-      : `Saved. Revision ${result.data.revision}.`);
-  }
-
-  private writeLayout(expected: number): void {
-    const room = this.room();
-    const owner = this.owner;
-    if (owner == null || room == null || this.layoutLoading() || this.layoutBusy()) return;
-    const epoch = this.layoutEpoch + 1;
-    this.layoutEpoch = epoch;
-    this.layoutBusy.set(true);
-    const body = homeLayoutWrite(room.id, expected, this.palette());
-    this.api.saveLayout(room.id, body).pipe(
-      map(data => ({ ok: true as const, data })),
-      catchError((error: { error?: { message?: unknown } }) => of({ ok: false as const, error })),
-      takeUntilDestroyed(this.destroyRef),
-    ).subscribe(result => {
-      if (!this.alive || epoch !== this.layoutEpoch || owner !== this.owner || this.room()?.id !== room.id) return;
-      this.layoutBusy.set(false);
-      if (!result.ok) {
-        const message = result.error.error?.message;
-        const match = typeof message === 'string' ? /^This room was saved at revision (\d+)\.$/.exec(message) : null;
-        if (match) {
-          const revision = Number(match[1]);
-          this.layoutRevision.set(revision);
-          this.layoutStatus.set(`This room was saved at revision ${revision}. The older revision was not written.`);
-          return;
-        }
-        this.layoutStatus.set('The layout was not saved. Your palette choice is still here.');
-        return;
-      }
-      this.loadedKey = `${owner}:${room.id}`;
-      this.layoutRevision.set(result.data.revision);
-      this.layoutStatus.set(result.data.revision === 0
-        ? 'Nothing is saved yet. Revision 0.'
-        : `Saved. Revision ${result.data.revision}.`);
-    });
+    this.adoptLayout(result.data);
   }
 
   private publishTown(result: TownLoad): void {
@@ -515,11 +725,7 @@ export class HomeRoomComponent {
     if (!this.alive) return;
     const camera = cameraFromQuery(params);
     if (!sameCamera(camera, this.camera())) this.camera.set(camera);
-    const object = params.get('object');
-    if (!object) return;
-    const room = homeRoom(this.route.snapshot.paramMap.get('room'));
-    const known = room != null && homeObjects(room.id).some(item => item.id === object);
-    if (!known) this.publish(sceneQuery(null, camera));
+
   }
 
   private dropUncommittedGesture(): void {

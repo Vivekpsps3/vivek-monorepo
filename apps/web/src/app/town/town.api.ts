@@ -90,7 +90,7 @@ export class TownApiService {
     return this.http.get<{ days: string[] }>(`/api/town/habits/${id}/checkins`, this.options({ from, to }));
   }
   getStamps() {
-    return this.http.get<StampWallet>('/api/town/stamps', this.options());
+    return this.http.get<StampWallet>('/api/town/stamps', this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
   }
   refundStamps(body: StampRefund) {
     return this.http.post<StampWallet>('/api/town/stamps/refunds', body, this.options());
