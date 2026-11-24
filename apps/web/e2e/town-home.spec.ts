@@ -14,6 +14,7 @@ async function prepare(page: Page, width: number, theme: 'light' | 'dark'): Prom
 async function activate(page: Page, locator: ReturnType<Page['locator']>, touch: boolean): Promise<void> {
   if (touch) await locator.tap();
   else {
+    await expect(locator).toBeEnabled();
     await locator.focus();
     await page.keyboard.press('Enter');
   }
