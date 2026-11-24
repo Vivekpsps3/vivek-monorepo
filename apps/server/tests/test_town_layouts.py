@@ -536,7 +536,10 @@ def test_stored_private_and_unknown_fields_stay_out_of_the_read(tmp_path: Path) 
                 "palette": 2,
             }
         ]
+        assert view["recovery_required"] is True
         assert "bp 120" not in json.dumps(view)
+        assert "weight 70" not in json.dumps(view)
+        assert _reject(db, "living", LIVING, 1).code == "layout_recovery"
         fresh = db.scalar(select(RoomLayout).where(RoomLayout.room_id == "living"))
         assert fresh is not None
         assert fresh.payload == raw
@@ -547,7 +550,42 @@ def test_stored_private_and_unknown_fields_stay_out_of_the_read(tmp_path: Path) 
         db.commit()
         assert broken["items"] == []
         assert broken["revision"] == 1
+        assert broken["recovery_required"] is True
+        assert _reject(db, "living", [], 1).code == "layout_recovery"
         assert db.scalar(select(RoomLayout.payload)) == '{"note":"secret measurement"}'
+    finally:
+        db.close()
+        database.engine.dispose()
+
+
+def test_unknown_placement_is_kept_through_valid_writes(tmp_path: Path) -> None:
+    database = _file_db(tmp_path)
+    db = _session(database)
+    try:
+        grant_stamps(db, 1, {"grant_key": "quest:layout", "amount": 20, "consumer": "quest"}, WHEN)
+        purchase_stamps(
+            db,
+            1,
+            {"grant_key": "market:buy:future", "catalog_id": "future-chair", "amount": 5},
+            WHEN,
+        )
+        future = _piece("future", "future-chair", column=11, row=0, palette=2)
+        _save(db, "study", [*STUDY, future])
+        db.commit()
+
+        error = _reject(db, "study", STUDY, 1)
+        assert error.code == "layout_recovery"
+        error = _reject(db, "study", [*STUDY, {**future, "palette": 1}], 1)
+        assert error.code == "layout_recovery"
+        assert read_layout(db, 1, "study")["items"][-1] == future
+
+        edited = [{**STUDY[0], "palette": 1}, *STUDY[1:], future]
+        result, created = _save(db, "study", edited, 1)
+        db.commit()
+        assert not created
+        assert result["revision"] == 2
+        assert result["items"] == edited
+        assert "recovery_required" not in result
     finally:
         db.close()
         database.engine.dispose()
@@ -660,6 +698,18 @@ def test_http_save_hides_private_fields_and_blocks_a_foreign_owner(api) -> None:
     assert stored is not None
     assert "note" not in stored
     assert _count(db) == 1
+    row = db.scalar(select(RoomLayout).where(RoomLayout.room_id == "living"))
+    assert row is not None
+    row.payload = json.dumps([*LIVING, {"note": "synthetic private marker"}])
+    db.commit()
+    protected = client.get("/api/town/layouts/living")
+    assert protected.json()["recovery_required"] is True
+    assert protected.json()["items"][0]["slot"] is None
+    assert "synthetic private marker" not in protected.text
+    refused = client.put("/api/town/layouts/living", json=_body(LIVING, 1))
+    assert refused.status_code == 409
+    assert refused.json()["code"] == "layout_recovery"
+    assert json.loads(_payload(db, 1, "living") or "[]")[-1] == {"note": "synthetic private marker"}
     db.close()
     application.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=2)
     from apps.server.auth import require_principal

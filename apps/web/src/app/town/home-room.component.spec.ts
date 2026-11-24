@@ -327,12 +327,15 @@ describe('Home room ownership', () => {
     named('Save layout').click();
     saves.at(-1)!.error({ status: 409, error: { code: 'layout_conflict' } });
     harness.detectChanges();
-    expect(host().textContent).toContain('This room was saved elsewhere. Your changes are still here.');
-    expect(named('Save layout').disabled).toBeTrue();
-    expect(host().querySelector('#home-placed')?.textContent).toContain('Oak seat');
-    named('Discard draft and reload').click();
+    expect(host().textContent).toContain('This room was saved elsewhere');
+    expect(named('Reapply my changes').disabled).toBeTrue();
+    expect(host().querySelector('[data-scene-object^="piece-"]')).not.toBeNull();
     layouts.at(-1)!.next({ ...layout, revision: 1 });
     harness.detectChanges();
+    expect(named('Reapply my changes').disabled).toBeFalse();
+    named('Discard my changes').click();
+    harness.detectChanges();
+    expect(host().querySelector('[data-scene-object^="piece-"]')).toBeNull();
     expect(host().querySelector<HTMLTextAreaElement>('#home-note')?.value).toBe('Harbor draft stays');
 
     beginDraft();

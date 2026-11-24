@@ -315,3 +315,4 @@ class RoomLayoutView(_Shape):
     room_id: str
     revision: int
     items: list[RoomLayoutItem]
+    recovery_required: Literal[True] | None = None

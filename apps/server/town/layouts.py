@@ -384,28 +384,39 @@ def _budget(db: Session, user_id: int, room_id: str, size: int) -> None:
         raise _invalid()
 
 
-def _public_items(payload: str) -> list[dict[str, Any]]:
-    """Public fields only. A private key stays in the row and leaves this list."""
+def _view(room_id: str, revision: int, payload: str) -> dict[str, Any]:
+    """Report records that cannot round-trip without exposing unsupported fields."""
     try:
         raw = json.loads(payload)
     except (ValueError, RecursionError):
-        return []
-    if type(raw) is not list:
-        return []
-    items: list[dict[str, Any]] = []
-    for entry in raw:
-        if type(entry) is not dict:
+        raw = None
+    entries = raw if isinstance(raw, list) else []
+    protected = raw is None or not isinstance(raw, list) or len(entries) > ITEM_CAP
+    items: list[_Item] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            protected = True
             continue
+        protected |= set(entry) != set(_PUBLIC)
         try:
-            item = _Item.model_validate({key: entry.get(key) for key in _PUBLIC})
+            items.append(_Item.model_validate({key: entry.get(key) for key in _PUBLIC}))
         except ValidationError:
-            continue
-        items.append(_placed(item))
-    return items
+            protected = True
+    if not protected:
+        try:
+            _validate(room_id, items)
+        except APIError:
+            protected = True
+    view = {"room_id": room_id, "revision": revision, "items": [_placed(item) for item in items]}
+    if protected:
+        view["recovery_required"] = True
+    return view
 
 
-def _view(room_id: str, revision: int, payload: str) -> dict[str, Any]:
-    return {"room_id": room_id, "revision": revision, "items": _public_items(payload)}
+def _stored_layout(db: Session, user_id: int, room_id: str) -> RoomLayout | None:
+    return db.scalar(
+        select(RoomLayout).where(RoomLayout.user_id == user_id, RoomLayout.room_id == room_id)
+    )
 
 
 def _revision(db: Session, user_id: int, room_id: str) -> int | None:
@@ -421,9 +432,7 @@ def _revision(db: Session, user_id: int, room_id: str) -> int | None:
 def read_layout(db: Session, user_id: int, room_id: str) -> dict[str, Any]:
     if room_id not in ROOMS:
         raise APIError(404, "layout_not_found", _ROOM)
-    row = db.scalar(
-        select(RoomLayout).where(RoomLayout.user_id == user_id, RoomLayout.room_id == room_id)
-    )
+    row = _stored_layout(db, user_id, room_id)
     if row is None:
         return {"room_id": room_id, "revision": 0, "items": []}
     return _view(room_id, row.revision, row.payload)
@@ -447,6 +456,23 @@ def save_layout(
     # A zero-row update takes SQLite's reserved lock before the reads. Two
     # deferred reads that later write can deadlock on the shared lock.
     db.execute(text("UPDATE town_room_layouts SET revision = revision WHERE 0"))
+    stored = _stored_layout(db, user_id, room_id)
+    if stored is not None:
+        if stored.revision != parsed.expected_revision:
+            raise _conflict(stored.revision)
+        previous = _view(room_id, stored.revision, stored.payload)
+        if previous.get("recovery_required"):
+            raise APIError(409, "layout_recovery", "The saved layout needs recovery.")
+        by_id = {item["instance_id"]: item for item in items}
+        if any(
+            old["catalog_id"] not in CATALOG
+            and old["instance_id"] not in _MILESTONE_CHOICES
+            and by_id.get(old["instance_id"]) != old
+            for old in previous["items"]
+        ):
+            raise APIError(
+                409, "layout_recovery", "Keep unavailable furniture in the saved layout."
+            )
     _entitle(db, user_id, items)
     _entitle_milestones(db, user_id, items, now, zone)
     _budget(db, user_id, room_id, len(canonical))

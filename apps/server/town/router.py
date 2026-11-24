@@ -269,7 +269,7 @@ async def post_stamp_refund(
     return StampWalletView.model_validate(wallet)
 
 
-@router.get("/layouts/{room_id}", response_model=RoomLayoutView)
+@router.get("/layouts/{room_id}", response_model=RoomLayoutView, response_model_exclude_unset=True)
 def get_layout(
     room_id: str,
     db: Session = Depends(get_db, scope="function"),
@@ -278,7 +278,7 @@ def get_layout(
     return RoomLayoutView.model_validate(read_layout(db, principal.id, room_id))
 
 
-@router.put("/layouts/{room_id}", response_model=RoomLayoutView)
+@router.put("/layouts/{room_id}", response_model=RoomLayoutView, response_model_exclude_unset=True)
 async def put_layout(
     room_id: str,
     request: Request,
