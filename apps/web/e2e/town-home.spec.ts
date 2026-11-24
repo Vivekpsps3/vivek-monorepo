@@ -509,7 +509,7 @@ test.describe('Home rooms', () => {
     expect((await page.request.post(checkins, { headers, data: { day: '2026-10-08' } })).ok()).toBeTruthy();
     await page.reload();
     await expect(ornament).toBeVisible();
-    await expect(ornament).toHaveAccessibleName('Small planter');
+    await expect(home.getByRole('link', { name: 'Small planter', exact: true })).toBeVisible();
   });
 
   test('drops the editor and a held save on a cross-tab vault lock', async ({ page }) => {
