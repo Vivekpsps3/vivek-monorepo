@@ -1,21 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="288" height="360" viewBox="0 0 288 360">
+<svg xmlns="http://www.w3.org/2000/svg" width="288" height="228" viewBox="0 0 288 228">
+  <desc>Original artwork for Terraria-on-Sea. Floor and wall anchors align with the Home room view.</desc>
   <style>
-    :root { color-scheme: light dark; --sky:#f4efe2; --wall:#e7d3ac; --shade:#c4a57c; --floor:#b08968; --grid:#8d6848; --trim:#f3e2bc; --roof:#8aa4b5; --accent:#6f9e98; }
-    @media (prefers-color-scheme: dark) {
-      :root { --sky:#1a2b3d; --wall:#6d6454; --shade:#463f3c; --floor:#5c4636; --grid:#d0a45a; --trim:#b89a68; --roof:#243646; --accent:#6f9e98; }
-    }
+    :root { color-scheme: light dark; --sea:#e9e6d6; --wall:#c9ceac; --floor:#987953; --warm:#b4956d; --edge:#655648; --trim:#a1a987; --view:#a4cbd3; --accent:#607c70; --shadow:color-mix(in srgb, var(--edge) 75%, var(--wall)); }
+    @media (prefers-color-scheme: dark) { :root { --sea:#1b2b39; --wall:#58655a; --floor:#473b2e; --warm:#69533e; --edge:#30323b; --trim:#697967; --view:#385d70; --accent:#95bb9e; } }
   </style>
-  <rect width="288" height="360" fill="var(--sky)"/>
-  <rect width="288" height="28" fill="var(--roof)"/>
-  <rect y="28" width="288" height="36" fill="var(--wall)"/>
-  <rect x="168" y="34" width="64" height="26" fill="var(--accent)" opacity="0.8"/>
-  <rect y="64" width="288" height="8" fill="var(--trim)"/>
-  <rect y="24" width="14" height="336" fill="var(--shade)"/>
-  <rect x="274" y="24" width="14" height="336" fill="var(--shade)"/>
-  <rect y="72" width="288" height="288" fill="var(--floor)"/>
-  <pattern id="cells" width="24" height="24" patternUnits="userSpaceOnUse" x="0" y="72">
-    <path d="M24 0H0V24" fill="none" stroke="var(--grid)" stroke-width="1"/>
-  </pattern>
-  <rect y="72" width="288" height="288" fill="url(#cells)"/>
-  <rect x="120" y="312" width="48" height="48" fill="var(--sky)" opacity="0.35"/>
+  <rect width="288" height="228" fill="var(--sea)"/>
+  <path d="M6 64H246L283 213H48z" fill="var(--edge)" opacity=".23"/>
+  <path d="M12 64H240L276 208H48z" fill="var(--floor)"/>
+
+  <path d="M17 82l223 2 M26 112l226 2 M33 145l228 2 M41 177l226 2" fill="none" stroke="var(--warm)" stroke-width="5" opacity=".3"/>
+  <path d="M26 98l174 1m-138 27l165 1m-134 29h150m-171 31h110" fill="none" stroke="var(--edge)" stroke-width=".7" opacity=".19"/>
+  <path d="M12 9H240V64H12z" fill="var(--wall)"/>
+  <path d="M12 9h228v4H12z" fill="var(--trim)"/>
+
+  <path d="M88 12h44v40H88z" fill="var(--trim)"/>
+  <path d="M91 15h38v33H91z" fill="var(--view)"/>
+  <path d="M91 40l12-9 8 7 7-6 11 7v9H91z" fill="var(--accent)" opacity=".52"/>
+  <path d="M110 15v33M91 30h38" stroke="var(--trim)" stroke-width="1.4"/>
+  <path d="M84 50h52v3H84z" fill="var(--shadow)"/>
+  <path d="M166 14h64v43h-64z" fill="var(--trim)" opacity=".43"/>
+  <path d="M170 14v43m10-43v43m10-43v43m10-43v43m10-43v43m10-43v43" stroke="var(--edge)" opacity=".26"/>
+  <path d="M24 24h39v2H24zm0 9h39v2H24zm0 9h39v2H24z" fill="var(--trim)" opacity=".6"/>
+
+  <path d="M12 60h228v4H12z" fill="var(--shadow)"/>
+  <path d="M12 9l-6 5v53l42 149v-8L12 64z" fill="var(--edge)"/>
+  <path d="M6 59l6 5 36 144v8L6 67z" fill="var(--trim)"/>
+  <path d="M240 58l6 4 36 146-6 8v-8L240 64z" fill="var(--edge)"/>
+  <path d="M48 208h95v8H48zm133 0h95v8h-95z" fill="var(--edge)"/>
+  <path d="M137 184h38l6 24h-38z" fill="var(--warm)"/>
+  <path d="M143 208h38v5h-38z" fill="var(--trim)"/>
+  <path d="M137 184h5v7h-5zm33 0h5v7h-5z" fill="var(--shadow)"/>
 </svg>

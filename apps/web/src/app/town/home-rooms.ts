@@ -9,7 +9,7 @@ import {
 } from './cosmetic-catalog';
 import type { HomeLayoutItem, HomePalette, HomeTurn } from './home-layout';
 import { homeMilestoneOption } from './home-milestones';
-import { roomRect, sceneFrame, type ScenePlacement } from './library-room.scene';
+import { roomRect, sceneFrame, type RoomRect, type ScenePlacement } from './library-room.scene';
 
 export const HOME_CELL = LAYOUT_CELL_PX;
 export const HOME_FLOOR_CELLS = COSMETIC_ROOM_CELLS;
@@ -21,10 +21,57 @@ export const HOME_ROOM_BOUNDS = Object.freeze({
   height: HOME_WALL_PX + HOME_FLOOR_CELLS * HOME_CELL,
 });
 export const HOME_DOORWAY = Object.freeze({ column: 5, row: 10, columns: 2, rows: 2 });
-export const HOME_ART_SOURCE = Object.freeze({
-  attribution: 'Original artwork for Terraria-on-Sea',
-  license: 'No separate license published',
-});
+
+export const HOME_VIEW = { width: 288, height: 228 };
+// The four cutaway artworks share these back edge, floor and threshold coordinates.
+const viewFloor = { left: 12, top: 64, width: 228, height: 144 };
+const floorWidthScale = viewFloor.width / HOME_ROOM_BOUNDS.width;
+const floorHeightScale = viewFloor.height / (HOME_FLOOR_CELLS * HOME_CELL);
+const floorSkew = 0.25;
+const wallHeightScale = 0.7;
+
+export const HOME_VIEW_GRID = {
+  ...sceneFrame(viewFloor, HOME_VIEW),
+  skew: `${Math.atan(floorSkew)}rad`,
+};
+
+function homeViewLeft(x: number, viewY: number): number {
+  return viewFloor.left + x * floorWidthScale + Math.max(0, viewY - viewFloor.top) * floorSkew;
+}
+
+export function homePlacementPoint(view: { x: number; y: number }): { x: number; y: number } {
+  const depth = view.y - viewFloor.top;
+  return {
+    x: (view.x - homeViewLeft(0, view.y)) / floorWidthScale,
+    y: HOME_WALL_PX + depth / (depth < 0 ? wallHeightScale : floorHeightScale),
+  };
+}
+
+/** Project the anchor and leave the furniture upright. The same rect paints and picks the sprite. */
+export function homeViewItem(object: HomeSceneObject): HomeSceneObject {
+  const wall = object.asset.anchor.y === 0;
+  const depth = (object.y - HOME_WALL_PX) * (wall ? wallHeightScale : floorHeightScale);
+  const y = viewFloor.top + depth;
+  const x = homeViewLeft(object.x, y);
+  const { width, height } = object.asset.bounds;
+  const bounds = { width, height: height * 1.16 };
+  const anchor = { x: bounds.width / 2, y: wall ? 0 : bounds.height };
+  const projected = { ...object, x, y, asset: { ...object.asset, bounds, anchor } };
+  return { ...projected, ...sceneFrame(roomRect(projected), HOME_VIEW) };
+}
+
+export function homeViewFootprint(object: HomeSceneObject): RoomRect {
+  if (object.asset.anchor.y === 0) return homeViewItem(object);
+  const rect = roomRect(object);
+  const top = viewFloor.top + (rect.top - HOME_WALL_PX) * floorHeightScale;
+  return sceneFrame({
+    left: homeViewLeft(rect.left, top),
+    top,
+    width: rect.width * floorWidthScale,
+    height: rect.height * floorHeightScale,
+  }, HOME_VIEW);
+}
+
 
 export const HOME_ROOM_IDS = ['living', 'study', 'bedroom', 'courtyard'] as const;
 export type HomeRoomId = (typeof HOME_ROOM_IDS)[number];
@@ -63,7 +110,6 @@ export interface HomeSceneObject extends ScenePlacement {
   readonly detail: string;
   readonly primary: boolean;
   readonly action: HomeAction;
-  readonly slotLabel: string;
   readonly orientation: HomeTurn;
   readonly palette: HomePalette;
   readonly ornamentArt: string | null;
@@ -76,9 +122,7 @@ export interface HomeSceneObject extends ScenePlacement {
 export interface HomeRoom {
   readonly id: HomeRoomId;
   readonly label: string;
-  readonly summary: string;
   readonly src: string;
-  readonly bounds: typeof HOME_ROOM_BOUNDS;
   readonly wallSlots: readonly string[];
 }
 
@@ -222,15 +266,7 @@ for (const object of HOME_OBJECTS) {
 export const HOME_ROOMS: readonly HomeRoom[] = Object.freeze(HOME_ROOM_IDS.map(id => Object.freeze({
   id,
   label: id === 'living' ? 'Living room' : id === 'study' ? 'Study' : id === 'bedroom' ? 'Bedroom' : 'Courtyard',
-  summary: id === 'living'
-    ? 'A furnished living room. The plain frame holds a sample print.'
-    : id === 'study'
-      ? 'A study with a desk, a lamp, and a bookshelf.'
-      : id === 'bedroom'
-        ? 'A bedroom with a bed and a record stand.'
-        : 'A courtyard with a planter, a fern, and the existing garden lots.',
   src: `/town/home/${id}.svg`,
-  bounds: HOME_ROOM_BOUNDS,
   wallSlots: HOME_WALL_SLOTS.filter(slot => slot.room === id).map(slot => slot.id),
 })));
 
@@ -280,7 +316,6 @@ function scenePlacement(
     detail: authored?.detail ?? 'A decoration for this room.',
     primary: authored?.primary ?? false,
     action: authored?.action ?? { kind: 'placed' as const },
-    slotLabel: item.row != null ? `Floor column ${column + 1}, row ${item.row + 1}` : `Wall slot ${wall?.id}`,
     x: column * HOME_CELL + anchor.x,
     y: top + anchor.y,
     asset: { id: item.instance_id, layer: asset?.layer ?? 3, bounds: { width, height }, anchor },

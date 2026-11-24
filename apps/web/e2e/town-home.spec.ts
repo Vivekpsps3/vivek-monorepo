@@ -33,6 +33,16 @@ test.describe('Home rooms', () => {
       });
       await prepare(page, width, theme);
       await page.goto('/town');
+      for (const room of HOME_ROOMS) {
+        const items = starterHomeLayout(room.id).map(item => item.instance_id === homePrimary(room.id).id
+          ? { ...item, palette: 1 }
+          : item);
+        const response = await page.request.put(`/api/town/layouts/${room.id}`, {
+          headers: { 'X-CSRF-Token': 'synthetic-csrf', Origin: new URL(page.url()).origin },
+          data: { expected_revision: 0, items },
+        });
+        expect(response.status()).toBe(201);
+      }
       const entrance = page.getByRole('link', { name: 'Visit Home' });
       await expect(entrance).toBeVisible();
       await expect(page.getByRole('button', { name: 'Choose a first habit' })).toBeVisible();
@@ -45,8 +55,8 @@ test.describe('Home rooms', () => {
       await expect(home).not.toContainText('Buy');
       await expect(home).not.toContainText('Stamps');
       await expect(home).not.toContainText(FOREIGN_HABIT);
-      await expect(home.locator('[data-cutaway="floor-walls"]')).toBeVisible();
-      await expect(home.locator('[data-floor-cells="12"]')).toBeVisible();
+      await expect(home.locator('[data-placement-grid]')).toHaveCount(0);
+      await expect(home.getByLabel('Column', { exact: true })).toHaveCount(0);
       const part = theme === 'dark' ? 'night' : 'day';
 
       for (const room of HOME_ROOMS) {
@@ -57,8 +67,9 @@ test.describe('Home rooms', () => {
         await activate(page, nav, touch);
         await expect(page).toHaveURL(new RegExp(`/town/home/${room.id}$`));
         await expect(home.getByRole('heading', { name: room.label, level: 1 })).toBeVisible();
-        await expect(home.locator('[data-wall-slots]')).toContainText('open');
-        await expect(home.locator('img.room')).toBeVisible();
+        const roomArt = home.locator('img.room');
+        await expect(roomArt).toBeVisible();
+        await expect(roomArt).toHaveAttribute('src', `/town/home/${room.id}.svg`);
         for (const object of homeObjects(room.id)) {
           const link = home.locator(`[data-object="${object.id}"]`);
           await expect(link).toBeVisible();
@@ -68,13 +79,21 @@ test.describe('Home rooms', () => {
         }
         const primary = homePrimary(room.id);
         const primaryLink = home.locator(`[data-object="${primary.id}"]`);
-        await activate(page, primaryLink, touch);
-        await expect(page).toHaveURL(new RegExp(`object=${primary.id}`));
-        await expect(home.locator('[data-cutaway="floor-walls"]')).toHaveClass(/cutaway/);
-        await expect(home.getByRole('heading', { name: primary.label, level: 2 })).toBeVisible();
-        const art = home.locator(`[data-scene-object="${primary.id}"] img`);
+        const piece = home.locator(`[data-scene-object="${primary.id}"]`);
+        const art = piece.locator('img');
         await expect(art).toBeVisible();
         await expect(art).toHaveAttribute('src', new RegExp(`/town/cosmetics/${primary.catalogId}-${part}\\.svg`));
+        await expect(art).toHaveAttribute('data-palette', '1');
+        await expect(home.getByRole('button', { name: 'Decorate room' })).toBeEnabled();
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await expect(primaryLink).toBeInViewport({ ratio: 1 });
+        await expect(home.getByRole('button', { name: 'Decorate room' })).toBeInViewport({ ratio: 1 });
+        await expect(home.locator('[data-placement-grid]')).toHaveCount(0);
+        await info.attach(`browse-${room.id}-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+        await activate(page, primaryLink, touch);
+        await expect(page).toHaveURL(new RegExp(`object=${primary.id}`));
+        await expect(piece).toHaveAttribute('aria-current', 'true');
+        await expect(home.getByRole('heading', { name: primary.label, level: 2 })).toBeVisible();
         if (primary.action.kind === 'sample') {
           await expect(home.getByText(primary.action.title)).toBeVisible();
           await expect(home.getByText('No photo is saved.')).toBeVisible();
@@ -93,15 +112,24 @@ test.describe('Home rooms', () => {
         } else if (primary.action.kind === 'garden') {
           await expect(home.getByRole('button', { name: primary.action.verb })).toBeVisible();
         }
-        if (touch) {
-          const close = home.getByRole('button', { name: 'Close details' });
-          const closeBox = await close.boundingBox();
-          expect(closeBox?.width).toBeGreaterThanOrEqual(44);
-          expect(closeBox?.height).toBeGreaterThanOrEqual(44);
-          await page.keyboard.press('Escape');
-          await expect(page).not.toHaveURL(/object=/);
-          await expect(primaryLink).toBeFocused();
-        }
+        const close = home.getByRole('button', { name: 'Close details' });
+        const closeBox = await close.boundingBox();
+        expect(closeBox?.width).toBeGreaterThanOrEqual(44);
+        expect(closeBox?.height).toBeGreaterThanOrEqual(44);
+        if (touch) await page.keyboard.press('Escape');
+        else await activate(page, close, false);
+        await expect(page).not.toHaveURL(/object=/);
+        await expect(primaryLink).toBeFocused();
+
+        await piece.scrollIntoViewIfNeeded();
+        const bounds = await piece.boundingBox();
+        if (!bounds) throw new Error(`${primary.label} is missing from the scene`);
+        const x = bounds.x + bounds.width / 4;
+        const y = bounds.y + bounds.height / 2;
+        if (touch) await page.touchscreen.tap(x, y);
+        else await page.mouse.click(x, y);
+        await expect(page).toHaveURL(new RegExp(`object=${primary.id}`));
+        await expect(primaryLink).toBeFocused();
       }
 
       const planter = home.locator('[data-object="courtyard-planter"]');
@@ -123,6 +151,30 @@ test.describe('Home rooms', () => {
       await info.attach(`home-${width}-${theme}`, { body: await home.screenshot(), contentType: 'image/png' });
     });
   }
+
+  test('fits the 320px room chooser and editor at 200% text', async ({ page }, info) => {
+    await prepare(page, 320, 'dark');
+    await page.goto('/town/home/study');
+    const home = page.locator('app-town-home');
+    await expect(home.locator('img.room')).toBeVisible();
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    await expect(page.locator('html')).toHaveCSS('font-size', '32px');
+    const fits = () => home.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+    expect(await fits()).toBeTruthy();
+    const decorate = home.getByRole('button', { name: 'Decorate room' });
+    await expect(decorate).toBeEnabled();
+    await info.attach('browse-320-dark-200-percent', { body: await page.screenshot(), contentType: 'image/png' });
+    await activate(page, decorate, false);
+    await expect(home.getByLabel('Add furniture')).toBeFocused();
+    await home.getByLabel('Add furniture').selectOption('low-table');
+    await expect(home.getByLabel('Column', { exact: true })).toBeVisible();
+    expect(await fits()).toBeTruthy();
+    await info.attach('edit-320-dark-200-percent', { body: await home.screenshot(), contentType: 'image/png' });
+    await page.keyboard.press('Escape');
+    await expect(home.getByLabel('Add furniture')).toBeFocused();
+    await activate(page, home.getByRole('button', { name: 'Cancel editing' }), false);
+    await expect(decorate).toBeFocused();
+  });
 
   test('opens the study desk from a direct address', async ({ page }) => {
     await prepare(page, 1280, 'light');
@@ -184,6 +236,8 @@ test.describe('Home rooms', () => {
       const touch = width === 390;
       const decorate = home.getByRole('button', { name: 'Decorate room' });
       await activate(page, decorate, touch);
+      const grid = home.locator('[data-placement-grid]');
+      await expect(grid).toBeVisible();
       const inventory = home.getByLabel('Add furniture');
       await expect(inventory).toBeFocused();
       await inventory.selectOption('low-table');
@@ -202,11 +256,14 @@ test.describe('Home rooms', () => {
 
       await inventory.selectOption('low-table');
       if (touch) {
-        const viewport = home.getByRole('group', { name: 'Study', exact: true });
-        await viewport.scrollIntoViewIfNeeded();
-        const scene = await viewport.boundingBox();
-        if (!scene) throw new Error('Study scene is missing');
-        await page.touchscreen.tap(scene.x + scene.width * 5.5 / 12, scene.y + scene.height * 13.5 / 15);
+        await grid.scrollIntoViewIfNeeded();
+        const doorway = await grid.evaluate(element => {
+          const shape = element.getBoundingClientRect();
+          const skew = new DOMMatrix(getComputedStyle(element).transform).c;
+          const depth = element.clientHeight * 10.5 / 12;
+          return { x: shape.left + element.clientWidth * 5.5 / 12 + depth * skew, y: shape.top + depth };
+        });
+        await page.touchscreen.tap(doorway.x, doorway.y);
       } else {
         await column.selectOption({ value: '5' });
         await row.selectOption({ value: '10' });
@@ -234,6 +291,11 @@ test.describe('Home rooms', () => {
       await info.attach(`preview-${width}-${theme}`, { body: await home.screenshot(), contentType: 'image/png' });
 
       await activate(page, place, touch);
+      const placed = home.locator('[data-scene-object^="piece-"]');
+      const position = await placed.evaluate(element => {
+        const { left, top } = (element as HTMLElement).style;
+        return { left, top };
+      });
       const save = home.getByRole('button', { name: 'Save layout', exact: true });
       for (const target of [save, inventory]) {
         const box = await target.boundingBox();
@@ -247,6 +309,11 @@ test.describe('Home rooms', () => {
       await activate(page, save, touch);
       await expect(status).toHaveText('Layout saved · Revision 1');
       await expect(decorate).toBeFocused();
+      await expect(grid).toHaveCount(0);
+      expect(await placed.evaluate(element => {
+        const { left, top } = (element as HTMLElement).style;
+        return { left, top };
+      })).toEqual(position);
       await expect(home.locator('#home-note')).toHaveValue('Harbor draft stays');
       expect(writes).toHaveLength(2);
       expect(writes[0]).toBe(writes[1]);
@@ -387,7 +454,8 @@ test.describe('Home rooms', () => {
       expect(revisions).toEqual([0, 1, 2, 2, 3, 3]);
       expect(await read()).toMatchObject({ revision: 4, items: starterHomeLayout('study') });
       await page.reload();
-      await expect(status).toHaveText('Layout saved · Revision 4');
+      await expect(status).toHaveAttribute('data-layout-revision', '4');
+      await expect(status).toBeEmpty();
       await expect(palette('study-shelf')).toHaveAttribute('data-palette', '0');
     });
   }
@@ -441,7 +509,7 @@ test.describe('Home rooms', () => {
     expect((await page.request.post(checkins, { headers, data: { day: '2026-10-08' } })).ok()).toBeTruthy();
     await page.reload();
     await expect(ornament).toBeVisible();
-    await expect(ornament).toHaveAccessibleName('Small planter');
+    await expect(home.getByRole('link', { name: 'Small planter', exact: true })).toBeVisible();
   });
 
   test('drops the editor and a held save on a cross-tab vault lock', async ({ page }) => {

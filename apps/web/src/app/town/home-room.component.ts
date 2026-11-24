@@ -11,12 +11,17 @@ import {
   HOME_FLOOR_CELLS,
   HOME_NOTE_LIMIT,
   HOME_ROOMS,
+  HOME_VIEW,
+  HOME_VIEW_GRID,
   HOME_WALL_PX,
   HOME_WALL_SLOTS,
   homeObjects,
+  homePlacementPoint,
   homeRoom,
   homeSceneItem,
   homeSceneObjects,
+  homeViewFootprint,
+  homeViewItem,
   starterHomeLayout,
   wallSlotLabel,
   type HomeRoom,
@@ -43,7 +48,6 @@ import {
 } from './home-layout';
 import { HOME_MILESTONES, homeMilestoneEligible, type HomeMilestone } from './home-milestones';
 import { TownApiService, type RoomLayout } from './town.api';
-import { TownPlaceComponent, type PlaceCrumb } from './town-place.component';
 import { formatTownDay } from './town-text';
 import type { TownResponse } from './town.types';
 
@@ -74,7 +78,7 @@ interface LayoutLoad {
 
 @Component({
   selector: 'app-town-home',
-  imports: [RouterLink, UiButtonComponent, TownPlaceComponent],
+  imports: [RouterLink, UiButtonComponent],
   templateUrl: './home-room.component.html',
   styleUrls: ['./library-room.component.css', './home-room.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -102,6 +106,8 @@ export class HomeRoomComponent {
   private alive = true;
 
   protected readonly rooms = HOME_ROOMS;
+  protected readonly sceneSize = HOME_VIEW;
+  protected readonly grid = HOME_VIEW_GRID;
   protected readonly painted = signal<readonly string[]>([]);
   protected readonly failed = signal<readonly string[]>([]);
   protected readonly note = signal('');
@@ -115,11 +121,6 @@ export class HomeRoomComponent {
   protected readonly milestoneEligible = (id: HomeMilestone['id']): boolean => homeMilestoneEligible(id, this.town());
   protected readonly itemLabel = homeItemLabel;
   protected readonly wallLabel = wallSlotLabel;
-  protected slots(room: HomeRoom): string {
-    return room.wallSlots.map(slot => `${wallSlotLabel(slot)} (${
-      this.baseItems().some(item => item.slot === slot) ? 'occupied' : 'open'
-    })`).join(', ');
-  }
   protected readonly savedItems = signal<readonly HomeLayoutItem[] | null>(null);
   protected readonly draft = signal<readonly HomeLayoutItem[] | null>(null);
   protected readonly candidate = signal<HomeLayoutItem | null>(null);
@@ -191,7 +192,8 @@ export class HomeRoomComponent {
   protected readonly preview = computed(() => {
     const room = this.room();
     const item = this.candidate();
-    return room && item ? homeSceneItem(room.id, item) : null;
+    const object = room && item ? homeSceneItem(room.id, item) : null;
+    return object ? homeViewFootprint(object) : null;
   });
   private readonly sceneItems = computed(() => {
     if (this.layoutConflict() && this.conflictReady()) return this.baseItems();
@@ -204,12 +206,13 @@ export class HomeRoomComponent {
     const candidate = this.candidate();
     const visible = this.sceneItems().filter(item => !this.unavailableMilestone(item));
     const shown = candidate && !this.candidateProblem() ? withHomeItem(visible, candidate) : visible;
-    return homeSceneObjects(room.id, shown);
+    return homeSceneObjects(room.id, shown).map(homeViewItem);
   });
   protected readonly dormantMilestones = computed(() => {
     if (this.room()?.id !== 'courtyard') return [];
     return this.sceneItems().filter(item => this.unavailableMilestone(item))
-      .flatMap(item => homeSceneItem('courtyard', item) ?? []);
+      .flatMap(item => homeSceneItem('courtyard', item) ?? [])
+      .map(object => ({ id: object.id, ...homeViewFootprint(object) }));
   });
   protected readonly practical = computed(() => {
     const room = this.room();
@@ -217,7 +220,8 @@ export class HomeRoomComponent {
     const visible = this.objects();
     const actions = homeSceneObjects(room.id).filter(object => object.action.kind !== 'placed' &&
       !visible.some(item => item.id === object.id && item.action.kind !== 'placed'));
-    return [...visible.filter(item => !actions.some(action => action.id === item.id)), ...actions];
+    return [...visible.filter(item => !actions.some(action => action.id === item.id)), ...actions]
+      .sort((a, b) => Number(b.primary) - Number(a.primary) || Number(a.action.kind === 'placed') - Number(b.action.kind === 'placed'));
   });
   protected readonly selected = computed(() => this.draft() ? null :
     this.practical().find(object => object.id === this.query().get('object')) ?? null);
@@ -227,22 +231,11 @@ export class HomeRoomComponent {
     const camera = this.camera();
     return `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
   });
-  protected readonly crumbs = computed((): readonly PlaceCrumb[] => {
-    const room = this.room();
-    const object = this.selected();
-    if (!room) return [{ label: 'Town', href: '/town' }, { label: 'Home' }];
-    const roomCrumb: PlaceCrumb = object
-      ? { label: room.label, href: `/town/home/${room.id}`, query: sceneQuery(null, this.camera()) }
-      : { label: room.label };
-    return object
-      ? [{ label: 'Town', href: '/town' }, roomCrumb, { label: object.label }]
-      : [{ label: 'Town', href: '/town' }, roomCrumb];
-  });
   protected readonly noteWhen = computed(() => {
     const today = this.town()?.town.today;
     return today
-      ? `Note for ${formatTownDay(today)}. Nothing is saved.`
-      : 'Note for this visit. Nothing is saved.';
+      ? `Note for ${formatTownDay(today)}.`
+      : 'Note for this visit.';
   });
 
   constructor() {
@@ -594,6 +587,7 @@ export class HomeRoomComponent {
       const target = this.returnObject;
       this.adoptLayout(result.data);
       this.undo.set({ revision: result.data.revision, items: previous });
+      this.showConfirmedStatus();
       this.endEditing();
       if (action === 'save') this.focusLayout('#home-decorate');
       else this.focusRoomAction(target);
@@ -693,14 +687,15 @@ export class HomeRoomComponent {
       { x: event.clientX - rect.left, y: event.clientY - rect.top },
       this.camera(),
       { width: rect.width, height: rect.height },
-      room.bounds,
+      this.sceneSize,
     );
     const candidate = this.candidate();
     if (candidate && this.draft()) {
-      const column = Math.floor(point.x / HOME_CELL);
-      const row = Math.floor((point.y - HOME_WALL_PX) / HOME_CELL);
+      const placement = homePlacementPoint(point);
+      const column = Math.floor(placement.x / HOME_CELL);
+      const row = Math.floor((placement.y - HOME_WALL_PX) / HOME_CELL);
       if (candidate.anchor === 'floor' && homeFloorPoint(column, row)) this.updateCandidate({ column, row });
-      else if (candidate.anchor === 'wall' && point.y < HOME_WALL_PX) {
+      else if (candidate.anchor === 'wall' && placement.y < HOME_WALL_PX) {
         const slot = HOME_WALL_SLOTS.find(entry => entry.room === room.id && entry.column === column);
         if (slot) this.updateCandidate({ slot: slot.id });
       }
@@ -802,13 +797,12 @@ export class HomeRoomComponent {
     this.recoveryRequired.set(data.recovery_required === true);
     this.savedItems.set(data.revision > 0 && !this.recoveryRequired() ? data.items : starterHomeLayout(room.id));
     this.layoutRevision.set(data.revision);
-    this.showConfirmedStatus();
   }
 
   private showConfirmedStatus(): void {
     const revision = this.layoutRevision();
     this.layoutStatus.set(this.recoveryRequired() ? 'This layout needs recovery. Starter furniture is shown. Your saved layout is kept.' :
-      revision === 0 ? '' : `Layout saved · Revision ${revision}`);
+      this.canUndo() ? `Layout saved · Revision ${revision}` : '');
   }
 
   private publishLayout(result: LayoutLoad): void {
@@ -823,8 +817,12 @@ export class HomeRoomComponent {
     this.adoptLayout(result.data);
     if (this.layoutConflict()) {
       this.conflictReady.set(true);
-      if (!this.recoveryRequired()) this.layoutStatus.set('The scene shows the latest saved room.');
+      if (!this.recoveryRequired()) {
+        this.layoutStatus.set('The scene shows the latest saved room.');
+        return;
+      }
     }
+    this.showConfirmedStatus();
   }
 
   private publishTown(result: TownLoad): void {
@@ -862,7 +860,7 @@ export class HomeRoomComponent {
     };
     if (sameCamera(camera, this.camera())) return;
     this.camera.set(camera);
-    this.publish(sceneQuery(this.selected()?.id ?? null, camera));
+    this.publish(sceneQuery(this.query().get('object'), camera));
   }
 
   private publish(query: Record<string, string | null>, after?: () => void): void {
