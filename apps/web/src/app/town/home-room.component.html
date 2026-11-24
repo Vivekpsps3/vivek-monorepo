@@ -49,9 +49,9 @@
                   [style.width.%]="grid.width" [style.height.%]="grid.height"></span>
               }
               @for (object of objects(); track object.id) {
-                <button type="button" class="piece" tabindex="-1" [class.faded]="faded(object.id)" [class.interactive]="!draft()"
+                <span class="piece" aria-hidden="true" [class.faded]="faded(object.id)" [class.interactive]="!draft()"
                   [attr.data-scene-object]="object.id" [attr.data-primary]="object.primary ? 'true' : null"
-                  [attr.aria-label]="object.label" [attr.aria-current]="selected() === object ? 'true' : null"
+                  [attr.aria-current]="selected() === object ? 'true' : null"
                   [hidden]="!painted().includes(object.id)"
                   [style.left.%]="object.left" [style.top.%]="object.top" [style.width.%]="object.width" [style.height.%]="object.height"
                   [style.z-index]="object.asset.layer">
@@ -61,7 +61,7 @@
                     [style.height.%]="object.orientation % 2 ? object.width * sceneSize.width / (object.height * sceneSize.height) * 100 : 100"
                     [style.--turn]="object.orientation * 90 + 'deg'" [attr.data-palette]="object.palette" alt=""
                     (load)="artLoaded(object.id)" (error)="artFailed(object.id)">
-                </button>
+                </span>
               }
               @for (marker of dormantMilestones(); track marker.id) {
                 <span class="milestone-placeholder" [style.--grid-skew]="grid.skew" [attr.data-dormant-milestone]="marker.id" aria-hidden="true"

@@ -454,7 +454,8 @@ test.describe('Home rooms', () => {
       expect(revisions).toEqual([0, 1, 2, 2, 3, 3]);
       expect(await read()).toMatchObject({ revision: 4, items: starterHomeLayout('study') });
       await page.reload();
-      await expect(status).toHaveText('Layout saved · Revision 4');
+      await expect(status).toHaveAttribute('data-layout-revision', '4');
+      await expect(status).toBeEmpty();
       await expect(palette('study-shelf')).toHaveAttribute('data-palette', '0');
     });
   }
