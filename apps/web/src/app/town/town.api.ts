@@ -11,6 +11,7 @@ export interface RoomLayout {
   room_id: string;
   revision: number;
   items: HomeLayoutWrite['items'];
+  recovery_required?: true;
 }
 
 export interface CreateHabit {

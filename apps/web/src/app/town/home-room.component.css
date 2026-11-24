@@ -78,6 +78,11 @@ label { font-weight: 600; }
 }
 .layout-status:not(:empty) { margin-block-end: 12px; }
 .room-editor h3 { margin-block: 12px 8px; font-size: 1rem; }
+.layout-recovery {
+  border-block-start: 1px solid var(--border);
+  margin-block-start: 12px;
+}
+.layout-recovery p { margin-block: 8px; }
 .room-editor select {
   display: block;
   box-sizing: border-box;

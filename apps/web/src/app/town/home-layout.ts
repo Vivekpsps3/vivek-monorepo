@@ -104,6 +104,39 @@ export function homePlacementProblem(room: HomeRoomId, items: readonly HomeLayou
   return null;
 }
 
+export function homeItemKnown(item: HomeLayoutItem): boolean {
+  return !!(cosmeticById(item.catalog_id) || homeMilestoneOption(item.catalog_id, item.instance_id));
+}
+
+export function sameHomeItem(left: HomeLayoutItem, right: HomeLayoutItem | undefined): boolean {
+  return right != null && left.instance_id === right.instance_id && left.catalog_id === right.catalog_id &&
+    left.anchor === right.anchor && left.column === right.column && left.row === right.row &&
+    left.slot === right.slot && left.orientation === right.orientation && left.palette === right.palette;
+}
+
+export function sameHomeLayout(left: readonly HomeLayoutItem[], right: readonly HomeLayoutItem[]): boolean {
+  return left.length === right.length && left.every((item, index) => sameHomeItem(item, right[index]));
+}
+
+export function reapplyHomeChanges(
+  base: readonly HomeLayoutItem[],
+  draft: readonly HomeLayoutItem[],
+  saved: readonly HomeLayoutItem[],
+): HomeLayoutItem[] {
+  const before = new Map(base.map(item => [item.instance_id, item]));
+  const localIds = new Set(draft.map(item => item.instance_id));
+  const changes = new Map(draft.filter(item => !sameHomeItem(item, before.get(item.instance_id)))
+    .map(item => [item.instance_id, item]));
+  const result = [];
+  for (const item of saved) {
+    const id = item.instance_id;
+    if (before.has(id) && !localIds.has(id)) continue;
+    result.push(changes.get(id) ?? item);
+    changes.delete(id);
+  }
+  return [...result, ...changes.values()];
+}
+
 export function homeItemLabel(item: HomeLayoutItem): string {
   return cosmeticById(item.catalog_id)?.label ?? homeMilestoneOption(item.catalog_id, item.instance_id)?.label ?? 'Unavailable item';
 }

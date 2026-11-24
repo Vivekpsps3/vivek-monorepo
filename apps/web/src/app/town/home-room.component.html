@@ -14,8 +14,12 @@
     </ul>
     @if (room() && signedIn() && !draft()) {
       <div class="decorate-action">
-        <button id="home-decorate" class="action decorate" type="button" [disabled]="!savedItems()" (click)="startEditing()">Decorate room</button>
-        @if (!savedItems() && !layoutLoading()) {
+        <button id="home-decorate" class="action decorate" type="button"
+          [disabled]="!savedItems() || recoveryRequired() || layoutBusy()" (click)="startEditing()">Decorate room</button>
+        @if (canUndo()) {
+          <button id="home-undo" class="action" type="button" [disabled]="layoutBusy()" (click)="undoLayout()">Undo last save</button>
+        }
+        @if ((!savedItems() || recoveryRequired()) && !layoutLoading()) {
           <button class="action" type="button" (click)="retryLayout()">Retry layout</button>
         }
       </div>
@@ -95,10 +99,42 @@
       </div>
       <aside class="inspector" [class.sheet]="sheet()" [attr.data-inspector]="selected() ? 'ready' : 'empty'" [attr.aria-label]="room.label + ' details'">
         <p class="layout-status" data-layout-status role="status" [attr.data-layout-revision]="layoutRevision()">{{ layoutStatus() }}</p>
+        @if (unavailableItems(); as count) {
+          <p class="layout-status">Unavailable furniture kept in this room: {{ count }}.</p>
+        }
         @if (draft()) {
           <section class="room-editor" aria-labelledby="home-editor-title">
-            <h2 id="home-editor-title">Decorate {{ room.label }}</h2>
-            @if (candidate(); as item) {
+            <h2 id="home-editor-title" tabindex="-1">Decorate {{ room.label }}</h2>
+            @if (layoutConflict()) {
+              <section class="layout-recovery" aria-labelledby="home-conflict-title">
+                <h3 id="home-conflict-title" tabindex="-1">
+                  {{ recoveryRequired() ? 'This layout needs recovery' : 'This room was saved elsewhere' }}
+                </h3>
+                @if (recoveryRequired()) {
+                  <p>Your draft is kept while the saved layout needs recovery.</p>
+                } @else {
+                  <p>Reapply to preview your edits on the latest room. Saving uses your draft version for pieces you changed.</p>
+                }
+                <div class="editor-actions">
+                  <button class="action decorate" type="button"
+                    [disabled]="!conflictReady() || layoutLoading() || recoveryRequired()" (click)="reapplyDraft()">Reapply my changes</button>
+                  @if ((!conflictReady() || recoveryRequired()) && !layoutLoading()) {
+                    <button class="action" type="button" (click)="retryLayout()">Retry latest layout</button>
+                  }
+                  <button class="action" type="button" (click)="cancelEditing()">Discard my changes</button>
+                </div>
+              </section>
+            } @else if (resetPreview()) {
+              <section class="layout-recovery" aria-labelledby="home-reset-title">
+                <h3 id="home-reset-title" tabindex="-1">Reset preview</h3>
+                <p>Restore starter furniture and keep milestone ornaments and unavailable pieces.</p>
+                @if (resetProblem(); as problem) { <p role="status">{{ problem }}</p> }
+                <div class="editor-actions">
+                  <button class="action decorate" type="button" [disabled]="layoutBusy() || !!resetProblem()" (click)="confirmReset()">Confirm reset</button>
+                  <button id="home-reset-cancel" class="action" type="button" [disabled]="layoutBusy()" (click)="cancelReset()">Keep editing</button>
+                </div>
+              </section>
+            } @else if (candidate(); as item) {
               <h3 id="home-preview" tabindex="-1">{{ itemLabel(item) }}</h3>
               <fieldset [disabled]="layoutBusy()">
                 <legend>Position</legend>
@@ -199,9 +235,8 @@
               @if (draftProblem(); as problem) { <p role="status">{{ problem }}</p> }
               <div class="editor-actions">
                 <button type="button" class="action decorate" [disabled]="saveDisabled()" (click)="saveCurrent()">Save layout</button>
-                <button type="button" class="action" [disabled]="layoutBusy()" (click)="cancelEditing()">
-                  {{ layoutConflict() ? 'Discard draft and reload' : 'Cancel editing' }}
-                </button>
+                <button id="home-reset" type="button" class="action" [disabled]="layoutBusy()" (click)="previewReset()">Reset room</button>
+                <button type="button" class="action" [disabled]="layoutBusy()" (click)="cancelEditing()">Cancel editing</button>
               </div>
             }
           </section>

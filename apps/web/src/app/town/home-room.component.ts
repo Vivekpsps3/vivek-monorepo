@@ -37,7 +37,10 @@ import {
   zoomToward,
   type SceneCamera,
 } from './library-room.scene';
-import { homeFloorPoint, homeItemLabel, homePlacementProblem, withHomeItem, type HomeLayoutItem } from './home-layout';
+import {
+  homeFloorPoint, homeItemKnown, homeItemLabel, homePlacementProblem, reapplyHomeChanges, sameHomeLayout,
+  withHomeItem, type HomeLayoutItem,
+} from './home-layout';
 import { HOME_MILESTONES, homeMilestoneEligible, type HomeMilestone } from './home-milestones';
 import { TownApiService, type RoomLayout } from './town.api';
 import { TownPlaceComponent, type PlaceCrumb } from './town-place.component';
@@ -58,6 +61,8 @@ interface TownLoad {
   data: TownResponse | null;
   failed: boolean;
 }
+
+type LayoutAction = 'save' | 'undo' | 'reset';
 
 interface LayoutLoad {
   owner: number;
@@ -123,7 +128,13 @@ export class HomeRoomComponent {
     asset.group === 'starter' || this.unlocked()?.has(asset.id),
   ));
   protected readonly inventoryUnavailable = signal(false);
-  protected readonly layoutConflict = signal(false);
+  private readonly conflictBase = signal<readonly HomeLayoutItem[] | null>(null);
+  protected readonly layoutConflict = computed(() => this.conflictBase() != null);
+  protected readonly conflictReady = signal(false);
+  protected readonly recoveryRequired = signal(false);
+  protected readonly resetPreview = signal(false);
+  private readonly undo = signal<{ revision: number; items: readonly HomeLayoutItem[] } | null>(null);
+  private returnObject: string | null = null;
   private editEpoch = 0;
   protected readonly layoutRevision = signal(0);
   protected readonly layoutStatus = signal('');
@@ -145,7 +156,24 @@ export class HomeRoomComponent {
     cosmeticById(item.catalog_id) || this.milestones.some(milestone =>
       item.instance_id === milestone.id && this.milestoneEligible(milestone.id)),
   ) ?? []);
-  protected readonly changed = computed(() => JSON.stringify(this.draft()) !== JSON.stringify(this.baseItems()));
+  protected readonly changed = computed(() => {
+    const draft = this.draft();
+    return !!draft && !sameHomeLayout(draft, this.baseItems());
+  });
+  protected readonly canUndo = computed(() => this.undo()?.revision === this.layoutRevision());
+  protected readonly unavailableItems = computed(() => this.baseItems().filter(item => !homeItemKnown(item)).length);
+  private readonly resetItems = computed(() => {
+    const room = this.room();
+    if (!room) return [];
+    const preserved = (this.draft() ?? this.baseItems()).filter(item => !homeItemKnown(item) ||
+      this.milestones.some(milestone => item.instance_id === milestone.id));
+    const ids = new Set(preserved.map(item => item.instance_id));
+    return [...starterHomeLayout(room.id).filter(item => !ids.has(item.instance_id)), ...preserved];
+  });
+  protected readonly resetProblem = computed(() => {
+    const room = this.room();
+    return room ? homePlacementProblem(room.id, this.resetItems()) : null;
+  });
   protected readonly draftProblem = computed(() => {
     const room = this.room();
     const draft = this.draft();
@@ -165,19 +193,22 @@ export class HomeRoomComponent {
     const item = this.candidate();
     return room && item ? homeSceneItem(room.id, item) : null;
   });
+  private readonly sceneItems = computed(() => {
+    if (this.layoutConflict() && this.conflictReady()) return this.baseItems();
+    if (this.resetPreview()) return this.resetItems();
+    return this.draft() ?? this.baseItems();
+  });
   protected readonly objects = computed(() => {
     const room = this.room();
     if (!room) return [];
-    const draft = this.draft();
     const candidate = this.candidate();
-    const visible = (draft ?? this.baseItems()).filter(item => !this.unavailableMilestone(item));
+    const visible = this.sceneItems().filter(item => !this.unavailableMilestone(item));
     const shown = candidate && !this.candidateProblem() ? withHomeItem(visible, candidate) : visible;
     return homeSceneObjects(room.id, shown);
   });
   protected readonly dormantMilestones = computed(() => {
     if (this.room()?.id !== 'courtyard') return [];
-    return (this.draft() ?? this.baseItems())
-      .filter(item => this.unavailableMilestone(item))
+    return this.sceneItems().filter(item => this.unavailableMilestone(item))
       .flatMap(item => homeSceneItem('courtyard', item) ?? []);
   });
   protected readonly practical = computed(() => {
@@ -326,7 +357,8 @@ export class HomeRoomComponent {
 
   protected onEscape(): void {
     if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
-    if (this.candidate() && !this.layoutBusy()) this.cancelCandidate();
+    if (this.resetPreview() && !this.layoutBusy()) this.cancelReset();
+    else if (this.candidate() && !this.layoutBusy()) this.cancelCandidate();
     else if (this.sheet()) this.closeSheet();
   }
 
@@ -361,9 +393,9 @@ export class HomeRoomComponent {
   }
 
   protected startEditing(): void {
-    if (!this.signedIn() || !this.savedItems() || this.draft()) return;
+    if (!this.signedIn() || !this.savedItems() || this.draft() || this.recoveryRequired() || this.layoutBusy()) return;
+    this.returnObject = this.selected()?.id ?? null;
     this.draft.set(this.baseItems());
-    this.layoutConflict.set(false);
     this.loadInventory();
     this.focusLayout('#home-inventory');
   }
@@ -392,6 +424,7 @@ export class HomeRoomComponent {
   protected pickPlaced(id: string): void {
     const item = this.editableItems().find(entry => entry.instance_id === id);
     if (!item || this.layoutBusy()) return;
+    this.returnObject = id;
     this.candidate.set(item);
     this.focusLayout('#home-preview');
   }
@@ -432,6 +465,7 @@ export class HomeRoomComponent {
     const draft = this.draft();
     if (!item || !draft || this.candidateProblem() || this.layoutBusy()) return;
     this.draft.set(withHomeItem(draft, item));
+    this.returnObject = item.instance_id;
     this.candidate.set(null);
     this.focusLayout('#home-inventory');
   }
@@ -458,13 +492,12 @@ export class HomeRoomComponent {
 
   protected cancelEditing(): void {
     if (this.layoutBusy()) return;
-    const conflict = this.layoutConflict();
+    const reload = this.layoutConflict() && !this.conflictReady();
+    const target = this.returnObject;
     this.endEditing();
-    if (conflict) {
-      this.layoutEpoch += 1;
-      this.requestLayout();
-    }
-    this.focusLayout('#home-decorate');
+    if (reload) this.retryLayout();
+    else this.showConfirmedStatus();
+    this.focusRoomAction(target);
   }
 
   protected retryLayout(): void {
@@ -472,20 +505,61 @@ export class HomeRoomComponent {
     this.requestLayout();
   }
 
+  protected reapplyDraft(): void {
+    const base = this.conflictBase();
+    const draft = this.draft();
+    if (!base || !draft || !this.conflictReady() || this.recoveryRequired()) return;
+    this.draft.set(reapplyHomeChanges(base, draft, this.baseItems()));
+    this.conflictBase.set(null);
+    this.conflictReady.set(false);
+    this.layoutStatus.set('Review your reapplied changes before saving.');
+    this.focusLayout('#home-editor-title');
+  }
+
+  protected previewReset(): void {
+    if (!this.draft() || this.candidate() || this.layoutBusy() || this.layoutConflict()) return;
+    this.resetPreview.set(true);
+    this.focusLayout('#home-reset-title');
+  }
+
+  protected cancelReset(): void {
+    if (this.layoutBusy()) return;
+    this.resetPreview.set(false);
+    this.showConfirmedStatus();
+    this.focusLayout('#home-reset');
+  }
+
+  protected confirmReset(): void {
+    if (!this.resetPreview() || this.resetProblem()) return;
+    this.commitLayout('reset', this.resetItems());
+  }
+
+  protected undoLayout(): void {
+    const prior = this.undo();
+    if (!prior || !this.canUndo() || this.draft()) return;
+    this.returnObject = this.selected()?.id ?? null;
+    this.commitLayout('undo', prior.items);
+  }
+
   protected saveDisabled(): boolean {
-    return !this.draft() || !this.changed() || !!this.candidate() ||
-      !!this.draftProblem() || this.layoutBusy() || this.layoutConflict();
+    return !this.draft() || !this.changed() || !!this.candidate() || !!this.draftProblem() ||
+      this.layoutBusy() || this.layoutConflict() || this.resetPreview() || this.recoveryRequired();
   }
 
   protected saveCurrent(): void {
+    const draft = this.draft();
+    if (draft && !this.saveDisabled()) this.commitLayout('save', draft);
+  }
+
+  private commitLayout(action: LayoutAction, items: readonly HomeLayoutItem[]): void {
     const room = this.room();
     const owner = this.owner;
-    const draft = this.draft();
-    if (!room || owner == null || !draft || this.saveDisabled()) return;
+    if (!room || owner == null || this.layoutBusy() || this.layoutConflict() || this.recoveryRequired()) return;
+    const previous = this.baseItems();
     const epoch = ++this.layoutEpoch;
     this.layoutBusy.set(true);
-    this.layoutStatus.set('Saving layout…');
-    this.api.saveLayout(room.id, { expected_revision: this.layoutRevision(), items: [...draft] }).pipe(
+    this.layoutStatus.set(action === 'undo' ? 'Undoing last save…' : action === 'reset' ? 'Resetting room…' : 'Saving layout…');
+    this.api.saveLayout(room.id, { expected_revision: this.layoutRevision(), items: [...items] }).pipe(
       map(data => ({ ok: true as const, data })),
       catchError((error: { error?: { code?: unknown } }) => of({ ok: false as const, error })),
       takeUntilDestroyed(this.destroyRef),
@@ -493,21 +567,36 @@ export class HomeRoomComponent {
       if (!this.alive || epoch !== this.layoutEpoch || owner !== this.owner || this.room()?.id !== room.id) return;
       this.layoutBusy.set(false);
       if (!result.ok) {
-        if (result.error.error?.code === 'layout_conflict') {
-          this.layoutConflict.set(true);
-          this.layoutStatus.set('This room was saved elsewhere. Your changes are still here.');
-        } else if (result.error.error?.code === 'layout_entitlement') {
+        const code = result.error.error?.code;
+        if (code === 'layout_conflict' || code === 'layout_recovery') {
+          this.draft.set(items);
+          this.candidate.set(null);
+          this.resetPreview.set(false);
+          this.conflictBase.set(previous);
+          this.conflictReady.set(false);
+          this.undo.set(null);
+          this.requestLayout();
+          this.focusLayout('#home-conflict-title');
+          return;
+        }
+        this.layoutStatus.set(action === 'undo' ? 'Undo failed. Your saved room is unchanged.' :
+          action === 'reset' ? 'Reset failed. Your saved room and draft are unchanged.' :
+          'The layout was not saved. Your changes are still here.');
+        if (code === 'layout_entitlement' && this.draft()) {
           this.layoutStatus.set('An item is no longer unlocked. Your changes are still here.');
           this.retry.next();
           this.loadInventory();
-        } else {
-          this.layoutStatus.set('The layout was not saved. Your changes are still here.');
         }
+        if (action === 'undo') this.focusLayout('#home-undo', '#home-decorate');
+        if (action === 'reset') this.focusLayout('#home-reset-cancel');
         return;
       }
+      const target = this.returnObject;
       this.adoptLayout(result.data);
+      this.undo.set({ revision: result.data.revision, items: previous });
       this.endEditing();
-      this.focusLayout('#home-decorate');
+      if (action === 'save') this.focusLayout('#home-decorate');
+      else this.focusRoomAction(target);
     });
   }
 
@@ -535,10 +624,19 @@ export class HomeRoomComponent {
     this.candidate.set({ ...item, ...change });
   }
 
-  private focusLayout(selector: string): void {
+  private focusRoomAction(item: string | null): void {
+    const decorate = '#home-decorate:not(:disabled)';
+    this.focusLayout(item ? `[data-object="${CSS.escape(item)}"]` : decorate, item ? decorate : '.rooms [aria-current="page"]');
+  }
+
+  private focusLayout(selector: string, fallback?: string): void {
     const epoch = this.layoutEpoch;
     afterNextRender(() => {
-      if (this.alive && this.layoutEpoch === epoch) this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus();
+      if (!this.alive || this.layoutEpoch !== epoch) return;
+      const host = this.host.nativeElement;
+      const control = host.querySelector<HTMLElement>(selector) ??
+        (fallback ? host.querySelector<HTMLElement>(fallback) : null);
+      control?.focus();
     }, { injector: this.injector });
   }
 
@@ -660,7 +758,7 @@ export class HomeRoomComponent {
   private invalidateForLock(): void {
     this.note.set('');
     this.dropUncommittedGesture();
-    if (this.draft()) this.onRoomChange();
+    if (this.draft() || this.layoutBusy() || this.undo()) this.onRoomChange();
   }
 
   private endEditing(): void {
@@ -668,35 +766,49 @@ export class HomeRoomComponent {
     this.draft.set(null);
     this.candidate.set(null);
     this.unlocked.set(null);
-    this.layoutConflict.set(false);
+    this.conflictBase.set(null);
+    this.conflictReady.set(false);
+    this.resetPreview.set(false);
+    this.returnObject = null;
   }
 
   private onRoomChange(): void {
     this.layoutEpoch += 1;
     this.layoutBusy.set(false);
+    this.undo.set(null);
     this.endEditing();
     this.requestLayout();
   }
 
   private requestLayout(): void {
     const room = this.room();
-    this.savedItems.set(null);
-    this.layoutRevision.set(0);
+    if (!this.layoutConflict()) {
+      this.savedItems.set(null);
+      this.layoutRevision.set(0);
+      this.recoveryRequired.set(false);
+    }
     if (this.owner == null || room == null) {
       this.layoutLoading.set(false);
       this.layoutStatus.set(room ? 'Sign in to decorate this room.' : '');
       return;
     }
-    this.layoutStatus.set('Loading saved layout…');
+    this.layoutStatus.set(this.layoutConflict() ? 'Loading the latest saved room…' : 'Loading saved layout…');
     this.layoutRequest.next();
   }
 
   private adoptLayout(data: RoomLayout): void {
     const room = this.room();
     if (!room || room.id !== data.room_id) return;
-    this.savedItems.set(data.revision > 0 ? data.items : starterHomeLayout(room.id));
+    this.recoveryRequired.set(data.recovery_required === true);
+    this.savedItems.set(data.revision > 0 && !this.recoveryRequired() ? data.items : starterHomeLayout(room.id));
     this.layoutRevision.set(data.revision);
-    this.layoutStatus.set(data.revision === 0 ? '' : `Layout saved · Revision ${data.revision}`);
+    this.showConfirmedStatus();
+  }
+
+  private showConfirmedStatus(): void {
+    const revision = this.layoutRevision();
+    this.layoutStatus.set(this.recoveryRequired() ? 'This layout needs recovery. Starter furniture is shown. Your saved layout is kept.' :
+      revision === 0 ? '' : `Layout saved · Revision ${revision}`);
   }
 
   private publishLayout(result: LayoutLoad): void {
@@ -704,10 +816,15 @@ export class HomeRoomComponent {
     if (this.room()?.id !== result.roomId) return;
     this.layoutLoading.set(false);
     if (result.failed || result.data?.room_id !== result.roomId) {
-      this.layoutStatus.set('The saved layout could not be loaded.');
+      this.layoutStatus.set(this.layoutConflict() ? 'The latest layout could not be loaded. Your draft is kept.' :
+        'The saved layout could not be loaded.');
       return;
     }
     this.adoptLayout(result.data);
+    if (this.layoutConflict()) {
+      this.conflictReady.set(true);
+      if (!this.recoveryRequired()) this.layoutStatus.set('The scene shows the latest saved room.');
+    }
   }
 
   private publishTown(result: TownLoad): void {

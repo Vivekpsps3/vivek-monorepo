@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '../../../tests/e2e/fixtures';
-import { HOME_ROOMS, homeObjects, homePrimary } from '../src/app/town/home-rooms';
+import { HOME_ROOMS, homeObjects, homePrimary, starterHomeLayout } from '../src/app/town/home-rooms';
 
 const FOREIGN_HABIT = "Other's habit";
 
@@ -268,6 +268,145 @@ test.describe('Home rooms', () => {
       await expect(home.locator('#home-note')).toBeEnabled();
     });
   }
+
+  for (const [width, theme] of [[390, 'light'], [390, 'dark'], [1280, 'light'], [1280, 'dark']] as const) {
+    test(`recovers a conflicted draft and previews Reset at ${width} ${theme}`, async ({ page }, info) => {
+      await prepare(page, width, theme);
+      await page.goto('/town/home/study?object=study-desk');
+      const home = page.locator('app-town-home');
+      const status = home.locator('[data-layout-status]');
+      const touch = width === 390;
+      const button = (name: string) => home.getByRole('button', { name, exact: true });
+      const press = (name: string) => activate(page, button(name), touch);
+      const desk = home.locator('[data-object="study-desk"]');
+      const palette = (id: string) => home.locator(`[data-scene-object="${id}"] img`);
+      const layoutUrl = '/api/town/layouts/study';
+      const read = async () => {
+        const response = await page.request.get(layoutUrl);
+        expect(response.ok()).toBeTruthy();
+        return response.json();
+      };
+      await home.locator('#home-note').fill('Keep this desk note');
+      await press('Decorate room');
+      await home.getByLabel('Move or recolor furniture').selectOption('study-desk');
+      await press('Rose');
+      await press('Place item');
+      await expect(palette('study-desk')).toHaveAttribute('data-palette', '2');
+
+      // Another client saves from the same revision while this device retains its draft.
+      const otherItems = starterHomeLayout('study').map(item =>
+        item.instance_id === 'study-shelf' ? { ...item, palette: 3 } : item);
+      const winner = await page.request.put(layoutUrl, {
+        headers: { 'X-CSRF-Token': 'synthetic-csrf', Origin: new URL(page.url()).origin },
+        data: { expected_revision: 0, items: otherItems },
+      });
+      expect(winner.status()).toBe(201);
+
+      let failRead = true;
+      let failWrite = false;
+      const revisions: number[] = [];
+      await page.route(/\/api\/town\/layouts\/study(?:\?|$)/, async route => {
+        const request = route.request();
+        const write = request.method() === 'PUT';
+        if (write) {
+          revisions.push(request.postDataJSON().expected_revision);
+          if (failWrite) {
+            failWrite = false;
+            return route.fulfill({ status: 503, json: { message: 'Synthetic failure' } });
+          }
+        } else if (failRead) {
+          failRead = false;
+          return route.fulfill({ status: 503, json: { message: 'Synthetic failure' } });
+        }
+        return route.continue();
+      });
+      await press('Save layout');
+      const conflict = home.getByRole('heading', { name: 'This room was saved elsewhere' });
+      await expect(conflict).toBeFocused();
+      await expect(status).toHaveText('The latest layout could not be loaded. Your draft is kept.');
+      await expect(button('Reapply my changes')).toBeDisabled();
+      expect(await read()).toMatchObject({ revision: 1, items: otherItems });
+      await press('Retry latest layout');
+      await expect(status).toHaveText('The scene shows the latest saved room.');
+      await expect(palette('study-desk')).toHaveAttribute('data-palette', '0');
+      await expect(palette('study-shelf')).toHaveAttribute('data-palette', '3');
+      for (const name of ['Reapply my changes', 'Discard my changes']) {
+        const box = await button(name).boundingBox();
+        expect(box?.width).toBeGreaterThanOrEqual(44);
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+      }
+      await info.attach(`conflict-${width}-${theme}`, { body: await home.screenshot(), contentType: 'image/png' });
+      await press('Reapply my changes');
+      await expect(home.getByRole('heading', { name: 'Decorate Study' })).toBeFocused();
+      await expect(palette('study-desk')).toHaveAttribute('data-palette', '2');
+      await expect(palette('study-shelf')).toHaveAttribute('data-palette', '3');
+      expect(revisions).toEqual([0]);
+      expect(await read()).toMatchObject({ revision: 1, items: otherItems });
+      await press('Save layout');
+      await expect(status).toHaveText('Layout saved · Revision 2');
+      await expect(home.locator('#home-note')).toHaveValue('Keep this desk note');
+      const merged = await read();
+      expect(merged.items.find((item: { instance_id: string }) => item.instance_id === 'study-desk')).toMatchObject({ palette: 2 });
+
+      failWrite = true;
+      await press('Undo last save');
+      await expect(status).toHaveText('Undo failed. Your saved room is unchanged.');
+      await expect(button('Undo last save')).toBeFocused();
+      expect(await read()).toEqual(merged);
+      await press('Undo last save');
+      await expect(status).toHaveText('Layout saved · Revision 3');
+      await expect(desk).toBeFocused();
+      expect(await read()).toMatchObject({ revision: 3, items: otherItems });
+
+      await press('Decorate room');
+      await press('Reset room');
+      const reset = home.getByRole('heading', { name: 'Reset preview' });
+      await expect(reset).toBeFocused();
+      await expect(palette('study-shelf')).toHaveAttribute('data-palette', '0');
+      expect(await read()).toMatchObject({ revision: 3, items: otherItems });
+      const scan = await new AxeBuilder({ page }).include('app-town-home').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+      expect(await home.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+      const confirm = await button('Confirm reset').boundingBox();
+      expect(confirm?.width).toBeGreaterThanOrEqual(44);
+      expect(confirm?.height).toBeGreaterThanOrEqual(44);
+      await info.attach(`reset-${width}-${theme}`, { body: await home.screenshot(), contentType: 'image/png' });
+      failWrite = true;
+      await press('Confirm reset');
+      await expect(status).toHaveText('Reset failed. Your saved room and draft are unchanged.');
+      await expect(button('Keep editing')).toBeFocused();
+      expect(await read()).toMatchObject({ revision: 3, items: otherItems });
+      await page.keyboard.press('Escape');
+      await expect(button('Reset room')).toBeFocused();
+      await expect(palette('study-shelf')).toHaveAttribute('data-palette', '3');
+      await press('Reset room');
+      await press('Confirm reset');
+      await expect(status).toHaveText('Layout saved · Revision 4');
+      await expect(desk).toBeFocused();
+      expect(revisions).toEqual([0, 1, 2, 2, 3, 3]);
+      expect(await read()).toMatchObject({ revision: 4, items: starterHomeLayout('study') });
+      await page.reload();
+      await expect(status).toHaveText('Layout saved · Revision 4');
+      await expect(palette('study-shelf')).toHaveAttribute('data-palette', '0');
+    });
+  }
+
+  test('keeps a protected layout read-only while room actions stay usable', async ({ page }) => {
+    await prepare(page, 390, 'dark');
+    await page.route(/\/api\/town\/layouts\/study(?:\?|$)/, route => route.fulfill({
+      json: { room_id: 'study', revision: 7, items: [], recovery_required: true },
+    }));
+    await page.goto('/town/home/study');
+    const home = page.locator('app-town-home');
+    await expect(home.locator('[data-layout-status]')).toHaveText(
+      'This layout needs recovery. Starter furniture is shown. Your saved layout is kept.',
+    );
+    await expect(home.getByRole('button', { name: 'Decorate room' })).toBeDisabled();
+    await expect(home.getByRole('button', { name: 'Undo last save' })).toHaveCount(0);
+    await home.getByRole('link', { name: 'Desk', exact: true }).tap();
+    await expect(home.locator('#home-note')).toBeEnabled();
+  });
 
   test('brings a saved milestone ornament back when corrected eligibility returns', async ({ page }) => {
     await prepare(page, 1280, 'light');
