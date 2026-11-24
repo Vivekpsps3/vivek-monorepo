@@ -9,7 +9,6 @@ import {
   HOME_ROOMS,
   HOME_WALL_CAP,
   HOME_WALL_SLOTS,
-  homeLayoutProblems,
   homeObjects,
   homePrimary,
   homeSceneObjects,
@@ -18,7 +17,6 @@ import { frontObject, roomRect } from './library-room.scene';
 
 describe('Home room layout', () => {
   it('fits four furnished rooms of free starters and leaves the doorway open', () => {
-    expect(homeLayoutProblems()).toEqual([]);
     expect(HOME_ROOMS.map(room => room.id)).toEqual([...HOME_ROOM_IDS]);
     const starters = cosmeticCatalog.filter(item => item.group === 'starter');
     const shop = new Set(cosmeticCatalog.filter(item => item.group === 'shop').map(item => item.id));

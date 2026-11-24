@@ -12,14 +12,20 @@
         </li>
       }
     </ul>
+    @if (room() && signedIn() && !draft()) {
+      <div class="decorate-action">
+        <button id="home-decorate" class="action decorate" type="button" [disabled]="!savedItems()" (click)="startEditing()">Decorate room</button>
+        @if (!savedItems() && !layoutLoading()) {
+          <button class="action" type="button" (click)="retryLayout()">Retry layout</button>
+        }
+      </div>
+    }
   </header>
-  @if (!layoutReady) {
-    <p role="status">This home layout does not fit its rooms.</p>
-  }
   @if (room(); as room) {
-    <div class="room-layout">
+    <div class="room-layout" [class.editing]="draft()">
       <div class="composition">
         <div #viewport class="viewport" role="group" [attr.aria-label]="room.label"
+          [class.placing]="candidate()"
           [style.aspect-ratio]="room.bounds.width + ' / ' + room.bounds.height"
           (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
           (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
@@ -40,14 +46,32 @@
                   [style.left.%]="object.left" [style.top.%]="object.top" [style.width.%]="object.width" [style.height.%]="object.height"
                   [style.z-index]="object.asset.layer">
                   <img [src]="objectSrc(object)" [width]="object.asset.bounds.width" [height]="object.asset.bounds.height"
-                    [style.color-scheme]="theme() === 'dark' ? 'dark' : 'light'" alt=""
+                    [style.color-scheme]="theme() === 'dark' ? 'dark' : 'light'"
+                    [style.width.%]="object.orientation % 2 ? object.height * room.bounds.height / (object.width * room.bounds.width) * 100 : 100"
+                    [style.height.%]="object.orientation % 2 ? object.width * room.bounds.width / (object.height * room.bounds.height) * 100 : 100"
+                    [style.--turn]="object.orientation * 90 + 'deg'" [attr.data-palette]="object.palette" alt=""
                     (load)="artLoaded(object.id)" (error)="artFailed(object.id)">
                 </button>
+              }
+              @for (marker of dormantMilestones(); track marker.id) {
+                <span class="milestone-placeholder" [attr.data-dormant-milestone]="marker.id" aria-hidden="true"
+                  [style.left.%]="marker.left" [style.top.%]="marker.top" [style.width.%]="marker.width" [style.height.%]="marker.height"></span>
+              }
+              @if (preview(); as marker) {
+                <span class="placement-preview" [class.invalid]="candidateProblem()" aria-hidden="true"
+                  [style.left.%]="marker.left" [style.top.%]="marker.top" [style.width.%]="marker.width" [style.height.%]="marker.height"
+                  [style.z-index]="8"></span>
               }
             </div>
           </div>
         </div>
-        <p id="scene-hint" class="scene-hint">Drag to look around. Tap the front object to inspect it. Dragging does not change the selection.</p>
+        <p id="scene-hint" class="scene-hint">
+          @if (candidate()) {
+            Tap the room or use the position controls to preview a spot.
+          } @else {
+            Drag to look around. Tap the front object to inspect it. Dragging does not change the selection.
+          }
+        </p>
         <div class="camera-controls" role="group" aria-label="Scene view">
           <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
           <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
@@ -57,82 +81,187 @@
           <p role="status">Some room artwork is unavailable. You can still select each object below.</p>
           <ui-button variant="secondary" (clicked)="retryArt()">Retry artwork</ui-button>
         }
-        <ul class="objects" aria-label="Room objects">
-          @for (object of objects(); track object.id) {
-            <li>
-              <a class="action" [attr.data-object]="object.id" [attr.data-primary]="object.primary ? 'true' : null"
-                [routerLink]="[]" [queryParams]="linkQuery(object.id)" [replaceUrl]="true"
-                [attr.aria-current]="selected() === object ? 'true' : null">{{ object.label }}</a>
-            </li>
-          }
-        </ul>
+        @if (!draft()) {
+          <ul class="objects" aria-label="Room objects">
+            @for (object of practical(); track object.id) {
+              <li>
+                <a class="action" [attr.data-object]="object.id" [attr.data-primary]="object.primary ? 'true' : null"
+                  [routerLink]="[]" [queryParams]="linkQuery(object.id)" [replaceUrl]="true"
+                  [attr.aria-current]="selected() === object ? 'true' : null">{{ object.label }}</a>
+              </li>
+            }
+          </ul>
+        }
       </div>
       <aside class="inspector" [class.sheet]="sheet()" [attr.data-inspector]="selected() ? 'ready' : 'empty'" [attr.aria-label]="room.label + ' details'">
-        @if (sheet()) {
-          <button type="button" class="action" (click)="closeSheet()">Close details</button>
-        }
-        <section aria-live="polite">
-          @if (selected(); as object) {
-            <h2>{{ object.label }}</h2>
-            <p>{{ object.detail }}</p>
-            <p>{{ object.slotLabel }}</p>
-            @if (object.action.kind === 'sample') {
-              <figure class="sample">
-                <figcaption>{{ object.action.title }}</figcaption>
-                <p>{{ object.action.caption }}</p>
-              </figure>
-            } @else if (object.action.kind === 'media') {
-              <ui-button [href]="object.action.href" [queryParams]="object.action.query" [label]="object.action.label" />
-            } @else if (object.action.kind === 'note') {
-              <label for="home-note">Dated note</label>
-              <p>{{ noteWhen() }}</p>
-              <textarea id="home-note" [value]="note()" [disabled]="!signedIn()" [attr.maxlength]="500" (input)="onNote($event)"></textarea>
-              <p>Nothing is saved. Locking or switching account clears this note.</p>
-            } @else if (object.action.kind === 'garden') {
-              <button type="button" class="action" (click)="water(object)">{{ object.action.verb }}</button>
-              @if (watered().has(object.id)) {
-                <p role="status">{{ object.action.done }}</p>
-              }
-            } @else {
-              <p>This starter is already placed.</p>
-            }
-          } @else {
-            <h2>{{ room.label }}</h2>
-            <p>{{ room.summary }}</p>
-            <p data-wall-slots>Wall slots: {{ slots(room) }}.</p>
-            <p>The floor is 12 by 12. The doorway stays open.</p>
-          }
-        </section>
-        @if (room.id === 'courtyard') {
-          <section class="lots" aria-labelledby="garden-lots">
-            <h2 id="garden-lots" tabindex="-1">Garden lots</h2>
-            <p>These are the existing habit lots. Opening one does not check it in.</p>
-            @if (townState() === 'loading') {
-              <p role="status">Loading garden lots…</p>
-            } @else if (townState() === 'unavailable' || !town()) {
-              <p role="status">Town lots are unavailable right now.</p>
-              <button type="button" class="action" (click)="retryTown()">Retry lots</button>
-            } @else if (town(); as data) {
-              <ul class="lot-links">
-                @for (slot of lotSlots; track slot) {
-                  <li>
-                    <a class="action" [attr.data-lot]="slot" routerLink="/town" [queryParams]="{ inspect: 'slot-' + slot }">{{ lotLabel(data, slot) }}</a>
-                  </li>
+        <p class="layout-status" data-layout-status role="status" [attr.data-layout-revision]="layoutRevision()">{{ layoutStatus() }}</p>
+        @if (draft()) {
+          <section class="room-editor" aria-labelledby="home-editor-title">
+            <h2 id="home-editor-title">Decorate {{ room.label }}</h2>
+            @if (candidate(); as item) {
+              <h3 id="home-preview" tabindex="-1">{{ itemLabel(item) }}</h3>
+              <fieldset [disabled]="layoutBusy()">
+                <legend>Position</legend>
+                <div class="position-controls">
+                  @if (item.anchor === 'floor') {
+                    <label for="home-column">Column</label>
+                    <select id="home-column" #column (change)="placeOnAxis('column', column.value)">
+                      @for (position of cells; track position) {
+                        <option [value]="position" [selected]="item.column === position">{{ position + 1 }}</option>
+                      }
+                    </select>
+                    <label for="home-row">Row</label>
+                    <select id="home-row" #row (change)="placeOnAxis('row', row.value)">
+                      @for (position of cells; track position) {
+                        <option [value]="position" [selected]="item.row === position">{{ position + 1 }}</option>
+                      }
+                    </select>
+                  } @else {
+                    <label for="home-wall-slot">Attachment</label>
+                    <select id="home-wall-slot" #wall (change)="placeOnWall(wall.value)">
+                      @for (slot of room.wallSlots; track slot) {
+                        <option [value]="slot" [selected]="item.slot === slot">{{ wallLabel(slot) }}</option>
+                      }
+                    </select>
+                  }
+                </div>
+                @if (item.anchor === 'floor') {
+                  <button type="button" class="action rotate" (click)="rotateCandidate()">Rotate 90°</button>
+                  <span class="orientation">{{ item.orientation * 90 }}°</span>
                 }
-              </ul>
+              </fieldset>
+              <fieldset [disabled]="layoutBusy()">
+                <legend>Color</legend>
+                <div class="palette">
+                  @for (swatch of palettes; track swatch; let index = $index) {
+                    <button type="button" class="action" [attr.data-palette]="index"
+                      [attr.aria-pressed]="item.palette === index" (click)="recolorCandidate(index)">{{ swatch }}</button>
+                  }
+                </div>
+              </fieldset>
+              <p class="placement-status" data-placement-status role="status">{{ candidateProblem() ?? 'Preview ready.' }}</p>
+              <div class="editor-actions">
+                <button type="button" class="action decorate" [disabled]="!!candidateProblem() || layoutBusy()" (click)="applyCandidate()">Place item</button>
+                <button type="button" class="action" [disabled]="layoutBusy()" (click)="cancelCandidate()">Cancel placement</button>
+                @if (removable(item)) {
+                  <button type="button" class="action" [disabled]="layoutBusy()" (click)="removeCandidate()">Remove item</button>
+                }
+              </div>
+            } @else {
+              <div class="inventory">
+                <label for="home-inventory">Add furniture</label>
+                <select id="home-inventory" #inventoryMenu [disabled]="layoutBusy()" (change)="pickInventory(inventoryMenu.value)">
+                  <option value="">Choose an item</option>
+                  @for (asset of inventory(); track asset.id) {
+                    <option [value]="asset.id">{{ asset.label }}</option>
+                  }
+                </select>
+                @if (inventoryUnavailable()) {
+                  <p role="status">Unlocked furniture is unavailable.</p>
+                  <button type="button" class="action" (click)="loadInventory()">Retry inventory</button>
+                }
+                @if (editableItems().length) {
+                  <label for="home-placed">Move or recolor furniture</label>
+                  <select id="home-placed" #placed [disabled]="layoutBusy()" (change)="pickPlaced(placed.value)">
+                    <option value="">Choose a placed item</option>
+                    @for (item of editableItems(); track item.instance_id) {
+                      <option [value]="item.instance_id">{{ itemLabel(item) }}
+                        @if (item.row !== null && item.column !== null) { ({{ item.column + 1 }}, {{ item.row + 1 }}) }
+                        @if (item.slot) { ({{ wallLabel(item.slot) }}) }
+                      </option>
+                    }
+                  </select>
+                }
+              </div>
+              @if (room.id === 'courtyard') {
+                <div class="milestones">
+                  <h3>Milestone ornaments</h3>
+                  @for (milestone of milestones; track milestone.id) {
+                    <div>
+                      @if (milestoneEligible(milestone.id)) {
+                        <label [for]="'home-' + milestone.id">{{ milestone.label }}</label>
+                        <select [id]="'home-' + milestone.id" #milestoneMenu
+                          [disabled]="layoutBusy()" (change)="pickMilestone(milestone, milestoneMenu.value)">
+                          <option value="">Choose an ornament</option>
+                          @for (option of milestone.options; track option.id) {
+                            <option [value]="option.id">{{ option.label }}</option>
+                          }
+                        </select>
+                      } @else {
+                        <p><strong>{{ milestone.label }}</strong> · {{ townState() === 'ready' ? milestone.requirement : 'Town progress is unavailable.' }}
+                          @if (milestoneChoice(milestone.id)) { Your choice will return when eligible. }
+                        </p>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+              @if (draftProblem(); as problem) { <p role="status">{{ problem }}</p> }
+              <div class="editor-actions">
+                <button type="button" class="action decorate" [disabled]="saveDisabled()" (click)="saveCurrent()">Save layout</button>
+                <button type="button" class="action" [disabled]="layoutBusy()" (click)="cancelEditing()">
+                  {{ layoutConflict() ? 'Discard draft and reload' : 'Cancel editing' }}
+                </button>
+              </div>
             }
           </section>
-        }
-        <section class="layout-save" aria-label="Room layout">
-          <p data-layout-status role="status" [attr.data-layout-revision]="layoutRevision()">{{ layoutStatus() }}</p>
-          <div role="group" aria-label="Palette">
-            @for (swatch of palettes; track swatch) {
-              <button type="button" class="action" [attr.aria-pressed]="palette() === swatch" [disabled]="!signedIn()" (click)="choosePalette(swatch)">Palette {{ swatch }}</button>
+        } @else {
+          @if (sheet()) {
+            <button type="button" class="action" (click)="closeSheet()">Close details</button>
+          }
+          <section aria-live="polite">
+            @if (selected(); as object) {
+              <h2>{{ object.label }}</h2>
+              <p>{{ object.detail }}</p>
+              <p>{{ object.slotLabel }}</p>
+              @if (object.action.kind === 'sample') {
+                <figure class="sample">
+                  <figcaption>{{ object.action.title }}</figcaption>
+                  <p>{{ object.action.caption }}</p>
+                </figure>
+              } @else if (object.action.kind === 'media') {
+                <ui-button [href]="object.action.href" [queryParams]="object.action.query" [label]="object.action.label" />
+              } @else if (object.action.kind === 'note') {
+                <label for="home-note">Dated note</label>
+                <p>{{ noteWhen() }}</p>
+                <textarea id="home-note" [value]="note()" [disabled]="!signedIn()" [attr.maxlength]="500" (input)="onNote($event)"></textarea>
+                <p>Nothing is saved. Locking or switching account clears this note.</p>
+              } @else if (object.action.kind === 'garden') {
+                <button type="button" class="action" (click)="water(object)">{{ object.action.verb }}</button>
+                @if (watered().has(object.id)) {
+                  <p role="status">{{ object.action.done }}</p>
+                }
+              } @else {
+                <p>This starter is already placed.</p>
+              }
+            } @else {
+              <h2>{{ room.label }}</h2>
+              <p>{{ room.summary }}</p>
+              <p data-wall-slots>Wall slots: {{ slots(room) }}.</p>
+              <p>The floor is 12 by 12. The doorway stays open.</p>
             }
-          </div>
-          <button type="button" class="action" [disabled]="saveDisabled()" (click)="saveCurrent()">Save layout</button>
-          <button type="button" class="action" [disabled]="saveDisabled() || layoutRevision() < 1" (click)="saveOlder()">Save the older revision</button>
-        </section>
+          </section>
+          @if (room.id === 'courtyard') {
+            <section class="lots" aria-labelledby="garden-lots">
+              <h2 id="garden-lots" tabindex="-1">Garden lots</h2>
+              <p>These are the existing habit lots. Opening one does not check it in.</p>
+              @if (townState() === 'loading') {
+                <p role="status">Loading garden lots…</p>
+              } @else if (townState() === 'unavailable' || !town()) {
+                <p role="status">Town lots are unavailable right now.</p>
+                <button type="button" class="action" (click)="retryTown()">Retry lots</button>
+              } @else if (town(); as data) {
+                <ul class="lot-links">
+                  @for (slot of lotSlots; track slot) {
+                    <li>
+                      <a class="action" [attr.data-lot]="slot" routerLink="/town" [queryParams]="{ inspect: 'slot-' + slot }">{{ lotLabel(data, slot) }}</a>
+                    </li>
+                  }
+                </ul>
+              }
+            </section>
+          }
+        }
         <p class="credit">{{ room.label }} artwork: Original artwork for Terraria-on-Sea.</p>
       </aside>
     </div>

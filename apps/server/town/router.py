@@ -283,12 +283,15 @@ async def put_layout(
     room_id: str,
     request: Request,
     response: Response,
+    tz: str | None = None,
     db: Session = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
     now: datetime = Depends(get_town_clock),
 ) -> RoomLayoutView:
     if room_id not in ROOMS:
         raise APIError(404, "layout_not_found", "That room is not in this home.")
-    view, created = save_layout(db, user.id, room_id, parse_body(await request.body()), now)
+    view, created = save_layout(
+        db, user.id, room_id, parse_body(await request.body()), now, resolve_tz(tz)
+    )
     response.status_code = 201 if created else 200
     return RoomLayoutView.model_validate(view)

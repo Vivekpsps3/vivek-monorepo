@@ -19,6 +19,7 @@ async function activate(page: Page, locator: Locator, touch: boolean): Promise<v
     await locator.tap();
     return;
   }
+  await expect(locator).toBeEnabled();
   await locator.focus();
   await page.keyboard.press('Enter');
 }

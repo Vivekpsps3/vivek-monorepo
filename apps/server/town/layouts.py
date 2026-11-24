@@ -4,7 +4,7 @@ One row per home room or the exterior anchor set. A write replaces that row
 only when expected_revision matches. The stored JSON keeps catalog ids, cells
 or anchors, a quarter turn, and a palette. Notes and measurements are not
 fields in that JSON. Shop and unknown catalog ids need an active Stamp unlock.
-Starter pieces do not.
+Starter pieces and eligible milestone choices do not.
 """
 
 from __future__ import annotations
@@ -24,6 +24,8 @@ from sqlalchemy.orm import Session
 
 from apps.server.errors import APIError
 from apps.server.town.models import RoomLayout, StampEntitlement
+from apps.server.town.service import read_town
+from packages.time.today import today_in_zone
 
 _CHECK = "Check the highlighted fields."
 _ROOM = "That room is not in this home."
@@ -109,6 +111,19 @@ CATALOG: dict[str, _Spec] = {
     "model-ferry": _spec("floor", 2, 1, 20),
     "moon-clock": _spec("wall", 1, 1, 20),
 }
+
+
+_MILESTONE_CHOICES = {
+    "habit-level-2": ("stepping-stone", "small-planter", "wooden-lantern"),
+    "town-level-3": ("wind-vane", "shell-marker", "path-lamp"),
+    "town-level-5": ("bench", "bird-bath", "civic-pennant"),
+}
+_MILESTONE_BY_OPTION = {
+    catalog_id: milestone
+    for milestone, options in _MILESTONE_CHOICES.items()
+    for catalog_id in options
+}
+_MILESTONE_FLOOR = _spec("floor", 1, 1, 0)
 
 
 class _Write(BaseModel):
@@ -239,6 +254,11 @@ def _validate(room_id: str, items: list[_Item]) -> list[dict[str, Any]]:
             raise _invalid()
         seen_ids.add(item.instance_id)
         known = CATALOG.get(item.catalog_id)
+        milestone = _MILESTONE_BY_OPTION.get(item.catalog_id)
+        if item.instance_id in _MILESTONE_CHOICES:
+            if room_id != "courtyard" or item.instance_id != milestone:
+                raise _invalid()
+            known = _MILESTONE_FLOOR
         spec = (
             known
             if known is not None
@@ -316,7 +336,8 @@ def _entitle(db: Session, user_id: int, items: Iterable[dict[str, Any]]) -> None
     needed = {
         str(item["catalog_id"])
         for item in items
-        if (spec := CATALOG.get(str(item["catalog_id"]))) is None or spec.price > 0
+        if str(item["instance_id"]) not in _MILESTONE_CHOICES
+        and ((spec := CATALOG.get(str(item["catalog_id"]))) is None or spec.price > 0)
     }
     if not needed:
         return
@@ -328,6 +349,29 @@ def _entitle(db: Session, user_id: int, items: Iterable[dict[str, Any]]) -> None
     ).all()
     active = {row.catalog_id for row in rows if row.refund_receipt_id is None}
     if not needed <= active:
+        raise APIError(409, "layout_entitlement", _LOCKED)
+
+
+def _entitle_milestones(
+    db: Session, user_id: int, items: list[dict[str, Any]], now: datetime, zone: str
+) -> None:
+    choices = [item for item in items if item["instance_id"] in _MILESTONE_CHOICES]
+    if not choices:
+        return
+    # Keep a dormant choice byte-for-byte through an unrelated room edit.
+    previous = read_layout(db, user_id, "courtyard")["items"]
+    changed = {item["instance_id"] for item in choices if item not in previous}
+    if not changed:
+        return
+    town = read_town(db, user_id, today_in_zone(zone, now), zone)
+    level = town["town"]["level"]
+    occupied = {lot["habit_id"] for lot in town["lots"] if lot["state"] == "occupied"}
+    allowed = {
+        "habit-level-2": any(h["id"] in occupied and h["level"] >= 2 for h in town["habits"]),
+        "town-level-3": level >= 3,
+        "town-level-5": level >= 5,
+    }
+    if any(not allowed[milestone] for milestone in changed):
         raise APIError(409, "layout_entitlement", _LOCKED)
 
 
@@ -391,6 +435,7 @@ def save_layout(
     room_id: str,
     payload: dict[str, Any],
     now: datetime,
+    zone: str = "UTC",
 ) -> tuple[dict[str, Any], bool]:
     if room_id not in ROOMS:
         raise APIError(404, "layout_not_found", _ROOM)
@@ -403,6 +448,7 @@ def save_layout(
     # deferred reads that later write can deadlock on the shared lock.
     db.execute(text("UPDATE town_room_layouts SET revision = revision WHERE 0"))
     _entitle(db, user_id, items)
+    _entitle_milestones(db, user_id, items, now, zone)
     _budget(db, user_id, room_id, len(canonical))
     return _compare_and_write(db, user_id, room_id, parsed.expected_revision, canonical, now)
 
