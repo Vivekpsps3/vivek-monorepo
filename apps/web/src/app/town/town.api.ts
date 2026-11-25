@@ -53,9 +53,15 @@ export interface StampWallet {
   receipts: StampReceipt[];
   entitlements: StampEntitlement[];
 }
+export interface StampPurchase {
+  grant_key: string;
+  catalog_id: string;
+  amount: number;
+}
 export interface StampRefund {
   grant_key: string;
   catalog_id: string;
+  spend_receipt_id: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -93,8 +99,11 @@ export class TownApiService {
   getStamps() {
     return this.http.get<StampWallet>('/api/town/stamps', this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
   }
+  purchaseStamps(body: StampPurchase) {
+    return this.http.post<StampWallet>('/api/town/stamps/purchases', body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
   refundStamps(body: StampRefund) {
-    return this.http.post<StampWallet>('/api/town/stamps/refunds', body, this.options());
+    return this.http.post<StampWallet>('/api/town/stamps/refunds', body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
   }
   getLayout(room: string) {
     return this.http.get<RoomLayout>(`/api/town/layouts/${encodeURIComponent(room)}`, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));

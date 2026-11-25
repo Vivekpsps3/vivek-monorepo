@@ -273,11 +273,11 @@ def test_other_owner_cannot_read_or_refund(tmp_path: Path) -> None:
     database = _file_db(tmp_path)
     db = _session(database)
     try:
-        grant_stamps(db, 1, GRANT, WHEN)
+        grant_stamps(db, 1, {**GRANT, "amount": 20}, WHEN)
         purchase_stamps(
             db,
             1,
-            {"grant_key": "market:buy:moon-clock", "catalog_id": "moon-clock", "amount": 10},
+            {"grant_key": "market:buy:moon-clock", "catalog_id": "moon-clock", "amount": 20},
             WHEN,
         )
         db.commit()
@@ -490,6 +490,48 @@ def test_http_purchase_refuses_an_active_unlock_and_an_empty_wallet(api) -> None
     db = database.sessionmaker()
     assert read_wallet(db, 1)["balance"] == 0
     db.close()
+
+
+def test_market_prices_are_server_owned_and_an_old_refund_cannot_revoke_a_new_unlock(api) -> None:
+    client, _database, _application = api
+    purchase = {"grant_key": "market:buy:globe", "catalog_id": "globe"}
+    client.post("/api/town/stamps/grants", json={**GRANT, "amount": 20})
+    bad_price = client.post("/api/town/stamps/purchases", json={**purchase, "amount": 1})
+    assert bad_price.status_code == 422
+    assert bad_price.json()["code"] == "stamp_price_changed"
+    for catalog_id in ("oak-seat", "future-cabinet"):
+        unavailable = client.post(
+            "/api/town/stamps/purchases", json={**purchase, "catalog_id": catalog_id}
+        )
+        assert unavailable.status_code == 422
+        assert unavailable.json()["code"] == "item_not_for_sale"
+    assert client.get("/api/town/stamps").json()["balance"] == 20
+
+    first = client.post("/api/town/stamps/purchases", json=purchase)
+    assert first.status_code == 201
+    assert first.json()["balance"] == 10
+    spend_id = first.json()["entitlements"][0]["spend_receipt_id"]
+    refund = {
+        "grant_key": f"market:refund:globe:{spend_id}",
+        "catalog_id": "globe",
+        "spend_receipt_id": spend_id,
+    }
+    assert client.post("/api/town/stamps/refunds", json=refund).status_code == 201
+    assert (
+        client.post(
+            "/api/town/stamps/purchases", json={**purchase, "grant_key": "market:buy:second"}
+        ).status_code
+        == 201
+    )
+    retry = client.post("/api/town/stamps/refunds", json=refund)
+    assert retry.status_code == 200
+    assert retry.json()["entitlements"][0]["active"]
+    stale = client.post(
+        "/api/town/stamps/refunds", json={**refund, "grant_key": "market:refund:stale"}
+    )
+    assert stale.status_code == 409
+    assert stale.json()["code"] == "unlock_changed"
+    assert client.get("/api/town/stamps").json()["balance"] == 10
 
 
 def test_upgrade_keeps_unsupported_rows_and_downgrade_drops_only_stamps(tmp_path: Path) -> None:

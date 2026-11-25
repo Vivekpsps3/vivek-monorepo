@@ -74,7 +74,7 @@
             <p role="status">{{ asset.label }} does not fit at column {{ draftColumn() }}, row {{ draftRow() }}.</p>
           }
         } @else {
-          <p>Listed for the workshop at {{ priceLabel(asset) }}.</p>
+          <a class="action" routerLink="/town/workshop" [queryParams]="{ item: asset.id }">Open in Workshop</a>
         }
       } @else {
         <h2>Unsupported item</h2>

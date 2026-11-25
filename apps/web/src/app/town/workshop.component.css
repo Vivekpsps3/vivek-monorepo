@@ -1,0 +1,31 @@
+:host { display: block; color: var(--text); }
+main { padding: clamp(12px, 4vw, 32px); max-width: 44rem; margin: auto; }
+header, .buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+header { justify-content: space-between; margin: 12px 0 20px; }
+h1, h2, h3, p { margin: 0; }
+.balance { background: var(--surface-2); padding: 8px 12px; border-radius: 8px; font-weight: 700; }
+.picker { display: grid; gap: 6px; margin-bottom: 14px; max-width: 24rem; }
+.picker label { font-weight: 700; }
+select, button, a { min-height: 44px; min-width: 44px; }
+select, button { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+select { width: 100%; }
+button { cursor: pointer; }
+button:disabled { cursor: wait; opacity: .7; }
+a { display: inline-flex; align-items: center; color: var(--link, var(--text)); }
+.preview { display: grid; grid-template: 'detail art' auto 'actions art' 1fr / minmax(0, 1fr) minmax(0, 16rem); gap: 12px 20px; padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.detail { grid-area: detail; display: grid; align-content: start; gap: 6px; overflow-wrap: anywhere; }
+.price { font-weight: 700; }
+.fit, .art p { color: var(--text-muted); }
+.art { grid-area: art; display: grid; min-height: 132px; place-items: center; text-align: center; padding: 12px; background: var(--bg); border-radius: 8px; }
+.art img { width: 100%; height: 132px; object-fit: contain; }
+.actions { grid-area: actions; display: grid; gap: 8px; align-content: start; justify-items: start; }
+.actions h3 { font-size: 1rem; }
+.primary { color: var(--on-accent); background: var(--accent-fill); border: 1px solid transparent; text-decoration: none; font-weight: 700; border-radius: 8px; padding: 8px 12px; box-sizing: border-box; }
+.error { color: var(--danger); }
+:is(button, a, select, [tabindex]):focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 3px; }
+@media (max-width: 540px) {
+  header { margin-bottom: 14px; }
+  .preview { grid-template: 'detail art' auto 'actions actions' auto / minmax(0, 1fr) minmax(0, .8fr); padding: 12px; }
+  .art { min-height: 84px; }
+  .art img { height: 84px; }
+}

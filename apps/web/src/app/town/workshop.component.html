@@ -1,0 +1,87 @@
+<main>
+  <a class="back" routerLink="/town">← Back to Town</a>
+  <header>
+    <h1>Workshop</h1>
+    @if (wallet(); as current) {
+      <p class="balance" aria-live="polite">{{ count(current.balance) }} available</p>
+    }
+  </header>
+
+  <div class="picker">
+    <label for="workshop-piece">Furniture</label>
+    <select id="workshop-piece" [disabled]="busy()" (change)="select($event)">
+      @for (item of shop; track item.id) {
+        <option [value]="item.id" [selected]="id() === item.id">{{ item.label }} · {{ count(item.priceStamps) }}</option>
+      }
+      @for (item of olderUnlocks(); track item.catalog_id) {
+        <option [value]="item.catalog_id" [selected]="id() === item.catalog_id">{{ legacyLabel(item.catalog_id) }}</option>
+      }
+    </select>
+  </div>
+
+  <section class="preview" aria-labelledby="workshop-item">
+    <div class="detail">
+      <h2 id="workshop-item">{{ asset()?.label ?? 'Older unlock' }}</h2>
+      @if (held(); as item) {
+        <p class="price">Unlocked · {{ count(item.amount) }} paid</p>
+      } @else if (asset(); as item) {
+        <p class="price">{{ count(item.priceStamps) }}</p>
+      }
+      @if (asset(); as item) {
+        <p class="fit">{{ item.anchor === 'wall' ? 'Wall' : 'Floor' }} · {{ item.footprint.columns }} × {{ item.footprint.rows }}</p>
+      } @else {
+        <p class="fit">{{ id() }}</p>
+      }
+    </div>
+    <div class="art">
+      @if (art(); as src) {
+        @if (failedArt() === src) {
+          <p>Preview unavailable</p>
+        } @else {
+          <img [src]="src" [width]="asset()?.bounds?.width" [height]="asset()?.bounds?.height" alt="" (error)="failedArt.set(src)">
+        }
+      } @else {
+        <p>Preview unavailable</p>
+      }
+    </div>
+    <div class="actions">
+      @if (currentConfirmation(); as choice) {
+        <h3 id="workshop-confirmation" tabindex="-1">{{ choice.action === 'buy' ? 'Unlock for ' + count(choice.price) + '?' : 'Return this unlock for ' + count(choice.price) + '?' }}</h3>
+        @if (choice.action === 'refund') {
+          <p>Remove every saved copy before refunding.</p>
+        }
+        <div class="buttons">
+          <button class="primary" type="button" [disabled]="busy()" (click)="confirm()">{{ busy() ? 'Working…' : choice.action === 'buy' ? 'Confirm purchase' : 'Confirm refund' }}</button>
+          <button type="button" [disabled]="busy()" (click)="cancel()">Cancel</button>
+        </div>
+      } @else if (loading()) {
+        <p role="status">Loading Stamps…</p>
+      } @else if (wallet(); as current) {
+        @if (held()) {
+          <div class="buttons">
+            <a class="primary" routerLink="/town/home/living">Place in Home</a>
+            <button id="workshop-action" type="button" (click)="choose()">Refund</button>
+          </div>
+        } @else if (asset(); as item) {
+          @if (current.balance >= item.priceStamps) {
+            <button id="workshop-action" class="primary" type="button" (click)="choose()">Unlock</button>
+          } @else {
+            <p>{{ count(item.priceStamps - current.balance) }} more needed</p>
+          }
+        }
+      } @else if (canLoad()) {
+        @if (loadError()) { <p role="alert">The wallet could not be loaded.</p> }
+        <button type="button" (click)="load()">{{ loadError() ? 'Retry wallet' : 'Load wallet' }}</button>
+      }
+      @if (error(); as message) {
+        <p id="workshop-error" class="error" role="alert" tabindex="-1">{{ message }}</p>
+        @if (currentConfirmation()?.action === 'refund') {
+          <a routerLink="/town/home/living">Open Home</a>
+        }
+      }
+      @if (notice(); as message) {
+        <p id="workshop-notice" tabindex="-1" role="status">{{ message }}</p>
+      }
+    </div>
+  </section>
+</main>

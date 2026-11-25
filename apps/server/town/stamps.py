@@ -3,9 +3,8 @@
 Receipts are owned and unique on (user_id, grant_key). A repeated key returns
 the stored receipt and does not move the balance again. Grants accept the
 quest and minigame consumers. Purchases and refunds are the market consumer.
-The market refund key is market:refund:{catalog_id}:{spend_receipt_id}.
-A room layout check belongs to the workshop. This refund returns the full
-recorded price of an unlock the owner still holds. No life metric is stored.
+Market purchases use fixed catalog prices. Refunds return the full recorded
+price when no saved layout uses the unlock. No life metric is stored.
 """
 
 from __future__ import annotations
@@ -15,13 +14,14 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.server.errors import APIError
+from apps.server.town.layouts import CATALOG, require_unused_unlock
 from apps.server.town.models import StampEntitlement, StampReceipt, StampWallet
 
 _CHECK = "Check the highlighted fields."
@@ -76,7 +76,7 @@ class StampGrantCreate(_Write):
 class StampPurchaseCreate(_Write):
     grant_key: str
     catalog_id: str
-    amount: int
+    amount: int | None = Field(default=None, ge=1, le=20)
 
     @field_validator("grant_key")
     @classmethod
@@ -92,17 +92,11 @@ class StampPurchaseCreate(_Write):
             raise ValueError("catalog_id")
         return value
 
-    @field_validator("amount")
-    @classmethod
-    def _amount(cls, value: int) -> int:
-        if not 1 <= value <= 20:
-            raise ValueError("amount")
-        return value
-
 
 class StampRefundCreate(_Write):
     grant_key: str
     catalog_id: str
+    spend_receipt_id: int | None = Field(default=None, gt=0)
 
     @field_validator("grant_key")
     @classmethod
@@ -296,12 +290,21 @@ def purchase_stamps(
 ) -> tuple[dict[str, Any], bool]:
     body = _parse(StampPurchaseCreate, payload)
     _lock(db, user_id)
-    if _receipt(db, user_id, body.grant_key) is not None:
+    previous = _receipt(db, user_id, body.grant_key)
+    if previous is not None:
+        if previous.kind != "spend" or previous.catalog_id != body.catalog_id:
+            raise APIError(409, "stamp_conflict", "That Stamp receipt was already recorded.")
         return read_wallet(db, user_id), False
+    spec = CATALOG.get(body.catalog_id)
+    if spec is None or spec.price == 0:
+        raise APIError(422, "item_not_for_sale", "That item is not sold at the workshop.")
+    price = spec.price
+    if body.amount is not None and body.amount != price:
+        raise APIError(422, "stamp_price_changed", "Check the current workshop price.")
     held = _entitlement(db, user_id, body.catalog_id)
     if held is not None and held.refund_receipt_id is None:
         raise APIError(409, "already_unlocked", "That unlock is already in the wallet.")
-    if not _move(db, user_id, -body.amount):
+    if not _move(db, user_id, -price):
         raise APIError(
             409,
             "insufficient_stamps",
@@ -310,7 +313,7 @@ def purchase_stamps(
 
     def write() -> None:
         receipt = _add_receipt(
-            db, user_id, body.grant_key, "market", "spend", body.amount, body.catalog_id, now
+            db, user_id, body.grant_key, "market", "spend", price, body.catalog_id, now
         )
         if held is None:
             db.add(
@@ -333,14 +336,26 @@ def refund_stamps(
 ) -> tuple[dict[str, Any], bool]:
     body = _parse(StampRefundCreate, payload)
     _lock(db, user_id)
-    if _receipt(db, user_id, body.grant_key) is not None:
+    previous = _receipt(db, user_id, body.grant_key)
+    if previous is not None:
+        if previous.kind != "refund" or previous.catalog_id != body.catalog_id:
+            raise APIError(409, "stamp_conflict", "That Stamp receipt was already recorded.")
         return read_wallet(db, user_id), False
     held = _entitlement(db, user_id, body.catalog_id)
     if held is None or held.refund_receipt_id is not None:
         raise APIError(404, "entitlement_not_found", "Refund applies to an unlock you still hold.")
+    expected = body.spend_receipt_id
+    if expected is None:
+        prefix = f"market:refund:{body.catalog_id}:"
+        old_spend_id = body.grant_key.removeprefix(prefix)
+        if body.grant_key.startswith(prefix) and old_spend_id.isdecimal():
+            expected = int(old_spend_id)
+    if expected is not None and held.spend_receipt_id != expected:
+        raise APIError(409, "unlock_changed", "The unlock changed. Review it before refunding.")
     spend = db.get(StampReceipt, held.spend_receipt_id)
     if spend is None or spend.user_id != user_id or spend.kind != "spend":
         raise APIError(404, "entitlement_not_found", "Refund applies to an unlock you still hold.")
+    require_unused_unlock(db, user_id, body.catalog_id)
     if not _move(db, user_id, spend.amount):
         raise APIError(409, "stamp_conflict", "That Stamp receipt was already recorded.")
 

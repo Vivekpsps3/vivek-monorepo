@@ -99,6 +99,13 @@
       "query": "item=oak-seat&part=night"
     },
     {
+      "id": "town-workshop",
+      "path": "town/workshop",
+      "owner": "town",
+      "status": "mounted",
+      "query": "item=tile-fountain"
+    },
+    {
       "id": "town-keepsakes",
       "path": "town/keepsakes",
       "owner": "town",

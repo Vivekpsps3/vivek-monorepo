@@ -37,8 +37,15 @@ from apps.server.tests.test_town_api_write import _call, _quiet
 from apps.server.town import layouts
 from apps.server.town.clock import get_town_clock
 from apps.server.town.layouts import read_layout, save_layout
-from apps.server.town.models import HabitCheckin, RoomLayout, TownBase
-from apps.server.town.stamps import grant_stamps, purchase_stamps, refund_stamps
+from apps.server.town.models import (
+    HabitCheckin,
+    RoomLayout,
+    StampEntitlement,
+    StampReceipt,
+    StampWallet,
+    TownBase,
+)
+from apps.server.town.stamps import grant_stamps, purchase_stamps, read_wallet, refund_stamps
 
 PARENT = "site_town_stamps_v1"
 HEAD = "site_town_layouts_v1"
@@ -129,6 +136,29 @@ def _payload(db, user: int, room: str) -> str | None:
     return db.scalar(
         select(RoomLayout.payload).where(RoomLayout.user_id == user, RoomLayout.room_id == room)
     )
+
+
+def _legacy_purchase(db, catalog_id: str) -> StampEntitlement:
+    """Seed the receipt and entitlement written before fixed catalog prices."""
+    grant_stamps(db, 1, {"grant_key": "quest:layout", "amount": 20, "consumer": "quest"}, WHEN)
+    wallet = db.get(StampWallet, 1)
+    assert wallet is not None
+    wallet.balance -= 5
+    receipt = StampReceipt(
+        user_id=1,
+        grant_key=f"market:buy:{catalog_id}",
+        consumer="market",
+        kind="spend",
+        amount=5,
+        catalog_id=catalog_id,
+        created_at=WHEN,
+    )
+    db.add(receipt)
+    db.flush()
+    entitlement = StampEntitlement(user_id=1, catalog_id=catalog_id, spend_receipt_id=receipt.id)
+    db.add(entitlement)
+    db.flush()
+    return entitlement
 
 
 def _reject(db, room: str, items: list[dict], expected: int = 0, user: int = 1) -> APIError:
@@ -425,13 +455,7 @@ def test_priced_and_unknown_items_need_an_active_unlock(tmp_path: Path) -> None:
         assert unknown.status_code == 409
         assert unknown.code == "layout_entitlement"
         assert _count(db) == 0
-        grant_stamps(db, 1, {"grant_key": "quest:layout", "amount": 20, "consumer": "quest"}, WHEN)
-        purchase_stamps(
-            db,
-            1,
-            {"grant_key": "market:buy:future-stool", "catalog_id": "future-stool", "amount": 5},
-            WHEN,
-        )
+        entitlement = _legacy_purchase(db, "future-stool")
         db.commit()
         view, created = _save(
             db,
@@ -441,12 +465,29 @@ def test_priced_and_unknown_items_need_an_active_unlock(tmp_path: Path) -> None:
         db.commit()
         assert created is True
         assert view["items"][0]["catalog_id"] == "future-stool"
-        refund_stamps(
-            db,
-            1,
-            {"grant_key": "market:refund:future-stool:2", "catalog_id": "future-stool"},
-            WHEN,
+        with pytest.raises(APIError, match="Remove every copy") as caught:
+            refund_stamps(
+                db,
+                1,
+                {"grant_key": "market:refund:future-stool:2", "catalog_id": "future-stool"},
+                WHEN,
+            )
+        assert caught.value.code == "unlock_in_use"
+        db.rollback()
+        assert read_wallet(db, 1)["balance"] == 15
+        # A pre-workshop refund could leave an unavailable item in an active layout.
+        refund = StampReceipt(
+            user_id=1,
+            grant_key="market:refund:future-stool:2",
+            consumer="market",
+            kind="refund",
+            amount=5,
+            catalog_id="future-stool",
+            created_at=WHEN,
         )
+        db.add(refund)
+        db.flush()
+        entitlement.refund_receipt_id = refund.id
         db.commit()
         kept = _payload(db, 1, "exterior")
         blocked = _reject(
@@ -549,6 +590,16 @@ def test_stored_private_and_unknown_fields_stay_out_of_the_read(tmp_path: Path) 
         broken = read_layout(db, 1, "living")
         db.commit()
         assert broken["items"] == []
+        grant_stamps(db, 1, {"grant_key": "quest:layout", "amount": 10, "consumer": "quest"}, WHEN)
+        purchase_stamps(db, 1, {"grant_key": "market:buy:stool", "catalog_id": "shell-stool"}, WHEN)
+        db.commit()
+        with pytest.raises(APIError) as caught:
+            refund_stamps(
+                db, 1, {"grant_key": "market:refund:2", "catalog_id": "shell-stool"}, WHEN
+            )
+        assert caught.value.code == "layout_recovery"
+        db.rollback()
+        assert read_wallet(db, 1)["balance"] == 5
         assert broken["revision"] == 1
         assert broken["recovery_required"] is True
         assert _reject(db, "living", [], 1).code == "layout_recovery"
@@ -562,13 +613,7 @@ def test_unknown_placement_is_kept_through_valid_writes(tmp_path: Path) -> None:
     database = _file_db(tmp_path)
     db = _session(database)
     try:
-        grant_stamps(db, 1, {"grant_key": "quest:layout", "amount": 20, "consumer": "quest"}, WHEN)
-        purchase_stamps(
-            db,
-            1,
-            {"grant_key": "market:buy:future", "catalog_id": "future-chair", "amount": 5},
-            WHEN,
-        )
+        _legacy_purchase(db, "future-chair")
         future = _piece("future", "future-chair", column=11, row=0, palette=2)
         _save(db, "study", [*STUDY, future])
         db.commit()
@@ -591,6 +636,55 @@ def test_unknown_placement_is_kept_through_valid_writes(tmp_path: Path) -> None:
         database.engine.dispose()
 
 
+def test_refund_and_placement_race_leave_either_a_placed_unlock_or_returned_stamps(
+    tmp_path: Path,
+) -> None:
+    database = _file_db(tmp_path)
+    with _session(database) as db:
+        grant_stamps(db, 1, {"grant_key": "quest:layout", "amount": 10, "consumer": "quest"}, WHEN)
+        purchased, _ = purchase_stamps(
+            db, 1, {"grant_key": "market:buy:stool", "catalog_id": "shell-stool"}, WHEN
+        )
+        db.commit()
+    spend_id = purchased["entitlements"][0]["spend_receipt_id"]
+    try:
+        saved, errors = _race(
+            database,
+            [
+                lambda db: _save(
+                    db,
+                    "study",
+                    [_piece("stool-a", "shell-stool"), _piece("stool-b", "shell-stool", column=1)],
+                ),
+                lambda db: refund_stamps(
+                    db,
+                    1,
+                    {
+                        "grant_key": f"market:refund:shell-stool:{spend_id}",
+                        "catalog_id": "shell-stool",
+                        "spend_receipt_id": spend_id,
+                    },
+                    WHEN,
+                ),
+            ],
+        )
+        assert len(saved) == 1
+        with _session(database) as db:
+            layout = read_layout(db, 1, "study")
+            wallet = read_wallet(db, 1)
+            if layout["items"]:
+                assert errors[0][0] == "unlock_in_use"
+                assert len(layout["items"]) == 2
+                assert wallet["balance"] == 5
+                assert wallet["entitlements"][0]["active"]
+            else:
+                assert errors[0][0] == "layout_entitlement"
+                assert wallet["balance"] == 10
+                assert not wallet["entitlements"][0]["active"]
+    finally:
+        database.engine.dispose()
+
+
 def test_racing_creates_and_updates_keep_one_row(tmp_path: Path) -> None:
     database = _file_db(tmp_path)
     try:
@@ -602,8 +696,8 @@ def test_racing_creates_and_updates_keep_one_row(tmp_path: Path) -> None:
             ],
         )
         assert len(created) == 1
-        assert created[0][0] is True
-        assert created[0][1] == 1
+        assert created[0][1] is True
+        assert created[0][0]["revision"] == 1
         assert len(errors) == 1
         assert errors[0][0] == "layout_conflict"
         assert "revision 1" in errors[0][1]
@@ -618,12 +712,12 @@ def test_racing_creates_and_updates_keep_one_row(tmp_path: Path) -> None:
             ],
         )
         assert len(updated) == 1
-        assert updated[0][1] == 2
+        assert updated[0][0]["revision"] == 2
         assert len(lost) == 1
         assert "revision 2" in lost[0][1]
         db = _session(database)
         stored = json.loads(_payload(db, 1, "living") or "[]")
-        assert stored[0]["palette"] == updated[0][2]
+        assert stored[0]["palette"] == updated[0][0]["items"][0]["palette"]
         assert _count(db) == 1
         db.close()
     finally:
@@ -640,9 +734,9 @@ def _race(database, calls: list) -> tuple[list, list]:
         try:
             barrier.wait(5)
             try:
-                view, created = call(db)
+                result = call(db)
                 db.commit()
-                results.append((created, view["revision"], view["items"][0]["palette"]))
+                results.append(result)
             except APIError as exc:
                 db.rollback()
                 errors.append((exc.code, exc.message))

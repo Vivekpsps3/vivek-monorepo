@@ -119,6 +119,7 @@ export class TownComponent {
     if (path === 'town/hall') return '/town/hall';
     if (path === 'town/home' || path?.startsWith('town/home/')) return '/town/home/living';
     if (path === 'town/cosmetics') return '/town/cosmetics';
+    if (path === 'town/workshop') return '/town/workshop';
     if (path === 'town/memory') return '/town/memory';
     return null;
   })();
