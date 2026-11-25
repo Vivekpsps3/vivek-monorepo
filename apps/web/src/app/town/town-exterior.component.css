@@ -310,7 +310,7 @@ button.action { cursor: pointer; }
 }
 @media (max-width: 359px) {
   .caption[data-building-label="library"] { margin-left: 0.125rem; }
-  .caption[data-building-label="theater"] { margin: -0.125rem 0 0 0.125rem; }
+  .caption[data-building-label="theater"] { margin: -0.125rem 0 0 0.25rem; }
   .caption[data-building-label="music"] { margin-left: -0.5rem; }
 }
 @media (prefers-reduced-motion: reduce) {

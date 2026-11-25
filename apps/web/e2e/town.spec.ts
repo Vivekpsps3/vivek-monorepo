@@ -433,9 +433,16 @@ test.describe('Town exterior', () => {
     await page.goto('/town');
     await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
     await culture.press('Enter');
+    await viewport.scrollIntoViewIfNeeded();
+    await expect(landmarks).toHaveText(['Library', 'Theater', 'Music bar', 'Arcade']);
+    for (const caption of await landmarks.all()) {
+      await expect(caption).toBeInViewport({ ratio: 1 });
+      expect(await caption.evaluate(el => el.scrollWidth <= el.clientWidth)).toBeTruthy();
+    }
     const name = viewport.locator('.active-name');
     await music.focus();
     await expect(name).toHaveText('Music bar');
+    await expect(landmarks).toHaveText(['Library', 'Theater', 'Arcade']);
     expect(await name.evaluate(el => el.scrollWidth <= el.clientWidth)).toBeTruthy();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
     await info.attach('coastal-focus-320-200-percent', { body: await viewport.screenshot(), contentType: 'image/png' });
