@@ -3,7 +3,6 @@ import {
   REST_CAMERA,
   SCENE_SCALES,
   clampCamera,
-  nearestScale,
   roomRect,
   sceneFrame,
   type RoomRect,
@@ -11,7 +10,7 @@ import {
   type ScenePlacement,
   type SceneSize,
 } from './library-room.scene';
-import { buildingSprite, townSpriteUrl, type TownSpriteId } from './town-sprites';
+import { buildingSprite, type TownSpriteId } from './town-sprites';
 import { formatTownDay } from './town-text';
 import type { Building, Habit, TownResponse } from './town.types';
 import { treasuryFace, type TreasuryView } from './weeks-kept';
@@ -35,18 +34,18 @@ export interface DistrictSpec {
 }
 
 export const DISTRICTS: readonly DistrictSpec[] = Object.freeze([
-  Object.freeze({ id: 'residential', label: 'Residential', focus: Object.freeze({ left: 0, top: 0, width: 210, height: 160 }) }),
-  Object.freeze({ id: 'civic', label: 'Civic', focus: Object.freeze({ left: 230, top: 0, width: 380, height: 160 }) }),
-  Object.freeze({ id: 'harbor', label: 'Harbor', focus: Object.freeze({ left: 790, top: 0, width: 210, height: 160 }) }),
-  Object.freeze({ id: 'culture', label: 'Culture', focus: Object.freeze({ left: 0, top: 160, width: 760, height: 170 }) }),
-  Object.freeze({ id: 'wellness', label: 'Wellness', focus: Object.freeze({ left: 790, top: 160, width: 210, height: 320 }) }),
-  Object.freeze({ id: 'garden', label: 'Garden', focus: Object.freeze({ left: 0, top: 490, width: 1000, height: 150 }) }),
+  Object.freeze({ id: 'residential', label: 'Residential', focus: Object.freeze({ left: 38, top: 16, width: 206, height: 174 }) }),
+  Object.freeze({ id: 'civic', label: 'Civic', focus: Object.freeze({ left: 266, top: 16, width: 380, height: 174 }) }),
+  Object.freeze({ id: 'harbor', label: 'Harbor', focus: Object.freeze({ left: 734, top: 68, width: 240, height: 196 }) }),
+  Object.freeze({ id: 'culture', label: 'Culture', focus: Object.freeze({ left: 113, top: 159, width: 484, height: 254 }) }),
+  Object.freeze({ id: 'wellness', label: 'Wellness', focus: Object.freeze({ left: 669, top: 226, width: 316, height: 240 }) }),
+  Object.freeze({ id: 'garden', label: 'Garden', focus: Object.freeze({ left: 23, top: 443, width: 938, height: 183 }) }),
 ]);
 
 export interface LotFace {
   readonly name: string;
   readonly label: string;
-  readonly src: string;
+  readonly sprite: TownSpriteId;
   readonly link: string;
   readonly external: boolean;
   readonly control: 'external' | 'link' | 'habit' | 'locked';
@@ -73,7 +72,7 @@ export function lotFace(input: {
     return {
       name: 'Treasury',
       label: face.label,
-      src: townSpriteUrl(sprite),
+      sprite,
       link: face.href,
       external: face.external,
       control: face.external ? 'external' : 'link',
@@ -84,7 +83,7 @@ export function lotFace(input: {
     return {
       name: kind === 'library' ? 'Library' : 'Inn',
       label: building?.source === 'unavailable' ? `Lv — · ${source} unavailable` : `Lv ${building?.level} · ${source}`,
-      src: townSpriteUrl(buildingSprite(kind, building?.stage ?? 1)),
+      sprite: buildingSprite(kind, building?.stage ?? 1),
       link: kind === 'library' ? '/town/library' : '/travel',
       external: false,
       control: 'link',
@@ -94,7 +93,7 @@ export function lotFace(input: {
     return {
       name: habit.name,
       label: `Lv ${habit.level} · ${habit.streak.current}-${habit.streak.unit === 'days' ? 'day' : 'week'} streak`,
-      src: townSpriteUrl(buildingSprite(habit.building_style, habit.stage)),
+      sprite: buildingSprite(habit.building_style, habit.stage),
       link: '',
       external: false,
       control: 'habit',
@@ -104,7 +103,7 @@ export function lotFace(input: {
   return {
     name: locked ? 'Locked lot' : 'Empty lot',
     label: locked ? `Unlocks at Lv ${lot?.unlock_level}` : 'Build here',
-    src: townSpriteUrl(locked ? 'lot-locked' : 'lot-empty'),
+    sprite: locked ? 'lot-locked' : 'lot-empty',
     link: '',
     external: false,
     control: locked ? 'locked' : 'habit',
@@ -116,8 +115,8 @@ export interface ExteriorBuilding {
   readonly district: DistrictId;
   readonly name: string;
   readonly label: string;
-  readonly sprite: string;
-  readonly previousSprite: string | null;
+  readonly landmark: LandmarkArt;
+  readonly previousLandmark: LandmarkArt | null;
   readonly control: 'external' | 'link' | 'habit' | 'locked' | 'select';
   readonly path: string;
   readonly query: Readonly<Record<string, string>> | null;
@@ -127,12 +126,19 @@ export interface ExteriorBuilding {
   readonly layer: number;
   readonly rect: RoomRect;
   readonly frame: RoomRect;
+  readonly captionAnchor: { readonly left: number; readonly top: number };
 }
 
-export interface ExteriorPlate {
-  readonly id: DistrictId;
-  readonly label: string;
-  readonly frame: RoomRect;
+type ExteriorSprite = TownSpriteId | 'home' | 'hall' | 'theater' | 'music' | 'arcade';
+
+export interface LandmarkArt {
+  readonly href: string;
+  readonly state: string;
+}
+
+function landmarkArt(sprite: ExteriorSprite): LandmarkArt {
+  const [kind, state = '1'] = sprite.split('-');
+  return { href: `/town/exterior/landmarks.svg#${kind}`, state };
 }
 
 interface Placement {
@@ -143,27 +149,30 @@ interface Placement {
   readonly width: number;
   readonly height: number;
   readonly layer: number;
+  readonly captionX?: number;
+  readonly captionY?: number;
 }
 
 const PLACED: readonly Placement[] = Object.freeze([
-  Object.freeze({ id: 'home', district: 'residential', x: 8, y: 16, width: 158, height: 124, layer: 2 }),
-  Object.freeze({ id: 'treasury', district: 'civic', x: 250, y: 16, width: 158, height: 124, layer: 2 }),
-  Object.freeze({ id: 'hall', district: 'civic', x: 424, y: 16, width: 158, height: 124, layer: 2 }),
-  Object.freeze({ id: 'inn', district: 'harbor', x: 820, y: 16, width: 158, height: 124, layer: 3 }),
-  Object.freeze({ id: 'library', district: 'culture', x: 8, y: 176, width: 158, height: 124, layer: 2 }),
-  Object.freeze({ id: 'theater', district: 'culture', x: 182, y: 176, width: 158, height: 124, layer: 2 }),
-  Object.freeze({ id: 'music', district: 'culture', x: 356, y: 176, width: 158, height: 124, layer: 2 }),
-  Object.freeze({ id: 'arcade', district: 'culture', x: 530, y: 176, width: 158, height: 124, layer: 2 }),
-  Object.freeze({ id: 'clinic', district: 'wellness', x: 820, y: 176, width: 158, height: 124, layer: 3 }),
-  Object.freeze({ id: 'gym', district: 'wellness', x: 820, y: 336, width: 158, height: 124, layer: 3 }),
+  Object.freeze({ id: 'home', district: 'residential', x: 62, y: 36, width: 154, height: 128, layer: 2 }),
+  Object.freeze({ id: 'treasury', district: 'civic', x: 281, y: 41, width: 154, height: 128, layer: 2 }),
+  Object.freeze({ id: 'hall', district: 'civic', x: 477, y: 29, width: 158, height: 128, layer: 2 }),
+  Object.freeze({ id: 'inn', district: 'harbor', x: 762, y: 92, width: 166, height: 128, layer: 3 }),
+  Object.freeze({ id: 'library', district: 'culture', x: 127, y: 188, width: 152, height: 128, layer: 3 }),
+  Object.freeze({ id: 'theater', district: 'culture', x: 295, y: 176, width: 160, height: 128, layer: 3, captionX: .72 }),
+  Object.freeze({ id: 'music', district: 'culture', x: 244, y: 259, width: 152, height: 128, layer: 4, captionX: .36 }),
+  Object.freeze({ id: 'arcade', district: 'culture', x: 421, y: 251, width: 156, height: 128, layer: 4 }),
+  Object.freeze({ id: 'clinic', district: 'wellness', x: 686, y: 245, width: 152, height: 128, layer: 4 }),
+  Object.freeze({ id: 'gym', district: 'wellness', x: 817, y: 324, width: 150, height: 128, layer: 5 }),
   ...([0, 1, 2, 3, 4, 5] as const).map(slot => Object.freeze({
     id: `slot-${slot}`,
     district: 'garden' as const,
-    x: 8 + slot * 166,
-    y: 508,
-    width: 158,
-    height: 112,
-    layer: 2,
+    x: 31 + slot * 154,
+    y: 480 + (slot % 2) * 15,
+    width: 150,
+    height: 108,
+    layer: 5,
+    captionY: slot % 2 === 0 ? -.6 : 0,
   })),
 ]);
 
@@ -175,7 +184,11 @@ function placed(id: string): Placement {
   return found;
 }
 
-function withFrame(placement: Placement, fields: Omit<ExteriorBuilding, 'id' | 'district' | 'layer' | 'rect' | 'frame'>): ExteriorBuilding {
+function withFrame(
+  placement: Placement,
+  sprite: ExteriorSprite,
+  fields: Omit<ExteriorBuilding, 'id' | 'district' | 'layer' | 'rect' | 'frame' | 'landmark' | 'captionAnchor'>,
+): ExteriorBuilding {
   const object: ScenePlacement = {
     x: placement.x,
     y: placement.y,
@@ -187,12 +200,18 @@ function withFrame(placement: Placement, fields: Omit<ExteriorBuilding, 'id' | '
     },
   };
   const rect = roomRect(object);
+  const frame = sceneFrame(rect, EXTERIOR_ROOM);
   return {
     id: placement.id,
     district: placement.district,
     layer: placement.layer,
     rect,
-    frame: sceneFrame(rect, EXTERIOR_ROOM),
+    frame,
+    captionAnchor: {
+      left: frame.left + frame.width * (placement.captionX ?? .5),
+      top: frame.top + frame.height * (placement.captionY ?? 1),
+    },
+    landmark: landmarkArt(sprite),
     ...fields,
   };
 }
@@ -203,16 +222,20 @@ function hrefOf(path: string, query: Readonly<Record<string, string>> | null): s
   return `${path}?${params.toString()}`;
 }
 
-function previousSprite(swaps: Readonly<Record<string, 1 | 2 | 3>>, key: string, kind: 'library' | 'inn' | Habit['building_style']): string | null {
+function previousLandmark(
+  swaps: Readonly<Record<string, 1 | 2 | 3>>,
+  key: string,
+  kind: 'library' | 'inn' | Habit['building_style'],
+): LandmarkArt | null {
   const from = swaps[key];
   if (from == null) return null;
-  return townSpriteUrl(buildingSprite(kind, from));
+  return landmarkArt(buildingSprite(kind, from));
 }
 
-function healthSprite(health: ExteriorHealth, kind: 'clinic' | 'gym'): string {
-  if (health.state === 'locked') return townSpriteUrl(kind === 'clinic' ? 'clinic-locked' : 'gym-locked');
-  if (health.state === 'ready') return townSpriteUrl(buildingSprite(kind, kind === 'clinic' ? health.clinic : health.gym));
-  return townSpriteUrl(buildingSprite(kind, 1));
+function healthSprite(health: ExteriorHealth, kind: 'clinic' | 'gym'): TownSpriteId {
+  if (health.state === 'locked') return kind === 'clinic' ? 'clinic-locked' : 'gym-locked';
+  if (health.state === 'ready') return buildingSprite(kind, kind === 'clinic' ? health.clinic : health.gym);
+  return buildingSprite(kind, 1);
 }
 
 function healthLabel(health: ExteriorHealth): string {
@@ -224,19 +247,11 @@ function healthLabel(health: ExteriorHealth): string {
   }
 }
 
-const CULTURE: readonly { id: string; name: string; label: string; kind: string }[] = Object.freeze([
+const CULTURE: readonly { id: 'theater' | 'music' | 'arcade'; name: string; label: string; kind: string }[] = Object.freeze([
   Object.freeze({ id: 'theater', name: 'Theater', label: 'Movies', kind: 'movie' }),
   Object.freeze({ id: 'music', name: 'Music bar', label: 'Artists', kind: 'artist' }),
   Object.freeze({ id: 'arcade', name: 'Arcade', label: 'Games', kind: 'game' }),
 ]);
-
-export function exteriorPlates(): readonly ExteriorPlate[] {
-  return DISTRICTS.map(district => ({
-    id: district.id,
-    label: district.label,
-    frame: sceneFrame(district.focus, EXTERIOR_ROOM),
-  }));
-}
 
 /**
  * Every functional entrance is present for an unfounded town and a rich one.
@@ -253,11 +268,10 @@ export function exteriorBuildings(input: {
   const habits = new Map(input.data.habits.map(habit => [habit.id, habit]));
   const lots = new Map(input.data.lots.map(lot => [lot.slot, lot]));
   const buildings: ExteriorBuilding[] = [
-    withFrame(placed('home'), {
+    withFrame(placed('home'), 'home', {
       name: 'Home',
       label: 'Residential',
-      sprite: '/town/exterior/home.svg',
-      previousSprite: null,
+      previousLandmark: null,
       control: 'link',
       path: '/town/home/living',
       query: null,
@@ -271,11 +285,10 @@ export function exteriorBuildings(input: {
         vaultPresent: input.vaultPresent,
         treasury: input.treasury,
       });
-      return withFrame(placed('treasury'), {
+      return withFrame(placed('treasury'), face.sprite, {
         name: face.name,
         label: face.label,
-        sprite: face.src,
-        previousSprite: null,
+        previousLandmark: null,
         control: face.control,
         path: face.external ? '' : face.link,
         query: null,
@@ -284,11 +297,10 @@ export function exteriorBuildings(input: {
         habitId: null,
       });
     })(),
-    withFrame(placed('hall'), {
+    withFrame(placed('hall'), 'hall', {
       name: 'Hall',
       label: 'Civic hall',
-      sprite: '/town/exterior/hall.svg',
-      previousSprite: null,
+      previousLandmark: null,
       control: 'link',
       path: '/town/hall',
       query: null,
@@ -298,11 +310,10 @@ export function exteriorBuildings(input: {
     }),
     (() => {
       const face = lotFace({ kind: 'inn', building: input.data.buildings.inn });
-      return withFrame(placed('inn'), {
+      return withFrame(placed('inn'), face.sprite, {
         name: face.name,
         label: face.label,
-        sprite: face.src,
-        previousSprite: previousSprite(swaps, 'inn', 'inn'),
+        previousLandmark: previousLandmark(swaps, 'inn', 'inn'),
         control: face.control,
         path: face.link,
         query: null,
@@ -313,11 +324,10 @@ export function exteriorBuildings(input: {
     })(),
     (() => {
       const face = lotFace({ kind: 'library', building: input.data.buildings.library });
-      return withFrame(placed('library'), {
+      return withFrame(placed('library'), face.sprite, {
         name: face.name,
         label: face.label,
-        sprite: face.src,
-        previousSprite: previousSprite(swaps, 'library', 'library'),
+        previousLandmark: previousLandmark(swaps, 'library', 'library'),
         control: face.control,
         path: face.link,
         query: null,
@@ -328,11 +338,10 @@ export function exteriorBuildings(input: {
     })(),
     ...CULTURE.map(item => {
       const query = { kind: item.kind };
-      return withFrame(placed(item.id), {
+      return withFrame(placed(item.id), item.id, {
         name: item.name,
         label: item.label,
-        sprite: `/town/exterior/${item.id}.svg`,
-        previousSprite: null,
+        previousLandmark: null,
         control: 'link' as const,
         path: '/media/library',
         query,
@@ -341,11 +350,10 @@ export function exteriorBuildings(input: {
         habitId: null,
       });
     }),
-    ...(['clinic', 'gym'] as const).map(kind => withFrame(placed(kind), {
+    ...(['clinic', 'gym'] as const).map(kind => withFrame(placed(kind), healthSprite(input.health, kind), {
       name: kind === 'clinic' ? 'Clinic' : 'Gym',
       label: healthLabel(input.health),
-      sprite: healthSprite(input.health, kind),
-      previousSprite: null,
+      previousLandmark: null,
       control: 'link' as const,
       path: kind === 'clinic' ? '/town/clinic' : '/town/gym',
       query: null,
@@ -358,11 +366,10 @@ export function exteriorBuildings(input: {
     const lot = lots.get(slot) ?? { slot, unlock_level: 1, state: 'empty' as const, habit_id: null };
     const habit = lot.habit_id == null ? undefined : habits.get(lot.habit_id);
     const face = lotFace({ kind: 'habit', lot, habit });
-    buildings.push(withFrame(placed(`slot-${slot}`), {
+    buildings.push(withFrame(placed(`slot-${slot}`), face.sprite, {
       name: face.name,
       label: face.label,
-      sprite: face.src,
-      previousSprite: habit ? previousSprite(swaps, `h${habit.id}`, habit.building_style) : null,
+      previousLandmark: habit ? previousLandmark(swaps, `h${habit.id}`, habit.building_style) : null,
       control: face.control,
       path: '',
       query: null,
@@ -378,7 +385,7 @@ export function exteriorBuildings(input: {
 export function frameDistrict(focus: RoomRect, viewport: SceneSize): SceneCamera {
   if (viewport.width <= 0 || viewport.height <= 0) return REST_CAMERA;
   const fit = Math.min(EXTERIOR_ROOM.width / focus.width, EXTERIOR_ROOM.height / focus.height);
-  const scale = nearestScale(Math.min(SCENE_SCALES[SCENE_SCALES.length - 1], Math.max(SCENE_SCALES[0], fit)));
+  const scale = SCENE_SCALES.filter(step => step <= fit).at(-1) ?? SCENE_SCALES[0];
   const centerX = (focus.left + focus.width / 2) / EXTERIOR_ROOM.width * viewport.width;
   const centerY = (focus.top + focus.height / 2) / EXTERIOR_ROOM.height * viewport.height;
   return clampCamera({

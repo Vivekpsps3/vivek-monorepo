@@ -1,3 +1,8 @@
+<ng-template #buildingIcon let-art>
+  <svg class="building-icon" aria-hidden="true" viewBox="0 0 160 128" [attr.data-stage]="art.state">
+    <use [attr.href]="art.href" />
+  </svg>
+</ng-template>
 <div class="exterior">
   <div class="districts" role="group" aria-label="Town districts">
     @for (district of districts; track district.id) {
@@ -11,27 +16,26 @@
     [attr.data-ambience]="ambience()"
     (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
     (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
-    <div class="stage" [style.transform]="cameraTransform()">
+    <div class="stage" [style.transform]="cameraTransform()" [style.--label-scale]="1 / camera().scale">
       <div class="scene">
+        <svg class="coast" aria-hidden="true" viewBox="0 0 1000 640" preserveAspectRatio="none">
+          <use href="/town/exterior/coast.svg#town" />
+        </svg>
         <div class="sky" aria-hidden="true"><span class="idle-mark"></span></div>
-        @for (plate of plates; track plate.id) {
-          <div class="plate {{ plate.id }}" aria-hidden="true"
-            [style.left.%]="plate.frame.left" [style.top.%]="plate.frame.top"
-            [style.width.%]="plate.frame.width" [style.height.%]="plate.frame.height">
-            <span>{{ plate.label }}</span>
-          </div>
-        }
         @for (building of buildings(); track building.id) {
           <div class="piece" aria-hidden="true" [attr.data-scene-object]="building.id"
-            [class.selected]="marked(building.id)"
+            [class.selected]="activeBuilding()?.id === building.id"
             [style.left.%]="building.frame.left" [style.top.%]="building.frame.top"
             [style.width.%]="building.frame.width" [style.height.%]="building.frame.height"
             [style.z-index]="building.layer">
-            @if (building.previousSprite && !reducedMotion()) {
-              <img class="old" [src]="building.previousSprite" alt="" width="32" height="32">
+            @if (building.previousLandmark && !reducedMotion()) {
+              <svg class="old" viewBox="0 0 160 128" preserveAspectRatio="none" [attr.data-stage]="building.previousLandmark.state">
+                <use [attr.href]="building.previousLandmark.href" />
+              </svg>
             }
-            <img [src]="building.sprite" alt="" width="32" height="32">
-            <span class="caption">{{ building.name }}</span>
+            <svg class="landmark" viewBox="0 0 160 128" preserveAspectRatio="none" [attr.data-stage]="building.landmark.state">
+              <use [attr.href]="building.landmark.href" />
+            </svg>
             @if (habitMark(building.habitId); as mark) {
               @if (mark.celebration !== null) {
                 <span class="habit-mark" aria-hidden="true" [attr.data-habit-feedback]="responseKind(mark.style)" [attr.data-celebration]="mark.celebration"></span>
@@ -42,8 +46,20 @@
             }
           </div>
         }
+        @if (framed(); as district) {
+          @for (building of buildings(); track building.id) {
+            @if (building.district === district && building.id !== activeBuilding()?.id) {
+              <span class="caption" [attr.data-building-label]="building.id" [class.lot-caption]="building.slot !== null" aria-hidden="true"
+                [style.left.%]="building.captionAnchor.left"
+                [style.top.%]="building.captionAnchor.top">{{ building.name }}</span>
+            }
+          }
+        }
       </div>
     </div>
+    @if (activeBuilding(); as building) {
+      <span class="active-name" aria-hidden="true">{{ building.name }}</span>
+    }
   </div>
   <div class="scene-actions">
     <details class="scene-settings" [open]="seasonDirty()">
@@ -67,20 +83,21 @@
       <summary>Buildings</summary>
       <ul class="buildings" role="list" aria-label="Town buildings">
         @for (building of buildings(); track building.id) {
-          <li role="listitem" [attr.data-district]="building.district">
+          <li role="listitem" [attr.data-district]="building.district"
+            (focusin)="focusedBuilding.set(building.id)" (focusout)="focusedBuilding.set(null)">
             @if (building.control === 'external') {
               <a class="action" [attr.data-building]="building.id" [href]="building.href" [attr.aria-current]="inspected() === building.id ? 'true' : null">
-                <img [src]="building.sprite" alt="" width="32" height="32">
+                <ng-container *ngTemplateOutlet="buildingIcon; context: { $implicit: building.landmark }" />
                 <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
               </a>
             } @else if (building.control === 'link') {
               <a class="action" [attr.data-building]="building.id" [routerLink]="building.path" [queryParams]="building.query" [attr.aria-current]="inspected() === building.id ? 'true' : null">
-                <img [src]="building.sprite" alt="" width="32" height="32">
+                <ng-container *ngTemplateOutlet="buildingIcon; context: { $implicit: building.landmark }" />
                 <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
               </a>
             } @else {
               <button type="button" class="action" [attr.data-building]="building.id" [attr.aria-current]="inspected() === building.id ? 'true' : null" (click)="choose(building)">
-                <img [src]="building.sprite" alt="" width="32" height="32">
+                <ng-container *ngTemplateOutlet="buildingIcon; context: { $implicit: building.landmark }" />
                 <span class="copy">
                   <span class="name">{{ building.name }}</span>
                   <span class="sub-label">{{ building.label }}</span>

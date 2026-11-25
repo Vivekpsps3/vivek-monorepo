@@ -54,7 +54,7 @@ export class TownLotComponent {
       vaultPresent: this.vaultPresent(),
       treasury: this.treasury(),
     });
-    return { name: face.name, label: face.label, src: face.src, link: face.link, external: face.external };
+    return { name: face.name, label: face.label, src: townSpriteUrl(face.sprite), link: face.link, external: face.external };
   });
 }
 

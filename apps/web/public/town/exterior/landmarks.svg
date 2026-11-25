@@ -1,0 +1,228 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <title>Terraria-on-Sea landmarks</title>
+  <desc>Original scenery for Town. Each symbol has a 160 by 128 frame. Lit windows and stone use the scene palette, and stage additions follow the saved place.</desc>
+  <defs>
+    <g id="foundation">
+      <path d="m9 95 68-34 76 33-75 32z" fill="#1a342d" opacity=".22" pointer-events="none"/>
+      <path d="M7 88 76 55 151 87v5l-74 34L7 94z" fill="var(--foundation,#a88866)"/>
+      <path d="m7 88 69-34 75 33-74 34z" fill="var(--road,#e6d8b6)" stroke="var(--stone-line,#625b53)" stroke-width="1.4"/>
+      <path d="m16 91 15 7m74 12 16-7m-68 4 16 8m61-22 12-6" fill="none" stroke="var(--foundation,#a88866)" opacity=".7"/>
+    </g>
+    <g id="body">
+      <path d="M22 57 77 83v25L22 83z" fill="var(--masonry,#e6d4b0)"/>
+      <path d="m77 83 58-27v25l-58 27z" fill="var(--shade,#bba180)"/>
+      <path d="M22 80 77 106l58-28" fill="none" stroke="var(--foundation,#a88866)" stroke-width="2"/>
+      <path d="m31 72 13 6v12l-13-6zm20 9 14 7v12l-14-7z" fill="var(--glass,#527e7d)" stroke="var(--stone-line,#625b53)" stroke-width="1.5"/>
+      <path d="m37 76 0 9m-5-7 10 5m16 2v11m-5-8 10 5" stroke="var(--masonry,#e6d4b0)" stroke-width="1"/>
+      <path d="m89 87 16-8v16l-16 8z" fill="var(--stone-line,#625b53)" stroke="var(--foundation,#a88866)" stroke-width="1.3"/>
+      <path d="m113 78 13-6v9l-13 7z" fill="var(--glass,#527e7d)" stroke="var(--stone-line,#625b53)" stroke-width="1.4"/>
+      <path d="m86 105 21-10 4 2-22 10z" fill="var(--rim,#d4bd90)"/>
+    </g>
+    <g id="tile-roof">
+      <path d="m16 56 39-31 62 27-40 31z" fill="var(--roof,#698e83)"/>
+      <path d="m55 25 22-11 64 30-24 8z" fill="var(--roof,#698e83)"/>
+      <path d="m77 83 40-31 24-8-4 13-60 29z" fill="var(--roof-shadow,#466b65)"/>
+      <path d="m16 56 61 27v3L16 60z" fill="var(--roof-shadow,#466b65)"/>
+      <path d="m24 51 61 27m-53-34 61 28m-52-34 60 28m-52-34 60 28m-49-35 63 29m-54-34 62 29" fill="none" stroke="#f0e3bc" opacity=".26"/>
+      <path d="m55 25 62 27" stroke="var(--roof-shadow,#466b65)" stroke-width="2"/>
+    </g>
+    <g id="flat-roof">
+      <path d="m18 56 58-27 64 27-63 29z" fill="var(--roof,#698e83)"/>
+      <path d="m18 56 59 29v5L18 62zm59 29 63-29v6L77 90z" fill="var(--roof-shadow,#466b65)"/>
+      <path d="m27 56 49-23 53 23-52 24z" fill="none" stroke="#eee0b2" stroke-width="1.3" opacity=".6"/>
+    </g>
+    <g id="dormer">
+      <path d="m41 47 16-8 20 9-15 9z" fill="var(--roof-shadow,#466b65)"/>
+      <path d="m41 47 11-13 11 21-2 14-20-9z" fill="var(--masonry,#e6d4b0)"/>
+      <path d="m45 51 11 5v8l-11-5z" fill="var(--glass,#527e7d)"/>
+      <path d="m39 48 13-16 13 22-3 2-10-17-10 11z" fill="var(--roof-shadow,#466b65)"/>
+    </g>
+    <g id="pennant">
+      <path d="M81 31V7" stroke="var(--stone-line,#625b53)" stroke-width="2"/>
+      <path d="m82 8 27 6-27 7z" fill="#cc8d62"/><circle cx="81" cy="6" r="2.6" fill="#f6d894"/>
+    </g>
+    <g id="lock">
+      <path d="M71 58a8 8 0 0 1 16 0v6h-4v-6a4 4 0 0 0-8 0v6h-4z" fill="#e5cf9c" stroke="#1b2d35" stroke-width="1.4"/>
+      <path d="M67 64h24v17H67z" fill="#d9b36e" stroke="#25393b" stroke-width="2"/>
+      <path d="M79 69v6" stroke="#384042" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <g id="bush">
+      <path d="m0 0 10-9 12 1 8 10-13 8z" fill="var(--grove,#648478)"/>
+      <path d="m0 0 10-9 12 1-6 9-6 5z" fill="var(--leaf,#8ea48a)"/>
+      <path d="m7 0 4 1m7-4 4 1" stroke="#dfa68c" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <g id="planter">
+      <path d="m0 0 24-12 21 9-23 13z" fill="#7f6550" stroke="var(--foundation,#a88866)" stroke-width="2"/>
+      <path d="m5 0 22-10m-17 12 22-10m-17 12 22-10" stroke="var(--leaf,#8ea48a)" stroke-width="2.6" stroke-linecap="round"/>
+    </g>
+    <g id="column">
+      <path d="M0 0h4v18H0z" fill="#ddc9a2"/><path d="M4 0h2v18H4z" fill="var(--foundation,#a88866)"/>
+    </g>
+  </defs>
+  <symbol id="home" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body"/>
+    <use href="#tile-roof" style="--roof:var(--coral,#b46e5d);--roof-shadow:var(--coral-shadow,#8a4d4b)"/>
+    <use href="#dormer"/>
+    <path d="m107 43 0-17 9-4 9 4v18l-9 4z" fill="var(--foundation,#a88866)"/>
+    <path d="m107 26 9-5 10 5-10 5z" fill="var(--rim,#d4bd90)"/>
+    <use href="#bush" transform="translate(113 92) scale(.76)"/>
+    <path d="m22 96 40 19m-38-25v8m7-5v8m7-5v8m7-5v8m7-5v8m7-5v8" fill="none" stroke="var(--foundation,#a88866)" stroke-width="2.2"/>
+  </symbol>
+  <symbol id="hall" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body"/>
+    <use href="#tile-roof"/>
+    <path d="M60 47V17L80 7l21 10v31L80 58z" fill="var(--masonry,#e6d4b0)" stroke="var(--foundation,#a88866)" stroke-width="1.4"/>
+    <path d="m80 27 21-10v31L80 58z" fill="var(--shade,#bba180)"/>
+    <path d="m55 19 25-13 25 12-25 12z" fill="var(--roof-shadow,#466b65)"/>
+    <path d="m55 19 25-18 25 17-25 12z" fill="var(--roof,#698e83)"/>
+    <ellipse cx="71" cy="35" rx="5" ry="7" fill="var(--window,#f0d89b)"/>
+    <path d="M71 30v5l3 2" fill="none" stroke="#344544" stroke-width="1.3"/>
+    <path d="m88 85 25-12 4 4-24 12z" fill="var(--coral,#b46e5d)"/>
+    <path d="M96 87v13m15-20v13" stroke="var(--stone-line,#625b53)" stroke-width="1.5"/>
+  </symbol>
+  <symbol id="treasury" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body"/>
+    <path d="m24 59 53-25 61 24-61 28z" fill="var(--masonry,#e6d4b0)"/>
+    <path d="m18 61 58-37 63 32-62 32z" fill="var(--roof,#698e83)" stroke="var(--roof-shadow,#466b65)" stroke-width="2"/>
+    <path d="m22 66 55 22 62-32v6L77 93 22 71z" fill="var(--roof-shadow,#466b65)"/>
+    <path d="m34 64 42-28 43 21-42 22z" fill="none" stroke="#d1ac73" stroke-width="2.8"/>
+    <use href="#column" transform="translate(78 88)"/><use href="#column" transform="translate(109 75)"/><use href="#column" transform="translate(129 65)"/>
+    <path d="m87 106 30-14 7 4-31 14zm2 5 35-16 8 3-36 16z" fill="var(--stone,#c8bea2)" stroke="var(--foundation,#a88866)" stroke-width="1.2"/>
+    <g style="display:var(--upgrade,none)"><path d="m59 52 17-10 20 9-20 10z" fill="#b3915e"/><path d="M71 51a5 5 0 1 1 10 0 5 5 0 0 1-10 0" fill="#f2d48f"/></g>
+    <use href="#pennant" transform="translate(5 9)" style="display:var(--landmark,none)"/>
+    <use href="#lock" style="display:var(--lock,none)"/>
+  </symbol>
+  <symbol id="inn" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body"/>
+    <use href="#tile-roof" style="--roof:var(--indigo,#6d7a94);--roof-shadow:var(--indigo-shadow,#4b5870)"/>
+    <path d="m74 83 66-32-4 12-59 30z" fill="var(--water-reflection,#dce7c8)"/>
+    <path d="m87 78-3 10m16-16-4 10m17-16-4 10m16-16-4 10" stroke="var(--indigo,#6d7a94)" stroke-width="5"/>
+    <path d="M133 54v32m-12-15 10-5v8l-10 5z" fill="var(--window,#f0d89b)" stroke="var(--stone-line,#625b53)" stroke-width="2"/>
+    <use href="#dormer" style="display:var(--upgrade,none)"/>
+    <use href="#pennant" style="display:var(--landmark,none)"/>
+  </symbol>
+  <symbol id="library" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body"/>
+    <use href="#tile-roof"/>
+    <path d="m86 78 17-8 17 4-17 8z" fill="var(--masonry,#e6d4b0)"/>
+    <path d="M88 88q0-8 9-12 9-4 9 4v15l-18 9z" fill="var(--stone-line,#625b53)" stroke="var(--rim,#d4bd90)" stroke-width="1.8"/>
+    <path d="M96 86v13m-5-13 11-5" stroke="var(--glass,#527e7d)" stroke-width="1.7"/>
+    <path d="m30 71 15 7v13l-15-7zm21 10 14 7v13l-14-7z" fill="var(--glass,#527e7d)" stroke="var(--stone-line,#625b53)" stroke-width="1.3"/>
+    <path d="M34 78v6m4-4v7m4-5v7m14-3v7m4-5v7" stroke="var(--window,#f0d89b)" stroke-width="1.6"/>
+    <path d="m91 109 25-12 6 2-26 13z" fill="var(--stone,#c8bea2)"/>
+    <use href="#dormer" style="display:var(--upgrade,none)"/>
+    <g style="display:var(--landmark,none)">
+      <path d="m99 48 12-7 15 7-14 7z" fill="var(--masonry,#e6d4b0)"/>
+      <path d="M110 46V25h4v21z" fill="var(--stone-line,#625b53)"/>
+      <path d="m104 27 14-10 4 5-14 10z" fill="#cc9c60" stroke="var(--roof-shadow,#466b65)" stroke-width="1.4"/>
+    </g>
+  </symbol>
+  <symbol id="theater" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body"/>
+    <use href="#flat-roof" style="--roof:var(--coral,#b46e5d);--roof-shadow:var(--coral-shadow,#8a4d4b)"/>
+    <path d="m23 56 0-15 54 24v18z" fill="var(--coral,#b46e5d)" stroke="var(--coral-shadow,#8a4d4b)" stroke-width="1.4"/>
+    <path d="m77 65 57-25v17L77 83z" fill="var(--coral-shadow,#8a4d4b)"/>
+    <path d="m23 41 52-24 59 23-57 25z" fill="var(--coral,#b46e5d)"/>
+    <path d="m35 40 40-18 47 18-45 20z" fill="none" stroke="#e2b98b" stroke-width="1.4"/>
+    <path d="m79 84 51-25 13 7-52 26z" fill="var(--window,#f0d89b)" stroke="var(--coral-shadow,#8a4d4b)" stroke-width="2"/>
+    <path d="m94 86 40-20m-35 25 39-19" stroke="var(--coral,#b46e5d)" stroke-width="2.3" stroke-dasharray="2 4" stroke-linecap="round"/>
+    <path d="m34 69 20 10v10l-20-10z" fill="var(--indigo-shadow,#4b5870)" stroke="var(--window,#f0d89b)" stroke-width="1.5"/>
+    <path d="m108 53 7-10 8 4 0 8-8 7-7-2z" fill="#efbe77" stroke="var(--coral-shadow,#8a4d4b)" stroke-width="2"/>
+    <path d="m113 53 5-4v7z" fill="#744b52"/>
+  </symbol>
+  <symbol id="music" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body"/>
+    <use href="#tile-roof" style="--roof:var(--indigo,#6d7a94);--roof-shadow:var(--indigo-shadow,#4b5870)"/>
+    <path d="m76 83 57-27 10 8-57 28z" fill="var(--coral,#b46e5d)" stroke="var(--coral-shadow,#8a4d4b)" stroke-width="1.2"/>
+    <path d="m88 78 10 8m2-14 10 8m2-14 10 8m2-14 10 8" fill="none" stroke="var(--masonry,#e6d4b0)" stroke-width="3"/>
+    <path d="m118 36 13-6 5 4v15l-14 6-4-4z" fill="var(--window,#f0d89b)" stroke="var(--indigo-shadow,#4b5870)" stroke-width="2"/>
+    <path d="M124 49V39l7-3v8m-7 1-3 4m10-8-3 4" stroke="#775255" fill="none" stroke-width="2"/>
+    <path d="m17 88 14-6 10 5-13 7z" fill="var(--coral,#b46e5d)"/><path d="m27 92 0 12m8-16v10" stroke="var(--stone-line,#625b53)" stroke-width="2"/>
+    <use href="#bush" transform="translate(116 100) scale(.65)"/>
+  </symbol>
+  <symbol id="arcade" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body"/>
+    <use href="#flat-roof" style="--roof:var(--indigo,#6d7a94);--roof-shadow:var(--indigo-shadow,#4b5870)"/>
+    <path d="m32 56 11-23 32-15 42 17 13 20-52 25z" fill="var(--indigo,#6d7a94)" stroke="var(--indigo-shadow,#4b5870)" stroke-width="2"/>
+    <path d="m43 33 33 14 41-12M32 56l44 19 54-20" fill="none" stroke="var(--window,#f0d89b)" stroke-width="2"/>
+    <path d="m82 60 44-20v18L82 78z" fill="var(--indigo-shadow,#4b5870)" stroke="var(--coral,#b46e5d)" stroke-width="2"/>
+    <path d="m94 63 8-4v-5l7-3v5l8-4v6l-8 3v5l-7 3v-5l-8 4z" fill="var(--window,#f0d89b)"/>
+    <path d="m29 76 39 18m44-4 20-9" stroke="var(--water-reflection,#dce7c8)" stroke-width="2"/>
+    <path d="m93 94 12-6v9l-12 6z" fill="var(--coral,#b46e5d)"/>
+  </symbol>
+  <symbol id="clinic" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body"/>
+    <use href="#flat-roof"/>
+    <path d="m39 53 38-18 44 18-42 20z" fill="var(--masonry,#e6d4b0)" stroke="var(--foundation,#a88866)" stroke-width="1.4"/>
+    <path d="m74 46 7-3 6 3-7 3 8 4-6 3-8-4-7 3-6-3 7-3-7-3 6-3z" fill="var(--coral,#b46e5d)"/>
+    <path d="m28 69 44 21v8L28 77z" fill="var(--roof-shadow,#466b65)"/>
+    <path d="m83 90 42-20v6L83 97z" fill="var(--window,#f0d89b)"/>
+    <use href="#bush" transform="translate(38 100) scale(.9)"/>
+    <use href="#planter" transform="translate(95 106) scale(.8)" style="display:var(--upgrade,none)"/>
+    <use href="#pennant" transform="translate(-9 15)" style="display:var(--landmark,none)"/>
+    <use href="#lock" style="display:var(--lock,none)"/>
+  </symbol>
+  <symbol id="gym" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body"/>
+    <path d="m17 58 14-18 53-24 53 29 5 14-65 29z" fill="var(--roof,#698e83)" stroke="var(--roof-shadow,#466b65)" stroke-width="2"/>
+    <path d="m31 40 54 28 52-23M17 58l60 30 8-20" fill="none" stroke="var(--roof-shadow,#466b65)" stroke-width="2.3"/>
+    <path d="m43 34 55 28m-44-33 55 28m-44-34 55 29m-43-33 55 28" stroke="#d5d3a2" opacity=".5"/>
+    <path d="m104 67 19-9m-21 6v8m4-10v8m15-15v8m4-10v8" stroke="var(--window,#f0d89b)" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="m41 94 25 12m-28-12 0 6m28 4v6" stroke="var(--indigo-shadow,#4b5870)" stroke-width="2.3"/>
+    <use href="#dormer" transform="translate(-10 0)" style="display:var(--upgrade,none)"/>
+    <use href="#pennant" transform="translate(-2 1)" style="display:var(--landmark,none)"/>
+    <use href="#lock" style="display:var(--lock,none)"/>
+  </symbol>
+  <symbol id="forge" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body" transform="translate(3 11) scale(.91)"/>
+    <use href="#tile-roof" transform="translate(3 11) scale(.91)" style="--roof:var(--indigo,#6d7a94);--roof-shadow:var(--indigo-shadow,#4b5870)"/>
+    <path d="m104 53 0-25 9-4 11 4v25l-10 5z" fill="var(--coral-shadow,#8a4d4b)"/>
+    <path d="m102 29 12-6 12 6-12 6z" fill="var(--cliff,#9d8465)" stroke="var(--stone-line,#625b53)" stroke-width="1.5"/>
+    <path d="m32 89 23 11m-13-19 15 7-3 3-13-6z" fill="var(--foundation,#a88866)" stroke="var(--stone-line,#625b53)" stroke-width="2"/>
+    <use href="#dormer" style="display:var(--upgrade,none)"/>
+    <use href="#pennant" style="display:var(--landmark,none)"/>
+  </symbol>
+  <symbol id="cottage" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <use href="#body" transform="translate(8 13) scale(.86)"/>
+    <use href="#tile-roof" transform="translate(8 13) scale(.86)" style="--roof:var(--coral,#b46e5d);--roof-shadow:var(--coral-shadow,#8a4d4b)"/>
+    <use href="#bush" transform="translate(44 94) scale(.7)"/>
+    <use href="#dormer" style="display:var(--upgrade,none)"/>
+    <g style="display:var(--landmark,none)"><use href="#planter" transform="translate(106 99) scale(.65)"/><path d="m109 49 0-16 7-4 8 4v15l-7 4z" fill="var(--foundation,#a88866)"/></g>
+  </symbol>
+  <symbol id="garden" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <path d="M27 86V64m17 13V56m17 13V48m17 13V39m-51 27 51-25m-51 34 51-26" stroke="var(--foundation,#a88866)" stroke-width="2.5"/>
+    <path d="m21 87 58-29 55 26-56 29z" fill="var(--lawn,#a7bc92)" stroke="var(--grove,#648478)" stroke-width="2"/>
+    <use href="#planter" transform="translate(49 84)"/>
+    <use href="#planter" transform="translate(79 100)"/>
+    <use href="#bush" transform="translate(80 72) scale(.8)"/>
+    <use href="#planter" transform="translate(98 83) scale(.62)" style="display:var(--upgrade,none)"/>
+    <g style="display:var(--landmark,none)">
+      <path d="m48 71 16-25 26-13 16 12-1 18-42 20z" fill="var(--sea,#97c1c2)" stroke="var(--roof-shadow,#466b65)" stroke-width="2"/>
+      <path d="m48 71 15 12V47m0 14 42-18m-22-7v36" fill="none" stroke="var(--masonry,#e6d4b0)" stroke-width="2"/>
+    </g>
+  </symbol>
+  <symbol id="lot" viewBox="0 0 160 128" preserveAspectRatio="none">
+    <use href="#foundation"/>
+    <path d="m23 89 54-26 56 25-55 26z" fill="var(--lawn,#a7bc92)" stroke="var(--grove,#648478)" stroke-width="1.4"/>
+    <path d="M42 90V68m75 21V68m-75 4 35 16 40-16m-75 9 35 16 40-16" fill="none" stroke="var(--foundation,#a88866)" stroke-width="2.3"/>
+    <g style="display:var(--unlocked,inline)">
+      <path d="M77 81V59" stroke="var(--stone-line,#625b53)" stroke-width="2.4"/>
+      <path d="M66 50h24v17H66z" fill="var(--masonry,#e6d4b0)" stroke="var(--foundation,#a88866)" stroke-width="1.7"/>
+      <path d="M78 54v9m-5-5h10" stroke="var(--roof-shadow,#466b65)" stroke-width="2.2"/>
+    </g>
+    <use href="#lock" style="display:var(--lock,none)"/>
+  </symbol>
+</svg>

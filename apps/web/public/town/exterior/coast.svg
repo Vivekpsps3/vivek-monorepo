@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <title>Terraria-on-Sea coastal terrain</title>
+  <desc>Original Town artwork. One composition in the 1000 by 640 Town frame.</desc>
+  <defs>
+    <path id="land" d="M27 214 48 113 126 78 225 29 379 22 513 25 619 48 704 96 765 95 834 115 888 153 938 184 950 230 918 252 866 264 874 300 930 331 977 391 979 480 938 524 929 565 840 606 718 600 658 622 522 610 463 626 331 615 212 616 132 589 70 557 30 495 18 417 38 355 18 283Z"/>
+    <path id="street" d="M60 192 131 170 237 181 356 184 492 165 592 169 685 190 779 206 876 227
+      M237 181 230 240 242 295 211 339 150 365 77 375
+      M211 339 307 357 399 334 481 368 571 370 667 384 776 374 852 403 926 441
+      M492 165 461 224 454 278 399 334
+      M685 190 675 245 697 292 667 384 640 445 574 472
+      M77 375 107 437 178 462 291 448 388 470 490 457 574 472 703 462 829 473 914 457"/>
+    <g id="tree">
+      <path d="m-15 4 19 12 20-11-20-6z" fill="#193031" opacity=".16"/>
+      <path d="M2 0h4v13H2z" fill="var(--cliff,#9d8465)"/>
+      <path d="m4-31 13 18-4 14-10 6-14-9-2-12z" fill="var(--grove,#648478)"/>
+      <path d="m4-31 2 24-3 14-14-9-2-12z" fill="var(--leaf,#8ea48a)"/>
+      <path d="m4-28-12 16 2 5" fill="none" stroke="#e2d9b3" opacity=".3"/>
+    </g>
+    <g id="lamp">
+      <path d="M0-19v22m-4 0h8" stroke="var(--cliff,#9d8465)" stroke-width="2.4" fill="none"/>
+      <path d="m-5-22 5-5 5 5-2 8h-6z" fill="var(--window,#f0d89b)" stroke="var(--stone-line,#625b53)" stroke-width="1.4"/>
+    </g>
+  </defs>
+  <symbol id="town" viewBox="0 0 1000 640" preserveAspectRatio="none">
+    <rect width="1000" height="640" fill="var(--sea,#97c1c2)"/>
+    <g fill="none" stroke="var(--wave,#d0e5dc)" stroke-width="2" stroke-linecap="round" opacity=".7">
+      <path d="M14 94q36-6 69-25m665-25q42 2 75 21m35 29 29 16m56 46 40 24M31 566l34 23m6 14q35 22 80 25m649 0 63-4 28-12m40-18 36-16M950 284l28 9m-14 17 21 7M8 180l15-37M295 8l59-4m246 11 30 7"/>
+      <path d="m947 269 12-1m-4 34 9 3m-8 242 17-17M20 525l15 24M419 625l-21 3m-226-11 34 12m691-485 27 15m-64-99 24 10M105 68l22-7m793 546 24-12" opacity=".5"/>
+    </g>
+    <use href="#land" transform="translate(0 13)" fill="var(--shore,#b1cfc3)" stroke="var(--shore,#b1cfc3)" stroke-width="20" stroke-linejoin="round"/>
+    <use href="#land" transform="translate(0 11)" fill="var(--cliff,#9d8465)"/>
+    <use href="#land" transform="translate(0 4)" fill="var(--rim,#d4bd90)"/>
+    <use href="#land" fill="var(--grass,#b5c5a2)" stroke="var(--grass-edge,#8ba582)" stroke-width="2.5" stroke-linejoin="round"/>
+    <g fill="var(--lawn,#a7bc92)">
+      <path d="m40 259 44-38 74 19-22 43-46 29-41-12zm113-147 89-52 36 5-21 64-65 33-51-14zm385-64 68 13 76 61-36 40-76-21-30-39zm-166 179 60-30-8 65-34 24-38-20zm166 159 65-3 21 40-37 32-74-8-14-32zm167 26 46-13 65 20 31 35-99-11zm-561 96 83-28 60 23-1 42-47 25-76-12-28-18zm188 36 71-28 112 30 8 38-103 6-72-13zm250-25 93-39 71 31 21 47-99 22-73-28z"/>
+      <path d="M70 545c95 30 184 43 272 46 67 3 83-5 125-3 101 4 181-1 264-5 86-4 136-24 192-55l-11 32-76 36-119-7-63 23-136-16-53 15-134-8-109 1-98-27z"/>
+    </g>
+    <use href="#street" fill="none" stroke="var(--road-edge,#a49170)" stroke-width="29" stroke-linejoin="round" stroke-linecap="round"/>
+    <use href="#street" fill="none" stroke="var(--road,#e6d8b6)" stroke-width="23" stroke-linejoin="round" stroke-linecap="round"/>
+    <use href="#street" fill="none" stroke="var(--stone,#c8bea2)" stroke-width="1.5" stroke-dasharray="3 9" stroke-linecap="round"/>
+    <g fill="none" stroke="var(--road,#e6d8b6)" stroke-width="11" stroke-linecap="round">
+      <path d="m154 159 16 13m188-8 1 18m185-26 12 11m291 47 18 10m-668 89 16 22m113-39 61 41m-63 44 7-28m167 26 8-15m240-2 4 14m123 61 10-16"/>
+      <path d="m139 458-29 67m142-70 6 53m140-39 18 49m110-55 2 48m139-46 22 54m135-46 25 43"/>
+    </g>
+    <g transform="translate(650 344)">
+      <path d="m-48 8 40-22 51 17-41 24z" fill="var(--stone,#c8bea2)"/>
+      <path d="m-16 4 15-8 20 7-17 10z" fill="var(--sea,#97c1c2)" stroke="var(--rim,#d4bd90)" stroke-width="3"/>
+      <path d="M2 4v-11m-8 3Q2-14 10-6" fill="none" stroke="var(--wave,#d0e5dc)" stroke-width="2"/>
+    </g>
+    <g transform="translate(894 228)" stroke-linejoin="round">
+      <path d="m-34 6 16-8 112 44-15 10z" fill="var(--cliff,#9d8465)"/>
+      <path d="m-34 0 16-9 112 45-15 10z" fill="var(--rim,#d4bd90)" stroke="var(--cliff,#9d8465)" stroke-width="2"/>
+      <path d="m-13-6-14 10m35-2-14 10m35-2-14 10m35-2-14 10m35-2-14 10m32-3-14 10" stroke="var(--cliff,#9d8465)" fill="none" opacity=".6"/>
+      <path d="m30 29 27 17 7 11-29 2-26-12z" fill="var(--wave,#d0e5dc)" opacity=".4"/>
+      <path d="m27 23 32 20 5 6-27 3-25-11z" fill="var(--coral-shadow,#8a4d4b)"/>
+      <path d="m27 20 32 20 5 6-27 2-25-10z" fill="var(--masonry,#e6d4b0)"/>
+      <path d="M34 34V4l-13 24zm3-27 14 36-14-9z" fill="var(--water-reflection,#dce7c8)" stroke="var(--stone-line,#625b53)" stroke-width="1"/>
+    </g>
+    <g fill="none" stroke="var(--rim,#d4bd90)" stroke-width="2" opacity=".75">
+      <path d="m91 117 38-20m7-3 22-11m467-10 33 18m12 6 34 16M40 331l7 17m894 86 7 29m-16 28-14 12m-201 80 35-3m14-2 48-11M87 535l22 19m74 36 30 8"/>
+    </g>
+    <use href="#tree" transform="translate(51 244) scale(1.05)"/>
+    <use href="#tree" transform="translate(74 263) scale(.68)"/>
+    <use href="#tree" transform="translate(60 331)"/>
+    <use href="#tree" transform="translate(107 329) scale(.75)"/>
+    <use href="#tree" transform="translate(239 113) scale(1.1)"/>
+    <use href="#tree" transform="translate(261 121) scale(.78)"/>
+    <use href="#tree" transform="translate(687 134)"/>
+    <use href="#tree" transform="translate(713 150) scale(.72)"/>
+    <use href="#tree" transform="translate(616 258) scale(1.18)"/>
+    <use href="#tree" transform="translate(642 274) scale(.88)"/>
+    <use href="#tree" transform="translate(618 287) scale(.63)"/>
+    <use href="#tree" transform="translate(929 499) scale(.96)"/>
+    <use href="#tree" transform="translate(900 528) scale(1.1)"/>
+    <use href="#tree" transform="translate(871 556) scale(.74)"/>
+    <use href="#tree" transform="translate(61 500) scale(.86)"/>
+    <use href="#tree" transform="translate(121 585) scale(.82)"/>
+    <use href="#tree" transform="translate(210 579) scale(.74)"/>
+    <use href="#tree" transform="translate(365 590) scale(.7)"/>
+    <use href="#tree" transform="translate(612 584) scale(.9)"/>
+    <use href="#tree" transform="translate(746 576) scale(.9)"/>
+    <use href="#lamp" transform="translate(201 177)"/>
+    <use href="#lamp" transform="translate(428 181)"/>
+    <use href="#lamp" transform="translate(735 208)"/>
+    <use href="#lamp" transform="translate(918 244)"/>
+    <use href="#lamp" transform="translate(157 358)"/>
+    <use href="#lamp" transform="translate(413 353)"/>
+    <use href="#lamp" transform="translate(591 384)"/>
+    <use href="#lamp" transform="translate(800 423)"/>
+    <use href="#lamp" transform="translate(278 457)"/>
+    <use href="#lamp" transform="translate(560 478)"/>
+    <use href="#lamp" transform="translate(727 467)"/>
+  </symbol>
+</svg>

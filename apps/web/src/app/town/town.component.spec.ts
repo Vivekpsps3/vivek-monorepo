@@ -163,7 +163,7 @@ describe('Town page', () => {
   it('explains a locked Finance vault on the treasury tile and in Today', () => {
     const { el } = render(snapshot());
     const tile = treasuryTile(el);
-    expect(tile.querySelector('img')?.getAttribute('src')).toBe('/town/treasury-locked.svg');
+    expect(tile.querySelector('.building-icon')?.getAttribute('data-stage')).toBe('locked');
     expect(tile.textContent).toContain('Finance vault locked');
     expect(tile.textContent).not.toMatch(/\d/);
     expect(tile.querySelector('a')?.getAttribute('href')).toBe('/finance/vault/unlock?next=%2Ftown');
@@ -297,13 +297,13 @@ describe('Town page', () => {
     fixture.detectChanges();
     expect(clinic().textContent).toContain('Health locked');
     expect(clinic().textContent).not.toMatch(/\d/);
-    expect(clinic().querySelector('img')?.getAttribute('src')).toBe('/town/clinic-locked.svg');
+    expect(clinic().querySelector('.building-icon')?.getAttribute('data-stage')).toBe('locked');
     expect(clinic().getAttribute('href')).toBe('/town/clinic');
     expect(el.querySelector<HTMLInputElement>('#habit-name')?.value).toBe('Walk 30 minutes');
     release({ state: 'ready', clinic: 2, gym: 1 });
     await flushBudget(fixture);
     expect(clinic().textContent).toContain('Health locked');
-    expect(clinic().querySelector('img')?.getAttribute('src')).toBe('/town/clinic-locked.svg');
+    expect(clinic().querySelector('.building-icon')?.getAttribute('data-stage')).toBe('locked');
     expect(clinic().textContent).not.toMatch(/\d/);
   });
 
@@ -378,10 +378,10 @@ describe('Town page', () => {
     const clinic = clinicLink(el);
     expect(clinic.textContent).toContain('Open');
     expect(clinic.textContent).not.toMatch(/\d/);
-    expect(clinic.querySelector('img')?.getAttribute('src')).toBe('/town/clinic-2.svg');
+    expect(clinic.querySelector('.building-icon')?.getAttribute('data-stage')).toBe('2');
     expect(clinic.getAttribute('href')).toBe('/town/clinic');
     const gym = el.querySelector('[data-building="gym"]') as HTMLAnchorElement;
-    expect(gym.querySelector('img')?.getAttribute('src')).toBe('/town/gym-1.svg');
+    expect(gym.querySelector('.building-icon')?.getAttribute('data-stage')).toBe('1');
     expect(gym.getAttribute('href')).toBe('/town/gym');
     expect(gym.textContent).toContain('Open');
   });
