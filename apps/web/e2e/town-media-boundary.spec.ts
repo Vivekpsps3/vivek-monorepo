@@ -55,6 +55,11 @@ for (const [width, height, theme, pointer] of [
     await expect(page.getByRole('heading', { level: 1, name: 'Terraria-on-Sea' })).toBeVisible();
     expect(await page.content()).not.toContain('Lantern Kart');
     expect(await page.content()).not.toContain('Untouched Quest');
+    if (width === 390) {
+      const today = page.getByRole('button', { name: 'Today', exact: true });
+      if (pointer === 'touch') await today.tap();
+      else await today.press('Enter');
+    }
     const button = page.locator('app-town-today li').filter({ hasText: 'Read 20 pages' }).getByRole('button');
     await expect(button).toHaveAccessibleName('Mark Read 20 pages done for today');
     await button.scrollIntoViewIfNeeded();

@@ -104,6 +104,7 @@ test.describe('Town season and ambience', () => {
     await expect(viewport).toHaveAttribute('data-ambience', 'still');
     expect(await page.locator('.idle-mark').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
     expect(await audioCreated(page)).toBe(0);
+    await page.getByText('View controls', { exact: true }).click();
     await expect(page.locator('.sound-status')).toContainText('Town sound is off');
     await page.getByRole('button', { name: 'Play Town sound' }).click();
     await expect(page.locator('.sound-status')).toContainText('Town sound is off');
@@ -170,6 +171,7 @@ test.describe('Town season at 390', () => {
     await expect(viewport).toHaveAttribute('data-season', 'summer');
     await expect(viewport).toHaveAttribute('data-day', 'night');
     await expect(viewport).toHaveAttribute('data-ambience', 'still');
+    await page.getByText('View controls', { exact: true }).tap();
     await expect(page.locator('.sound-status')).toContainText('Town sound is on');
     expect(await audioCreated(page)).toBe(0);
     await page.getByRole('button', { name: 'Play Town sound' }).tap();
@@ -215,6 +217,7 @@ test.describe('Town scene live ambience', () => {
     await expect(viewport).toHaveAttribute('data-ambience', 'live');
     expect(await page.locator('.idle-mark').evaluate(el => getComputedStyle(el).animationName)).toContain('scene-idle');
     expect(await audioCreated(page)).toBe(0);
+    await page.getByText('View controls', { exact: true }).click();
     // Keep the button in place so Playwright's click scroll cannot reveal the scene.
     await viewport.evaluate(el => { el.style.transform = 'translateY(-3000px)'; });
     await expect(viewport).not.toBeInViewport();

@@ -404,6 +404,8 @@ export class TownExteriorComponent {
     const target = archived
       ? this.host.nativeElement.querySelector<HTMLElement>(`[data-archived="${archived}"]`)
       : this.host.nativeElement.querySelector<HTMLElement>(`[data-building="${id}"]`);
+    const picker = target?.closest('details');
+    if (picker) picker.open = true;
     target?.focus();
   }
 

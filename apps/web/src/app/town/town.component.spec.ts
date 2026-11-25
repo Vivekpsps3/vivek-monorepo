@@ -263,13 +263,13 @@ describe('Town page', () => {
       slot, unlock_level, state: unlock_level > 1 ? 'locked' as const : 'empty' as const, habit_id: null,
     }));
     const { el } = render(data);
-    expect(el.textContent).toContain('Found Terraria-on-Sea');
+    expect(el.querySelector('section[aria-label="Found Terraria-on-Sea"]')).not.toBeNull();
     expect(el.textContent).toContain('Choose a first habit');
     expect(el.textContent).toContain('Read 20 pages');
-    expect(el.querySelector('a[href="/town/library"]')?.textContent).toContain('Visit the Reading Hall');
+    expect(el.querySelector('[data-building="library"][href="/town/library"]')?.textContent).toContain('Library');
     expect(el.querySelector('a[href="/town/keepsakes"]')?.textContent).toContain('Keepsake shelf');
-    expect(el.querySelector('a[href="/town/home/living"]')?.textContent).toContain('Visit Home');
-    expect(el.querySelector('a[href="/town/hall"]')?.textContent).toContain('Visit the Hall');
+    expect(el.querySelector('.town-destinations a[href="/town/home/living"]')?.textContent).toContain('Visit Home');
+    expect(el.querySelector('.town-destinations a[href="/town/hall"]')?.textContent).toContain('Visit the Hall');
     expect(el.querySelector('a[href="/town/memory"]')?.textContent).toContain('Memory Shelves');
     const list = el.querySelector('[aria-label="Town buildings"]');
     expect(list?.textContent).toContain('Library');

@@ -1,12 +1,11 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, InjectionToken, Injector, afterNextRender, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, InjectionToken, Injector, afterNextRender, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { DOCUMENT } from '@angular/common';
 import { EMPTY, Subject, fromEvent, interval } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
 import { mayPublish, openBoundedWork } from '@vivek/browser';
-import { ToastService, UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent } from '@vivek/ui';
-import { townSpriteUrl } from './town-sprites';
+import { ToastService, UiButtonComponent, UiCardComponent, UiSkeletonComponent, UiStateComponent } from '@vivek/ui';
 import {
   VAULT_PRESENCE,
   bindLockNotices,
@@ -74,7 +73,7 @@ function vaultOpenFor(userId: number | null): boolean {
 
 @Component({
   selector: 'app-town',
-  imports: [RouterLink, UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent, DateVisitComponent, TownExteriorComponent, TownTodayComponent, HabitDialogComponent, HistoryDialogComponent, StampWalletComponent],
+  imports: [RouterLink, UiButtonComponent, UiCardComponent, UiSkeletonComponent, UiStateComponent, DateVisitComponent, TownExteriorComponent, TownTodayComponent, HabitDialogComponent, HistoryDialogComponent, StampWalletComponent],
   templateUrl: './town.component.html',
   styleUrl: './town.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -108,7 +107,9 @@ export class TownComponent {
   readonly historyOpen = signal(false);
   readonly stampsOpen = signal(false);
   readonly suggestions = ['Read 20 pages', 'Walk 30 minutes', 'Sleep by 12'];
-  readonly emptySprite = townSpriteUrl('lot-empty');
+  protected readonly todayOpen = signal(false);
+  private readonly todayToggle = viewChild<ElementRef<HTMLButtonElement>>('todayToggle');
+  private readonly todayPanel = viewChild<ElementRef<HTMLElement>>('todayPanel');
   readonly exploreWorld = WORLD_COPY.explore;
   private readonly document = inject(DOCUMENT);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -153,6 +154,22 @@ export class TownComponent {
   reload(): void {
     this.loads.next();
   }
+  protected openToday(): void {
+    this.todayOpen.set(true);
+    afterNextRender(() => {
+      if (!this.todayOpen()) return;
+      this.todayPanel()?.nativeElement.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    }, { injector: this.injector });
+  }
+
+  protected closeToday(event?: Event): void {
+    const toggle = this.todayToggle()?.nativeElement;
+    if (!this.todayOpen() || !toggle?.getClientRects().length) return;
+    event?.stopPropagation();
+    this.todayOpen.set(false);
+    toggle.focus();
+  }
+
   openHabitDialog(slot: number | null, habitId: number | null, prefillName?: string): void {
     this.edit.set({ slot, habitId, prefill: prefillName ?? '' });
   }
@@ -273,6 +290,7 @@ export class TownComponent {
     this.edit.set(null);
     this.historyOpen.set(false);
     this.stampsOpen.set(false);
+    this.todayOpen.set(false);
     this.dropVaultViews();
   }
 

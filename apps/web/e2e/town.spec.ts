@@ -69,7 +69,17 @@ test.describe('Town', () => {
         expect(box?.width).toBeGreaterThanOrEqual(44);
         expect(box?.height).toBeGreaterThanOrEqual(44);
       }
-      await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+      const viewport = page.getByRole('group', { name: 'Town exterior' });
+      await expect(viewport).toBeInViewport({ ratio: 1 });
+      if (width === 390) {
+        await expect(page.getByRole('button', { name: 'Today', exact: true })).toBeInViewport({ ratio: 1 });
+        await expect(page.getByText('Buildings', { exact: true })).toBeInViewport({ ratio: 1 });
+        await expect(page.getByRole('link', { name: /^Home/ }).filter({ has: page.locator('img') })).toBeInViewport({ ratio: 1 });
+      } else {
+        const today = page.getByRole('region', { name: 'Today' });
+        await expect(today.getByRole('heading', { name: 'Today' })).toBeVisible();
+        expect((await today.boundingBox())?.x).toBeGreaterThan((await viewport.boundingBox())!.x);
+      }
       for (const img of await page.locator('[aria-label="Town buildings"] img, .viewport img').all()) {
         await expect(img).toHaveAttribute('alt', '');
         expect(await img.evaluate(el => getComputedStyle(el).imageRendering)).toBe('pixelated');
@@ -292,6 +302,7 @@ test.describe('Town exterior', () => {
           expect(box?.width).toBeGreaterThanOrEqual(44);
           expect(box?.height).toBeGreaterThanOrEqual(44);
         }
+        if (width === 390) await page.getByRole('button', { name: 'Today', exact: true }).tap();
         const today = page.getByRole('button', { name: 'Mark Read 20 pages done for today' });
         await expect(today).toBeVisible();
         await expect(today).toBeEnabled();
@@ -313,7 +324,13 @@ test.describe('Town exterior', () => {
     await page.setViewportSize({ width: 320, height: 700 });
     await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
     await expect(page.getByRole('button', { name: 'Wellness', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+    const todayToggle = page.getByRole('button', { name: 'Today', exact: true });
+    await todayToggle.press('Enter');
+    await expect(page.getByRole('region', { name: 'Today' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Mark Read 20 pages done for today' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(todayToggle).toBeFocused();
+    await expect(todayToggle).toHaveAttribute('aria-expanded', 'false');
     const narrowClinic = page.getByRole('list', { name: 'Town buildings' }).getByRole('link', { name: /^Clinic/ });
     expect((await narrowClinic.boundingBox())?.height).toBeGreaterThanOrEqual(44);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
@@ -344,12 +361,49 @@ test.describe('Town exterior', () => {
     await page.goBack();
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole('button', { name: 'Mark Read 20 pages done for today' }).click();
+    await todayToggle.press('Enter');
+    await expect(page.getByRole('button', { name: 'Mark Read 20 pages done for today' })).toBeFocused();
+    await page.keyboard.press('Enter');
     const done = page.getByRole('button', { name: 'Read 20 pages, done today. Undo' });
     await expect(done).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(done).toBeVisible();
     await expect(page.getByRole('button', { name: 'Garden', exact: true })).toBeVisible();
+  });
+
+  test('an unfounded Town keeps Today and real rooms in reach at phone sizes', async ({ page, request }, info) => {
+    expect((await request.post('/e2e/reset?seed=town-empty')).ok()).toBeTruthy();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/town');
+    const today = page.getByRole('button', { name: 'Today', exact: true });
+    const firstHabit = page.getByRole('button', { name: 'Choose a first habit' });
+    const viewport = page.getByRole('group', { name: 'Town exterior' });
+    const buildings = page.getByText('Buildings', { exact: true });
+    const library = page.getByRole('list', { name: 'Town buildings' }).getByRole('link', { name: /^Library/ });
+    for (const item of [today, firstHabit, viewport, buildings]) {
+      await expect(item).toBeInViewport({ ratio: 1 });
+    }
+    await info.attach('unfounded-town-390', { body: await page.screenshot(), contentType: 'image/png' });
+
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
+    await today.tap();
+    await expect(page.getByRole('button', { name: '+ New habit' })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'History' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+    await page.keyboard.press('Escape');
+    await expect(today).toBeFocused();
+    await expect(today).toHaveAttribute('aria-expanded', 'false');
+    const scan = await new AxeBuilder({ page }).include('app-town').analyze();
+    expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+    await firstHabit.press('Enter');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(firstHabit).toBeFocused();
+    await library.tap();
+    await expect(page.getByRole('heading', { name: 'Reading Hall', level: 1 })).toBeVisible();
+    await page.goBack();
+    await expect(library).toBeFocused();
   });
 
   test('inspects locked, empty, and archived lots and keeps a failed draft', async ({ page }) => {
@@ -425,16 +479,32 @@ test.describe('Town exterior', () => {
     await expect(page.locator('app-town-exterior [aria-modal="true"]')).toHaveCount(0);
     const close = page.getByRole('button', { name: 'Close details' });
     expect((await close.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    await page.getByText('Buildings', { exact: true }).tap();
+    await expect(page.getByRole('list', { name: 'Town buildings' })).toBeHidden();
+    await page.getByText('View controls', { exact: true }).tap();
     const zoom = page.getByRole('button', { name: 'Zoom in' });
-    await zoom.focus();
+    await zoom.press('Enter');
     await expect(zoom).toBeFocused();
+    const stage = page.locator('app-town-exterior .stage');
+    await expect(stage).not.toHaveAttribute('style', /scale\(1\)/);
     await page.keyboard.press('Escape');
     await expect(page).not.toHaveURL(/inspect=/);
     await expect(page.getByRole('button', { name: /Unlocks at Lv 5/ })).toBeFocused();
     const emptyPhone = page.getByRole('list', { name: 'Town buildings' }).getByRole('button', { name: /Empty lot/ }).first();
     await emptyPhone.tap();
     await expect(inspector).toHaveAttribute('data-inspector', 'empty');
-    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+    await expect(page).toHaveURL(/inspect=slot-/);
+    const selectedURL = page.url();
+    const camera = await stage.getAttribute('style');
+    const today = page.getByRole('button', { name: 'Today', exact: true });
+    await today.press('Enter');
+    await expect(page.getByRole('button', { name: 'History' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(today).toBeFocused();
+    await expect(today).toHaveAttribute('aria-expanded', 'false');
+    await expect(page).toHaveURL(selectedURL);
+    await expect(stage).toHaveAttribute('style', camera!);
+    await expect(inspector).toHaveAttribute('data-inspector', 'empty');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
     const scan = await new AxeBuilder({ page }).include('app-town').analyze();
     expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
@@ -680,7 +750,7 @@ test.describe('Reading Hall', () => {
     expect((await request.post('/e2e/reset?seed=town-empty')).ok()).toBeTruthy();
     await page.goto('/town');
     await expect(page.getByRole('button', { name: 'Choose a first habit' })).toBeVisible();
-    const entrance = page.getByRole('link', { name: 'Visit the Reading Hall' });
+    const entrance = page.getByRole('list', { name: 'Town buildings' }).getByRole('link', { name: /^Library/ });
     await entrance.click();
     const room = page.locator('app-town-library-room');
     await expect(room.getByRole('link', { name: 'Open Media Now' })).toBeVisible();

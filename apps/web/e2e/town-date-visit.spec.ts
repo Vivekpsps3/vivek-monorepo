@@ -69,6 +69,7 @@ for (const [width, height, theme] of [
       expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
 
       const beforeCamera = await page.evaluate(() => history.length);
+      await page.getByText('View controls', { exact: true }).click();
       await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
       await page.getByRole('button', { name: 'Harbor', exact: true }).click();
       await page.getByRole('button', { name: 'Zoom out', exact: true }).click();

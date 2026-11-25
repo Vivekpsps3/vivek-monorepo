@@ -1,15 +1,9 @@
 <div class="exterior">
-  <app-town-place [crumbs]="crumbs()" />
   <div class="districts" role="group" aria-label="Town districts">
     @for (district of districts; track district.id) {
       <button type="button" class="action" [attr.aria-pressed]="framed() === district.id" (click)="showDistrict(district.id)">{{ district.label }}</button>
     }
   </div>
-  <p class="scene-presentation" data-scene-presentation>
-    <span class="scene-label">{{ presentation().label }}</span>
-    <span class="scene-note">Presentation only. It does not change today’s Town date.</span>
-    @if (seasonDirty()) { <span class="scene-draft">Unsaved preview</span> }
-  </p>
   <div #viewport class="viewport" role="group" aria-label="Town exterior"
     [attr.data-season]="presentation().season"
     [attr.data-day]="presentation().dayPart"
@@ -51,48 +45,57 @@
       </div>
     </div>
   </div>
-  <p class="scene-hint">Drag to look around. Choose a district or a building. Dragging does not open it.</p>
-  <div class="camera-controls" role="group" aria-label="Scene view">
-    <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
-    <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
-    <button type="button" class="action" (click)="resetView()">Reset view</button>
-    <a class="action" routerLink="/settings/appearance">Town season</a>
-    <button type="button" class="action" (click)="playSound()">Play Town sound</button>
-  </div>
-  <p class="sound-status" role="status">{{ soundStatus() }}</p>
-  <ul class="buildings" role="list" aria-label="Town buildings">
-    @for (building of buildings(); track building.id) {
-      <li role="listitem" [attr.data-district]="building.district">
-        @if (building.control === 'external') {
-          <a class="action" [attr.data-building]="building.id" [href]="building.href" [attr.aria-current]="inspected() === building.id ? 'true' : null">
-            <img [src]="building.sprite" alt="" width="32" height="32">
-            <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
-          </a>
-        } @else if (building.control === 'link') {
-          <a class="action" [attr.data-building]="building.id" [routerLink]="building.path" [queryParams]="building.query" [attr.aria-current]="inspected() === building.id ? 'true' : null">
-            <img [src]="building.sprite" alt="" width="32" height="32">
-            <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
-          </a>
-        } @else if (building.control === 'habit' || building.control === 'select') {
-          <button type="button" class="action" [attr.data-building]="building.id" [attr.aria-current]="inspected() === building.id ? 'true' : null" (click)="choose(building)">
-            <img [src]="building.sprite" alt="" width="32" height="32">
-            <span class="copy">
-              <span class="name">{{ building.name }}</span>
-              <span class="sub-label">{{ building.label }}</span>
-              @if (habitMark(building.habitId); as mark) {
-                <span class="habit-response" [attr.data-habit-feedback]="feedbackAttr(mark)" [attr.data-celebration]="mark.celebration">{{ feedbackLabel(mark) }}</span>
-              }
-            </span>
-          </button>
-        } @else {
-          <button type="button" class="action" [attr.data-building]="building.id" [attr.aria-current]="inspected() === building.id ? 'true' : null" (click)="choose(building)">
-            <img [src]="building.sprite" alt="" width="32" height="32">
-            <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
-          </button>
+  <div class="scene-actions">
+    <details class="scene-settings" [open]="seasonDirty()">
+      <summary>View controls</summary>
+      <p class="scene-hint">Drag to look around. Choose a district or a building. Dragging does not open it.</p>
+      <div class="camera-controls" role="group" aria-label="Scene view">
+        <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
+        <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
+        <button type="button" class="action" (click)="resetView()">Reset view</button>
+        <a class="action" routerLink="/settings/appearance">Town season</a>
+        <button type="button" class="action" (click)="playSound()">Play Town sound</button>
+      </div>
+      <p class="sound-status" role="status">{{ soundStatus() }}</p>
+      <p class="scene-presentation" data-scene-presentation>
+        <span class="scene-label">{{ presentation().label }}</span>
+        <span class="scene-note">Presentation only. It does not change today’s Town date.</span>
+        @if (seasonDirty()) { <span class="scene-draft">Unsaved preview</span> }
+      </p>
+    </details>
+    <details class="building-picker" open>
+      <summary>Buildings</summary>
+      <ul class="buildings" role="list" aria-label="Town buildings">
+        @for (building of buildings(); track building.id) {
+          <li role="listitem" [attr.data-district]="building.district">
+            @if (building.control === 'external') {
+              <a class="action" [attr.data-building]="building.id" [href]="building.href" [attr.aria-current]="inspected() === building.id ? 'true' : null">
+                <img [src]="building.sprite" alt="" width="32" height="32">
+                <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
+              </a>
+            } @else if (building.control === 'link') {
+              <a class="action" [attr.data-building]="building.id" [routerLink]="building.path" [queryParams]="building.query" [attr.aria-current]="inspected() === building.id ? 'true' : null">
+                <img [src]="building.sprite" alt="" width="32" height="32">
+                <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
+              </a>
+            } @else {
+              <button type="button" class="action" [attr.data-building]="building.id" [attr.aria-current]="inspected() === building.id ? 'true' : null" (click)="choose(building)">
+                <img [src]="building.sprite" alt="" width="32" height="32">
+                <span class="copy">
+                  <span class="name">{{ building.name }}</span>
+                  <span class="sub-label">{{ building.label }}</span>
+                  @if (habitMark(building.habitId); as mark) {
+                    <span class="habit-response" [attr.data-habit-feedback]="feedbackAttr(mark)" [attr.data-celebration]="mark.celebration">{{ feedbackLabel(mark) }}</span>
+                  }
+                </span>
+              </button>
+            }
+          </li>
         }
-      </li>
-    }
-  </ul>
+      </ul>
+    </details>
+  </div>
+  @if (place()) { <app-town-place [crumbs]="crumbs()" /> }
   <ul class="buildings" aria-label="Archived habits">
     @if (data().archived.length === 0) {
       <li><span class="static">No archived habits</span></li>

@@ -148,6 +148,7 @@ test.describe('Town check-in', () => {
       await page.goto('/town');
       await expect(page.locator('html')).toHaveAttribute('data-theme', item.theme);
       await expect(page.locator('.viewport')).toHaveAttribute('data-day', item.night ? 'night' : 'day');
+      if (item.width === 390) await page.getByRole('button', { name: 'Today', exact: true }).click();
       const button = page.locator('app-town-today').getByRole('button', { name: /Walk 30 minutes/ });
       await button.focus();
       await button.press('Enter');
@@ -187,6 +188,7 @@ test.describe('Town check-in', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/town');
     await expect(page.locator('.viewport')).toHaveAttribute('data-day', 'night');
+    await page.getByRole('button', { name: 'Today', exact: true }).click();
     const sleep = page.locator('app-town-today').getByRole('button', { name: /Sleep by 12/ });
     await sleep.click();
     await expect(page.locator('[data-scene-object="slot-2"] [data-habit-feedback="light"]')).toHaveCount(1);
@@ -211,11 +213,26 @@ test.describe('Town check-in touch', () => {
   });
 
   test('a tap checks the garden lot and undo clears it', async ({ page }) => {
+    const town: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+    const walk = town.habits.find(habit => habit.name === 'Walk 30 minutes')!;
+    const checkin = '/api/town/habits/' + walk.id + '/checkins';
+    const today = page.getByRole('button', { name: 'Today', exact: true });
     const button = page.locator('app-town-today').getByRole('button', { name: /Walk 30 minutes/ });
+    await expect(button).toBeHidden();
+    await today.tap();
+    await expect(today).toHaveAttribute('aria-expanded', 'true');
+    const committed = page.waitForResponse(response => response.request().method() === 'POST'
+      && new URL(response.url()).pathname === checkin);
     await button.tap();
+    const result = await committed;
+    expect(result.ok()).toBeTruthy();
+    expect(result.request().postDataJSON()).toEqual({ day: town.town.today });
     await expect(page.locator('[data-scene-object="slot-1"] [data-habit-feedback="garden"]')).toHaveCount(1);
     await expect(page.locator('[data-building="slot-1"]')).toContainText('Flower open');
+    const undone = page.waitForResponse(response => response.request().method() === 'DELETE'
+      && new URL(response.url()).pathname === checkin + '/' + town.town.today);
     await button.tap();
+    expect((await undone).ok()).toBeTruthy();
     await expect(page.locator('app-town-today [aria-live="polite"]')).toContainText('Walk 30 minutes undone.');
     await expect(page.locator('[data-scene-object="slot-1"] [data-habit-feedback]')).toHaveCount(0);
   });
