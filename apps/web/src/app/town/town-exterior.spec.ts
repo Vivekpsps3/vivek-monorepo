@@ -5,7 +5,7 @@ import { SessionService } from '../platform/session.service';
 import { sceneAudio } from './scene-audio';
 import { scenePreferenceKey } from '../platform/scene-appearance';
 import { SceneAppearanceService } from '../platform/scene-appearance.service';
-import { frontObject, REST_CAMERA, type RoomRect } from './library-room.scene';
+import { rectsOverlap, REST_CAMERA, roomToScreen } from './library-room.scene';
 import { LOT_UNLOCK_LV } from './town.constants';
 import { TownExteriorComponent } from './town-exterior.component';
 import {
@@ -92,25 +92,6 @@ function byId(items: readonly ExteriorBuilding[], id: string): ExteriorBuilding 
   return found;
 }
 
-function overlaps(a: RoomRect, b: RoomRect): boolean {
-  return a.left < b.left + b.width && b.left < a.left + a.width
-    && a.top < b.top + b.height && b.top < a.top + a.height;
-}
-
-function placed(building: ExteriorBuilding) {
-  return {
-    building,
-    x: building.rect.left,
-    y: building.rect.top,
-    asset: {
-      id: building.id,
-      layer: building.layer,
-      bounds: { width: building.rect.width, height: building.rect.height },
-      anchor: { x: 0, y: 0 },
-    },
-  };
-}
-
 describe('Town exterior model', () => {
   it('keeps useful entrances in an unfounded town and a rich one', () => {
     expect(EXTERIOR_ART.attribution).toContain('Terraria-on-Sea');
@@ -142,26 +123,26 @@ describe('Town exterior model', () => {
     const locked = byId(faces('founded'), 'clinic');
     expect(locked.label).toBe('Health locked');
     expect(`${locked.name} ${locked.label}`).not.toMatch(/\d/);
-    expect(locked.sprite).toBe('/town/clinic-locked.svg');
-    expect(byId(faces('founded'), 'gym').sprite).toBe('/town/gym-locked.svg');
+    expect(locked.landmark).toEqual({ href: '/town/exterior/landmarks.svg#clinic', state: 'locked' });
+    expect(byId(faces('founded'), 'gym').landmark).toEqual({ href: '/town/exterior/landmarks.svg#gym', state: 'locked' });
 
     const ready = faces('founded', { state: 'ready', clinic: 2, gym: 1 });
     expect(byId(ready, 'clinic').label).toBe('Open');
-    expect(byId(ready, 'clinic').sprite).toBe('/town/clinic-2.svg');
-    expect(byId(ready, 'gym').sprite).toBe('/town/gym-1.svg');
+    expect(byId(ready, 'clinic').landmark).toEqual({ href: '/town/exterior/landmarks.svg#clinic', state: '2' });
+    expect(byId(ready, 'gym').landmark).toEqual({ href: '/town/exterior/landmarks.svg#gym', state: '1' });
     expect(byId(ready, 'clinic').href).toBe('/town/clinic');
     expect(`${byId(ready, 'clinic').name} ${byId(ready, 'clinic').label}`).not.toMatch(/\d/);
 
     const unavailable = faces('founded', { state: 'unavailable' });
     expect(byId(unavailable, 'clinic').label).toBe('Unavailable');
-    expect(byId(unavailable, 'clinic').sprite).toBe('/town/clinic-1.svg');
-    expect(byId(unavailable, 'gym').sprite).toBe('/town/gym-1.svg');
+    expect(byId(unavailable, 'clinic').landmark).toEqual({ href: '/town/exterior/landmarks.svg#clinic', state: '1' });
+    expect(byId(unavailable, 'gym').landmark).toEqual({ href: '/town/exterior/landmarks.svg#gym', state: '1' });
     expect(byId(unavailable, 'clinic').href).toBe('/town/clinic');
     expect(byId(unavailable, 'gym').href).toBe('/town/gym');
     expect(byId(unavailable, 'clinic').label).not.toMatch(/Lv|\d/);
   });
 
-  it('places every building inside the room without overlap', () => {
+  it('keeps every building in the room and paints the Music bar in front of the Theater', () => {
     const items = faces('rich');
     expect(items.length).toBe(16);
     for (const item of items) {
@@ -172,27 +153,27 @@ describe('Town exterior model', () => {
       expect(item.frame.left).toBeCloseTo(100 * item.rect.left / EXTERIOR_ROOM.width, 5);
       expect(item.frame.top).toBeCloseTo(100 * item.rect.top / EXTERIOR_ROOM.height, 5);
     }
-    for (let index = 0; index < items.length; index += 1) {
-      for (let other = index + 1; other < items.length; other += 1) {
-        expect(overlaps(items[index].rect, items[other].rect)).withContext(`${items[index].id} ${items[other].id}`).toBeFalse();
-      }
-    }
+    const music = byId(items, 'music');
+    const theater = byId(items, 'theater');
+    expect(rectsOverlap(music.rect, theater.rect)).toBeTrue();
+    expect(music.layer).toBeGreaterThan(theater.layer);
   });
 
-  it('picks the front building at its center and frames a district with the shared camera', () => {
-    const items = faces('founded').map(placed);
-    const library = items.find(item => item.building.id === 'library');
-    if (!library) throw new Error('missing library');
-    const center = {
-      x: library.building.rect.left + library.building.rect.width / 2,
-      y: library.building.rect.top + library.building.rect.height / 2,
-    };
-    expect(frontObject(items, center)?.building.id).toBe('library');
-    expect(frameDistrict(DISTRICTS[0].focus, { width: 0, height: 0 })).toEqual(REST_CAMERA);
-    const framed = frameDistrict(DISTRICTS.find(item => item.id === 'harbor')!.focus, { width: 400, height: 280 });
-    expect(framed.scale).toBe(2.5);
-    expect(framed.x).toBeLessThan(0);
-    expect(framed.y).toBe(0);
+  it('frames every Culture entrance at a shared zoom step without cropping its bounds', () => {
+    const culture = DISTRICTS.find(item => item.id === 'culture')!;
+    expect(frameDistrict(culture.focus, { width: 0, height: 0 })).toEqual(REST_CAMERA);
+    const viewport = { width: 354, height: 270 };
+    const camera = frameDistrict(culture.focus, viewport);
+    expect(camera.scale).toBe(2);
+    for (const building of faces('founded').filter(item => item.district === 'culture')) {
+      const { left, top, width, height } = building.rect;
+      const upper = roomToScreen({ x: left, y: top }, camera, viewport, EXTERIOR_ROOM);
+      const lower = roomToScreen({ x: left + width, y: top + height }, camera, viewport, EXTERIOR_ROOM);
+      expect(upper.x).toBeGreaterThan(0);
+      expect(upper.y).toBeGreaterThan(0);
+      expect(lower.x).toBeLessThan(viewport.width);
+      expect(lower.y).toBeLessThan(viewport.height);
+    }
   });
 
   it('describes locked, empty, occupied, archived, and missing places', () => {
@@ -301,17 +282,17 @@ describe('Town exterior scene', () => {
     const clinic = el.querySelector('[data-building="clinic"]') as HTMLAnchorElement;
     expect(clinic.textContent).toContain('Health locked');
     expect(clinic.textContent).not.toMatch(/\d/);
-    expect(clinic.querySelector('img')?.getAttribute('src')).toBe('/town/clinic-locked.svg');
+    expect(clinic.querySelector('.building-icon')?.getAttribute('data-stage')).toBe('locked');
     expect(clinic.getAttribute('href')).toBe('/town/clinic');
     fixture.componentRef.setInput('health', { state: 'ready', clinic: 2, gym: 1 });
     fixture.detectChanges();
     expect(clinic.textContent).toContain('Open');
-    expect(clinic.querySelector('img')?.getAttribute('src')).toBe('/town/clinic-2.svg');
+    expect(clinic.querySelector('.building-icon')?.getAttribute('data-stage')).toBe('2');
     expect((el.querySelector('[data-building="gym"]') as HTMLAnchorElement).getAttribute('href')).toBe('/town/gym');
     fixture.componentRef.setInput('health', { state: 'unavailable' });
     fixture.detectChanges();
     expect(clinic.textContent).toContain('Unavailable');
-    expect(clinic.querySelector('img')?.getAttribute('src')).toBe('/town/clinic-1.svg');
+    expect(clinic.querySelector('.building-icon')?.getAttribute('data-stage')).toBe('1');
     expect(clinic.getAttribute('href')).toBe('/town/clinic');
     expect(clinic.textContent).not.toMatch(/\d/);
   });
@@ -324,12 +305,17 @@ describe('Town exterior scene', () => {
     const opened: unknown[] = [];
     fixture.componentInstance.openHabit.subscribe(event => opened.push(event));
     const items = faces('founded');
+    const painted = spyOn(document, 'elementFromPoint');
+    painted.and.returnValue(el.querySelector('[data-scene-object="library"] .landmark use'));
     const library = at(viewport, byId(items, 'library'));
     viewport.dispatchEvent(pointer('pointerdown', library.x, library.y));
-    viewport.dispatchEvent(pointer('pointerup', library.x, library.y));
+    const libraryUp = pointer('pointerup', library.x, library.y);
+    viewport.dispatchEvent(libraryUp);
     expect(navigate).toHaveBeenCalledWith(['/town/library'], { queryParams: undefined });
+    expect(painted).toHaveBeenCalledWith(libraryUp.clientX, libraryUp.clientY);
     expect(opened).toEqual([]);
 
+    painted.and.returnValue(el.querySelector('[data-scene-object="slot-5"] .landmark use'));
     const locked = at(viewport, byId(items, 'slot-5'));
     viewport.dispatchEvent(pointer('pointerdown', locked.x, locked.y));
     viewport.dispatchEvent(pointer('pointerup', locked.x, locked.y));
@@ -349,6 +335,7 @@ describe('Town exterior scene', () => {
     expect(opened).toEqual([{ slot: 0, habitId: null }]);
 
     navigate.calls.reset();
+    painted.calls.reset();
     const origin = stage(el);
     control(el, 'Zoom in').click();
     fixture.detectChanges();
@@ -370,6 +357,7 @@ describe('Town exterior scene', () => {
     viewport.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 }));
     fixture.detectChanges();
     expect(stage(el)).toBe(dragged);
+    expect(painted).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -459,14 +447,15 @@ describe('Town exterior scene', () => {
   it('shows the outgoing sprite when motion is allowed', () => {
     motion(false);
     const shown = render(town('founded'), { swaps: { library: 1 } });
-    expect(shown.el.querySelector('.old')?.getAttribute('src')).toContain('/town/library-1.svg');
+    expect(shown.el.querySelector('.old')?.getAttribute('data-stage')).toBe('1');
+    expect(shown.el.querySelector('.old use')?.getAttribute('href')).toContain('#library');
   });
 
   it('hides the outgoing sprite when motion is reduced', () => {
     motion(true);
     const shown = render(town('founded'), { swaps: { library: 1 } });
     expect(shown.el.querySelector('.old')).toBeNull();
-    expect(shown.el.querySelector('[data-scene-object="library"] img')?.getAttribute('src')).toContain('/town/library-');
+    expect(shown.el.querySelector('[data-scene-object="library"] .landmark use')?.getAttribute('href')).toContain('#library');
   });
 
   it('resolves automatic seasons across a month boundary and drops a preview on owner change', () => {

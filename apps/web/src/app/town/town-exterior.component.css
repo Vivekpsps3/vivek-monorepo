@@ -27,7 +27,6 @@
 .scene-settings[open] summary { margin-inline: -12px; }
 .building-picker .buildings { box-sizing: border-box; margin: 0; padding: 0 8px 8px; }
 .building-picker li { min-width: 0; max-width: 100%; }
-.building-picker li:not([data-district="garden"]) .name { white-space: normal; overflow-wrap: anywhere; }
 .buildings { width: 100%; list-style: none; padding: 0; margin: 12px 0 0; }
 .action, .static {
   display: inline-flex;
@@ -51,21 +50,18 @@ button.action { cursor: pointer; }
 .action[aria-pressed="true"], .action[aria-current="true"] { border-color: var(--accent); }
 .action:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .copy { display: flex; flex-direction: column; min-width: 0; max-width: 100%; }
-.name, .caption, .plate span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.name, .sub-label {
+  overflow-wrap: anywhere;
 }
-.name { max-width: min(10rem, 100%); }
 .sub-label, .scene-hint { color: var(--text-muted); }
 .sub-label { font-size: 0.75rem; font-weight: 500; }
-.buildings img { width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
+.building-icon { width: 32px; height: 32px; flex: none; }
 .scene-hint { margin: 8px 0 0; }
 .camera-controls { margin-top: 12px; }
 .scene-presentation { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
 .scene-note, .scene-draft, .sound-status { color: var(--text-muted); }
 .sound-status { margin: 8px 0 0; }
-.sky { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.sky { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
 .idle-mark {
   position: absolute;
   top: 14%;
@@ -76,19 +72,6 @@ button.action { cursor: pointer; }
   background: color-mix(in srgb, var(--text) 40%, transparent);
   opacity: 0.7;
 }
-.viewport[data-day="night"] { background: linear-gradient(#1b2a3a, #22303a 60%, #1f3322); }
-.viewport[data-season="spring"][data-day="day"] { background: linear-gradient(#d5efcf, #e7f6df 55%, #c9e2c4); }
-.viewport[data-season="spring"][data-day="night"] { background: linear-gradient(#1a3144, #1d3a34 60%, #173028); }
-.viewport[data-season="summer"][data-day="day"] { background: linear-gradient(#c7e7f6, #e5f3d8 55%, #d7e7b8); }
-.viewport[data-season="summer"][data-day="night"] { background: linear-gradient(#1a2740, #24344a 60%, #1c3328); }
-.viewport[data-season="autumn"][data-day="day"] { background: linear-gradient(#f3d7b0, #ead3b4 55%, #d7c4a2); }
-.viewport[data-season="autumn"][data-day="night"] { background: linear-gradient(#2a241c, #3a2e24 60%, #243028); }
-.viewport[data-season="winter"][data-day="day"] { background: linear-gradient(#e4eef4, #e7eef2 55%, #d5e0e6); }
-.viewport[data-season="winter"][data-day="night"] { background: linear-gradient(#1c2836, #243240 60%, #1e2e36); }
-:host-context([data-theme="dark"]) .viewport[data-season="spring"][data-day="day"] { background: linear-gradient(#24382c, #1e3330 60%, #1a2e24); }
-:host-context([data-theme="dark"]) .viewport[data-season="summer"][data-day="day"] { background: linear-gradient(#1d3344, #243828 60%, #1c3024); }
-:host-context([data-theme="dark"]) .viewport[data-season="autumn"][data-day="day"] { background: linear-gradient(#3a3328, #2e3430 60%, #243028); }
-:host-context([data-theme="dark"]) .viewport[data-season="winter"][data-day="day"] { background: linear-gradient(#2a3642, #24323c 60%, #1e2c34); }
 .viewport[data-weather="rain"] .sky { background-image: repeating-linear-gradient(100deg, transparent 0 14px, rgb(126 182 216 / 35%) 14px 15px); }
 .viewport[data-weather="snow"] .sky {
   background-image: radial-gradient(circle, rgb(255 255 255 / 75%) 1px, transparent 1.6px);
@@ -120,50 +103,130 @@ button.action { cursor: pointer; }
   margin-top: 12px;
   border-radius: var(--radius-lg);
   box-shadow: inset 0 0 0 1px var(--border);
-  background: linear-gradient(#d7ebf3, #e7f2df 55%, #c9ddc4);
+  background: var(--sea);
 }
-:host-context([data-theme="dark"]) .viewport {
-  background: linear-gradient(#1b2a3a, #22303a 60%, #1f3322);
+.exterior, .viewport {
+  --sea: #97c1c2;
+  --wave: #d0e5dc;
+  --shore: #b1cfc3;
+  --cliff: #9d8465;
+  --rim: #d4bd90;
+  --grass: var(--day-grass, #b5c5a2);
+  --grass-edge: #8ba582;
+  --lawn: var(--day-lawn, #a7bc92);
+  --road: #e6d8b6;
+  --road-edge: #a49170;
+  --stone: #c8bea2;
+  --grove: #648478;
+  --leaf: var(--day-leaf, #8ea48a);
+  --water-reflection: #dce7c8;
+  --masonry: #e6d4b0;
+  --shade: #bba180;
+  --foundation: #a88866;
+  --roof: #698e83;
+  --roof-shadow: #466b65;
+  --coral: #b46e5d;
+  --coral-shadow: #8a4d4b;
+  --indigo: #6d7a94;
+  --indigo-shadow: #4b5870;
+  --glass: #527e7d;
+  --window: #f0d89b;
+  --stone-line: #625b53;
+}
+:host-context([data-theme="dark"]) :is(.exterior, .viewport), .viewport[data-day="night"] {
+  --sea: #274955;
+  --wave: #557982;
+  --shore: #3a5d65;
+  --cliff: #534c4d;
+  --rim: #777163;
+  --grass: var(--night-grass, #546d61);
+  --grass-edge: #3d5953;
+  --lawn: var(--night-lawn, #49655a);
+  --road: #979178;
+  --road-edge: #596861;
+  --stone: #817f6f;
+  --grove: #314e4d;
+  --leaf: var(--night-leaf, #5f7b69);
+  --water-reflection: #c6ac72;
+  --masonry: #a49a85;
+  --shade: #77776f;
+  --foundation: #71645a;
+  --roof: #557571;
+  --roof-shadow: #3c595b;
+  --coral: #976555;
+  --coral-shadow: #674950;
+  --indigo: #626e8d;
+  --indigo-shadow: #474e68;
+  --glass: #ebbd73;
+  --window: #ffe2a0;
+  --stone-line: #47474b;
+}
+.viewport[data-season="spring"] {
+  --day-grass: #bfd1a8;
+  --day-lawn: #aac798;
+  --night-grass: #547361;
+  --night-lawn: #4a6e5e;
+}
+.viewport[data-season="summer"] {
+  --day-grass: #b8ca99;
+  --day-lawn: #a4b98b;
+  --night-grass: #5a725d;
+  --night-lawn: #4d6a54;
+}
+.viewport[data-season="autumn"] {
+  --day-grass: #c8c69b;
+  --day-lawn: #b1be93;
+  --day-leaf: #ae9672;
+  --night-leaf: #947f63;
+}
+.viewport[data-season="winter"] {
+  --day-grass: #d7dfd1;
+  --day-lawn: #c2d3c7;
+  --day-leaf: #a1bcb5;
+  --night-grass: #6d827d;
+  --night-lawn: #586f6c;
 }
 .stage { position: absolute; inset: 0; transform-origin: 0 0; }
 .scene { position: absolute; inset: 0; }
-.plate, .piece { position: absolute; box-sizing: border-box; }
-.plate {
-  border-radius: 12px;
-  pointer-events: none;
-  color: var(--text);
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-.plate span {
-  display: block;
-  max-width: 100%;
-  padding: 4px 6px;
-}
-.plate.residential { background: color-mix(in srgb, #e6d6b4 70%, transparent); }
-.plate.civic { background: color-mix(in srgb, #f5d36e 55%, transparent); }
-.plate.harbor { background: color-mix(in srgb, #2f9e94 50%, transparent); }
-.plate.culture { background: color-mix(in srgb, #b5574c 40%, transparent); }
-.plate.wellness { background: color-mix(in srgb, #9cc6e4 60%, transparent); }
-.plate.garden { background: color-mix(in srgb, #3d8a5a 45%, transparent); }
-.piece img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; pointer-events: none; }
+.coast, .piece svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.piece { position: absolute; pointer-events: none; }
+.landmark use { pointer-events: visiblePainted; }
 .piece .old { opacity: 0.45; }
-.caption {
+.piece.selected .landmark { filter: drop-shadow(0 0 2px var(--focus-ring)) drop-shadow(0 0 1px var(--focus-ring)); }
+.exterior [data-stage="2"], .exterior [data-stage="3"] { --upgrade: inline; }
+.exterior [data-stage="3"] { --landmark: inline; }
+.exterior [data-stage="locked"] { --lock: inline; --unlocked: none; }
+.caption, .active-name {
   position: absolute;
-  left: 2px;
-  right: 2px;
-  bottom: 2px;
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  z-index: 7;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-elevated);
   color: var(--text);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1.2;
-  text-align: center;
+  overflow-wrap: anywhere;
   pointer-events: none;
 }
-.piece.selected { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: 1px; }
+.caption {
+  max-width: min(8rem, 28%);
+  text-align: center;
+  transform: translateX(-50%) scale(var(--label-scale));
+  transform-origin: top center;
+}
+.lot-caption {
+  box-sizing: border-box;
+  max-width: calc(15% - 6px);
+  padding-inline: 4px;
+  transform: translate(-50%, -100%);
+}
+.active-name {
+  inset: 8px auto auto 8px;
+  box-sizing: border-box;
+  max-width: calc(100% - 16px);
+  border: 1px solid var(--border-control);
+}
 .habit-mark {
   position: absolute;
   z-index: 2;

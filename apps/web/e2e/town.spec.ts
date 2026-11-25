@@ -74,16 +74,14 @@ test.describe('Town', () => {
       if (width === 390) {
         await expect(page.getByRole('button', { name: 'Today', exact: true })).toBeInViewport({ ratio: 1 });
         await expect(page.getByText('Buildings', { exact: true })).toBeInViewport({ ratio: 1 });
-        await expect(page.getByRole('link', { name: /^Home/ }).filter({ has: page.locator('img') })).toBeInViewport({ ratio: 1 });
+        await expect(page.getByRole('link', { name: /^Home/ }).filter({ has: page.locator('.building-icon') })).toBeInViewport({ ratio: 1 });
       } else {
         const today = page.getByRole('region', { name: 'Today' });
         await expect(today.getByRole('heading', { name: 'Today' })).toBeVisible();
         expect((await today.boundingBox())?.x).toBeGreaterThan((await viewport.boundingBox())!.x);
       }
-      for (const img of await page.locator('[aria-label="Town buildings"] img, .viewport img').all()) {
-        await expect(img).toHaveAttribute('alt', '');
-        expect(await img.evaluate(el => getComputedStyle(el).imageRendering)).toBe('pixelated');
-      }
+      await expect(page.locator('[aria-label="Town buildings"] svg[aria-hidden="true"]')).toHaveCount(16);
+      await expect(viewport.locator('[data-scene-object][aria-hidden="true"]')).toHaveCount(16);
       if (width === 1280) expect(await page.locator('app-town ui-card').evaluate(el => el.getBoundingClientRect().width)).toBe(360);
       const scan = await new AxeBuilder({ page }).include('app-town').analyze();
       expect(scan.violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
@@ -284,7 +282,7 @@ test.describe('Town exterior', () => {
   });
 
   test('six districts, a real entrance, Today, and a locked Clinic', async ({ page }) => {
-    for (const file of ['home', 'hall', 'theater', 'music', 'arcade']) {
+    for (const file of ['coast', 'landmarks']) {
       expect((await page.request.get(`/town/exterior/${file}.svg`)).ok()).toBeTruthy();
     }
     for (const width of [390, 1280]) {
@@ -309,7 +307,8 @@ test.describe('Town exterior', () => {
         const clinic = scene.getByRole('link', { name: /^Clinic/ });
         await expect(clinic).toBeVisible();
         expect(await clinic.innerText()).not.toMatch(/\d/);
-        await expect(clinic.locator('img')).toHaveAttribute('src', '/town/clinic-locked.svg');
+        await expect(clinic.locator('.building-icon')).toHaveAttribute('data-stage', 'locked');
+        await expect(clinic.locator('use')).toHaveAttribute('href', '/town/exterior/landmarks.svg#clinic');
         const clinicBox = await clinic.boundingBox();
         expect(clinicBox?.height).toBeGreaterThanOrEqual(44);
         await expect(scene.getByRole('link', { name: /^Library/ })).toBeVisible();
@@ -369,6 +368,86 @@ test.describe('Town exterior', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(done).toBeVisible();
     await expect(page.getByRole('button', { name: 'Garden', exact: true })).toBeVisible();
+  });
+
+  test('names Culture landmarks and picks the visible overlap through zoom and pan', async ({ page }, info) => {
+    const viewport = page.getByRole('group', { name: 'Town exterior' });
+    const landmarks = viewport.locator('.caption');
+    const culture = page.getByRole('button', { name: 'Culture', exact: true });
+    const scene = page.getByRole('list', { name: 'Town buildings' });
+    const music = scene.getByRole('link', { name: /^Music bar/ });
+    const theater = scene.getByRole('link', { name: /^Theater/ });
+    for (const width of [390, 1280]) {
+      const theme = width === 390 ? 'light' : 'dark';
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
+      await page.addInitScript(theme => localStorage.setItem('suite-theme', theme), theme);
+      await page.clock.setFixedTime(new Date(theme === 'dark' ? '2026-10-30T05:30:00Z' : '2026-10-29T19:00:00Z'));
+      const assets = ['coast', 'landmarks'].map(file => page.waitForResponse(`**/town/exterior/${file}.svg`));
+      await page.goto('/town');
+      expect((await Promise.all(assets)).every(response => response.ok())).toBeTruthy();
+      await expect(landmarks).toHaveCount(0);
+      await culture.press('Enter');
+      await expect(landmarks).toHaveText(['Library', 'Theater', 'Music bar', 'Arcade']);
+      for (const caption of await landmarks.all()) {
+        await expect(caption).toBeInViewport({ ratio: 1 });
+        expect(await caption.evaluate(el => el.scrollWidth <= el.clientWidth)).toBeTruthy();
+      }
+      await info.attach(`coastal-culture-${width}-${theme}`, { body: await viewport.screenshot(), contentType: 'image/png' });
+
+      const overviewOverlap = await cultureHitPoints(viewport);
+      await page.touchscreen.tap(overviewOverlap.empty.x, overviewOverlap.empty.y);
+      await expect(page).toHaveURL(/\/town\/?$/);
+      await page.touchscreen.tap(overviewOverlap.overlap.x, overviewOverlap.overlap.y);
+      await expect(page).toHaveURL(/\/media\/library\?kind=artist$/);
+      await page.goBack();
+      await page.getByText('View controls', { exact: true }).click();
+      await culture.press('Enter');
+      await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+      await viewport.scrollIntoViewIfNeeded();
+      const zoomed = await cultureHitPoints(viewport);
+      const stage = viewport.locator('.stage');
+      const beforeDrag = await stage.getAttribute('style');
+      await page.mouse.move(zoomed.overlap.x, zoomed.overlap.y);
+      await page.mouse.down();
+      await page.mouse.move(zoomed.overlap.x + 8, zoomed.overlap.y + 14, { steps: 4 });
+      await page.mouse.up();
+      await expect(stage).not.toHaveAttribute('style', beforeDrag!);
+      await expect(page).toHaveURL(/\/town\/?$/);
+
+      const panned = await cultureHitPoints(viewport);
+      await page.touchscreen.tap(panned.exposed.x, panned.exposed.y);
+      await expect(page).toHaveURL(/\/media\/library\?kind=movie$/);
+      await page.goBack();
+      await music.focus();
+      await expect(viewport.locator('.active-name')).toHaveText('Music bar');
+      await expect(viewport.locator('[data-scene-object="music"]')).toHaveClass(/selected/);
+      await music.press('Enter');
+      await expect(page).toHaveURL(/\/media\/library\?kind=artist$/);
+      await page.goBack();
+      await theater.press('Enter');
+      await expect(page).toHaveURL(/\/media\/library\?kind=movie$/);
+    }
+
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.goto('/town');
+    await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
+    await culture.press('Enter');
+    const name = viewport.locator('.active-name');
+    await music.focus();
+    await expect(name).toHaveText('Music bar');
+    expect(await name.evaluate(el => el.scrollWidth <= el.clientWidth)).toBeTruthy();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+    await info.attach('coastal-focus-320-200-percent', { body: await viewport.screenshot(), contentType: 'image/png' });
+  });
+
+  test('the building picker still opens rooms if the coastal art fails', async ({ page }) => {
+    await page.route('**/town/exterior/*.svg', route => route.abort());
+    await page.goto('/town');
+    const library = page.getByRole('list', { name: 'Town buildings' }).getByRole('link', { name: /^Library/ });
+    await library.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Reading Hall', level: 1 })).toBeVisible();
+    await page.goBack();
+    await expect(library).toBeFocused();
   });
 
   test('an unfounded Town keeps Today and real rooms in reach at phone sizes', async ({ page, request }, info) => {
@@ -1081,6 +1160,38 @@ async function sceneOffset(target: Locator, frame: Locator): Promise<{ x: number
   } finally {
     await piece.dispose();
   }
+}
+
+/** Find three points inside both artwork frames with different actual paint coverage. */
+async function cultureHitPoints(viewport: Locator) {
+  const points = await viewport.evaluate(view => {
+    const theater = view.querySelector('[data-scene-object="theater"] .landmark')!.getBoundingClientRect();
+    const music = view.querySelector('[data-scene-object="music"] .landmark')!.getBoundingClientRect();
+    const bounds = view.getBoundingClientRect();
+    type Point = { x: number; y: number };
+    const found: { overlap: Point | null; exposed: Point | null; empty: Point | null } = {
+      overlap: null, exposed: null, empty: null,
+    };
+    const left = Math.ceil(Math.max(theater.left, music.left, bounds.left));
+    const top = Math.ceil(Math.max(theater.top, music.top, bounds.top));
+    const right = Math.min(theater.right, music.right, bounds.right);
+    const bottom = Math.min(theater.bottom, music.bottom, bounds.bottom);
+    for (let y = top + 2; y < bottom - 1; y += 2) {
+      for (let x = left + 2; x < right - 1; x += 2) {
+        const painted = document.elementsFromPoint(x, y).map(element =>
+          element.closest('[data-scene-object]')?.getAttribute('data-scene-object')).filter(Boolean);
+        if (painted[0] === 'music' && painted.includes('theater')) found.overlap ??= { x, y };
+        if (painted[0] === 'theater' && !painted.includes('music')) found.exposed ??= { x, y };
+        if (painted.length === 0) found.empty ??= { x, y };
+        if (found.overlap && found.exposed && found.empty) return found;
+      }
+    }
+    return found;
+  });
+  if (!points.overlap || !points.exposed || !points.empty) {
+    throw new Error(`Culture needs three distinct painted hit cases: ${JSON.stringify(points)}`);
+  }
+  return { overlap: points.overlap, exposed: points.exposed, empty: points.empty };
 }
 
 async function overlapCenter(first: Locator, second: Locator) {

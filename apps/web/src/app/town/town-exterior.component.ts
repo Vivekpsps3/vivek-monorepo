@@ -1,4 +1,5 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { distinctUntilChanged, map } from 'rxjs';
@@ -6,18 +7,14 @@ import { SessionService } from '../platform/session.service';
 import {
   REST_CAMERA,
   SCENE_SCALES,
-  frontObject,
   movedPastSlop,
   panCamera,
-  screenToRoom,
   zoomToward,
   type SceneCamera,
 } from './library-room.scene';
 import {
   DISTRICTS,
-  EXTERIOR_ROOM,
   exteriorBuildings,
-  exteriorPlates,
   frameDistrict,
   inspectedPlace,
   type DistrictId,
@@ -53,7 +50,7 @@ interface SceneGesture {
 
 @Component({
   selector: 'app-town-exterior',
-  imports: [RouterLink, TownPlaceComponent],
+  imports: [NgTemplateOutlet, RouterLink, TownPlaceComponent],
   templateUrl: './town-exterior.component.html',
   styleUrl: './town-exterior.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -85,10 +82,9 @@ export class TownExteriorComponent {
   private readonly narrow = signal(false);
   private readonly picked = signal<string | null>(null);
   protected readonly districts = DISTRICTS;
-  protected readonly plates = exteriorPlates();
-  protected readonly room = EXTERIOR_ROOM;
   protected readonly camera = signal<SceneCamera>(REST_CAMERA);
   protected readonly framed = signal<DistrictId | null>(null);
+  protected readonly focusedBuilding = signal<string | null>(null);
   protected readonly inspected = computed(() => this.params().get('inspect') || this.picked());
   protected readonly place = computed((): InspectedPlace | null => inspectedPlace(this.data(), this.inspected()));
   protected readonly sheet = computed(() => this.narrow() && this.place() != null);
@@ -106,6 +102,10 @@ export class TownExteriorComponent {
     health: this.health(),
     swaps: this.swaps(),
   }));
+  protected readonly activeBuilding = computed(() => {
+    const id = this.focusedBuilding() ?? this.inspected();
+    return this.buildings().find(building => building.id === id);
+  });
   protected readonly cameraTransform = computed(() => {
     const camera = this.camera();
     return `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
@@ -149,7 +149,10 @@ export class TownExteriorComponent {
       this.owner = owner;
       this.soundOutcome.set(null);
       this.dropUncommittedGesture();
-      if (previous !== null && previous !== owner) this.clearInspect();
+      if (previous !== null && previous !== owner) {
+        this.focusedBuilding.set(null);
+        this.clearInspect();
+      }
     });
   }
 
@@ -239,28 +242,15 @@ export class TownExteriorComponent {
     if (!gesture || event.pointerId !== gesture.id) return;
     this.gesture = null;
     if (gesture.moved || !this.alive || this.owner !== gesture.owner) return;
+    if (movedPastSlop(event.clientX - gesture.startX, event.clientY - gesture.startY)) return;
     const element = this.viewport()?.nativeElement;
     if (!element) return;
-    const rect = element.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
-    const point = screenToRoom(
-      { x: event.clientX - rect.left, y: event.clientY - rect.top },
-      this.camera(),
-      { width: rect.width, height: rect.height },
-      EXTERIOR_ROOM,
-    );
-    const hit = frontObject(this.buildings().map(building => ({
-      building,
-      x: building.rect.left,
-      y: building.rect.top,
-      asset: {
-        id: building.id,
-        layer: building.layer,
-        bounds: { width: building.rect.width, height: building.rect.height },
-        anchor: { x: 0, y: 0 },
-      },
-    })), point);
-    if (hit) this.choose(hit.building);
+    // The SVG paint participates in native hit testing. Shadows, captions and
+    // empty corners never claim a tap, even when a nearer landmark overlaps.
+    const piece = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-scene-object]');
+    if (!piece || !element.contains(piece)) return;
+    const building = this.buildings().find(item => item.id === piece.getAttribute('data-scene-object'));
+    if (building) this.choose(building);
   }
 
   protected cancelPointer(): void {
@@ -274,10 +264,6 @@ export class TownExteriorComponent {
     }
     this.camera.set(gesture.origin);
     this.gesture = null;
-  }
-
-  protected marked(id: string): boolean {
-    return this.picked() === id || this.inspected() === id;
   }
 
   protected inspectorState(): 'empty' | 'locked' | 'occupied' | 'archived' | 'error' {
