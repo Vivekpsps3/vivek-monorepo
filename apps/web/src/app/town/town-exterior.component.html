@@ -50,8 +50,8 @@
           @for (building of buildings(); track building.id) {
             @if (building.district === district) {
               <span class="caption" [class.lot-caption]="building.slot !== null" aria-hidden="true"
-                [style.left.%]="building.frame.left + building.frame.width * (building.id === 'theater' ? .72 : .5)"
-                [style.top.%]="building.frame.top + (building.slot === null ? building.frame.height : 0)">{{ building.name }}</span>
+                [style.left.%]="building.captionAnchor.left"
+                [style.top.%]="building.captionAnchor.top">{{ building.name }}</span>
             }
           }
         }

@@ -217,15 +217,16 @@ button.action { cursor: pointer; }
   pointer-events: none;
 }
 .caption {
-  max-width: min(8rem, 28%);
   text-align: center;
+  white-space: nowrap;
   transform: translateX(-50%) scale(var(--label-scale));
   transform-origin: top center;
 }
 .lot-caption {
   box-sizing: border-box;
-  max-width: calc(15% - 6px);
+  max-width: min(6.5rem, 21%);
   padding-inline: 4px;
+  white-space: normal;
   transform: translate(-50%, -100%);
 }
 .active-name {

@@ -126,6 +126,7 @@ export interface ExteriorBuilding {
   readonly layer: number;
   readonly rect: RoomRect;
   readonly frame: RoomRect;
+  readonly captionAnchor: { readonly left: number; readonly top: number };
 }
 
 type ExteriorSprite = TownSpriteId | 'home' | 'hall' | 'theater' | 'music' | 'arcade';
@@ -148,6 +149,8 @@ interface Placement {
   readonly width: number;
   readonly height: number;
   readonly layer: number;
+  readonly captionX?: number;
+  readonly captionY?: number;
 }
 
 const PLACED: readonly Placement[] = Object.freeze([
@@ -156,8 +159,8 @@ const PLACED: readonly Placement[] = Object.freeze([
   Object.freeze({ id: 'hall', district: 'civic', x: 477, y: 29, width: 158, height: 128, layer: 2 }),
   Object.freeze({ id: 'inn', district: 'harbor', x: 762, y: 92, width: 166, height: 128, layer: 3 }),
   Object.freeze({ id: 'library', district: 'culture', x: 127, y: 188, width: 152, height: 128, layer: 3 }),
-  Object.freeze({ id: 'theater', district: 'culture', x: 295, y: 176, width: 160, height: 128, layer: 3 }),
-  Object.freeze({ id: 'music', district: 'culture', x: 244, y: 259, width: 152, height: 128, layer: 4 }),
+  Object.freeze({ id: 'theater', district: 'culture', x: 295, y: 176, width: 160, height: 128, layer: 3, captionX: .72 }),
+  Object.freeze({ id: 'music', district: 'culture', x: 244, y: 259, width: 152, height: 128, layer: 4, captionX: .36 }),
   Object.freeze({ id: 'arcade', district: 'culture', x: 421, y: 251, width: 156, height: 128, layer: 4 }),
   Object.freeze({ id: 'clinic', district: 'wellness', x: 686, y: 245, width: 152, height: 128, layer: 4 }),
   Object.freeze({ id: 'gym', district: 'wellness', x: 817, y: 324, width: 150, height: 128, layer: 5 }),
@@ -169,6 +172,7 @@ const PLACED: readonly Placement[] = Object.freeze([
     width: 150,
     height: 108,
     layer: 5,
+    captionY: slot % 2 === 0 ? -.6 : 0,
   })),
 ]);
 
@@ -183,7 +187,7 @@ function placed(id: string): Placement {
 function withFrame(
   placement: Placement,
   sprite: ExteriorSprite,
-  fields: Omit<ExteriorBuilding, 'id' | 'district' | 'layer' | 'rect' | 'frame' | 'landmark'>,
+  fields: Omit<ExteriorBuilding, 'id' | 'district' | 'layer' | 'rect' | 'frame' | 'landmark' | 'captionAnchor'>,
 ): ExteriorBuilding {
   const object: ScenePlacement = {
     x: placement.x,
@@ -196,12 +200,17 @@ function withFrame(
     },
   };
   const rect = roomRect(object);
+  const frame = sceneFrame(rect, EXTERIOR_ROOM);
   return {
     id: placement.id,
     district: placement.district,
     layer: placement.layer,
     rect,
-    frame: sceneFrame(rect, EXTERIOR_ROOM),
+    frame,
+    captionAnchor: {
+      left: frame.left + frame.width * (placement.captionX ?? .5),
+      top: frame.top + frame.height * (placement.captionY ?? 1),
+    },
     landmark: landmarkArt(sprite),
     ...fields,
   };
