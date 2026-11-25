@@ -6,20 +6,22 @@
       type="search"
       placeholder="Search trips, places, plans and media"
       [value]="query()"
+      [disabled]="status() === 'expired'"
       (valueChange)="onQueryChange($event)"
       (keydown)="onKeydown($event)" />
     <div class="search-dialog__body">
       @if (status() === 'unavailable') {
-        <ui-state state="unavailable" thing="search results" (retry)="retry()" />
+        <ui-state state="unavailable" thing="Travel and Media results" (retry)="retry()" />
       } @else if (status() === 'expired') {
         <ui-state state="expired" thing="search results" [next]="currentPath()" />
-      } @else if (status() === 'loading') {
+      } @else if (status() === 'loading' || financePending()) {
         <p class="search-dialog__status" role="status">Searching…</p>
       } @else if (showHint()) {
         <p class="search-dialog__status">Type at least 2 characters to search.</p>
       } @else if (showNoResults()) {
         <p class="search-dialog__status">No matches for "{{ query().trim() }}".</p>
-      } @else {
+      }
+      @if (options().length) {
         <div id="search-listbox" role="listbox" aria-label="Search results">
           @for (group of groups(); track group.name) {
             <div role="group" [attr.aria-labelledby]="'search-group-' + group.name">
@@ -32,7 +34,7 @@
                   class="search-dialog__option"
                   [class.search-dialog__option--active]="optionIndex(option) === activeIndex()"
                   (click)="activate(option)"
-                  (mouseenter)="activeIndex.set(optionIndex(option))">
+                  (mouseenter)="highlight(option)">
                   <span class="search-dialog__title">{{ option.title }}</span>
                   @if (option.detail) {
                     <span class="search-dialog__detail">{{ option.detail }}</span>

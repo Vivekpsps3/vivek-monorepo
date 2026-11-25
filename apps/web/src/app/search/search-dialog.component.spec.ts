@@ -180,7 +180,7 @@ describe('SearchDialogComponent', () => {
     expect(JSON.parse(localStorage.getItem(SEARCH_RECENT_KEY)!)).toEqual([refs[0]]);
   });
 
-  it('aborts the previous in-flight request when a new search runs', async () => {
+  it('aborts the previous in-flight request as soon as the query changes', async () => {
     hangSearch = true;
     openDialog();
     await settle();
@@ -190,11 +190,93 @@ describe('SearchDialogComponent', () => {
     expect(firstSignal).not.toBeNull();
     expect(firstSignal!.aborted).toBeFalse();
     typeQuery('kyo');
-    await settle(200);
     // fetchHubSummary links the component's controller to the fetch signal
     // only while the request is in flight — exactly what abort must cancel.
     expect(firstSignal!.aborted).toBeTrue();
+    expect(fetchSpy.calls.count()).toBe(1);
+  });
+
+  it('drops the old active descendant and refuses to activate a retired row during debounce', async () => {
+    openDialog();
+    typeQuery('kyoto');
+    await settle(200);
+    fixture.detectChanges();
+    const former = component.options()[0];
+    const input: HTMLInputElement = fixture.nativeElement.querySelector('input[role=combobox]');
+    expect(input.getAttribute('aria-activedescendant')).toBe('search-opt-0');
+
+    typeQuery('zz');
+    expect(input.getAttribute('aria-activedescendant')).toBeNull();
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    component.activate(former);
+    component.onKeydown(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(component.options()).toEqual([]);
+    expect(navigated).toEqual([]);
+    expect(closedCount).toBe(0);
+    expect(localStorage.getItem(SEARCH_RECENT_KEY)).toBeNull();
+  });
+
+  it('keeps Finance available before and after remote failure and retries only the remote source', async () => {
+    let release: (response: Response) => void = () => undefined;
+    fetchSpy.and.callFake(() => new Promise<Response>(resolve => { release = resolve; }));
+    financeAnswer = {
+      status: 'ready',
+      names: [{ kind: 'account', id: 4, title: 'Savings', href: '/finance/have' }],
+    };
+    openDialog();
+    typeQuery('sa');
+    await settle(200);
+    fixture.detectChanges();
+    const input: HTMLInputElement = fixture.nativeElement.querySelector('input[role=combobox]');
+    expect(component.options().map(option => option.title)).toEqual(['Savings']);
+    expect(component.status()).toBe('loading');
+
+    release(respond({}, 503));
     await settle();
+    fixture.detectChanges();
+    expect(component.status()).toBe('unavailable');
+    expect(component.options().map(option => option.title)).toEqual(['Savings']);
+    expect(input.getAttribute('aria-activedescendant')).toBe('search-opt-0');
+
+    component.onKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    component.retry();
+    expect(component.options().map(option => option.title)).toEqual(['Savings']);
+    const payload = { q: 'sa', results: [TRIP], truncated: false };
+    const recovered = respond(payload);
+    spyOn(recovered, 'json').and.resolveTo(payload);
+    release(recovered);
+    await settle();
+    fixture.detectChanges();
+    expect(financeQueries).toEqual(['sa']);
+    expect(fetchSpy.calls.count()).toBe(2);
+    expect(component.options().map(option => option.title)).toEqual(['Kyoto', 'Savings']);
+    expect(component.activeOption()?.title).toBe('Savings');
+    expect(input.getAttribute('aria-activedescendant')).toBe('search-opt-1');
+  });
+
+  it('invalidates a held Finance response on expiry and blocks searches until the session changes', async () => {
+    let release: (result: SearchFinanceQueryResult) => void = () => undefined;
+    financeQueryImpl = () => new Promise(resolve => { release = resolve; });
+    users.next({ id: 1 });
+    openDialog();
+    typeQuery('old');
+    await settle(200);
+    fixture.detectChanges();
+    expect(component.status()).toBe('expired');
+    release({ status: 'ready', names: [{ kind: 'account', id: 4, title: 'Old account', href: '/finance/have' }] });
+    await settle();
+    openDialog();
+    typeQuery('ky');
+    expect(component.options()).toEqual([]);
+    expect(component.status()).toBe('expired');
+    expect(fetchSpy.calls.count()).toBe(1);
+
+    users.next({ id: 2 });
+    financeQueryImpl = () => Promise.resolve({ status: 'none' });
+    typeQuery('ky');
+    await settle(200);
+    expect(component.status()).toBe('ready');
+    expect(component.options().map(option => option.title)).toEqual(['Kyoto', 'Dune']);
   });
 
   it('shows the Finance locked row when the vault is present but locked', async () => {
@@ -315,11 +397,11 @@ describe('SearchDialogComponent', () => {
       jasmine.clock().tick(7999);
       for (let i = 0; i < 8; i += 1) await Promise.resolve();
       fixture.detectChanges();
-      expect(fixture.nativeElement.textContent).not.toContain("Couldn't load search results.");
+      expect(fixture.nativeElement.textContent).not.toContain("Couldn't load Travel and Media results.");
       jasmine.clock().tick(1);
       for (let i = 0; i < 8; i += 1) await Promise.resolve();
       fixture.detectChanges();
-      expect(fixture.nativeElement.textContent).toContain("Couldn't load search results.");
+      expect(fixture.nativeElement.textContent).toContain("Couldn't load Travel and Media results.");
     } finally {
       jasmine.clock().uninstall();
     }
