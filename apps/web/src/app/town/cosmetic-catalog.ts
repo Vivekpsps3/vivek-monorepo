@@ -1,7 +1,5 @@
 /** One cosmetic catalog: twelve free starters and twelve priced shop items. */
 
-import { HOME_MILESTONES } from './home-milestones';
-
 export const COSMETIC_CATALOG_VERSION = 1;
 export const COSMETIC_CELL_PX = 56;
 export const COSMETIC_ROOM_CELLS = 12;
@@ -33,14 +31,6 @@ export interface CosmeticAsset {
   readonly variants: { readonly day: string; readonly night: string };
   readonly attribution: string;
   readonly license: string;
-}
-
-export interface CosmeticPlacement {
-  readonly instanceId: string;
-  readonly catalogId: string;
-  readonly column: number;
-  readonly row: number;
-  readonly orientation: 0 | 1 | 2 | 3;
 }
 
 interface ItemSpec {
@@ -119,56 +109,24 @@ export const cosmeticCatalog: readonly CosmeticAsset[] = Object.freeze([
 
 const catalogById = new Map(cosmeticCatalog.map(item => [item.id, item]));
 
-/**
- * The nine existing milestone ornament identities. They stay outside this catalog:
- * no price, no artwork, and no starter or shop group.
- */
-export const MILESTONE_ORNAMENT_IDS: readonly string[] = Object.freeze(
-  HOME_MILESTONES.flatMap(milestone => milestone.options.map(option => option.id)),
-);
-
-export const SAMPLE_COSMETIC_LAYOUT: readonly CosmeticPlacement[] = Object.freeze([
-  Object.freeze({ instanceId: 'sample-oak-seat', catalogId: 'oak-seat', column: 1, row: 2, orientation: 0 as const }),
-  Object.freeze({ instanceId: 'sample-missing', catalogId: 'missing-keepsake', column: 4, row: 3, orientation: 0 as const }),
-]);
-
 export function cosmeticById(id: string): CosmeticAsset | null {
   return catalogById.get(id) ?? null;
 }
 
-export function cosmeticPriceLabel(item: CosmeticAsset): string {
-  return item.group === 'starter' && item.priceStamps === 0 ? 'Free' : `${item.priceStamps} Stamps`;
+export function cosmeticPart(value: unknown): CosmeticPart | null {
+  return value === 'day' || value === 'night' ? value : null;
 }
 
-export function copyCosmeticLayout(layout: readonly CosmeticPlacement[]): CosmeticPlacement[] {
-  return layout.map(item => ({
-    instanceId: item.instanceId,
-    catalogId: item.catalogId,
-    column: item.column,
-    row: item.row,
-    orientation: item.orientation,
-  }));
+/** Resolve a bookmarked catalog item without restoring its temporary layout. */
+export function catalogItemDestination(id: string, requestedPart: unknown): string {
+  const part = cosmeticPart(requestedPart);
+  const destination = cosmeticById(id)?.group === 'starter' ? '/town/home/living' : '/town/workshop';
+  return destination + '?' + new URLSearchParams({ item: id, ...(part ? { part } : {}) }).toString();
 }
 
-export function footprintAtTurn(asset: CosmeticAsset | null, orientation: CosmeticPlacement['orientation']) {
+export function footprintAtTurn(asset: CosmeticAsset | null, orientation: 0 | 1 | 2 | 3) {
   const footprint = asset?.footprint ?? { columns: 1, rows: 1 };
   return orientation % 2 === 0 ? footprint : { columns: footprint.rows, rows: footprint.columns };
-}
-
-export function footprintFits(asset: CosmeticAsset, column: number, row: number): boolean {
-  return Number.isInteger(column) && Number.isInteger(row)
-    && column >= 0 && row >= 0
-    && column + asset.footprint.columns <= COSMETIC_ROOM_CELLS
-    && row + asset.footprint.rows <= COSMETIC_ROOM_CELLS;
-}
-
-/** Append a placement. A full layout or an unknown call returns null and leaves the previous entries untouched. */
-export function nextCosmeticLayout(
-  layout: readonly CosmeticPlacement[],
-  placement: CosmeticPlacement,
-): readonly CosmeticPlacement[] | null {
-  if (layout.length >= COSMETIC_LAYOUT_CAP) return null;
-  return [...layout, placement];
 }
 
 export function variantSrc(asset: CosmeticAsset, part: CosmeticPart, paint: number): string {

@@ -27,6 +27,11 @@ const compensationRange = {
   compensation_start: isReturnDate, compensation_end: isReturnDate,
 };
 
+const townFurniture = {
+  item: (value: string) => /^[a-z][a-z0-9-]{0,39}$/.test(value),
+  part: ['day', 'night'],
+};
+
 const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>>> = {
   '/finance': {},
   '/finance/embed': {},
@@ -58,17 +63,14 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/finance/planning/research': {},
   '/town': {},
   '/town/home': {},
-  '/town/home/living': { object: ['living-rug', 'living-table', 'living-seat', 'living-lantern', 'living-frame'] },
-  '/town/home/study': { object: ['study-desk', 'study-lamp', 'study-shelf'] },
-  '/town/home/bedroom': { object: ['bedroom-bed', 'bedroom-record', 'bedroom-frame'] },
-  '/town/home/courtyard': { object: ['courtyard-planter', 'courtyard-fern', 'courtyard-seat', 'courtyard-lantern'] },
+  '/town/home/living': { ...townFurniture, object: ['living-rug', 'living-table', 'living-seat', 'living-lantern', 'living-frame'] },
+  '/town/home/study': { ...townFurniture, object: ['study-desk', 'study-lamp', 'study-shelf'] },
+  '/town/home/bedroom': { ...townFurniture, object: ['bedroom-bed', 'bedroom-record', 'bedroom-frame'] },
+  '/town/home/courtyard': { ...townFurniture, object: ['courtyard-planter', 'courtyard-fern', 'courtyard-seat', 'courtyard-lantern'] },
   '/town/library': {},
   '/town/hall': { object: ['rules', 'progress', 'archive'] },
-  '/town/cosmetics': {
-    item: (value: string) => /^[a-z][a-z0-9-]{0,39}$/.test(value),
-    part: ['day', 'night'],
-  },
-  '/town/workshop': { item: value => /^[a-z0-9][a-z0-9:_-]{0,63}$/.test(value) },
+  '/town/cosmetics': townFurniture,
+  '/town/workshop': { ...townFurniture, item: value => /^[a-z0-9][a-z0-9:_-]{0,63}$/.test(value) },
   '/town/review': { week: isIsoMondayDate },
   '/town/clinic': { entry: isHealthEntryId },
   '/town/gym': { entry: isHealthEntryId },

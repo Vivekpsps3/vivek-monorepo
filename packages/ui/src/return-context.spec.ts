@@ -16,6 +16,9 @@ describe('return context', () => {
       '/town/clinic?entry=hlt_SyntheticWeightEntryAB',
       '/town/gym?entry=hlt_SyntheticLiftEntryABCD',
       '/town/cosmetics?item=oak-seat&part=night',
+      '/town/home/living?item=oak-seat&part=night',
+      '/town/home/study?item=desk&part=day&object=study-desk',
+      '/town/workshop?item=hanging-ivy&part=night',
       '/finance/spending?month=all',
       '/finance/pay?month=2026-10&history=1&year=custom&start=2024-02-29&end=2024-12-31',
       '/finance/bills?kind=subscription&status=active&order=latest',
@@ -51,6 +54,7 @@ describe('return context', () => {
     expect(returnPath('/town/gym?entry=80&weight=176.4')).toBe('/town/gym');
     expect(returnPath('/town/home/living?object=living-frame&note=secret&scale=1.5')).toBe('/town/home/living?object=living-frame');
     expect(returnPath('/town/home/study?object=living-frame')).toBe('/town/home/study');
+    expect(returnPath('/town/home/study?item=desk&item=fern&part=dusk&note=private')).toBe('/town/home/study');
     expect(returnPath('/town/hall?object=rules&edit=15&history=15&balance=10')).toBe('/town/hall?object=rules');
     expect(returnPath('/town/review?week=2026-12-28')).toBe('/town/review?week=2026-12-28');
     expect(returnPath('/town/review?week=2027-01-04')).toBe('/town/review?week=2027-01-04');

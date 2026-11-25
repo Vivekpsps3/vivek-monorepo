@@ -77,15 +77,17 @@ test.describe('Stamp wallet and Workshop', () => {
 
       await activate(page, workshop.getByRole('link', { name: 'Place in Home' }), touch);
       const home = page.locator('app-town-home');
-      await activate(page, home.getByRole('button', { name: 'Decorate room' }), touch);
+      await expect(page).toHaveURL(/\/town\/home\/living\?item=shell-stool$/);
+      await activate(page, home.getByRole('button', { name: 'Place Shell stool' }), touch);
       const inventory = home.getByLabel('Add furniture');
-      await expect(inventory.locator('option[value="shell-stool"]')).toHaveCount(1);
+      await expect(home.getByRole('heading', { name: 'Shell stool', exact: true })).toBeFocused();
       for (const column of ['0', '1']) {
-        await inventory.selectOption('shell-stool');
+        if (column === '1') await inventory.selectOption('shell-stool');
         await home.getByLabel('Column', { exact: true }).selectOption({ value: column });
         await home.getByLabel('Row', { exact: true }).selectOption({ value: '0' });
         await activate(page, home.getByRole('button', { name: 'Place item' }), touch);
       }
+      await expect(inventory.locator('option[value="shell-stool"]')).toHaveCount(1);
       await activate(page, home.getByRole('button', { name: 'Save layout' }), touch);
       await expect(home.locator('[data-layout-status]')).toHaveAttribute('data-layout-revision', '1');
       const saved = await (await page.request.get('/api/town/layouts/living')).json();

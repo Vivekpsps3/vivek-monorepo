@@ -71,7 +71,7 @@ export class PrivateLayoutComponent {
       { label: 'Home', link: '/town/home/living' },
       { label: 'Reading Hall', link: '/town/library' },
       { label: 'Hall', link: '/town/hall' },
-      { label: 'Cosmetic catalog', link: '/town/cosmetics' },
+      { label: 'Workshop', link: '/town/workshop' },
       { label: 'Memory Shelves', link: '/town/memory' },
       { label: 'World', link: '/town/world' },
     ] },

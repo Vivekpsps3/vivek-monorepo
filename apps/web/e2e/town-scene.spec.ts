@@ -215,11 +215,16 @@ test.describe('Town scene live ambience', () => {
     await expect(viewport).toHaveAttribute('data-ambience', 'live');
     expect(await page.locator('.idle-mark').evaluate(el => getComputedStyle(el).animationName)).toContain('scene-idle');
     expect(await audioCreated(page)).toBe(0);
-    await viewport.evaluate(el => { el.style.marginTop = '3000px'; });
+    // Keep the button in place so Playwright's click scroll cannot reveal the scene.
+    await viewport.evaluate(el => { el.style.transform = 'translateY(-3000px)'; });
+    await expect(viewport).not.toBeInViewport();
     await expect(viewport).toHaveAttribute('data-ambience', 'still');
     await page.getByRole('button', { name: 'Play Town sound' }).click();
+    await expect(viewport).not.toBeInViewport();
+    await expect(page.locator('.sound-status')).toContainText('stays quiet');
     expect(await audioCreated(page)).toBe(0);
-    await viewport.evaluate(el => { el.style.marginTop = ''; });
+    await viewport.evaluate(el => { el.style.transform = ''; });
+    await viewport.scrollIntoViewIfNeeded();
     await expect(viewport).toHaveAttribute('data-ambience', 'live');
     await page.evaluate(() => {
       Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });

@@ -26,8 +26,8 @@ Verify prerequisite outcomes on fresh main. [HOME-01 / #466](https://github.com/
 
 ## Source paths
 
-- `apps/web/src/app/town/cosmetic-catalog.component.ts`
-- `apps/web/src/app/town/cosmetic-catalog.component.html`
+- `apps/web/src/app/town/home-room.component.ts`
+- `apps/web/src/app/town/workshop.component.ts`
 - `apps/web/src/app/town/cosmetic-catalog.ts`
 - `apps/web/src/app/town/town.component.html`
 

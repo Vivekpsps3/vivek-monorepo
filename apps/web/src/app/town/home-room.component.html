@@ -6,7 +6,7 @@
       @if (room() && signedIn() && !draft()) {
         <div class="decorate-action">
           <button id="home-decorate" class="action decorate" type="button"
-            [disabled]="!savedItems() || recoveryRequired() || layoutBusy()" (click)="startEditing()">Decorate room</button>
+            [disabled]="!savedItems() || recoveryRequired() || layoutBusy()" (click)="startEditing()">{{ linkedAsset() ? 'Place ' + linkedAsset()?.label : 'Decorate room' }}</button>
           @if (canUndo()) {
             <button id="home-undo" class="action" type="button" [disabled]="layoutBusy()" (click)="undoLayout()">Undo last save</button>
           }
@@ -22,7 +22,7 @@
           @for (entry of rooms; track entry.id) {
             <li>
               <a class="action" [attr.data-home-link]="entry.id" [routerLink]="['/town/home', entry.id]"
-                [queryParams]="{ object: null, scale: null, x: null, y: null }"
+                [queryParams]="furnitureQuery()"
                 [attr.aria-current]="entry.id === room()?.id ? 'page' : null">{{ entry.label }}</a>
             </li>
           }
@@ -182,6 +182,9 @@
                 @if (inventoryUnavailable()) {
                   <p role="status">Unlocked furniture is unavailable.</p>
                   <button type="button" class="action" (click)="loadInventory()">Retry inventory</button>
+                }
+                @if (linkedShopLocked()) {
+                  <a class="action" routerLink="/town/workshop" [queryParams]="furnitureQuery()">Open {{ linkedAsset()?.label }} in Workshop</a>
                 }
                 @if (editableItems().length) {
                   <label for="home-placed">Move or recolor furniture</label>
