@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import threading
 from datetime import UTC, datetime
@@ -11,7 +12,8 @@ from types import SimpleNamespace
 import pytest
 from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import event, func, select
 from sqlalchemy.exc import IntegrityError
 
 from apps.server.auth import Principal, require_principal
@@ -229,6 +231,46 @@ def test_refund_is_idempotent_and_a_second_key_does_not_credit_twice(tmp_path: P
         later.close()
     finally:
         db.close()
+        database.engine.dispose()
+
+
+def test_a_waiting_purchase_allows_the_prior_purchase_to_commit(tmp_path, monkeypatch) -> None:
+    _quiet(monkeypatch)
+    application, database = _open(tmp_path, Principal(1, "ada", "Ada"))
+    application.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
+    winner = {"grant_key": "market:buy:globe", "catalog_id": "globe"}
+    loser = {"grant_key": "market:buy:tile-fountain", "catalog_id": "tile-fountain"}
+
+    async def compete(holder):
+        loop = asyncio.get_running_loop()
+        attempted_lock = asyncio.Event()
+
+        @event.listens_for(database.engine, "before_cursor_execute")
+        def notice_lock_attempt(_conn, _cursor, statement, _params, _context, _many):
+            if statement.startswith("INSERT INTO town_stamp_wallets"):
+                loop.call_soon_threadsafe(attempted_lock.set)
+
+        transport = ASGITransport(app=application, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            async with asyncio.TaskGroup() as group:
+                request = group.create_task(client.post("/api/town/stamps/purchases", json=loser))
+                await asyncio.wait_for(attempted_lock.wait(), timeout=10)
+                holder.commit()
+            return request.result()
+
+    try:
+        with database.sessionmaker() as holder:
+            grant_stamps(holder, 1, GRANT, WHEN)
+            holder.commit()
+            _, created = purchase_stamps(holder, 1, winner, WHEN)
+            assert created
+            response = asyncio.run(compete(holder))
+            assert response.status_code == 409
+            assert response.json()["code"] == "insufficient_stamps"
+            wallet = read_wallet(holder, 1)
+            assert wallet["balance"] == 0
+            assert [item["catalog_id"] for item in wallet["entitlements"]] == ["globe"]
+    finally:
         database.engine.dispose()
 
 
