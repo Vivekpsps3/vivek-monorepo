@@ -419,6 +419,27 @@ def _stored_layout(db: Session, user_id: int, room_id: str) -> RoomLayout | None
     )
 
 
+def require_unused_unlock(db: Session, user_id: int, catalog_id: str) -> None:
+    """Check raw saved placements while the calling writer holds SQLite's lock."""
+    payloads = db.scalars(select(RoomLayout.payload).where(RoomLayout.user_id == user_id))
+    for payload in payloads:
+        try:
+            entries = json.loads(payload)
+        except (ValueError, RecursionError):
+            entries = None
+        if not isinstance(entries, list) or any(
+            not isinstance(entry, dict) or not isinstance(entry.get("catalog_id"), str)
+            for entry in entries
+        ):
+            raise APIError(
+                409, "layout_recovery", "A saved layout needs recovery before you can refund."
+            )
+        if any(entry["catalog_id"] == catalog_id for entry in entries):
+            raise APIError(
+                409, "unlock_in_use", "Remove every copy from your saved layouts before refunding."
+            )
+
+
 def _revision(db: Session, user_id: int, room_id: str) -> int | None:
     found = db.scalar(
         select(RoomLayout.revision).where(

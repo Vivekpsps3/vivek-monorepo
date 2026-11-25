@@ -85,7 +85,7 @@ describe('cosmetic catalog page', () => {
     await harness.navigateByUrl('/town/cosmetics?item=shell-stool&part=night');
     expect(host.querySelector('button[name="place"]')).toBeNull();
     expect(host.textContent).toContain('5 Stamps');
-    expect(host.textContent).toContain('Listed for the workshop');
+    expect(host.querySelector('a[href="/town/workshop?item=shell-stool"]')?.textContent).toContain('Open in Workshop');
     expect(layoutIds(host)).toEqual(['oak-seat', 'missing-keepsake', 'fern']);
 
     await harness.navigateByUrl('/town/cosmetics?item=bed&part=day');

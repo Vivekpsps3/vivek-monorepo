@@ -35,16 +35,23 @@ describe('TownApiService', () => {
     expect(open.request.params.has('on')).toBeFalse();
     open.flush({});
   });
-  it('reads the stamp wallet and posts a refund without a life metric', () => {
+  it('reads the wallet and posts only the selected unlock and receipt details', () => {
     api.getStamps().subscribe();
     const read = http.expectOne(request => request.url === '/api/town/stamps');
     expect(read.request.method).toBe('GET');
     expect(read.request.params.get('tz')).toBeTruthy();
     read.flush({ balance: 0, consumers: [], receipts: [], entitlements: [] });
-    api.refundStamps({ grant_key: 'market:refund:tile-fountain:4', catalog_id: 'tile-fountain' }).subscribe();
+    const buy = { grant_key: 'market:buy:example', catalog_id: 'tile-fountain', amount: 10 };
+    api.purchaseStamps(buy).subscribe();
+    const purchase = http.expectOne(request => request.url === '/api/town/stamps/purchases');
+    expect(purchase.request.method).toBe('POST');
+    expect(purchase.request.body).toEqual(buy);
+    purchase.flush({ balance: 0, consumers: [], receipts: [], entitlements: [] });
+    const giveBack = { grant_key: 'market:refund:tile-fountain:4', catalog_id: 'tile-fountain', spend_receipt_id: 4 };
+    api.refundStamps(giveBack).subscribe();
     const refund = http.expectOne(request => request.url === '/api/town/stamps/refunds');
     expect(refund.request.method).toBe('POST');
-    expect(refund.request.body).toEqual({ grant_key: 'market:refund:tile-fountain:4', catalog_id: 'tile-fountain' });
+    expect(refund.request.body).toEqual(giveBack);
     refund.flush({ balance: 10, consumers: [], receipts: [], entitlements: [] });
   });
   it('reads and saves a room layout without a life metric', () => {

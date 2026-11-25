@@ -68,6 +68,7 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
     item: (value: string) => /^[a-z][a-z0-9-]{0,39}$/.test(value),
     part: ['day', 'night'],
   },
+  '/town/workshop': { item: value => /^[a-z0-9][a-z0-9:_-]{0,63}$/.test(value) },
   '/town/review': { week: isIsoMondayDate },
   '/town/clinic': { entry: isHealthEntryId },
   '/town/gym': { entry: isHealthEntryId },
