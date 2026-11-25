@@ -43,7 +43,7 @@ test.describe('Town habit actions', () => {
     await page.keyboard.press('Escape');
     await expect(history).toBeFocused();
 
-    await page.getByRole('button', { name: /Walk 30 minutes/ }).first().focus();
+    await page.getByRole('list', { name: 'Town buildings' }).getByRole('button', { name: /Walk 30 minutes/ }).focus();
     await page.keyboard.press('Enter');
     await page.locator('app-town-exterior').getByRole('button', { name: 'Edit habit' }).focus();
     await page.keyboard.press('Enter');
@@ -54,7 +54,7 @@ test.describe('Town habit actions', () => {
     await page.getByRole('button', { name: 'Save' }).focus();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('dialog')).toBeHidden();
-    await page.getByRole('button', { name: /Walk 30 minutes/ }).first().focus();
+    await page.getByRole('list', { name: 'Town buildings' }).getByRole('button', { name: /Walk 30 minutes/ }).focus();
     await page.keyboard.press('Enter');
     await page.locator('app-town-exterior').getByRole('button', { name: 'Edit habit' }).click();
     await expect(page.getByText('Changes to 4× a week from Mon 2 Nov')).toBeVisible();
@@ -102,6 +102,7 @@ test.describe('Town habit actions', () => {
       await page.setViewportSize({ width, height });
       await page.goto('/town');
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      if (width === 390) await page.getByRole('button', { name: 'Today', exact: true }).click();
       await page.getByRole('button', { name: 'History' }).click();
       const dialog = page.getByRole('dialog');
       const yesterday = dialog.getByRole('button', { name: 'Mark yesterday' });
@@ -132,6 +133,7 @@ test.describe('Town habit actions by touch', () => {
     await page.goto('/town');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
+    await page.getByRole('button', { name: 'Today', exact: true }).tap();
     await page.getByRole('button', { name: '+ New habit' }).tap();
     await page.locator('#habit-name').fill('Stretch 10 minutes');
     await page.getByRole('button', { name: 'Save' }).tap();

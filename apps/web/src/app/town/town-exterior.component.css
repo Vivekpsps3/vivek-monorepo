@@ -1,6 +1,33 @@
 :host { display: block; min-width: 0; }
 .exterior { min-width: 0; }
 .districts, .camera-controls, .buildings { display: flex; flex-wrap: wrap; gap: 8px; }
+.districts .action { justify-content: center; text-align: center; overflow-wrap: anywhere; }
+.scene-actions { margin-top: 8px; }
+.scene-actions summary {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 12px;
+  align-content: center;
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.scene-actions summary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.scene-settings, .building-picker {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-elevated);
+}
+.scene-settings { margin-bottom: 8px; }
+.scene-settings[open] { padding: 0 12px 12px; }
+.scene-settings[open] summary { margin-inline: -12px; }
+.building-picker .buildings { box-sizing: border-box; margin: 0; padding: 0 8px 8px; }
+.building-picker li { min-width: 0; max-width: 100%; }
+.building-picker li:not([data-district="garden"]) .name { white-space: normal; overflow-wrap: anywhere; }
 .buildings { width: 100%; list-style: none; padding: 0; margin: 12px 0 0; }
 .action, .static {
   display: inline-flex;
@@ -198,6 +225,9 @@ button.action { cursor: pointer; }
 .inspector h2 { margin: 0; font-size: 1.15rem; }
 .inspector p { margin: 8px 0 12px; }
 @media (max-width: 799px) {
+  .districts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.5rem), 1fr)); gap: 6px; }
+  .districts .action { padding-inline: 4px; font-size: .875rem; }
+  .viewport { height: 270px; margin-top: 8px; }
   .inspector.sheet {
     position: sticky;
     bottom: 0;

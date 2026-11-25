@@ -16,7 +16,8 @@ test.describe('Town dialogs', () => {
     await expect(page.locator('main > header')).toHaveCount(1);
     await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
     await expect(page.getByRole('main').getByRole('heading', { level: 1, name: 'Terraria-on-Sea' })).toBeVisible();
-    await expect(page.getByText('Found Terraria-on-Sea', { exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Found Terraria-on-Sea' })).toBeVisible();
+    await page.getByText('Habit ideas', { exact: true }).click();
     expect(await page.content()).not.toContain(FOREIGN_HABIT);
     await page.getByRole('button', { name: 'Read 20 pages' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
@@ -67,14 +68,14 @@ test.describe('Town dialogs', () => {
   test('8: a cadence change names next Monday and keeps this week target', async ({ page, request }) => {
     expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
     await page.reload();
-    await page.getByRole('button', { name: /Walk 30 minutes/ }).first().click();
+    await page.getByRole('list', { name: 'Town buildings' }).getByRole('button', { name: /Walk 30 minutes/ }).click();
     await page.locator('app-town-exterior').getByRole('button', { name: 'Edit habit' }).click();
     await page.locator('#habit-cadence').selectOption('4');
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(page.getByText(/\/3 this week/)).toBeVisible();
     await expect(page.getByText(/\/4 this week/)).toHaveCount(0);
-    await page.getByRole('button', { name: /Walk 30 minutes/ }).first().click();
+    await page.getByRole('list', { name: 'Town buildings' }).getByRole('button', { name: /Walk 30 minutes/ }).click();
     await page.locator('app-town-exterior').getByRole('button', { name: 'Edit habit' }).click();
     await expect(page.getByText('Changes to 4× a week from Mon 2 Nov')).toBeVisible();
   });

@@ -1,9 +1,9 @@
 <main>
   <app-date-visit [today]="state() === 'ready' ? (data()?.town?.today ?? '') : ''" />
-  <header>
+  <header class="town-heading">
     <h1>{{ data()?.town?.name || 'Town' }}</h1>
-    @if (state() === 'ready') {
-      @if (data(); as data) {
+    @if (state() === 'ready' && data(); as data) {
+      <div class="town-level">
         @if (data.town.next_level_xp !== null) {
           <p>Lv {{ data.town.level }} · {{ data.town.xp }} / {{ data.town.next_level_xp }} XP</p>
           <progress [value]="data.town.xp - data.town.level_xp_start" [max]="data.town.next_level_xp - data.town.level_xp_start"
@@ -11,17 +11,7 @@
             [attr.aria-valuenow]="data.town.xp" [attr.aria-valuetext]="'Level ' + data.town.level + ', ' + data.town.xp + ' of ' + data.town.next_level_xp + ' XP'"
             aria-label="Town XP"></progress>
         } @else { <p>Lv {{ data.town.level }} · Max</p> }
-        @if (data.town.founded_on === null) {
-          <a class="explore-world" routerLink="/town/library">Visit the Reading Hall</a>
-        }
-        <a class="explore-world" routerLink="/town/keepsakes">Keepsake shelf</a>
-        <a class="explore-world" routerLink="/town/home/living">Visit Home</a>
-        <a class="explore-world" routerLink="/town/hall">Visit the Hall</a>
-        <a class="explore-world" routerLink="/town/memory">Memory Shelves</a>
-        <a class="explore-world" routerLink="/town/workshop">Workshop</a>
-        <button type="button" class="explore-world" (click)="openStamps()">Stamps</button>
-        <a class="explore-world" href="/town/world">{{ exploreWorld }}</a>
-      }
+      </div>
     }
   </header>
   @if (state() === 'loading') {
@@ -38,24 +28,43 @@
     </ui-state>
   } @else if (data(); as data) {
     @if (data.town.founded_on === null) {
-      <ui-empty-state title="Found Terraria-on-Sea" message="Pick a first habit. Your town grows as you keep it, and as you watch things in Media and finish trips in Travel.">
-        <img class="first-sprite" [src]="emptySprite" alt="" width="128" height="128">
+      <section class="founding" aria-label="Found Terraria-on-Sea">
         <ui-button (clicked)="openHabitDialog(0, null)">Choose a first habit</ui-button>
-        <p>Media and Travel count from today on.</p>
-        <div class="suggestions">
-          @for (name of suggestions; track name) { <ui-button variant="secondary" (clicked)="openHabitDialog(0, null, name)">{{ name }}</ui-button> }
-        </div>
-      </ui-empty-state>
+        <details>
+          <summary>Habit ideas</summary>
+          <p>Media and Travel count from the day you found your town.</p>
+          <div class="suggestions">
+            @for (name of suggestions; track name) { <ui-button variant="secondary" (clicked)="openHabitDialog(0, null, name)">{{ name }}</ui-button> }
+          </div>
+        </details>
+      </section>
     }
     <div class="town-layout">
+      <div class="today-drawer" (keydown.escape)="closeToday($event)">
+        <button #todayToggle class="today-toggle" type="button" aria-controls="town-today"
+          [attr.aria-expanded]="todayOpen()" (click)="todayOpen() ? closeToday() : openToday()">Today<span aria-hidden="true">{{ todayOpen() ? '−' : '+' }}</span></button>
+        <section #todayPanel id="town-today" class="today-panel" [class.is-open]="todayOpen()"
+          aria-labelledby="town-today-heading">
+          <ui-card>
+            <h2 id="town-today-heading">Today</h2>
+            <app-town-today [data]="data" [live]="live()" [vaultPresent]="financeVaultPresent()" [treasury]="treasury()"
+              (newHabit)="openHabitDialog(null, null)" (history)="openHistory()"
+              (settled)="onSettled($event)" (feedback)="onFeedback($event)" (dayChanged)="reload()" />
+          </ui-card>
+        </section>
+      </div>
       <app-town-exterior [data]="data" [treasury]="treasury()" [vaultPresent]="financeVaultPresent()" [health]="health()"
         [swaps]="swapping()" [feedback]="habitFeedback()" (openHabit)="openHabitDialog($event.slot, $event.habitId)" (openHistory)="openHistory()" />
-      <ui-card><h2>Today</h2>
-        <app-town-today [data]="data" [live]="live()" [vaultPresent]="financeVaultPresent()" [treasury]="treasury()"
-          (newHabit)="openHabitDialog(null, null)" (history)="openHistory()"
-          (settled)="onSettled($event)" (feedback)="onFeedback($event)" (dayChanged)="reload()" />
-      </ui-card>
     </div>
+    <nav class="town-destinations" aria-label="More in Town">
+      <a class="explore-world" routerLink="/town/keepsakes">Keepsake shelf</a>
+      <a class="explore-world" routerLink="/town/home/living">Visit Home</a>
+      <a class="explore-world" routerLink="/town/hall">Visit the Hall</a>
+      <a class="explore-world" routerLink="/town/memory">Memory Shelves</a>
+      <a class="explore-world" routerLink="/town/workshop">Workshop</a>
+      <button type="button" class="explore-world" (click)="openStamps()">Stamps</button>
+      <a class="explore-world" href="/town/world">{{ exploreWorld }}</a>
+    </nav>
     @if (edit(); as edit) {
       <app-habit-dialog [data]="data" [slot]="edit.slot" [habitId]="edit.habitId" [prefill]="edit.prefill" (closed)="closeEdit($event)" />
     }

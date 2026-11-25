@@ -1,15 +1,66 @@
 :host { display: block; box-sizing: border-box; max-width: 1200px; margin: auto; padding: 16px; }
-header { margin-bottom: 24px; }
-.explore-world { display: inline-flex; align-items: center; min-height: 44px; margin: 8px 12px 0 0; }
-button.explore-world { min-width: 44px; padding: 0 12px; background: transparent; color: inherit; font: inherit; border: 0; cursor: pointer; }
-h1, h2 { margin-top: 0; }
-progress { width: 100%; accent-color: var(--accent); }
-.town-layout { display: grid; gap: 24px; align-items: start; min-width: 0; }
+.town-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+h1, h2 { margin: 0; }
+h1 { overflow-wrap: anywhere; }
+.town-level { display: grid; gap: 4px; color: var(--text-muted); font-size: .875rem; }
+.town-level p { margin: 0; }
+progress { width: 100%; height: 6px; accent-color: var(--accent); }
+.town-layout { display: grid; gap: 12px; align-items: start; min-width: 0; }
 .town-layout > * { min-width: 0; }
-@media (min-width: 1024px) { .town-layout { grid-template-columns: minmax(0, 1fr) 360px; } }
-
-.first-sprite { display: block; image-rendering: pixelated; margin: 0 auto 16px; }
-.suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.today-panel:not(.is-open) { display: none; }
+.today-panel h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.today-panel { margin-top: 8px; }
+.today-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 14px;
+  color: var(--text);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.today-toggle[aria-expanded="true"] { border-color: var(--accent); }
+.today-toggle:focus-visible, summary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.founding, .suggestions, .town-destinations { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.founding { margin-bottom: 12px; }
+.founding details[open] { flex: 1 1 100%; }
+.founding summary { display: list-item; align-content: center; min-height: 44px; cursor: pointer; }
+.founding p { margin: 0 0 8px; color: var(--text-muted); }
+.town-destinations { margin-top: 16px; padding-block: 12px; border-top: 1px solid var(--border); }
+.explore-world { display: inline-flex; align-items: center; min-height: 44px; }
+button.explore-world { min-width: 44px; padding: 0 12px; background: transparent; color: inherit; font: inherit; border: 0; cursor: pointer; }
 .header-skeleton, .scene-skeleton { display: block; margin-bottom: 24px; }
 /* Town's static skeletons retain the shared primitive without its shimmer. */
 :host ::ng-deep ui-skeleton [class^="ui-skeleton__"] { animation: none; }
+@media (min-width: 1024px) {
+  .town-layout { grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; }
+  .town-layout app-town-exterior { grid-column: 1; grid-row: 1; }
+  .today-drawer { grid-column: 2; grid-row: 1; }
+  .today-toggle { display: none; }
+  .today-panel:not(.is-open) { display: block; }
+  .today-panel { margin-top: 0; }
+  .today-panel h2 { position: static; width: auto; height: auto; clip-path: none; margin-bottom: 12px; }
+}
