@@ -217,6 +217,7 @@ button.action { cursor: pointer; }
   pointer-events: none;
 }
 .caption {
+  width: max-content;
   text-align: center;
   white-space: nowrap;
   transform: translateX(-50%) scale(var(--label-scale));
@@ -306,6 +307,11 @@ button.action { cursor: pointer; }
     max-height: min(420px, 55vh);
     overflow: auto;
   }
+}
+@media (max-width: 359px) {
+  .caption[data-building-label="library"] { margin-left: 0.125rem; }
+  .caption[data-building-label="theater"] { margin: -0.125rem 0 0 0.125rem; }
+  .caption[data-building-label="music"] { margin-left: -0.5rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .piece .old { display: none; }

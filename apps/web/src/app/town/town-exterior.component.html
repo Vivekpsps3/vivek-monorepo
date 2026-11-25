@@ -49,7 +49,7 @@
         @if (framed(); as district) {
           @for (building of buildings(); track building.id) {
             @if (building.district === district) {
-              <span class="caption" [class.lot-caption]="building.slot !== null" aria-hidden="true"
+              <span class="caption" [attr.data-building-label]="building.id" [class.lot-caption]="building.slot !== null" aria-hidden="true"
                 [style.left.%]="building.captionAnchor.left"
                 [style.top.%]="building.captionAnchor.top">{{ building.name }}</span>
             }
