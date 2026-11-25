@@ -50,8 +50,15 @@ button.action { cursor: pointer; }
 .action[aria-pressed="true"], .action[aria-current="true"] { border-color: var(--accent); }
 .action:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .copy { display: flex; flex-direction: column; min-width: 0; max-width: 100%; }
-.name, .sub-label {
+.name {
+  max-width: min(10rem, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.building-picker li:not([data-district="garden"]) .name, .sub-label {
   overflow-wrap: anywhere;
+  white-space: normal;
 }
 .sub-label, .scene-hint { color: var(--text-muted); }
 .sub-label { font-size: 0.75rem; font-weight: 500; }

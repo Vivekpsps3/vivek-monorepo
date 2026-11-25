@@ -24,7 +24,9 @@ test.describe('Town dialogs', () => {
     await expect(page.locator('#habit-name')).toHaveValue('Read 20 pages');
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
-    await expect(page.locator('img[src="/town/forge-1.svg"], img[src="/town/forge-2.svg"]').first()).toBeVisible();
+    const tile = page.getByRole('list', { name: 'Town buildings' }).getByRole('button', { name: /^Read 20 pages/ });
+    await expect(tile.locator('.building-icon')).toHaveAttribute('data-stage', /^[12]$/);
+    await expect(tile.locator('use')).toHaveAttribute('href', '/town/exterior/landmarks.svg#forge');
     await expect(page.getByRole('button', { name: 'Mark Read 20 pages done for today' })).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: /reached Lv|Level up!/ })).toHaveCount(0);
     expect(await page.content()).not.toContain(FOREIGN_HABIT);
@@ -55,6 +57,8 @@ test.describe('Town dialogs', () => {
     const tile = page.getByRole('list', { name: 'Town buildings' }).getByRole('button', { name: new RegExp(name) });
     await expect(tile).toBeVisible();
     expect(await tile.locator('.name').evaluate(node => getComputedStyle(node).textOverflow)).toBe('ellipsis');
+    await tile.focus();
+    await expect(page.getByRole('group', { name: 'Town exterior' }).locator('.active-name')).toHaveText(name);
     await tile.click();
     await page.locator('app-town-exterior').getByRole('button', { name: 'Edit habit' }).click();
     await page.getByRole('button', { name: 'Archive habit' }).click();

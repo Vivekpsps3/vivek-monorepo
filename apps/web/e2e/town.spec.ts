@@ -252,7 +252,8 @@ test('treasury follows completed budget weeks and clears when Finance locks', as
   await expect(dialog).toBeHidden();
   await page.goto('/town');
   await expect(treasury).toContainText('Lv 5 · 52+ weeks');
-  await expect(treasury.locator('img')).toHaveAttribute('src', /treasury-3\.svg$/);
+  await expect(treasury.locator('.building-icon')).toHaveAttribute('data-stage', '3');
+  await expect(treasury.locator('use')).toHaveAttribute('href', '/town/exterior/landmarks.svg#treasury');
   await expect(todayTreasury).toContainText('Lv 5 · 52+ weeks');
   await expect(treasury).not.toContainText('$');
   await expect(todayTreasury).not.toContainText('$');
