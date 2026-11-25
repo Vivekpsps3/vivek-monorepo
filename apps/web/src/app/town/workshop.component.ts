@@ -5,7 +5,7 @@ import { ThemeService } from '@vivek/ui';
 import { distinctUntilChanged, map, skip } from 'rxjs';
 import { bindLockNotices, bindLockSnapshots } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
-import { cosmeticById, cosmeticCatalog, variantSrc } from './cosmetic-catalog';
+import { cosmeticById, cosmeticCatalog, cosmeticPart, variantSrc } from './cosmetic-catalog';
 import { TownApiService, type StampWallet } from './town.api';
 
 type Confirmation = {
@@ -46,19 +46,23 @@ export class WorkshopComponent {
   protected readonly active = computed(() => this.wallet()?.entitlements.filter(item => item.active) ?? []);
   protected readonly olderUnlocks = computed(() => this.active().filter(item => cosmeticById(item.catalog_id)?.group !== 'shop'));
   protected readonly id = computed(() => {
-    const selected = this.selection().get('item');
-    return selected && (this.shop.some(item => item.id === selected) || this.olderUnlocks().some(item => item.catalog_id === selected))
-      ? selected : this.shop[0].id;
+    const item = this.selection().get('item');
+    return item && /^[a-z0-9][a-z0-9:_-]{0,63}$/.test(item) ? item : this.shop[0].id;
   });
-  protected readonly asset = computed(() => cosmeticById(this.id()));
   protected readonly held = computed(() => this.active().find(item => item.catalog_id === this.id()));
+  protected readonly asset = computed(() => {
+    const asset = cosmeticById(this.id());
+    return asset?.group === 'shop' || this.held() ? asset : null;
+  });
+  protected readonly part = computed(() => cosmeticPart(this.selection().get('part')));
   protected readonly currentConfirmation = computed(() => {
     const choice = this.confirmation();
     return choice?.id === this.id() ? choice : null;
   });
   protected readonly art = computed(() => {
     const asset = this.asset();
-    return asset ? variantSrc(asset, this.theme() === 'dark' ? 'night' : 'day', 0) : null;
+    const part = this.part() ?? (this.theme() === 'dark' ? 'night' : 'day');
+    return asset ? variantSrc(asset, part, 0) : null;
   });
   protected readonly failedArt = signal<string | null>(null);
 
@@ -101,7 +105,11 @@ export class WorkshopComponent {
   protected select(event: Event): void {
     if (!(event.target instanceof HTMLSelectElement) || this.busy()) return;
     this.clearChoice();
-    void this.router.navigate([], { relativeTo: this.route, queryParams: { item: event.target.value }, replaceUrl: true });
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { item: event.target.value, part: this.part() },
+      replaceUrl: true,
+    });
   }
 
   protected load(): void {

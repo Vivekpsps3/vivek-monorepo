@@ -29,3 +29,7 @@ a { display: inline-flex; align-items: center; color: var(--link, var(--text)); 
   .art { min-height: 84px; }
   .art img { height: 84px; }
 }
+@media (max-width: 360px) {
+  .preview { grid-template: 'detail' 'art' 'actions' / minmax(0, 1fr); }
+  .art { overflow-wrap: anywhere; }
+}

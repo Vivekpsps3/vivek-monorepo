@@ -1,13 +1,13 @@
 /** The public saved room layout and the editor's local geometry checks. */
 
-import { COSMETIC_LAYOUT_CAP, cosmeticById, footprintAtTurn, type CosmeticPlacement } from './cosmetic-catalog';
+import { COSMETIC_LAYOUT_CAP, cosmeticById, footprintAtTurn } from './cosmetic-catalog';
 import {
   HOME_DOORWAY, HOME_FLOOR_CELLS, HOME_WALL_CAP, HOME_WALL_SLOTS, type HomeRoomId,
 } from './home-rooms';
 import { homeMilestoneOption } from './home-milestones';
 
 export type HomePalette = 0 | 1 | 2 | 3;
-export type HomeTurn = CosmeticPlacement['orientation'];
+export type HomeTurn = 0 | 1 | 2 | 3;
 
 export interface HomeLayoutItem {
   instance_id: string;

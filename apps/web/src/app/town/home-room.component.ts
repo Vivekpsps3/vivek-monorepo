@@ -5,7 +5,7 @@ import { EMPTY, Subject, catchError, distinctUntilChanged, map, of, skip, startW
 import { ThemeService, UiButtonComponent } from '@vivek/ui';
 import { bindLockNotices, bindLockSnapshots } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
-import { cosmeticById, cosmeticCatalog, variantSrc, type CosmeticAsset, type CosmeticPart } from './cosmetic-catalog';
+import { cosmeticById, cosmeticCatalog, cosmeticPart, variantSrc, type CosmeticAsset, type CosmeticPart } from './cosmetic-catalog';
 import {
   HOME_CELL,
   HOME_FLOOR_CELLS,
@@ -137,6 +137,7 @@ export class HomeRoomComponent {
   private readonly undo = signal<{ revision: number; items: readonly HomeLayoutItem[] } | null>(null);
   private returnObject: string | null = null;
   private editEpoch = 0;
+  private pendingInventoryItem: string | null = null;
   protected readonly layoutRevision = signal(0);
   protected readonly layoutStatus = signal('');
   protected readonly layoutLoading = signal(false);
@@ -149,6 +150,16 @@ export class HomeRoomComponent {
   private readonly params = toSignal(this.route.paramMap, { requireSync: true });
   private readonly query = toSignal(this.route.queryParamMap, { requireSync: true });
   protected readonly room = computed(() => homeRoom(this.params().get('room')));
+  protected readonly linkedAsset = computed(() => cosmeticById(this.query().get('item') ?? ''));
+  protected readonly furnitureQuery = computed(() => {
+    const item = this.linkedAsset()?.id ?? null;
+    return { item, part: item ? cosmeticPart(this.query().get('part')) : null };
+  });
+  protected readonly linkedShopLocked = computed(() => {
+    const item = this.linkedAsset();
+    const unlocked = this.unlocked();
+    return item?.group === 'shop' && unlocked != null && !unlocked.has(item.id);
+  });
   private readonly baseItems = computed(() => {
     const room = this.room();
     return room ? this.savedItems() ?? starterHomeLayout(room.id) : [];
@@ -317,7 +328,9 @@ export class HomeRoomComponent {
   protected objectSrc(object: HomeSceneObject): string {
     const asset = cosmeticById(object.catalogId);
     if (!asset) return `/town/home/milestones.svg#${object.ornamentArt ?? ''}`;
-    return variantSrc(asset, this.part(), this.attempts()[object.id] ?? 0);
+    const linked = this.furnitureQuery();
+    const part = this.candidate()?.instance_id === object.id && linked.item === asset.id ? linked.part : null;
+    return variantSrc(asset, part ?? this.part(), this.attempts()[object.id] ?? 0);
   }
 
   protected faded(id: string): boolean {
@@ -325,7 +338,7 @@ export class HomeRoomComponent {
   }
 
   protected linkQuery(id: string): Record<string, string | null> {
-    return sceneQuery(id, this.camera());
+    return { ...sceneQuery(id, this.camera()), ...this.furnitureQuery() };
   }
 
   protected atMaxZoom(): boolean {
@@ -389,8 +402,11 @@ export class HomeRoomComponent {
     if (!this.signedIn() || !this.savedItems() || this.draft() || this.recoveryRequired() || this.layoutBusy()) return;
     this.returnObject = this.selected()?.id ?? null;
     this.draft.set(this.baseItems());
+    const requested = this.linkedAsset();
+    this.pendingInventoryItem = requested?.group === 'shop' ? requested.id : null;
     this.loadInventory();
-    this.focusLayout('#home-inventory');
+    if (requested?.group === 'starter') this.pickInventory(requested.id);
+    else if (!this.candidate()) this.focusLayout('#home-inventory');
   }
 
   protected loadInventory(): void {
@@ -404,12 +420,15 @@ export class HomeRoomComponent {
       if (!this.alive || epoch !== this.editEpoch || !this.draft()) return;
       this.unlocked.set(ids && new Set(ids));
       this.inventoryUnavailable.set(ids == null);
+      const preselect = this.pendingInventoryItem;
+      if (preselect && ids?.includes(preselect) && this.linkedAsset()?.id === preselect) this.pickInventory(preselect);
     });
   }
 
   protected pickInventory(id: string): void {
     const asset = this.inventory().find(item => item.id === id);
     if (!asset || !this.draft() || this.layoutBusy()) return;
+    this.pendingInventoryItem = null;
     this.candidate.set(this.newItem(asset.id, asset));
     this.focusLayout('#home-preview');
   }
@@ -417,6 +436,7 @@ export class HomeRoomComponent {
   protected pickPlaced(id: string): void {
     const item = this.editableItems().find(entry => entry.instance_id === id);
     if (!item || this.layoutBusy()) return;
+    this.pendingInventoryItem = null;
     this.returnObject = id;
     this.candidate.set(item);
     this.focusLayout('#home-preview');
@@ -425,6 +445,7 @@ export class HomeRoomComponent {
   protected pickMilestone(milestone: HomeMilestone, id: string): void {
     const prior = this.milestoneChoice(milestone.id);
     if (!this.milestoneEligible(milestone.id) || !milestone.options.some(option => option.id === id) || this.layoutBusy()) return;
+    this.pendingInventoryItem = null;
     this.candidate.set({ ...(prior ?? this.newItem(id, null)), catalog_id: id, instance_id: milestone.id });
     this.focusLayout('#home-preview');
   }
@@ -758,6 +779,7 @@ export class HomeRoomComponent {
 
   private endEditing(): void {
     this.editEpoch += 1;
+    this.pendingInventoryItem = null;
     this.draft.set(null);
     this.candidate.set(null);
     this.unlocked.set(null);
@@ -868,7 +890,7 @@ export class HomeRoomComponent {
     const owner = this.owner;
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: query,
+      queryParams: { ...query, ...this.furnitureQuery() },
       replaceUrl: true,
       scroll: 'manual',
     }).then(() => {

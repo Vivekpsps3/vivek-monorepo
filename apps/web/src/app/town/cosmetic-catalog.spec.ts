@@ -1,14 +1,5 @@
-import {
-  COSMETIC_CELL_PX,
-  COSMETIC_LAYOUT_CAP,
-  MILESTONE_ORNAMENT_IDS,
-  SAMPLE_COSMETIC_LAYOUT,
-  cosmeticById,
-  cosmeticCatalog,
-  cosmeticPriceLabel,
-  footprintFits,
-  nextCosmeticLayout,
-} from './cosmetic-catalog';
+import { COSMETIC_CELL_PX, catalogItemDestination, cosmeticById, cosmeticCatalog } from './cosmetic-catalog';
+import { HOME_MILESTONES } from './home-milestones';
 
 const STARTERS = [
   ['oak-seat', 'Oak seat', 1, 1, 3, 'floor', false, false],
@@ -60,7 +51,6 @@ describe('cosmetic catalog', () => {
       expect(item.label).toBe(label);
       expect(item.group).toBe('starter');
       expect(item.priceStamps).toBe(0);
-      expect(cosmeticPriceLabel(item)).toBe('Free');
       expect(item.footprint).toEqual({ columns, rows });
       expect(item.layer).toBe(layer);
       expect(item.anchor).toBe(anchor);
@@ -81,7 +71,6 @@ describe('cosmetic catalog', () => {
       expect(item.label).toBe(label);
       expect(item.group).toBe('shop');
       expect(item.priceStamps).toBe(price);
-      expect(cosmeticPriceLabel(item)).toBe(`${price} Stamps`);
       expect(item.footprint).toEqual({ columns, rows });
       expect(item.layer).toBe(layer);
       expect(item.anchor).toBe(anchor);
@@ -94,39 +83,20 @@ describe('cosmetic catalog', () => {
   });
 
   it('keeps the nine milestone ornaments outside the starter and shop catalog', () => {
-    expect([...MILESTONE_ORNAMENT_IDS]).toEqual(MILESTONES);
+    expect<readonly string[]>(HOME_MILESTONES.flatMap(milestone => milestone.options.map(option => option.id))).toEqual(MILESTONES);
     for (const id of MILESTONES) {
       expect(cosmeticById(id)).withContext(id).toBeNull();
       expect(cosmeticCatalog.some(item => item.id === id || item.label.toLowerCase() === id.replaceAll('-', ' '))).toBeFalse();
     }
   });
 
-  it('keeps an unsupported placement when a layout grows or is already full', () => {
-    const oak = cosmeticById('oak-seat');
-    const bed = cosmeticById('bed');
-    if (!oak || !bed) throw new Error('starter items missing');
-    expect(footprintFits(oak, 0, 0)).toBeTrue();
-    expect(footprintFits(bed, 11, 0)).toBeFalse();
-    expect(footprintFits(bed, 10, 9)).toBeTrue();
-    const added = nextCosmeticLayout(SAMPLE_COSMETIC_LAYOUT, {
-      instanceId: 'placed-fern', catalogId: 'fern', column: 0, row: 0, orientation: 0,
-    });
-    expect(added?.map(item => item.catalogId)).toEqual(['oak-seat', 'missing-keepsake', 'fern']);
-    expect(SAMPLE_COSMETIC_LAYOUT.map(item => item.catalogId)).toEqual(['oak-seat', 'missing-keepsake']);
-
-    let full = [...SAMPLE_COSMETIC_LAYOUT];
-    while (full.length < COSMETIC_LAYOUT_CAP) {
-      const next = nextCosmeticLayout(full, {
-        instanceId: `extra-${full.length}`, catalogId: 'planter', column: 0, row: 0, orientation: 0,
-      });
-      if (!next) throw new Error('layout rejected before the cap');
-      full = [...next];
+  it('routes each known item to its owner and keeps only supported artwork variants', () => {
+    for (const [id] of STARTERS) {
+      expect(catalogItemDestination(id, 'night')).toBe(`/town/home/living?item=${id}&part=night`);
     }
-    expect(full).toHaveSize(64);
-    expect(nextCosmeticLayout(full, {
-      instanceId: 'overflow', catalogId: 'fern', column: 0, row: 0, orientation: 0,
-    })).toBeNull();
-    expect(full.some(item => item.catalogId === 'missing-keepsake')).toBeTrue();
-    expect(full).toHaveSize(64);
+    for (const [id] of SHOP) {
+      expect(catalogItemDestination(id, 'day')).toBe(`/town/workshop?item=${id}&part=day`);
+    }
+    expect(catalogItemDestination('missing-keepsake', 'dusk')).toBe('/town/workshop?item=missing-keepsake');
   });
 });

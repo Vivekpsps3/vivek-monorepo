@@ -5,6 +5,7 @@ from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BeforeValidator
 from sqlalchemy.orm import Session
 
@@ -250,7 +251,9 @@ async def post_stamp_purchase(
     now: datetime = Depends(get_town_clock),
 ) -> StampWalletView:
     payload = await writes.json_object(request)
-    wallet, created = purchase_stamps(db, user.id, payload, now)
+    # A competing SQLite writer can wait for the first request to commit.
+    # Keep that wait off the event loop so it can schedule the first commit.
+    wallet, created = await run_in_threadpool(purchase_stamps, db, user.id, payload, now)
     response.status_code = 201 if created else 200
     return StampWalletView.model_validate(wallet)
 

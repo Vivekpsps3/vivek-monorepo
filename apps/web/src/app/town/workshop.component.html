@@ -10,6 +10,9 @@
   <div class="picker">
     <label for="workshop-piece">Furniture</label>
     <select id="workshop-piece" [disabled]="busy()" (change)="select($event)">
+      @if (!asset() && !held()) {
+        <option value="" selected disabled>Choose furniture</option>
+      }
       @for (item of shop; track item.id) {
         <option [value]="item.id" [selected]="id() === item.id">{{ item.label }} · {{ count(item.priceStamps) }}</option>
       }
@@ -21,7 +24,7 @@
 
   <section class="preview" aria-labelledby="workshop-item">
     <div class="detail">
-      <h2 id="workshop-item">{{ asset()?.label ?? 'Older unlock' }}</h2>
+      <h2 id="workshop-item">{{ asset()?.label ?? (held() ? 'Older unlock' : 'Unsupported item') }}</h2>
       @if (held(); as item) {
         <p class="price">Unlocked · {{ count(item.amount) }} paid</p>
       } @else if (asset(); as item) {
@@ -59,7 +62,9 @@
       } @else if (wallet(); as current) {
         @if (held()) {
           <div class="buttons">
-            <a class="primary" routerLink="/town/home/living">Place in Home</a>
+            @if (asset()) {
+              <a class="primary" routerLink="/town/home/living" [queryParams]="{ item: id(), part: part() }">Place in Home</a>
+            }
             <button id="workshop-action" type="button" (click)="choose()">Refund</button>
           </div>
         } @else if (asset(); as item) {
