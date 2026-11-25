@@ -10,10 +10,10 @@ it on lock, sign-out, and owner change.
 Read guidance for [Town/Health](src/app/town/AGENTS.md),
 [World](src/app/world/AGENTS.md) or [Pixels](src/app/pixels/AGENTS.md) when editing them.
 
-Keep locked, empty, stale, expired and unavailable source states independent.
-Invalidate old owner/route work before publication, clear private snapshots on lock,
-and dispose subscriptions/listeners with the actual consumer lifetime. Cancellation
-must not leave a promise that can still mutate shared state.
+Keep locked, empty, stale, expired and unavailable sources independent. Invalidate
+old owner, route and query work before publication. Clear private snapshots on lock.
+Dispose subscriptions/listeners when their consumer ends. Search retries Travel/Media
+while keeping current local Finance matches.
 
 Hub Up next, its agenda child route, and app cards share Travel summary, Media
 summary plus saved calendar months, and one browser-only Finance load. Keep the

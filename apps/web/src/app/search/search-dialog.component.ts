@@ -177,8 +177,9 @@ export class SearchDialogComponent implements AfterViewChecked {
 
   readonly query = signal('');
   readonly status = signal<DialogStatus>('idle');
-  readonly options = signal<SearchOption[]>([]);
-  readonly activeIndex = signal(0);
+  private readonly results = signal<SearchOption[]>([]);
+  private readonly activeKey = signal<string | null>(null);
+  readonly financePending = signal(false);
   readonly formatDay = formatDay;
 
   private debounce: ReturnType<typeof setTimeout> | null = null;
@@ -188,7 +189,7 @@ export class SearchDialogComponent implements AfterViewChecked {
 
   readonly groups = computed(() => {
     const grouped = new Map<SearchOption['group'], SearchOption[]>();
-    for (const option of this.options()) {
+    for (const option of this.results()) {
       const list = grouped.get(option.group) ?? [];
       list.push(option);
       grouped.set(option.group, list);
@@ -196,62 +197,83 @@ export class SearchDialogComponent implements AfterViewChecked {
     return [...grouped.entries()].map(([name, items]) => ({ name, items }));
   });
 
+  readonly options = computed(() => this.groups().flatMap(group => group.items));
+  readonly activeIndex = computed(() => Math.max(0, this.options().findIndex(option => option.key === this.activeKey())));
   readonly activeOption = computed(() => this.options()[this.activeIndex()] ?? null);
 
   readonly showHint = computed(
     () => this.status() === 'idle' && this.query().trim().length < 2 && this.options().length === 0,
   );
   readonly showNoResults = computed(
-    () => this.status() === 'ready' && this.options().length === 0,
+    () => this.status() === 'ready' && !this.financePending() && this.options().length === 0,
   );
 
   constructor() {
     const destroy = inject(DestroyRef);
-    destroy.onDestroy(() => {
-      if (this.debounce !== null) clearTimeout(this.debounce);
-      this.ctrl?.abort();
-    });
+    destroy.onDestroy(() => this.cancelPendingSearch());
     destroy.onDestroy(this.finance.onLock(() => this.onVaultLock()));
     const session = inject(SESSION_CONTEXT, { optional: true });
     if (!session) return;
-    session.cleared$.pipe(takeUntilDestroyed()).subscribe(() => this.onSessionClear());
+    session.cleared$.pipe(takeUntilDestroyed()).subscribe(() => {
+      this.ownerId = null;
+      this.onSessionClear();
+    });
     session.user$.pipe(takeUntilDestroyed()).subscribe(user => this.onIdentity(user?.id ?? null));
   }
 
   /** Called by the host when the dialog opens. */
   onOpened(): void {
-    this.query.set('');
-    this.options.set([]);
-    this.status.set('idle');
-    this.activeIndex.set(0);
-    void this.loadRecents();
+    this.resetDialog();
+    if (this.ownerId !== null && this.status() !== 'expired') {
+      this.status.set('idle');
+      void this.loadRecents();
+    }
     queueMicrotask(() => this.applyComboboxAttrs());
   }
 
   onQueryChange(value: string): void {
+    if (this.ownerId === null || this.status() === 'expired') return;
     this.query.set(value);
+    this.cancelPendingSearch();
+    this.results.set([]);
+    this.activeKey.set(null);
     this.applyComboboxAttrs();
-    if (this.debounce !== null) clearTimeout(this.debounce);
     const q = value.trim();
     if (q.length < 2) {
-      this.ctrl?.abort();
       this.status.set('idle');
       void this.loadRecents();
       return;
     }
-    this.debounce = setTimeout(() => void this.runSearch(q), DEBOUNCE_MS);
+    this.status.set('loading');
+    this.debounce = setTimeout(() => {
+      this.debounce = null;
+      this.runSearch(q);
+    }, DEBOUNCE_MS);
+  }
+
+  private cancelPendingSearch(): void {
+    this.generation += 1;
+    if (this.debounce !== null) clearTimeout(this.debounce);
+    this.debounce = null;
+    this.ctrl?.abort();
+    this.ctrl = null;
+    this.financePending.set(false);
+  }
+
+  private resetDialog(): void {
+    this.cancelPendingSearch();
+    this.query.set('');
+    this.results.set([]);
+    this.activeKey.set(null);
+    this.applyComboboxAttrs();
   }
 
   private async loadRecents(): Promise<void> {
-    const generation = ++this.generation;
+    const generation = this.generation;
     const refs = readSearchRecents();
     const serverRefs = refs.filter(ref => ref.app === 'travel' || ref.app === 'media');
     const financeRefs = refs.filter(ref => ref.app === 'finance');
-    if (!serverRefs.length && !financeRefs.length) {
-      if (generation === this.generation) this.options.set([]);
-      return;
-    }
-    this.ctrl?.abort();
+    if (!serverRefs.length && !financeRefs.length) return;
     const ctrl = new AbortController();
     this.ctrl = ctrl;
     const serverPromise = serverRefs.length
@@ -265,6 +287,11 @@ export class SearchDialogComponent implements AfterViewChecked {
       : Promise.resolve(EMPTY_RECENTS);
     const [result, finance] = await Promise.all([serverPromise, financePromise]);
     if (generation !== this.generation || result.status === 'cancelled') return;
+    this.ctrl = null;
+    if (result.status === 'expired') {
+      this.expireSearch();
+      return;
+    }
     const serverOptions = result.status === 'ok'
       ? result.body.results.map(row => this.toOption(row, 'Recent'))
       : [];
@@ -287,45 +314,54 @@ export class SearchDialogComponent implements AfterViewChecked {
       const option = this.financeNameOption(name, 'Recent');
       byKey.set(option.key, option);
     }
-    this.options.set(refs.flatMap(ref => {
+    this.results.set(refs.flatMap(ref => {
       const option = byKey.get(`${ref.app}:${ref.kind}:${ref.id}`);
       return option ? [option] : [];
     }));
-    this.activeIndex.set(0);
     this.applyComboboxAttrs();
   }
 
-  private async runSearch(q: string): Promise<void> {
-    const generation = ++this.generation;
-    this.ctrl?.abort();
+  private runSearch(q: string): void {
+    const generation = this.generation;
+    void this.loadServerResults(q, generation);
+    void this.loadFinanceResults(q, generation);
+  }
+
+  private async loadServerResults(q: string, generation: number): Promise<void> {
     const ctrl = new AbortController();
     this.ctrl = ctrl;
     this.status.set('loading');
-    const [result, finance] = await Promise.all([
-      fetchHubSummary<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}`, ctrl.signal),
-      this.finance.query(q).catch((): SearchFinanceQueryResult => ({ status: 'none' })),
-    ]);
+    const result = await fetchHubSummary<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}`, ctrl.signal);
     if (generation !== this.generation || result.status === 'cancelled') return;
+    this.ctrl = null;
     if (result.status === 'expired') {
-      this.status.set('expired');
-      this.options.set([]);
+      this.expireSearch();
       return;
     }
-    if (result.status !== 'ok') {
-      this.status.set('unavailable');
-      this.options.set([]);
-      return;
-    }
-    const options = result.body.results.map(row =>
-      this.toOption(row, row.app === 'media' ? 'Media' : 'Travel'),
-    );
-    if (finance.status === 'locked') options.push(this.lockedFinanceOption());
+    const server = result.status === 'ok'
+      ? result.body.results.map(row => this.toOption(row, row.app === 'media' ? 'Media' : 'Travel'))
+      : [];
+    this.results.update(options => [...server, ...options.filter(option => option.group === 'Finance')]);
+    this.status.set(result.status === 'ok' ? 'ready' : 'unavailable');
+    this.applyComboboxAttrs();
+  }
+
+  private expireSearch(): void {
+    this.resetDialog();
+    this.status.set('expired');
+  }
+
+  private async loadFinanceResults(q: string, generation: number): Promise<void> {
+    this.financePending.set(true);
+    const finance = await this.finance.query(q).catch((): SearchFinanceQueryResult => ({ status: 'none' }));
+    if (generation !== this.generation) return;
+    const local: SearchOption[] = [];
+    if (finance.status === 'locked') local.push(this.lockedFinanceOption());
     else if (finance.status === 'ready') {
-      for (const name of finance.names) options.push(this.financeNameOption(name, 'Finance'));
+      for (const name of finance.names) local.push(this.financeNameOption(name, 'Finance'));
     }
-    this.options.set(options);
-    this.activeIndex.set(0);
-    this.status.set('ready');
+    this.results.update(options => [...options.filter(option => option.group !== 'Finance'), ...local]);
+    this.financePending.set(false);
     this.applyComboboxAttrs();
   }
 
@@ -357,41 +393,22 @@ export class SearchDialogComponent implements AfterViewChecked {
 
   /** Drop finance names immediately. A search still in flight cannot publish them. */
   private onVaultLock(): void {
-    this.generation += 1;
-    this.ctrl?.abort();
-    if (this.debounce !== null) {
-      clearTimeout(this.debounce);
-      this.debounce = null;
-    }
-    this.options.set(this.options().filter(option => option.ref?.app !== 'finance'));
-    this.activeIndex.set(0);
+    this.cancelPendingSearch();
+    this.results.update(options => options.filter(option => option.ref?.app !== 'finance'));
+    this.applyComboboxAttrs();
     const q = this.query().trim();
-    if (q.length >= 2) void this.runSearch(q);
-    else this.applyComboboxAttrs();
+    if (this.ownerId !== null && this.status() !== 'expired' && q.length >= 2) this.runSearch(q);
   }
 
-  /** Logout and identity change drop every row, including Travel and Media. */
+  /** Logout and identity change drop the query and every result. */
   private onSessionClear(): void {
-    this.generation += 1;
-    this.ctrl?.abort();
-    if (this.debounce !== null) {
-      clearTimeout(this.debounce);
-      this.debounce = null;
-    }
-    this.options.set([]);
     this.status.set('idle');
-    this.activeIndex.set(0);
-    this.applyComboboxAttrs();
+    this.resetDialog();
   }
 
   private onIdentity(id: number | null): void {
-    if (this.ownerId === undefined) {
-      this.ownerId = id;
-      return;
-    }
-    if (this.ownerId === id) return;
+    if (this.ownerId !== undefined && this.ownerId !== id) this.onSessionClear();
     this.ownerId = id;
-    this.onSessionClear();
   }
 
   private toOption(row: SearchResultRow, group: SearchOption['group']): SearchOption {
@@ -412,8 +429,9 @@ export class SearchDialogComponent implements AfterViewChecked {
   }
 
   retry(): void {
-    const q = this.query().trim();
-    if (q.length >= 2) void this.runSearch(q);
+    if (this.status() !== 'unavailable') return;
+    this.searchInput()?.focus();
+    void this.loadServerResults(this.query().trim(), this.generation);
   }
 
   onKeydown(event: KeyboardEvent): void {
@@ -422,8 +440,9 @@ export class SearchDialogComponent implements AfterViewChecked {
       if (!options.length) return;
       event.preventDefault();
       const delta = event.key === 'ArrowDown' ? 1 : -1;
-      this.activeIndex.set((this.activeIndex() + delta + options.length) % options.length);
-      this.applyComboboxAttrs();
+      const index = (this.activeIndex() + delta + options.length) % options.length;
+      this.highlight(options[index]);
+      this.host.nativeElement.querySelector(`#search-opt-${index}`)?.scrollIntoView({ block: 'nearest' });
     } else if (event.key === 'Enter') {
       const option = this.activeOption();
       if (option) {
@@ -433,16 +452,27 @@ export class SearchDialogComponent implements AfterViewChecked {
     }
   }
 
+  highlight(option: SearchOption): void {
+    if (!this.options().includes(option)) return;
+    this.activeKey.set(option.key);
+    this.applyComboboxAttrs();
+  }
+
   activate(option: SearchOption): void {
+    if (!this.options().includes(option)) return;
     if (option.ref) recordSearchRecent(option.ref);
-    this.closed.emit();
+    this.onClosed();
     const state = option.returnSource ? this.context.link(option.returnSource) : undefined;
     void this.router.navigateByUrl(option.href, { state });
   }
 
   onClosed(): void {
-    this.ctrl?.abort();
+    this.resetDialog();
     this.closed.emit();
+  }
+
+  private searchInput(): HTMLInputElement | null {
+    return this.host.nativeElement.querySelector('ui-input input');
   }
 
   /**
@@ -450,16 +480,17 @@ export class SearchDialogComponent implements AfterViewChecked {
    * to its inner input directly and kept current as the active option moves.
    */
   private applyComboboxAttrs(): void {
-    const input = this.host.nativeElement.querySelector<HTMLInputElement>('ui-input input');
+    const input = this.searchInput();
     if (!input) return;
     input.setAttribute('role', 'combobox');
-    input.setAttribute('aria-expanded', this.options().length ? 'true' : 'false');
-    input.setAttribute('aria-controls', 'search-listbox');
-    input.setAttribute('aria-autocomplete', 'list');
     const active = this.activeOption();
-    if (active && this.options().length) {
+    input.setAttribute('aria-expanded', active ? 'true' : 'false');
+    input.setAttribute('aria-autocomplete', 'list');
+    if (active) {
+      input.setAttribute('aria-controls', 'search-listbox');
       input.setAttribute('aria-activedescendant', `search-opt-${this.activeIndex()}`);
     } else {
+      input.removeAttribute('aria-controls');
       input.removeAttribute('aria-activedescendant');
     }
   }

@@ -36,6 +36,11 @@
   line-height: 1.4;
 }
 
+.search-dialog__status + [role='listbox'],
+ui-state + [role='listbox'] {
+  margin-block-start: var(--space-2);
+}
+
 .search-dialog__group {
   margin: var(--space-3) 0 var(--space-2);
   color: var(--text-secondary);
