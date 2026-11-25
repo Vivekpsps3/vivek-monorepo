@@ -363,17 +363,26 @@ describe('SearchDialogComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Finance results hidden: locked · Unlock');
   });
 
-  it('clears every row on logout and ignores a late finance result', async () => {
+  it('clears every row on logout, aborts Travel and Media, and ignores both late sources', async () => {
     const savings: SearchFinanceName = { kind: 'account', id: 4, title: 'Savings', href: '/finance/have' };
     let release: (result: SearchFinanceQueryResult) => void = () => undefined;
+    let releaseServer: (result: Response) => void = () => undefined;
     financeQueryImpl = () => new Promise(resolve => { release = resolve; });
+    fetchSpy.and.callFake((_input: RequestInfo | URL, init?: RequestInit) => {
+      lastSignal = init?.signal ?? null;
+      return new Promise<Response>(resolve => { releaseServer = resolve; });
+    });
     openDialog();
     await settle();
     typeQuery('sa');
     await settle(200);
     fixture.detectChanges();
+    expect(lastSignal?.aborted).toBeFalse();
     cleared.next();
+    expect(lastSignal?.aborted).toBeTrue();
+    expect(component.query()).toBe('');
     fixture.detectChanges();
+    releaseServer(respond({ q: 'sa', results: [TRIP], truncated: false }));
     release({ status: 'ready', names: [savings] });
     await settle(50);
     fixture.detectChanges();

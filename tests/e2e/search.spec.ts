@@ -72,10 +72,12 @@ function searchFor(query: string) {
 }
 
 async function holdSearch(page: Page, query: string) {
-  let receive: (route: Route) => void;
-  const pending = new Promise<Route>(resolve => { receive = resolve; });
-  await page.route(searchFor(query), route => receive(route), { times: 1 });
-  return { pending };
+  let held: Route | undefined;
+  await page.route(searchFor(query), route => { held = route; }, { times: 1 });
+  return async () => {
+    await expect.poll(() => held !== undefined, { message: `Hold the "${query}" search request` }).toBe(true);
+    return held!;
+  };
 }
 
 async function expectActive(input: Locator, option: Locator) {
@@ -128,7 +130,7 @@ for (const { width, height, theme } of searchViews) {
       const previous = await holdSearch(page, 'Port');
       await input.fill('Port');
       await page.clock.runFor(150);
-      const previousResponse = await previous.pending;
+      const previousResponse = await previous();
 
       await input.fill('Harbor');
       await expect(portland).toHaveCount(0);
@@ -209,7 +211,7 @@ for (const { width, height, theme } of searchViews) {
         await expect(retry).toBeFocused();
         await page.keyboard.press('Enter');
       }
-      const retryResponse = await retryRequest.pending;
+      const retryResponse = await retryRequest();
       await expectActive(input, finance);
       await expect(server).toHaveCount(0);
       await retryResponse.fulfill({ json: publicMatches });
@@ -227,7 +229,7 @@ for (const { width, height, theme } of searchViews) {
       await page.route(searchFor('Check'), route => route.fulfill({ json: { q: 'Check', results: [], truncated: false } }));
       const beforeLock = await holdSearch(page, 'Check');
       await input.fill('Check');
-      const lockResponse = await beforeLock.pending;
+      const lockResponse = await beforeLock();
       await expectActive(input, finance);
       await lock.click();
       await expect(finance).toHaveCount(0);
@@ -240,16 +242,14 @@ for (const { width, height, theme } of searchViews) {
 
       const beforeSignOut = await holdSearch(page, 'Harbor');
       await input.fill('Harbor');
-      const signOutResponse = await beforeSignOut.pending;
+      const signOutResponse = await beforeSignOut();
       const menu = await openUserMenu(peer);
-      const aborted = page.waitForEvent('requestfailed', request => searchFor('Harbor')(new URL(request.url())));
       await menu.getByRole('button', { name: 'Sign out', exact: true }).click();
-      await aborted;
-      await signOutResponse.fulfill({ json: publicMatches });
       await expect(page).toHaveURL(/\/auth\/login/);
       await expect(dialog).toHaveCount(0);
+      await signOutResponse.fulfill({ json: publicMatches });
       await expect(page.locator('body')).not.toContainText(/Harbor Checking|Leap harbor/);
-      await peer.close();
+      // The test context closes both tabs after their sign-out redirects.
     });
   });
 }
