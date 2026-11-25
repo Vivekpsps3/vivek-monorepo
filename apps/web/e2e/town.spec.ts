@@ -479,10 +479,14 @@ test.describe('Town exterior', () => {
     await expect(page.locator('app-town-exterior [aria-modal="true"]')).toHaveCount(0);
     const close = page.getByRole('button', { name: 'Close details' });
     expect((await close.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    await page.getByText('Buildings', { exact: true }).tap();
+    await expect(page.getByRole('list', { name: 'Town buildings' })).toBeHidden();
     await page.getByText('View controls', { exact: true }).tap();
     const zoom = page.getByRole('button', { name: 'Zoom in' });
-    await zoom.focus();
+    await zoom.press('Enter');
     await expect(zoom).toBeFocused();
+    const stage = page.locator('app-town-exterior .stage');
+    await expect(stage).not.toHaveAttribute('style', /scale\(1\)/);
     await page.keyboard.press('Escape');
     await expect(page).not.toHaveURL(/inspect=/);
     await expect(page.getByRole('button', { name: /Unlocks at Lv 5/ })).toBeFocused();
@@ -491,7 +495,6 @@ test.describe('Town exterior', () => {
     await expect(inspector).toHaveAttribute('data-inspector', 'empty');
     await expect(page).toHaveURL(/inspect=slot-/);
     const selectedURL = page.url();
-    const stage = page.locator('app-town-exterior .stage');
     const camera = await stage.getAttribute('style');
     const today = page.getByRole('button', { name: 'Today', exact: true });
     await today.press('Enter');
