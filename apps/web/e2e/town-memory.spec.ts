@@ -39,8 +39,8 @@ async function activate(page: Page, locator: Locator, touch: boolean): Promise<v
   }
 }
 
-async function solve(page: Page, game: Locator, touch: boolean): Promise<void> {
-  for (const indexes of pairs()) {
+async function solve(page: Page, game: Locator, touch: boolean, firstPair = 0): Promise<void> {
+  for (const indexes of pairs().slice(firstPair)) {
     for (const index of indexes) await activate(page, game.locator(`[data-index="${index}"]`), touch);
   }
 }
@@ -68,8 +68,8 @@ test.describe('Memory Shelves', () => {
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       await expect(game.locator('[data-motion="reduce"]')).toBeVisible();
       await expect(game.locator('[data-sound="off"]')).toBeVisible();
-      await expect(game).toContainText('Seed 10.');
-      await expect(game).toContainText('This game is not timed.');
+      await expect(game).not.toContainText('Seed 10.');
+      await expect(game.getByRole('status')).toHaveText('Turn two shelves. This game is not timed.');
       await expect(game).toContainText('Town sound is off.');
       await expect(game.getByText(/\d:\d\d/)).toHaveCount(0);
       await expect(game.getByRole('button', { name: /Buy|Grant/ })).toHaveCount(0);
@@ -108,7 +108,22 @@ test.describe('Memory Shelves', () => {
       await expect(game.locator('[data-index="0"]')).toHaveAttribute('data-face', 'down');
       await expect(game.getByRole('status')).toHaveText('0 moves.');
 
-      await solve(page, game, touch);
+      await activate(page, game.locator('[data-index="0"]'), touch);
+      await activate(page, game.locator('[data-index="11"]'), touch);
+      await expect(game.getByRole('status')).toHaveText('1 move. 1 of 6 pairs matched.');
+      if (touch) await game.getByRole('button', { name: 'Pause', exact: true }).tap();
+      else await page.keyboard.press('p');
+      await expect(game.getByRole('status')).toHaveText('Paused. 1 move. 1 of 6 pairs matched.');
+      await page.reload();
+      await expect(game.getByRole('status')).toHaveText('Paused. 1 move. 1 of 6 pairs matched.');
+      await expect(game.locator('[data-face="matched"]')).toHaveCount(2);
+      await expect(game.getByRole('button', { name: 'Shelf 1, Bell, matched' })).toBeDisabled();
+      await expect(game.locator('.shelf[tabindex="0"]')).toHaveCount(0);
+      await activate(page, game.getByRole('button', { name: 'Resume', exact: true }), touch);
+      await expect(game.locator('[data-index="1"][tabindex="0"]')).toBeFocused();
+      await expect(game.getByRole('status')).toHaveText('1 move. 1 of 6 pairs matched.');
+
+      await solve(page, game, touch, 1);
       await expect(game.getByRole('status')).toHaveText('All six pairs matched in 6 moves.');
       await expect(game.locator('[data-face="matched"]')).toHaveCount(12);
       await expect(game.locator('[data-index="2"]')).toBeDisabled();
@@ -140,7 +155,102 @@ test.describe('Memory Shelves', () => {
       expect(writes.filter(item => /\/api\/(town|media|pixels|health)|stamp/i.test(item))).toEqual([]);
       await info.attach(`memory-${width}-${theme}`, { body: await game.screenshot(), contentType: 'image/png' });
     });
+
+    test(`keeps keyboard focus through all six matches at ${width} ${theme}`, async ({ page }, info) => {
+      await prepare(page, width, theme);
+      await page.goto('/town/memory');
+      const game = page.locator('app-memory-shelves');
+      const play = game.getByRole('button', { name: 'Play Memory Shelves' });
+      const tabStop = game.locator('.shelf[tabindex="0"]:enabled');
+      await expect(play).toBeVisible();
+      for (let step = 0; step < 12; step++) {
+        if (await play.evaluate(element => element === document.activeElement)) break;
+        await page.keyboard.press('Tab');
+      }
+      await expect(play).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(tabStop).toHaveAccessibleName('Shelf 1, face down');
+      await expect(tabStop).toBeFocused();
+      await expect(game.getByRole('group', { name: 'Shelves' })).toHaveAccessibleDescription(/Arrow keys.*Enter or Space/);
+      await page.keyboard.press('Tab');
+      await expect(game.getByRole('button', { name: 'Pause' })).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(tabStop).toBeFocused();
+
+      let focused = 0;
+      const matched = new Set<number>();
+      const nextShelves = [1, 7, 4, 8, 9];
+      for (const [pairIndex, pair] of pairs().entries()) {
+        for (const index of pair) {
+          const step = index > focused ? 1 : -1;
+          while (focused !== index) {
+            focused += step;
+            while (matched.has(focused)) focused += step;
+            await page.keyboard.press(step === 1 ? 'ArrowRight' : 'ArrowLeft');
+            await expect(game.locator(`[data-index="${focused}"]`)).toBeFocused();
+          }
+          await page.keyboard.press(index === pair[0] ? 'Enter' : 'Space');
+        }
+        pair.forEach(index => matched.add(index));
+        await expect(game.locator('.shelf:disabled[tabindex="0"]')).toHaveCount(0);
+        await expect(game.locator('[data-face="matched"]')).toHaveCount(matched.size);
+        if (pairIndex < nextShelves.length) {
+          focused = nextShelves[pairIndex];
+          await expect(tabStop).toHaveCount(1);
+          await expect(tabStop).toHaveAttribute('data-index', String(focused));
+          await expect(tabStop).toBeFocused();
+          await expect(tabStop).toBeInViewport();
+          await expect(game.locator('.shelf:focus-visible')).toHaveCount(1);
+          const moves = pairIndex + 1;
+          await expect(game.getByRole('status')).toHaveText(`${moves} ${moves === 1 ? 'move' : 'moves'}. ${moves} of 6 pairs matched.`);
+          if (pairIndex === 0) {
+            await info.attach(`memory-match-focus-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+          }
+        }
+      }
+      await expect(tabStop).toHaveCount(0);
+      await expect(game.getByRole('status')).toHaveText('All six pairs matched in 6 moves.');
+      await expect(game.getByRole('button', { name: 'Restart' })).toBeFocused();
+      await info.attach(`memory-restart-focus-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      await page.keyboard.press('Enter');
+      await expect(tabStop).toHaveAccessibleName('Shelf 1, face down');
+      await expect(tabStop).toBeFocused();
+      await expect(game.getByRole('status')).toHaveText('0 moves.');
+      await expect(page).toHaveURL(/\/town\/memory$/);
+    });
   }
+
+  test('keeps shelf focus and readable symbols at 320px with enlarged text', async ({ page }, info) => {
+    await prepare(page, 320, 'dark');
+    await page.goto('/town/memory');
+    await page.locator('html').evaluate(element => { element.style.fontSize = '200%'; });
+    const game = page.locator('app-memory-shelves');
+    await game.getByRole('button', { name: 'Play Memory Shelves' }).click();
+    await expect(game.locator('[data-index="0"]')).toBeFocused();
+    await page.keyboard.press('Enter');
+    for (let index = 1; index <= 11; index++) {
+      await page.keyboard.press('ArrowDown');
+      await expect(game.locator(`[data-index="${index}"]`)).toBeFocused();
+    }
+    await page.keyboard.press('Enter');
+    await expect(game.getByRole('status')).toHaveText('1 move. 1 of 6 pairs matched.');
+    await expect(game.locator('[data-index="1"]')).toBeFocused();
+    await expect(game.locator('[data-index="1"]')).toBeInViewport();
+    const readableSymbols = await game.locator('.shelf[data-face="matched"]').evaluateAll(elements => elements.every(element => {
+      const face = element.querySelector('.shelf-face');
+      if (!face) return false;
+      const text = document.createRange();
+      text.selectNodeContents(face);
+      return text.getBoundingClientRect().width <= face.getBoundingClientRect().width + 1;
+    }));
+    expect(readableSymbols).toBeTruthy();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBeTruthy();
+    await info.attach('memory-enlarged-text', { body: await page.screenshot(), contentType: 'image/png' });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.keyboard.press('ArrowDown');
+    await expect(game.locator('[data-index="3"]')).toBeFocused();
+  });
 
   test('finishes the same six moves when motion is allowed', async ({ page }) => {
     await prepare(page, 1280, 'light', false);
@@ -170,7 +280,7 @@ test.describe('Memory Shelves', () => {
     await game.getByRole('button', { name: 'Play Memory Shelves' }).tap();
     await game.locator('[data-index="2"]').tap();
     await game.locator('[data-index="3"]').tap();
-    await expect(game.getByRole('status')).toHaveText('1 move.');
+    await expect(game.getByRole('status')).toHaveText('1 move. 1 of 6 pairs matched.');
     await expect(game.locator('[data-index="2"]')).toHaveAttribute('data-face', 'matched');
     await expect(game.locator('[data-index="3"]')).toHaveAttribute('aria-label', 'Shelf 4, Lantern, matched');
   });
@@ -186,13 +296,16 @@ test.describe('Memory Shelves', () => {
     const game = page.locator('app-memory-shelves');
     await game.getByRole('button', { name: 'Play Memory Shelves' }).click();
     await game.locator('[data-index="0"]').click();
-    await expect(game.locator('[data-index="0"]')).toHaveAttribute('data-face', 'up');
+    await game.locator('[data-index="11"]').click();
+    await game.locator('[data-index="1"]').click();
+    await expect(game.locator('[data-index="1"]')).toHaveAttribute('data-face', 'up');
     await game.getByRole('navigation', { name: 'Current place' }).getByRole('link', { name: 'Town' }).click();
     await expect(page).toHaveURL(/\/town$/);
     await expect(page.getByRole('link', { name: 'Memory Shelves', exact: true })).toBeFocused();
     await page.getByRole('link', { name: 'Memory Shelves', exact: true }).click();
-    await expect(game.locator('[data-index="0"]')).toHaveAttribute('data-face', 'up');
-    await expect(game.getByRole('status')).toHaveText('0 moves.');
+    await expect(game.locator('[data-index="1"]')).toHaveAttribute('data-face', 'up');
+    await expect(game.locator('.shelf[tabindex="0"]')).toHaveAttribute('data-index', '1');
+    await expect(game.getByRole('status')).toHaveText('1 move. 1 of 6 pairs matched.');
   });
 
   test('clears the shelf when the session ends', async ({ page }) => {

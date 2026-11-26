@@ -144,9 +144,11 @@ export function memoryStatus(board: MemoryBoard | null, lastMoves: number | null
     return `Last game finished in ${lastMoves} ${noun}. This game is not timed.`;
   }
   const noun = board.moves === 1 ? 'move' : 'moves';
-  if (board.phase === 'paused') return `Paused. ${board.moves} ${noun}.`;
   if (board.phase === 'complete') return `All six pairs matched in ${board.moves} ${noun}.`;
-  return `${board.moves} ${noun}.`;
+  const moves = `${board.moves} ${noun}.`;
+  const paired = board.tiles.filter(tile => tile.face === 'matched').length / 2;
+  const progress = paired ? ` ${paired} of ${MEMORY_SYMBOLS.length} pairs matched.` : '';
+  return `${board.phase === 'paused' ? 'Paused. ' : ''}${moves}${progress}`;
 }
 
 export function shelfStep(key: string, columns: number = MEMORY_COLUMNS): number | null {

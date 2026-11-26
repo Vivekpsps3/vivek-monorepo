@@ -4,24 +4,24 @@
   [attr.data-phase]="phase()"
   [attr.data-motion]="reduced() ? 'reduce' : 'ok'"
   [attr.data-sound]="soundOn() ? 'on' : 'off'"
-  [attr.data-seed]="seed"
 >
   <h1>Memory Shelves</h1>
-  <p>Six symbol pairs. Turn two shelves. The score is the number of turns. This game is not timed.</p>
-  <p>Seed {{ seed }}.</p>
+  <p>Match six pairs. Turn two shelves per move.</p>
   <p>This play does not award Stamps or save a life record.</p>
   <p>{{ soundOn() ? 'Town sound is on. A match can play a short tone.' : 'Town sound is off. The game stays silent.' }}</p>
+  <p id="memory-keys">Arrow keys move. Enter or Space turns a shelf. P plays, pauses, or resumes. R restarts. Q quits.</p>
   <p id="memory-status" role="status">{{ status() }}</p>
   @if (board(); as board) {
-    <div class="board" role="group" aria-label="Shelves">
+    <div class="board" role="group" aria-label="Shelves" aria-describedby="memory-keys">
       @for (tile of board.tiles; track tile.index) {
+        @let disabled = board.phase !== 'playing' || tile.face === 'matched';
         <button
           type="button"
           class="shelf"
           [attr.data-face]="tile.face"
           [attr.data-index]="tile.index"
-          [disabled]="board.phase !== 'playing' || tile.face === 'matched'"
-          [attr.tabindex]="shelfTab(tile.index)"
+          [disabled]="disabled"
+          [attr.tabindex]="disabled ? null : (tabStop() === tile.index ? 0 : -1)"
           [attr.aria-label]="label(tile)"
           (click)="flip(tile.index)"
           (keydown)="onShelfKey($event, tile.index)"
@@ -44,5 +44,4 @@
   } @else {
     <ui-button variant="primary" (clicked)="play()">Play Memory Shelves</ui-button>
   }
-  <p class="keys">Keyboard: P plays, pauses, or resumes. R restarts. Q quits. Arrow keys move between shelves.</p>
 </main>

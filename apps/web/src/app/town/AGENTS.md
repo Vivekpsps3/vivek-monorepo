@@ -18,6 +18,6 @@ Use [health constants](health/health.constants.ts) for units, thresholds, and ba
 Do not duplicate conversion or XP math.
 
 Town reset fixtures and worker clock stay deterministic.
-See [scene-appearance](../platform/scene-appearance.ts). Gym objects open that dialog.
+Gym objects open [scene appearance](../platform/scene-appearance.ts).
 
-Town's y-down [frame](library-room.scene.ts) supports [paint picking](town-exterior.component.ts). Home projects one layout, checks revisions and entitlements, preserves unsupported records, clears drafts and notes on lock. Old catalog links open Home or Workshop. `/town/memory` awards no Stamps. [Workshop](workshop.component.ts) confirms fixed-price purchases and refunds through the Stamp ledger. Refunds require unused furniture. Locked, empty, and archived lots clear check-in marks on Undo, owner, or day change. The keepsake shelf stores nothing. Clinic and Gym read [loadTownHealthStages](health/index.ts).
+Town's y-down [frame](library-room.scene.ts) supports [paint picking](town-exterior.component.ts). Home projects one layout, checks revisions and entitlements, preserves unsupported records, clears drafts and notes on lock. Old catalog links open Home or Workshop. `/town/memory` skips matched shelves. No Stamps. [Workshop](workshop.component.ts) confirms fixed-price purchases and refunds through the Stamp ledger. Refunds require unused furniture. Locked, empty, and archived lots clear check-in marks on Undo, owner, or day change. The keepsake shelf stores nothing. Clinic and Gym read [loadTownHealthStages](health/index.ts).
