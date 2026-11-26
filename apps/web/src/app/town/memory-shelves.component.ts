@@ -52,18 +52,23 @@ export class MemoryShelvesComponent {
   private generation = 0;
   private alive = true;
 
-  readonly seed = MEMORY_SEED;
   readonly crumbs: readonly PlaceCrumb[] = [
     { label: 'Town', href: '/town' },
     { label: 'Memory Shelves' },
   ];
   readonly reduced = signal(false);
-  readonly focusIndex = signal(0);
+  private readonly focusIndex = signal(0);
   private readonly view = signal<MemoryView>({ board: null, lastMoves: null });
   protected readonly board = computed(() => this.view().board);
   protected readonly status = computed(() => memoryStatus(this.view().board, this.view().lastMoves));
   protected readonly soundOn = computed(() => this.scene.effective().sound);
   protected readonly phase = computed(() => this.view().board?.phase ?? 'ready');
+  protected readonly tabStop = computed(() => {
+    const board = this.board();
+    if (board?.phase !== 'playing') return null;
+    const eligible = board.tiles.filter(tile => tile.face !== 'matched');
+    return eligible.find(tile => tile.index >= this.focusIndex())?.index ?? eligible[0]?.index ?? null;
+  });
 
   constructor() {
     this.destroyRef.onDestroy(() => {
@@ -95,11 +100,6 @@ export class MemoryShelvesComponent {
     return shelfLabel(tile);
   }
 
-  protected shelfTab(index: number): number | null {
-    if (this.view().board?.phase !== 'playing') return null;
-    return this.focusIndex() === index ? 0 : -1;
-  }
-
   protected play(): void {
     const owner = this.ownerId;
     const generation = this.generation;
@@ -121,12 +121,12 @@ export class MemoryShelvesComponent {
     const lastMoves = board.phase === 'complete' ? board.moves : current.lastMoves;
     this.focusIndex.set(index);
     this.publish({ board, lastMoves }, owner, generation);
+    if (!this.owns(owner, generation)) return;
     if (matched && matchToneAllowed(this.soundOn(), this.reduced())) {
-      void this.matchTone().then(() => {
-        if (!this.owns(owner, generation)) return;
-      }).catch(() => undefined);
+      void this.matchTone().catch(() => undefined);
     }
     if (board.phase === 'complete') this.focusNamed('Restart');
+    else if (matched) this.focusShelf();
   }
 
   protected pause(): void {
@@ -148,7 +148,7 @@ export class MemoryShelvesComponent {
     const board = resumeBoard(current.board);
     if (board === current.board) return;
     this.publish({ board, lastMoves: current.lastMoves }, owner, generation);
-    this.focusShelf(this.focusIndex());
+    this.focusShelf();
   }
 
   protected restart(): void {
@@ -173,13 +173,18 @@ export class MemoryShelvesComponent {
 
   protected onShelfKey(event: KeyboardEvent, index: number): void {
     const board = this.view().board;
-    if (!board || board.phase !== 'playing') return;
-    const delta = shelfStep(event.key);
+    if (!board || board.phase !== 'playing' || !event.key.startsWith('Arrow')) return;
+    const grid = (event.currentTarget as HTMLButtonElement | null)?.parentElement;
+    // The grid can fit fewer shelves when its text is enlarged.
+    const columns = grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').length : undefined;
+    const delta = shelfStep(event.key, columns);
     if (delta == null) return;
-    const next = index + delta;
-    if (next < 0 || next >= board.tiles.length) return;
     event.preventDefault();
-    this.focusShelf(next);
+    for (let next = index + delta; next >= 0 && next < board.tiles.length; next += delta) {
+      if (board.tiles[next]?.face === 'matched') continue;
+      this.focusShelf(next);
+      return;
+    }
   }
 
   onWorkspaceShortcut(event: KeyboardEvent): void {
@@ -255,12 +260,21 @@ export class MemoryShelvesComponent {
     return memoryPlayStorage();
   }
 
-  private focusShelf(index: number): void {
+  private focusShelf(index = this.tabStop()): void {
+    if (index == null) return;
     this.focusIndex.set(index);
+    if (this.tabStop() !== index) return;
+    const findShelf = (): HTMLButtonElement | null =>
+      this.host.nativeElement.querySelector<HTMLButtonElement>(`[data-index="${index}"]`);
+    const button = findShelf();
+    if (button && !button.disabled) {
+      button.focus();
+      return;
+    }
     const generation = this.generation;
     requestAnimationFrame(() => {
-      if (!this.alive || generation !== this.generation || this.view().board?.phase !== 'playing') return;
-      this.host.nativeElement.querySelector<HTMLButtonElement>(`[data-index="${index}"]`)?.focus({ preventScroll: true });
+      if (!this.alive || generation !== this.generation || this.tabStop() !== index) return;
+      findShelf()?.focus();
     });
   }
 
@@ -270,7 +284,7 @@ export class MemoryShelvesComponent {
       if (!this.alive || generation !== this.generation) return;
       const button = [...this.host.nativeElement.querySelectorAll('button')]
         .find(item => item.textContent?.trim() === name);
-      button?.focus({ preventScroll: true });
+      button?.focus();
     });
   }
 }

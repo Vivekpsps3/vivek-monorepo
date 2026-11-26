@@ -70,7 +70,7 @@ describe('Memory Shelves page', () => {
   it('finishes seed 10, restarts without a matched shelf, and quits to the same score', async () => {
     const { harness, host } = await open();
     expect(host.querySelector('h1')?.textContent).toContain('Memory Shelves');
-    expect(host.textContent).toContain('Seed 10');
+    expect(host.textContent).toContain('Enter or Space turns a shelf');
     expect(host.textContent).toContain('not timed');
     expect(host.textContent).toContain('does not award Stamps');
     expect(host.textContent).not.toMatch(/Buy|Grant/);
@@ -222,7 +222,7 @@ describe('Memory Shelves page', () => {
     shelf(reduced.host, 2).click();
     shelf(reduced.host, 3).click();
     reduced.harness.detectChanges();
-    expect(reduced.host.textContent).toContain('1 move.');
+    expect(reduced.host.querySelector('[role=status]')?.textContent).toContain('1 move. 1 of 6 pairs matched.');
     expect(reduced.tone).not.toHaveBeenCalled();
   });
 });
