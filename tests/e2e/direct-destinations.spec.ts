@@ -44,7 +44,8 @@ for (const [width, theme, reducedMotion] of [
         else await toggle.press('Enter');
         const destination = group.getByRole('link', { name: label, exact: true });
         await expect(destination).toBeInViewport({ ratio: 1 });
-        expect((await destination.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        await destination.click({ trial: true });
+        expect(await destination.evaluate(link => link.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
         if (width === 390) await destination.tap();
         else await destination.press('Enter');
         await expect(page).toHaveURL(url => url.pathname === path);
