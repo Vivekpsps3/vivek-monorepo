@@ -34,6 +34,6 @@ responses and test request counts; bounded reuse must preserve result semantics.
 The app switcher reuses canonical app-local destinations and respects app guards.
 Hub pins store allowlisted destination IDs per owner and device. Reset restores
 the default order.
-Verify navigation, refresh, history and keyboard focus.
+Canceled navigation preserves browser history. Verify refresh and keyboard focus.
 See [FRONTEND](../../docs/FRONTEND.md) for shell ownership. Run root Karma and
 affected [browser journeys](e2e/), including Town, Pixels and World.

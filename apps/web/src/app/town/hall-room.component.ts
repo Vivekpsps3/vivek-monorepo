@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRe
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EMPTY, Subject, catchError, distinctUntilChanged, map, of, startWith, switchMap } from 'rxjs';
-import { ThemeService, UiButtonComponent } from '@vivek/ui';
+import { ReturnContext, ThemeService, UiButtonComponent } from '@vivek/ui';
 import { SessionService } from '../platform/session.service';
 import { HabitDialogComponent } from './habit-dialog.component';
 import { hallObjects, hallRoom, type HallRoomAsset } from './hall-room.assets';
@@ -60,6 +60,7 @@ export class HallRoomComponent {
   private readonly api = inject(TownApiService);
   private readonly session = inject(SessionService);
   private readonly router = inject(Router);
+  private readonly returns = inject(ReturnContext);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly themeService = inject(ThemeService);
   private readonly route = inject(ActivatedRoute);
@@ -119,6 +120,10 @@ export class HallRoomComponent {
     if (state === 'unavailable' || state === 'stale') return 'Town is unavailable right now.';
     return '';
   });
+
+  protected reviewSource(): Record<string, unknown> {
+    return this.returns.link(this.router.url);
+  }
 
   constructor() {
     this.camera.set(cameraFromQuery(this.route.snapshot.queryParamMap));

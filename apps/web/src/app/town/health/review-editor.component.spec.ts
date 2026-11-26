@@ -196,7 +196,11 @@ describe('Weekly review editor', () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([
-          { path: 'town/review', component: WeeklyReviewComponent },
+          {
+            path: 'town/review', component: WeeklyReviewComponent,
+            canDeactivate: [(editor: WeeklyReviewComponent) => editor.canLeave()],
+            runGuardsAndResolvers: 'pathParamsOrQueryParamsChange',
+          },
           { path: 'town/hall', children: [] },
         ]),
         { provide: ReviewStoreService, useClass: TestStore },
@@ -248,7 +252,10 @@ describe('Weekly review editor', () => {
     expect(el.querySelector('a.reference')?.textContent).toBe('https://example.com/synthetic-review');
     expect(el.querySelector('a.reference')?.textContent).not.toContain(MARKER);
     clickNamed(el, 'Later', fixture);
-    expect(el.textContent).toContain('Save or discard this week before opening another.');
+    await until(fixture, () => !!el.querySelector('[role="dialog"]'));
+    expect(el.textContent).toContain('Unsaved changes to this reflection will be discarded.');
+    clickNamed(el, 'Stay', fixture);
+    await settle(fixture);
     expect(TestBed.inject(Router).url).toContain(WEEK);
     clickNamed(el, 'Save', fixture);
     await settle(fixture);
@@ -270,7 +277,10 @@ describe('Weekly review editor', () => {
     await settle(fixture);
     const notes = fake.rows.map(item => (decode(item.ciphertext_b64) as WeeklyReview));
     expect(notes.map(item => item.week).sort()).toEqual(['2026-12-28', '2027-01-04']);
-    clickNamed(el, '2026-12-28', fixture);
+    const history = el.querySelector('select[aria-label="Saved weeks"]');
+    if (!(history instanceof HTMLSelectElement)) throw new Error('missing saved weeks');
+    history.value = WEEK;
+    history.dispatchEvent(new Event('change', { bubbles: true }));
     await settle(fixture);
     expect(field(el, '#review-note').value).toBe(MARKER);
     clickNamed(el, 'Delete', fixture);
@@ -371,7 +381,10 @@ describe('Weekly review editor', () => {
     fake.upsertRelease.splice(0);
     clickNamed(leaving, 'Save', harness.fixture);
     await until(harness.fixture, () => fake.upsertRelease.length === 1);
-    await harness.navigateByUrl('/town/hall');
+    const navigation = harness.navigateByUrl('/town/hall');
+    await until(harness.fixture, () => !!leaving.querySelector('[role="dialog"]'));
+    clickNamed(leaving, 'Leave', harness.fixture);
+    await navigation;
     await settle(harness.fixture);
     fake.upsertRelease.shift()?.();
     await settle(harness.fixture);

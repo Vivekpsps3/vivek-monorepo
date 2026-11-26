@@ -209,9 +209,9 @@ export class PrivateLayoutComponent {
 
   onSwitcherLink(): void {
     // Let RouterLink handle the click before removing the link from the DOM.
-    // Leave focus alone; the arrived page heading takes it.
+    // The toggle stays available for focus return if a guard cancels navigation.
     queueMicrotask(() => {
-      if (this.switcherOpen()) this.closeSwitcher(false);
+      if (this.switcherOpen()) this.closeSwitcher();
     });
   }
 

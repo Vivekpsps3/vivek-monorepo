@@ -1,5 +1,5 @@
 import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
-import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withInMemoryScrolling, withRouterConfig } from '@angular/router';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { provideClientHydration } from '@angular/platform-browser';
 import { routes } from './routes';
@@ -12,7 +12,9 @@ import { requestPolicyInterceptor } from './platform/request-policy.interceptor'
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
-    provideRouter(routes, withComponentInputBinding(), withInMemoryScrolling({
+    provideRouter(routes, withComponentInputBinding(), withRouterConfig({
+      canceledNavigationResolution: 'computed',
+    }), withInMemoryScrolling({
       anchorScrolling: 'enabled', scrollPositionRestoration: 'enabled',
     })),
     { provide: SESSION_CONTEXT, useExisting: SessionService },

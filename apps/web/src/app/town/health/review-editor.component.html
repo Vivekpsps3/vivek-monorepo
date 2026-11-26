@@ -1,5 +1,8 @@
 <main class="review">
-  <ui-page-header title="Weekly review" eyebrow="Town" backLabel="Hall" backLink="/town/hall" titleId="review-title" />
+  <div>
+    <a class="review-back" [routerLink]="returnUrl()">{{ returnLabel() }}</a>
+    <ui-page-header title="Weekly review" [subtitle]="week() ? 'Week of ' + week() : undefined" titleId="review-title" />
+  </div>
 
   @if (phase() === 'loading') {
     <div role="status" aria-label="Loading the weekly review">
@@ -8,12 +11,12 @@
   } @else if (phase() === 'locked') {
     <div class="gate" role="status">
       <p>Finance is locked. The review stays encrypted.</p>
-      <ui-button href="/finance/vault/unlock" [queryParams]="returnQuery()" label="Unlock" />
+      <a class="btn btn-primary" routerLink="/finance/vault/unlock" [queryParams]="returnQuery()" [state]="unlockReturn()">Unlock</a>
     </div>
   } @else if (phase() === 'setup') {
     <div class="gate" role="status">
       <p>Set up Finance before this review can open.</p>
-      <ui-button href="/finance/vault/setup" [queryParams]="returnQuery()" label="Set up Finance" />
+      <a class="btn btn-primary" routerLink="/finance/vault/setup" [queryParams]="returnQuery()" [state]="unlockReturn()">Set up Finance</a>
     </div>
   } @else if (phase() === 'unavailable') {
     <div class="gate" role="status">
@@ -21,7 +24,6 @@
       <ui-button variant="secondary" (clicked)="retry()">Retry</ui-button>
     </div>
   } @else {
-    <p class="week-label">Week of {{ week() }}</p>
     @if (showSunday()) {
       <p class="prompt" role="status">This week ends today. Saving is optional and does not change Town.</p>
     }
@@ -32,28 +34,40 @@
     <div class="weeks">
       <ui-button variant="secondary" [disabled]="!canShift(-1) || busy()" (clicked)="shift(-1)">Earlier</ui-button>
       <ui-button variant="secondary" [disabled]="!canShift(1) || busy()" (clicked)="shift(1)">Later</ui-button>
+      @if (savedWeeks().length) {
+        <select aria-label="Saved weeks" [disabled]="busy()" (change)="openSaved($event)">
+          <option value="">Saved weeks ({{ savedWeeks().length }})</option>
+          @for (day of savedWeeks(); track day) {
+            <option [value]="day" [disabled]="day === week()">{{ day }}</option>
+          }
+        </select>
+      }
     </div>
 
-    @if (savedWeeks().length) {
-      <nav class="saved-weeks" aria-label="Saved weeks">
-        @for (day of savedWeeks(); track day) {
-          <ui-button variant="secondary" [pressed]="day === week()" [disabled]="busy()" (clicked)="openSaved(day)">{{ day }}</ui-button>
-        }
-      </nav>
-    }
-
     <form class="fields" (submit)="$event.preventDefault()">
-      <label for="review-focus-1">Focus 1</label>
-      <input id="review-focus-1" data-review-marker="focus-1" autocomplete="off" [value]="draft().focus[0]" (input)="setFocus(0, $event)" />
-      <label for="review-focus-2">Focus 2</label>
-      <input id="review-focus-2" data-review-marker="focus-2" autocomplete="off" [value]="draft().focus[1]" (input)="setFocus(1, $event)" />
-      <label for="review-focus-3">Focus 3</label>
-      <input id="review-focus-3" data-review-marker="focus-3" autocomplete="off" [value]="draft().focus[2]" (input)="setFocus(2, $event)" />
-      <label for="review-note">Note</label>
-      <textarea id="review-note" data-review-marker="note" autocomplete="off" [value]="draft().note" (input)="setNote($event)"></textarea>
-      <label for="review-obsidian">Obsidian link</label>
-      <input id="review-obsidian" data-review-marker="obsidian" autocomplete="off" aria-describedby="review-link-help" [value]="draft().obsidian" (input)="setLink($event)" />
-      <p id="review-link-help">Optional. This stays a link and is not copied into the note.</p>
+      <div class="focus-fields">
+        <div class="focus-field">
+          <label for="review-focus-1">Focus 1</label>
+          <input id="review-focus-1" data-review-marker="focus-1" autocomplete="off" [value]="draft().focus[0]" (input)="setFocus(0, $event)" />
+        </div>
+        <div class="focus-field">
+          <label for="review-focus-2">Focus 2</label>
+          <input id="review-focus-2" data-review-marker="focus-2" autocomplete="off" [value]="draft().focus[1]" (input)="setFocus(1, $event)" />
+        </div>
+        <div class="focus-field">
+          <label for="review-focus-3">Focus 3</label>
+          <input id="review-focus-3" data-review-marker="focus-3" autocomplete="off" [value]="draft().focus[2]" (input)="setFocus(2, $event)" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="review-note">Note</label>
+        <textarea id="review-note" data-review-marker="note" autocomplete="off" [value]="draft().note" (input)="setNote($event)"></textarea>
+      </div>
+      <div class="field">
+        <label for="review-obsidian">Obsidian link</label>
+        <input id="review-obsidian" data-review-marker="obsidian" autocomplete="off" aria-describedby="review-link-help" [value]="draft().obsidian" (input)="setLink($event)" />
+        <p id="review-link-help">Optional. Stored as a link.</p>
+      </div>
       @if (linkHref(); as href) {
         <a class="reference" [href]="href" rel="noreferrer">{{ href }}</a>
       }
@@ -73,6 +87,23 @@
       }
     </div>
   }
+
+  <ui-dialog [open]="confirmLeave()" labelledBy="review-leave-title" describedBy="review-leave-help" (closed)="finishLeave(false)">
+    <h2 id="review-leave-title">Leave this week?</h2>
+    <p id="review-leave-help">
+      @if (busy()) {
+        A change is in progress and may still finish. Stay to check its result.
+      } @else if (dirty()) {
+        Unsaved changes to this reflection will be discarded.
+      } @else {
+        The latest changes are saved.
+      }
+    </p>
+    <div class="actions">
+      <ui-button variant="secondary" (clicked)="finishLeave(false)">Stay</ui-button>
+      <ui-button variant="danger" (clicked)="finishLeave(true)">{{ !busy() && dirty() ? 'Discard and leave' : 'Leave' }}</ui-button>
+    </div>
+  </ui-dialog>
 
   <ui-dialog [open]="confirmDelete()" labelledBy="review-delete-title" (closed)="confirmDelete.set(false)">
     <h2 id="review-delete-title">Delete this week</h2>

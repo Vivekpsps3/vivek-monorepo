@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard, adminGuard } from '@vivek/ui';
 import { PrivateLayoutComponent } from './private-layout.component';
+import type { WeeklyReviewComponent } from './town/health/review-editor.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', loadChildren: () => import('../../../site/src/public-api').then(m => m.routes) },
@@ -33,7 +34,13 @@ export const routes: Routes = [
       { path: 'memory', title: 'Town · Memory Shelves', loadComponent: () => import('./town/memory-shelves.component').then(m => m.MemoryShelvesComponent) },
       { path: 'clinic', title: 'Town · Clinic', data: { healthRoom: 'clinic' }, loadComponent: () => import('./town/health/health-room.component').then(m => m.HealthRoomComponent) },
       { path: 'gym', title: 'Town · Gym', data: { healthRoom: 'gym' }, loadComponent: () => import('./town/health/health-room.component').then(m => m.HealthRoomComponent) },
-      { path: 'review', title: 'Town · Weekly review', loadComponent: () => import('./town/health/review-editor.component').then(m => m.WeeklyReviewComponent) },
+      {
+        path: 'review',
+        title: 'Town · Weekly review',
+        loadComponent: () => import('./town/health/review-editor.component').then(m => m.WeeklyReviewComponent),
+        canDeactivate: [(editor: WeeklyReviewComponent | null) => editor?.canLeave() ?? true],
+        runGuardsAndResolvers: (from, to) => from.queryParamMap.get('week') !== to.queryParamMap.get('week'),
+      },
       { path: 'world', title: 'World', loadComponent: () => import('./world/ui/world.component').then(m => m.WorldComponent) },
     ] },
     { path: 'pixels', loadChildren: () => import('./pixels/pixels.routes').then(m => m.PIXELS_ROUTES) },
