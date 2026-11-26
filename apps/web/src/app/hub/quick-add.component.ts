@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, ViewChild, inject, input, signal } from '@angular/core';
 import { Router, RouterLink, UrlTree } from '@angular/router';
 import { todayIsoDate } from '@vivek/browser';
-import { UiButtonComponent, UiDialogComponent, UiMenuComponent, UiMenuItemDirective, vaultUnlockHref } from '@vivek/ui';
+import { ReturnContext, UiButtonComponent, UiDialogComponent, UiMenuComponent, UiMenuItemDirective, vaultUnlockHref } from '@vivek/ui';
 import { financeVaultPresent } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
 
@@ -15,6 +15,8 @@ import { SessionService } from '../platform/session.service';
       <a uiMenuItem routerLink="/travel/trips/new">Plan a trip</a>
       <a uiMenuItem routerLink="/media/search">Add media</a>
       <a uiMenuItem [routerLink]="transactionHref()">Add transaction</a>
+      <a uiMenuItem routerLink="/town/clinic" [state]="healthSource()">Record a measurement</a>
+      <a uiMenuItem routerLink="/town/gym" [state]="healthSource()">Start or resume a workout</a>
     </ui-menu>
     <button class="help" type="button" aria-label="Keyboard shortcuts" aria-keyshortcuts="?" (click)="help.set(true)">?</button>
     <ui-dialog [open]="help()" labelledBy="workspace-shortcuts-title" (closed)="help.set(false)">
@@ -37,6 +39,11 @@ export class QuickAddComponent {
   @ViewChild(UiMenuComponent) private menu?: UiMenuComponent;
 
   private readonly router = inject(Router);
+  private readonly returns = inject(ReturnContext);
+
+  protected healthSource(): Record<string, unknown> {
+    return { ...this.returns.link(this.router.url), healthQuickAdd: true };
+  }
 
   transactionHref(): UrlTree {
     const next = `/finance/spending?t=activity&date=${todayIsoDate()}&add=1`;

@@ -284,7 +284,7 @@ export class VaultService {
     const material = await createVaultMaterial(passphrase);
     if (!this.sameSession(epoch, lockAt, userId)) return;
     const status = await firstValueFrom(
-      this.http.post<VaultStatus>(apiUrl('/finance/vault/setup'), material.setupPayload)
+      this.http.post<VaultStatus>(apiUrl('/vault/setup'), material.setupPayload)
     );
     if (!this.sameSession(epoch, lockAt, userId)) return;
     this.statusSubject.next(status);

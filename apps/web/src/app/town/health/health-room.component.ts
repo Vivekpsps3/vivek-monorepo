@@ -1,10 +1,11 @@
-import { NgTemplateOutlet } from '@angular/common';
+import { Location, NgTemplateOutlet } from '@angular/common';
 import { AfterViewChecked, ChangeDetectionStrategy, Component, DestroyRef, Directive, ElementRef, InjectionToken, Injector, OnInit, afterRenderEffect, computed, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { localTodayIso } from '@vivek/browser';
 import {
   ConfirmService,
+  ReturnContext,
   UiButtonComponent,
   UiInputComponent,
   UiPageHeaderComponent,
@@ -215,6 +216,7 @@ function isStat(value: HealthStat | HealthPr): value is HealthStat {
 @Component({
   selector: 'app-health-room',
   imports: [
+    RouterLink,
     ClinicRoomComponent,
     GymFloorComponent,
     GymMezzanineComponent,
@@ -245,6 +247,10 @@ export class HealthRoomComponent implements OnInit {
   protected readonly medalNote = GAME_MEDAL_EXPLANATION;
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly returns = inject(ReturnContext);
+  private readonly location = inject(Location);
+  /** Only the original Health entry can launch once the vault is ready. */
+  private quickAddOpened = false;
   private readonly session = inject(SessionService);
   private readonly store = inject(HealthStoreService);
   private readonly confirm = inject(ConfirmService);
@@ -495,6 +501,12 @@ export class HealthRoomComponent implements OnInit {
       this.clinicObject.set(clinicId);
       if (clinicId !== 'labs') this.openLabTitle.set(null);
     });
+    effect(() => {
+      if (this.phase() !== 'ready' || this.quickAddOpened || !this.quickAddOrigin()) return;
+      this.quickAddOpened = true;
+      if (this.room() === 'clinic') this.openCreate('weight');
+      else this.openCurrentWorkout();
+    });
     afterRenderEffect(() => {
       const tick = this.wallErrorTick();
       const message = this.wallDateError();
@@ -542,10 +554,31 @@ export class HealthRoomComponent implements OnInit {
     return localTodayIso();
   }
 
-  protected returnQuery(): { next?: string } {
+  private roomPath(): string {
     const entry = this.entryId();
     const path = this.room() === 'clinic' ? '/town/clinic' : '/town/gym';
-    return vaultReturnQuery(entry ? `${path}?entry=${entry}` : path);
+    return entry ? `${path}?entry=${entry}` : path;
+  }
+
+  protected returnQuery(): { next?: string } {
+    return vaultReturnQuery(this.roomPath());
+  }
+
+  protected unlockReturn(): Record<string, unknown> | undefined {
+    return this.quickAddOrigin() ? this.returns.link(this.roomPath()) : undefined;
+  }
+
+  private quickAddOrigin(): string | null {
+    const state = this.location.getState() as { healthQuickAdd?: unknown } | null;
+    if (state?.healthQuickAdd !== true) return null;
+    const origin = this.returns.origin();
+    const path = origin?.split('?')[0];
+    return path === '/hub' || path === '/hub/agenda' ? origin : null;
+  }
+
+  private finishQuickAdd(): void {
+    const origin = this.quickAddOpened ? this.quickAddOrigin() : null;
+    if (origin) this.returns.back(origin);
   }
 
   protected retry(): void {
@@ -760,6 +793,10 @@ export class HealthRoomComponent implements OnInit {
   protected recordAtStation(): void {
     if (this.phase() !== 'ready' || this.workoutBusy()) return;
     this.selectFloor('station');
+    this.openCurrentWorkout();
+  }
+
+  private openCurrentWorkout(): void {
     const held = this.workoutDraft();
     if (held?.kind === 'session') {
       if (held.clientId === '') {
@@ -849,6 +886,7 @@ export class HealthRoomComponent implements OnInit {
   protected onWorkoutClosed(): void {
     this.workoutDialogOpen.set(false);
     this.workoutFormError.set('');
+    this.finishQuickAdd();
   }
 
   protected openEdit(clientId: string): void {
@@ -879,6 +917,7 @@ export class HealthRoomComponent implements OnInit {
   protected onDialogClosed(): void {
     this.dialogOpen.set(false);
     this.formError.set('');
+    this.finishQuickAdd();
   }
 
   protected setWeight(value: string | number | null): void {
@@ -1187,6 +1226,7 @@ export class HealthRoomComponent implements OnInit {
     this.draft.set(null);
     this.dialogOpen.set(false);
     this.formError.set('');
+    this.finishQuickAdd();
   }
 
   private openSavedSession(clientId: string, focusId: string, state: 'draft' | 'completed'): void {
@@ -1228,6 +1268,7 @@ export class HealthRoomComponent implements OnInit {
     this.workoutDraft.set(null);
     this.workoutDialogOpen.set(false);
     this.workoutFormError.set('');
+    this.finishQuickAdd();
   }
 
   private dropPrivate(): void {

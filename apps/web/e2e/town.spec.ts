@@ -209,13 +209,6 @@ test('treasury follows completed budget weeks and clears when Finance locks', as
   expect(records).toEqual([]);
   const before: TownResponse = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
 
-  // The setup screen posts /api/finance/vault/setup. The vault router serves /api/vault/setup.
-  await page.route('**/api/finance/vault/setup', async route => {
-    const response = await route.fetch({
-      url: route.request().url().replace('/api/finance/vault/setup', '/api/vault/setup'),
-    });
-    await route.fulfill({ response });
-  });
   await page.goto('/finance/vault/setup?next=%2Ffinance%2Fplanning');
   await page.getByLabel('Vault passphrase', { exact: true }).fill(BUDGET_PASSPHRASE);
   await page.getByLabel('Confirm passphrase', { exact: true }).fill(BUDGET_PASSPHRASE);

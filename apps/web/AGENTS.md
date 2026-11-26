@@ -21,13 +21,12 @@ Hub component alive across `/hub` and `/hub/agenda`; month/source filters live i
 the URL. Compact Up next retains its 14-day window and overdue rules; the agenda
 uses bounded summary windows and authoritative saved dates. Reminder PATCH uses
 every ReminderIn field.
-`hub-up-next.spec.ts` executes with the web browser suite.
 
 Account forms share `platform/auth/account-error.ts` for safe copy and Retry-After;
 keep username validation with `@vivek/auth`.
 
-Use existing Hub loaders and controls. The shell owns global shortcuts; mounted Hub
-commands route Quick add to app editors with a browser-local transaction date.
+The shell owns global shortcuts. Hub Quick add opens existing editors and uses
+browser-local transaction dates and owner-bound vault return for Health.
 Health checks are admin-only, owner-bound and visibility-throttled. Share source
 responses and test request counts; bounded reuse must preserve result semantics.
 

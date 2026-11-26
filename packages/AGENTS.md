@@ -18,8 +18,8 @@ For UI changes, preserve accessible names, linked errors, keyboard/focus return,
 dialog scroll, 44px targets at every size and theme tokens. Keep overlay labels
 opaque during motion and use the shared frame-shadow tokens. Resolve cascade
 ownership instead of stacking specificity overrides. Migrate consumers and remove their old selectors.
-Menus must hide their panel and update expanded state before focus returns, so
-the next keyboard command sees the closed state.
+Menus fit the viewport and hide before restoring focus. The next keyboard
+command must see the updated expanded state.
 Section navigation wraps its real links. Its current-state match prefers a matching
 query-backed view over the default path and ignores unrelated query parameters.
 ReturnContext validates history coordinates before vault navigation.

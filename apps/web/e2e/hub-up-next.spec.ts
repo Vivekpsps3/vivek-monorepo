@@ -216,7 +216,7 @@ test('pins reorder shortcuts, survive reload and reset from the keyboard', async
   const edit = shortcuts.getByRole('button', { name: 'Edit pins' });
   const links = shortcuts.getByRole('link');
   const dialog = page.getByRole('dialog', { name: 'Edit pins' });
-  const defaults = ['Holdings', 'Trips', 'Library', 'Pixels', 'Town', 'Weekly review'];
+  const defaults = ['Holdings', 'Trips', 'Library', 'Health', 'Pixels', 'Town', 'Weekly review'];
   await expect(links).toHaveText(defaults);
   await edit.press('Enter');
   await expect(dialog.getByRole('button', { name: 'Holdings' })).toBeFocused();
@@ -229,9 +229,9 @@ test('pins reorder shortcuts, survive reload and reset from the keyboard', async
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.keyboard.press('Escape');
   await expect(edit).toBeFocused();
-  await expect(links).toHaveText(['Town', 'Pixels', 'Library', 'Holdings', 'Trips', 'Weekly review']);
+  await expect(links).toHaveText(['Town', 'Pixels', 'Library', 'Holdings', 'Trips', 'Health', 'Weekly review']);
   await page.reload();
-  await expect(links).toHaveText(['Town', 'Pixels', 'Library', 'Holdings', 'Trips', 'Weekly review']);
+  await expect(links).toHaveText(['Town', 'Pixels', 'Library', 'Holdings', 'Trips', 'Health', 'Weekly review']);
   await edit.press('Enter');
   await dialog.getByRole('button', { name: 'Reset pins' }).press('Enter');
   await dialog.getByRole('button', { name: 'Done' }).press('Enter');

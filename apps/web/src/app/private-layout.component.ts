@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, HostListener, Injector, ViewChild, inject, isDevMode, signal } from '@angular/core';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs';
 import { UiIconComponent, UiStateComponent, UserMenuContent, currentSectionNavLink, safeNextPathFrom, type UiSectionNavItem } from '@vivek/ui';
@@ -14,7 +14,7 @@ import { SearchDialogComponent } from './search/search-dialog.component';
 @Component({
   selector: 'suite-private-layout',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, AsyncPipe, NgTemplateOutlet, UiIconComponent, SearchDialogComponent, UiStateComponent, HealthChipComponent],
+  imports: [RouterLink, RouterOutlet, AsyncPipe, NgTemplateOutlet, UiIconComponent, SearchDialogComponent, UiStateComponent, HealthChipComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './private-layout.component.html',
   styleUrl: './private-layout.component.css',
@@ -64,6 +64,10 @@ export class PrivateLayoutComponent {
   private readonly router = inject(Router);
   readonly apps = [
     { label: 'Hub', href: '/hub', sections: [{ label: 'Agenda', link: '/hub/agenda' }] },
+    { label: 'Health', href: '/town/clinic', homeLabel: 'Clinic', sections: [
+      { label: 'Clinic', link: '/town/clinic' },
+      { label: 'Gym', link: '/town/gym' },
+    ] },
     { label: 'Finance', href: '/finance', sections: financeSections },
     { label: 'Travel', href: '/travel', sections: travelSections },
     { label: 'Media', href: '/media', sections: mediaSections },
@@ -76,7 +80,7 @@ export class PrivateLayoutComponent {
       { label: 'World', link: '/town/world' },
     ] },
     { label: 'Pixels', href: '/pixels', sections: [{ label: 'Life', link: '/pixels/life' }] },
-  ].map((app: { label: string; href: string; sections: readonly UiSectionNavItem[] }) => ({
+  ].map((app: { label: string; href: string; homeLabel?: string; sections: readonly UiSectionNavItem[] }) => ({
     ...app,
     destinations: app.sections
       .filter(item => item.link !== app.href)
@@ -277,7 +281,8 @@ export class PrivateLayoutComponent {
 
   private get currentApp() {
     const path = this.router.url.split(/[?#]/)[0];
-    return this.apps.find(app => path === app.href || path.startsWith(app.href + '/'));
+    return this.apps.find(app => app.sections.some(section => path === section.link))
+      ?? this.apps.find(app => path === app.href || path.startsWith(app.href + '/'));
   }
 
   get appName(): string {
