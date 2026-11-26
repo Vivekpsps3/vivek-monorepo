@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, Injector, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, Injector, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Subject, finalize, type Observable } from 'rxjs';
 import { localTodayIso } from '@vivek/browser';
 import {
+  ReturnContext,
   UiButtonComponent,
   UiDialogComponent,
   UiPageHeaderComponent,
@@ -59,7 +61,7 @@ function sameDraft(left: ReviewDraft, right: ReviewDraft): boolean {
 
 @Component({
   selector: 'app-weekly-review',
-  imports: [UiButtonComponent, UiDialogComponent, UiPageHeaderComponent, UiSkeletonComponent],
+  imports: [RouterLink, UiButtonComponent, UiDialogComponent, UiPageHeaderComponent, UiSkeletonComponent],
   templateUrl: './review-editor.component.html',
   styleUrl: './review-editor.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -71,6 +73,7 @@ function sameDraft(left: ReviewDraft, right: ReviewDraft): boolean {
 export class WeeklyReviewComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly returns = inject(ReturnContext);
   private readonly session = inject(SessionService);
   private readonly store = inject(ReviewStoreService);
   private readonly todayToken = inject(REVIEW_TODAY);
@@ -79,7 +82,8 @@ export class WeeklyReviewComponent {
   private generation = 0;
   private dead = false;
   private seenOwner: number | null | undefined;
-  private readonly life = new AbortController();
+  private life = new AbortController();
+  private leave: Subject<boolean> | null = null;
   private baseline: ReviewDraft = emptyDraft();
   private clientId: string | null = null;
   private revision: number | null = null;
@@ -97,6 +101,15 @@ export class WeeklyReviewComponent {
   protected readonly saved = signal(false);
   protected readonly busy = signal(false);
   protected readonly confirmDelete = signal(false);
+  protected readonly confirmLeave = signal(false);
+  private readonly returnPath = signal('/town/hall');
+  protected readonly returnUrl = computed(() => this.router.parseUrl(this.returnPath()));
+
+  private readonly beforeUnload = (event: BeforeUnloadEvent): void => {
+    if (!this.hasPendingChanges()) return;
+    event.preventDefault();
+    event.returnValue = true;
+  };
 
   constructor() {
     const releaseLock = bindLockSnapshots(() => this.invalidate());
@@ -104,15 +117,65 @@ export class WeeklyReviewComponent {
       this.dead = true;
       this.generation += 1;
       this.life.abort();
+      this.finishLeave(false);
       this.dropPrivate();
       releaseLock();
     });
     this.session.user$.pipe(takeUntilDestroyed()).subscribe(user => this.noteOwner(user?.id));
     this.session.cleared$.pipe(takeUntilDestroyed()).subscribe(() => this.invalidate());
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => {
-      this.requested = params.get('week');
+      this.returnPath.set(this.source() ?? '/town/hall');
+      const week = params.get('week');
+      if (this.requested !== week) this.resetWeek();
+      this.requested = week;
       void this.follow(this.requested);
     });
+    effect(cleanup => {
+      if (typeof window === 'undefined' || !this.hasPendingChanges()) return;
+      window.addEventListener('beforeunload', this.beforeUnload);
+      cleanup(() => window.removeEventListener('beforeunload', this.beforeUnload));
+    });
+  }
+
+  canLeave(): boolean | Observable<boolean> {
+    if (!this.hasPendingChanges()) return true;
+    this.finishLeave(false);
+    const decision = new Subject<boolean>();
+    this.leave = decision;
+    this.confirmLeave.set(true);
+    return decision.pipe(finalize(() => {
+      if (this.leave !== decision) return;
+      this.leave = null;
+      this.confirmLeave.set(false);
+    }));
+  }
+
+  protected finishLeave(discard: boolean): void {
+    const decision = this.leave;
+    this.leave = null;
+    this.confirmLeave.set(false);
+    decision?.next(discard);
+    decision?.complete();
+  }
+
+  private hasPendingChanges(): boolean {
+    return this.ownerId() !== null && financeVaultPresent() && (this.busy() || this.dirty());
+  }
+
+  private source(): string | null {
+    const path = this.returns.origin();
+    switch (path?.split('?')[0]) {
+      case '/hub':
+      case '/hub/agenda':
+      case '/town/hall':
+        return path;
+      default:
+        return null;
+    }
+  }
+
+  protected returnLabel(): string {
+    return this.returnPath().startsWith('/hub') ? 'Hub' : 'Hall';
   }
 
   protected today(): string {
@@ -136,9 +199,17 @@ export class WeeklyReviewComponent {
     return typeof link === 'string' ? link : null;
   }
 
-  protected returnQuery(): { next?: string } {
+  private reviewPath(): string {
     const week = this.week();
-    return vaultReturnQuery(week ? `/town/review?week=${week}` : '/town/review');
+    return week ? `/town/review?week=${week}` : '/town/review';
+  }
+
+  protected returnQuery(): { next?: string } {
+    return vaultReturnQuery(this.reviewPath());
+  }
+
+  protected unlockReturn(): Record<string, unknown> {
+    return this.returns.link(this.reviewPath());
   }
 
   protected unreadableText(): string {
@@ -176,22 +247,23 @@ export class WeeklyReviewComponent {
   }
 
   protected shift(delta: number): void {
-    if (this.dirty()) {
-      this.message.set('Save or discard this week before opening another.');
-      return;
-    }
-    const next = shiftIsoWeek(this.week(), delta);
-    if (!next) return;
-    void this.router.navigate([], { relativeTo: this.route, queryParams: { week: next } });
+    const week = shiftIsoWeek(this.week(), delta);
+    if (week) this.changeWeek(week);
   }
 
-  protected openSaved(day: string): void {
-    if (!isIsoMonday(day) || day === this.week()) return;
-    if (this.dirty()) {
-      this.message.set('Save or discard this week before opening another.');
-      return;
-    }
-    void this.router.navigate([], { relativeTo: this.route, queryParams: { week: day } });
+  protected openSaved(event: Event): void {
+    if (!(event.target instanceof HTMLSelectElement)) return;
+    const day = event.target.value;
+    event.target.value = '';
+    if (isIsoMonday(day) && day !== this.week()) this.changeWeek(day);
+  }
+
+  private changeWeek(week: string, replaceUrl = false): void {
+    const source = this.source();
+    void this.router.navigate([], {
+      relativeTo: this.route, queryParams: { week }, replaceUrl,
+      state: source ? this.returns.sourceState(source) : undefined,
+    });
   }
 
   protected async save(): Promise<void> {
@@ -295,11 +367,18 @@ export class WeeklyReviewComponent {
 
   private invalidate(): void {
     if (this.dead) return;
+    this.finishLeave(false);
+    this.resetWeek();
+    void this.follow(this.requested);
+  }
+
+  private resetWeek(): void {
     this.generation += 1;
     this.view += 1;
+    this.life.abort();
+    this.life = new AbortController();
     this.phase.set('loading');
     this.dropPrivate();
-    void this.follow(this.requested);
   }
 
   private dropPrivate(): void {
@@ -327,20 +406,7 @@ export class WeeklyReviewComponent {
       return;
     }
     if (requested !== monday) {
-      await this.router.navigate([], {
-        relativeTo: this.route,
-        queryParams: { week: monday },
-        replaceUrl: true,
-      });
-      return;
-    }
-    if (this.phase() === 'ready' && this.dirty() && this.week() && this.week() !== monday) {
-      this.message.set('Save or discard this week before opening another.');
-      await this.router.navigate([], {
-        relativeTo: this.route,
-        queryParams: { week: this.week() },
-        replaceUrl: true,
-      });
+      this.changeWeek(monday, true);
       return;
     }
     if (this.phase() === 'ready' && this.week() === monday) return;

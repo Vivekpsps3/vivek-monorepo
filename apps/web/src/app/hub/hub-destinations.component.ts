@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { UiButtonComponent, UiDialogComponent, UiIconComponent, type UiIconName } from '@vivek/ui';
+import { ReturnContext, UiButtonComponent, UiDialogComponent, UiIconComponent, type UiIconName } from '@vivek/ui';
 
 const destinations = [
   { id: 'finance', label: 'Holdings', path: '/finance/have?t=holdings', icon: 'wallet' },
@@ -44,7 +44,7 @@ function readPins(ownerId: number | null): readonly DestinationId[] {
         @for (tile of tiles(); track tile.id) {
           <li>
             @if (tile.url) {
-              <a class="tile" [routerLink]="tile.url" [class.pinned]="pins().includes(tile.id)">
+              <a class="tile" [routerLink]="tile.url" [state]="tile.id === 'review' ? reviewSource() : undefined" [class.pinned]="pins().includes(tile.id)">
                 <ui-icon [name]="tile.icon" />
                 <span>{{ tile.label }}</span>
                 @if (pins().includes(tile.id)) { <ui-icon class="pin" size="sm" name="check" /> }
@@ -82,6 +82,7 @@ function readPins(ownerId: number | null): readonly DestinationId[] {
 export class HubDestinationsComponent {
   readonly ownerId = input.required<number | null>();
   private readonly router = inject(Router);
+  private readonly returns = inject(ReturnContext);
   protected readonly options = pinnable;
   protected readonly maxPins = maxPins;
   protected readonly pins = linkedSignal(() => readPins(this.ownerId()));
@@ -96,6 +97,10 @@ export class HubDestinationsComponent {
     const pinned = pins.flatMap(id => this.links.filter(tile => tile.id === id));
     return [...pinned, ...this.links.filter(tile => !pins.includes(tile.id))];
   });
+
+  protected reviewSource(): Record<string, unknown> {
+    return this.returns.link(this.router.url);
+  }
 
   protected edit(): void {
     this.saveFailed.set(false);

@@ -3,6 +3,7 @@
     <app-town-place [crumbs]="crumbs()" />
     <ui-button variant="ghost" href="/town" label="Back to Town" />
     <h1>Hall</h1>
+    <a class="action" routerLink="/town/review" [state]="reviewSource()">Weekly review</a>
   </header>
   <div class="room-layout">
     <div class="composition">
