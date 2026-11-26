@@ -187,7 +187,7 @@ export class UiMenuComponent implements OnDestroy {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (!this.open()) return;
-        this.measureFlip();
+        this.placePanel();
         if (focus === "none") return;
         const enabled = this.enabledItems();
         if (!enabled.length) {
@@ -199,9 +199,13 @@ export class UiMenuComponent implements OnDestroy {
     });
   }
 
-  private measureFlip(): void {
+  private placePanel(): void {
     const panel = this.panel().nativeElement;
+    panel.style.translate = "";
     const rect = panel.getBoundingClientRect();
+    const right = document.documentElement.clientWidth - 8;
+    const offset = Math.max(8 - rect.left, Math.min(0, right - rect.right));
+    if (offset !== 0) panel.style.translate = `${offset}px`;
     if (rect.bottom > window.innerHeight) {
       this.openUp.set(true);
     }

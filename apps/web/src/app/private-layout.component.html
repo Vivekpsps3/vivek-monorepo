@@ -4,8 +4,8 @@
     <nav class="app-switcher__bar" aria-label="Apps" #switcher (keydown)="onSwitcherKey($event)">
       <div class="app-switcher__overview">
         @for (app of apps; track app.href) {
-          <a [routerLink]="app.href" routerLinkActive="is-current" ariaCurrentWhenActive="location"
-            [routerLinkActiveOptions]="{ paths: 'subset', queryParams: 'ignored', matrixParams: 'ignored', fragment: 'ignored' }">{{ app.label }}</a>
+          <a [routerLink]="app.href" [class.is-current]="appName === app.label"
+            [attr.aria-current]="appName === app.label ? 'location' : null">{{ app.label }}</a>
         }
       </div>
       <button #switcherButton class="app-switcher__toggle" type="button"
@@ -21,7 +21,7 @@
             <div class="app-switcher__group" role="group" [attr.aria-label]="app.label">
               <a class="app-switcher__home" [routerLink]="app.href"
                 [attr.aria-current]="appName === app.label && (activeDestination() === app.href || !activeDestination()) ? 'location' : null"
-                (click)="onSwitcherLink()">{{ app.label }}</a>
+                (click)="onSwitcherLink()">{{ app.homeLabel ?? app.label }}</a>
               <div class="app-switcher__destinations">
                 @for (item of app.destinations; track item.link) {
                   <a [routerLink]="item.url" [attr.aria-label]="item.ariaLabel ?? null"

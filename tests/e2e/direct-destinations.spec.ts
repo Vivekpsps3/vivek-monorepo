@@ -11,6 +11,55 @@ for (const [width, theme, reducedMotion] of [
   test.describe(`${width}px ${theme}`, () => {
     test.use({ viewport: { width, height: width === 390 ? 844 : 800 }, hasTouch: width === 390, reducedMotion });
 
+    test('Health is pinnable and Clinic and Gym have direct app destinations', async ({ page, request }, info) => {
+      expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
+      await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+      await page.goto('/hub');
+      const shortcuts = page.getByRole('navigation', { name: 'Shortcuts' });
+      const links = shortcuts.getByRole('link');
+      const health = shortcuts.getByRole('link', { name: 'Health' });
+      await expect(health).toHaveAttribute('href', '/town/clinic');
+      await shortcuts.getByRole('button', { name: 'Edit pins' }).click();
+      const pins = page.getByRole('dialog', { name: 'Edit pins' });
+      await pins.getByRole('button', { name: 'Health' }).click();
+      await pins.getByRole('button', { name: 'Done' }).click();
+      await expect(links.first()).toHaveText('Health');
+      await page.reload();
+      await expect(links.first()).toHaveText('Health');
+      await shortcuts.getByRole('button', { name: 'Edit pins' }).click();
+      await pins.getByRole('button', { name: 'Reset pins' }).click();
+      await pins.getByRole('button', { name: 'Done' }).click();
+      await expect(links.first()).toHaveText('Holdings');
+      await health.click();
+      await expect(page.getByRole('heading', { name: 'Clinic', level: 1 })).toBeFocused();
+
+      const apps = page.getByRole('navigation', { name: 'Apps', exact: true });
+      const toggle = apps.getByRole('button', { name: /Switch apps and destinations/ });
+      const group = apps.getByRole('group', { name: 'Health', exact: true });
+      await expect(toggle).toHaveAccessibleName(/Current app Health/);
+      for (const [label, path] of [['Clinic', '/town/clinic'], ['Gym', '/town/gym']]) {
+        await page.goto('/travel');
+        await expect(toggle).toHaveAccessibleName(/Current app Travel/);
+        if (width === 390) await toggle.tap();
+        else await toggle.press('Enter');
+        const destination = group.getByRole('link', { name: label, exact: true });
+        await expect(destination).toBeInViewport({ ratio: 1 });
+        expect((await destination.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        if (width === 390) await destination.tap();
+        else await destination.press('Enter');
+        await expect(page).toHaveURL(url => url.pathname === path);
+        await expect(page.getByRole('heading', { name: label, level: 1 })).toBeFocused();
+        await expect(toggle).toHaveAccessibleName(/Current app Health/);
+        await toggle.press('Enter');
+        await expect(destination).toHaveAttribute('aria-current', label === 'Clinic' ? 'location' : 'page');
+        await info.attach(`health-switcher-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
+        await page.keyboard.press('Escape');
+        await expect(toggle).toBeFocused();
+        await page.goBack();
+        await expect(toggle).toHaveAccessibleName(/Current app Travel/);
+      }
+    });
+
     test('Travel opens Media Books in two actions from one switcher', async ({ page, request }, info) => {
       await resetMedia(request);
       await addItem(request, { kind: 'book', title: 'Harbor Guide' });

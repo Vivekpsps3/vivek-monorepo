@@ -59,6 +59,78 @@ async function activate(page: Page, locator: Locator, touch: boolean): Promise<v
   await page.keyboard.press('Enter');
 }
 
+async function fromQuickAdd(page: Page, label: string, touch: boolean): Promise<void> {
+  const quickAdd = page.getByRole('button', { name: 'Quick add', exact: true });
+  const menu = page.getByRole('menu', { name: 'Quick add' });
+  const action = menu.getByRole('menuitem', { name: label });
+  if (touch) {
+    await quickAdd.tap();
+    await action.tap();
+    return;
+  }
+  await quickAdd.focus();
+  await page.keyboard.press('n');
+  await expect(menu.getByRole('menuitem', { name: 'Plan a trip' })).toBeFocused();
+  await page.keyboard.press(label[0].toLowerCase());
+  await expect(action).toBeFocused();
+  await page.keyboard.press('Enter');
+}
+
+// Setup writes a real synthetic vault. Give this case its own worker server.
+const firstVaultTest = test.extend<{}, { serverURL: string }>({
+  serverURL: [async ({ serverURL }, use) => { await use(serverURL); }, { scope: 'worker' }],
+});
+
+firstVaultTest.describe('Health Quick add with a new vault', () => {
+  firstVaultTest.use({ viewport: { width: 390, height: 844 }, hasTouch: true, timezoneId: 'America/Los_Angeles' });
+  firstVaultTest('Quick add starts a workout after setup and resumes the same saved draft after lock', async ({ page, request }, info) => {
+    expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
+    await page.clock.setFixedTime(new Date('2026-10-29T19:00:00Z'));
+    await page.addInitScript(() => localStorage.setItem('suite-theme', 'dark'));
+    await page.goto('/hub');
+    await fromQuickAdd(page, 'Start or resume a workout', true);
+    const room = page.locator('app-health-room');
+    await expect(room).toHaveAttribute('data-health-state', 'setup');
+    await activate(page, room.getByRole('link', { name: 'Set up Finance' }), true);
+    await expect(page).toHaveURL(url => url.pathname === '/finance/vault/setup' && url.searchParams.get('next') === '/town/gym');
+    await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+    await page.getByRole('textbox', { name: 'Confirm passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+    await activate(page, page.getByRole('button', { name: 'Create vault' }), true);
+    const editor = page.getByRole('dialog', { name: 'Add session' });
+    await expect(editor).toBeVisible({ timeout: 90_000 });
+    await editor.locator('#health-workout-measured-on').fill(DAY);
+    await editor.locator('#health-workout-name').fill('Synthetic harbor press');
+    await editor.locator('#health-workout-load').fill('30');
+    await editor.locator('#health-workout-reps').fill('5');
+    await editor.getByRole('button', { name: 'Add set' }).click();
+    await editor.locator('#health-workout-state').selectOption('draft');
+    await editor.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page).toHaveURL(/\/hub$/);
+    const draft = (await collectionCipher(page)).health_workouts;
+    expect(draft).toHaveLength(1);
+
+    await page.goto('/settings/finance');
+    await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+    await expect(page.getByText('Finance locked.')).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/hub');
+    await fromQuickAdd(page, 'Start or resume a workout', false);
+    await expect(room).toHaveAttribute('data-health-state', 'locked');
+    await expect(room).not.toContainText('Synthetic harbor press');
+    await expect(room.locator('#health-workout-name')).toHaveCount(0);
+    await activate(page, room.getByRole('link', { name: 'Unlock' }), false);
+    await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+    await activate(page, page.getByRole('button', { name: 'Unlock', exact: true }), false);
+    const resumed = page.getByRole('dialog', { name: 'Resume session' });
+    await expect(resumed.locator('#health-workout-name')).toHaveValue('Synthetic harbor press', { timeout: 90_000 });
+    await expect(resumed.locator('[data-entered-set]')).toHaveCount(1);
+    await info.attach('workout-resumed', { body: await page.screenshot(), contentType: 'image/png' });
+    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(/\/hub$/);
+    expect((await collectionCipher(page)).health_workouts).toEqual(draft);
+  });
+});
+
 function noMeasurementDigits(text: string): void {
   expect(text).not.toContain('176.4');
   expect(text).not.toContain('220.5');
@@ -82,6 +154,47 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await page.clock.setFixedTime(new Date('2026-10-29T19:00:00Z'));
       await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: theme === 'dark' ? 'dark' : 'light' });
       await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+    });
+
+    test('Quick add carries a locked measurement through unlock and returns to the exact Hub', async ({ page }, info) => {
+      const vault = await syntheticVault(page, SEED);
+      const hub = '/hub/agenda?date=2026-10-28&sources=travel';
+      await page.goto(hub);
+      await fromQuickAdd(page, 'Record a measurement', width === 390);
+      const room = page.locator('app-health-room');
+      await expect(room).toHaveAttribute('data-health-state', 'locked');
+      await expect(room.getByRole('dialog')).toHaveCount(0);
+      await expect(room).not.toContainText('176.4 lb');
+      await info.attach('measurement-locked', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+      await page.reload();
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), width === 390);
+      await expect(page).toHaveURL(url => url.pathname === '/finance/vault/unlock' && url.searchParams.get('next') === '/town/clinic');
+      await page.reload();
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await activate(page, page.getByRole('button', { name: 'Unlock', exact: true }), width === 390);
+      const dialog = page.getByRole('dialog', { name: 'Add weight' });
+      await expect(dialog.locator('#health-measured-on')).toBeFocused();
+      await info.attach('measurement-open', { body: await page.screenshot(), contentType: 'image/png' });
+      await activate(page, dialog.getByRole('button', { name: 'Cancel' }), width === 390);
+      await expect(page).toHaveURL(url => url.pathname + url.search === hub);
+      await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
+
+      await fromQuickAdd(page, 'Record a measurement', width === 390);
+      await expect(dialog).toBeVisible();
+      await dialog.locator('#health-measured-on').fill(DAY);
+      const weight = dialog.locator('#health-weight');
+      await weight.fill('155');
+      const save = dialog.getByRole('button', { name: 'Save', exact: true });
+      vault.failNextWrites();
+      await activate(page, save, width === 390);
+      await expect(dialog.getByRole('alert')).toHaveText('Could not save this entry. Try again.');
+      await expect(weight).toHaveValue('155');
+      await activate(page, save, width === 390);
+      await expect(page).toHaveURL(url => url.pathname + url.search === hub);
+      expect((await collectionCipher(page)).health_stats).toHaveLength(3);
+      await page.goto('/town/clinic?healthQuickAdd=true');
+      await expect(room).toHaveAttribute('data-health-state', 'ready');
+      await expect(room.getByRole('dialog')).toHaveCount(0);
     });
 
     test('unlocks a locked measurement, keeps a failed draft, and shows the corrupt row', async ({ page }) => {

@@ -356,7 +356,7 @@ describe('VaultService unlock epoch', () => {
     const http = TestBed.inject(HttpTestingController);
     const material = await createVaultMaterial(passphrase, 1000);
     const setup = service.setup(passphrase);
-    const posted = await nextHttp(http, apiUrl('/finance/vault/setup'));
+    const posted = await nextHttp(http, apiUrl('/vault/setup'));
     service.lock();
     posted.flush({ exists: true });
     await setup;

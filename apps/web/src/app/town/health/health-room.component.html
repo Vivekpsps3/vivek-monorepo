@@ -113,12 +113,12 @@
     @if (phase() === 'locked') {
     <div class="gate" role="status">
       <p>Finance is locked. Unlock to see measurements.</p>
-      <ui-button href="/finance/vault/unlock" [queryParams]="returnQuery()" label="Unlock" />
+      <a class="btn btn-primary" routerLink="/finance/vault/unlock" [queryParams]="returnQuery()" [state]="unlockReturn()">Unlock</a>
     </div>
   } @else if (phase() === 'setup') {
     <div class="gate" role="status">
       <p>Set up Finance before {{ title() }} can open.</p>
-      <ui-button href="/finance/vault/setup" [queryParams]="returnQuery()" label="Set up Finance" />
+      <a class="btn btn-primary" routerLink="/finance/vault/setup" [queryParams]="returnQuery()" [state]="unlockReturn()">Set up Finance</a>
     </div>
   } @else if (phase() === 'unavailable') {
     <div class="gate" role="status">

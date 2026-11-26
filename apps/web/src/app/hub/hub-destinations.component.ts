@@ -6,15 +6,14 @@ const destinations = [
   { id: 'finance', label: 'Holdings', path: '/finance/have?t=holdings', icon: 'wallet' },
   { id: 'travel', label: 'Trips', path: '/travel', icon: 'calendar' },
   { id: 'media', label: 'Library', path: '/media/library', icon: 'book' },
-  { id: 'health', label: 'Health', path: null, icon: 'trending' },
+  { id: 'health', label: 'Health', path: '/town/clinic', icon: 'trending' },
   { id: 'pixels', label: 'Pixels', path: '/pixels', icon: 'grid' },
   { id: 'town', label: 'Town', path: '/town', icon: 'building' },
   { id: 'review', label: 'Weekly review', path: '/town/review', icon: 'document' },
-] as const satisfies readonly { id: string; label: string; path: string | null; icon: UiIconName }[];
+] as const satisfies readonly { id: string; label: string; path: string; icon: UiIconName }[];
 type DestinationId = typeof destinations[number]['id'];
 
 const maxPins = 3;
-const pinnable = destinations.filter(destination => destination.path !== null);
 const storageKey = (ownerId: number) => `hub.pins.v1.${ownerId}`;
 
 function readPins(ownerId: number | null): readonly DestinationId[] {
@@ -24,7 +23,7 @@ function readPins(ownerId: number | null): readonly DestinationId[] {
     if (!raw || raw.length > 128) return [];
     const ids: unknown = JSON.parse(raw);
     if (!Array.isArray(ids)) return [];
-    return [...new Set(ids)].filter((id): id is DestinationId => pinnable.some(destination => destination.id === id)).slice(0, maxPins);
+    return [...new Set(ids)].filter((id): id is DestinationId => destinations.some(destination => destination.id === id)).slice(0, maxPins);
   } catch {
     return [];
   }
@@ -43,18 +42,11 @@ function readPins(ownerId: number | null): readonly DestinationId[] {
       <ul>
         @for (tile of tiles(); track tile.id) {
           <li>
-            @if (tile.url) {
-              <a class="tile" [routerLink]="tile.url" [state]="tile.id === 'review' ? reviewSource() : undefined" [class.pinned]="pins().includes(tile.id)">
-                <ui-icon [name]="tile.icon" />
-                <span>{{ tile.label }}</span>
-                @if (pins().includes(tile.id)) { <ui-icon class="pin" size="sm" name="check" /> }
-              </a>
-            } @else {
-              <div class="tile unavailable">
-                <ui-icon [name]="tile.icon" />
-                <span>{{ tile.label }}<small>Unavailable</small></span>
-              </div>
-            }
+            <a class="tile" [routerLink]="tile.url" [state]="tile.id === 'review' ? reviewSource() : undefined" [class.pinned]="pins().includes(tile.id)">
+              <ui-icon [name]="tile.icon" />
+              <span>{{ tile.label }}</span>
+              @if (pins().includes(tile.id)) { <ui-icon class="pin" size="sm" name="check" /> }
+            </a>
           </li>
         }
       </ul>
@@ -83,14 +75,14 @@ export class HubDestinationsComponent {
   readonly ownerId = input.required<number | null>();
   private readonly router = inject(Router);
   private readonly returns = inject(ReturnContext);
-  protected readonly options = pinnable;
+  protected readonly options = destinations;
   protected readonly maxPins = maxPins;
   protected readonly pins = linkedSignal(() => readPins(this.ownerId()));
   private readonly editingOwner = linkedSignal<number | null, number | null>({ source: this.ownerId, computation: () => null });
   protected readonly editing = computed(() => this.editingOwner() !== null && this.editingOwner() === this.ownerId());
   protected readonly saveFailed = signal(false);
   private readonly links = destinations.map(destination => ({
-    ...destination, url: destination.path === null ? null : this.router.parseUrl(destination.path),
+    ...destination, url: this.router.parseUrl(destination.path),
   }));
   protected readonly tiles = computed(() => {
     const pins = this.pins();

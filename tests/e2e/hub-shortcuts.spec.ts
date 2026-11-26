@@ -17,6 +17,10 @@ for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const)
     await expect(menu.getByRole('menuitem', {name: 'Add media'})).toHaveAttribute('href', '/media/search');
     await expect(menu.getByRole('menuitem', {name: 'Add transaction'})).toHaveAttribute('href', /date=\d{4}-\d{2}-\d{2}.*add=1/);
     await page.keyboard.press('ArrowUp');
+    await expect(menu.getByRole('menuitem', {name: 'Start or resume a workout'})).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(menu.getByRole('menuitem', {name: 'Record a measurement'})).toBeFocused();
+    await page.keyboard.press('ArrowUp');
     await expect(menu.getByRole('menuitem', {name: 'Add transaction'})).toBeFocused();
     await page.keyboard.press('Home');
     await expect(menu.getByRole('menuitem', {name: 'Plan a trip'})).toBeFocused();
@@ -66,4 +70,29 @@ test('health chip is admin-only and its outage does not disable the Hub', async 
   await expect(page.getByRole('link', {name: 'Travel and Media degraded'})).toBeVisible();
   expect(healthReads).toBe(2);
   await expect(page.getByRole('button', {name: 'Quick add', exact: true})).toBeEnabled();
+});
+
+test('Health Quick add and app destinations stay usable at 320px with enlarged text', async ({ page, request }, info) => {
+  expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto('/hub');
+  await page.locator('html').evaluate(element => { element.style.fontSize = '200%'; });
+  const quick = page.getByRole('button', { name: 'Quick add', exact: true });
+  await quick.press('Enter');
+  const action = page.getByRole('menuitem', { name: 'Start or resume a workout' });
+  await expect(action).toBeInViewport({ ratio: 1 });
+  expect((await action.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await info.attach('health-quick-add-enlarged', { body: await page.screenshot(), contentType: 'image/png' });
+  await action.press('Escape');
+  await expect(quick).toBeFocused();
+  const switcher = page.getByRole('button', { name: /Switch apps and destinations. Current app Hub/ });
+  await switcher.press('Enter');
+  const health = page.getByRole('group', { name: 'Health', exact: true });
+  await expect(health.getByRole('link', { name: 'Clinic' })).toBeInViewport({ ratio: 1 });
+  const gym = health.getByRole('link', { name: 'Gym' });
+  await expect(gym).toBeInViewport({ ratio: 1 });
+  await gym.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Gym', level: 1 })).toBeFocused();
+  await expect(switcher).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
