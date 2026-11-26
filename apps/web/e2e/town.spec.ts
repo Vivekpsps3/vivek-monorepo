@@ -1263,7 +1263,11 @@ for (const { name, width, height, theme, hasTouch, input } of harborViews) {
       await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
       await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
       if (width === 320) {
-        await page.addInitScript(() => { document.documentElement.style.fontSize = '32px'; });
+        await page.addInitScript(() => {
+          document.addEventListener('DOMContentLoaded', () => {
+            document.documentElement.style.fontSize = '32px';
+          }, { once: true });
+        });
       }
       const activate = async (locator: Locator): Promise<void> => {
         if (input === 'keyboard') await locator.press('Enter');
@@ -1289,7 +1293,7 @@ for (const { name, width, height, theme, hasTouch, input } of harborViews) {
         const landmark = scene.locator('[data-scene-object="inn"] .landmark');
         await scene.scrollIntoViewIfNeeded();
         await expect(landmark).toBeInViewport();
-        const paintedPoint = await landmark.evaluate(svg => {
+        const paintedPoint = () => landmark.evaluate(svg => {
           const rect = svg.getBoundingClientRect();
           for (let row = 1; row < 10; row += 1) {
             for (let column = 1; column < 10; column += 1) {
@@ -1298,9 +1302,12 @@ for (const { name, width, height, theme, hasTouch, input } of harborViews) {
               if (document.elementFromPoint(x, y)?.closest('[data-scene-object="inn"]')) return { x, y };
             }
           }
-          throw new Error('Expected visible, pickable Terminal paint');
+          return null;
         });
-        await page.mouse.click(paintedPoint.x, paintedPoint.y);
+        await expect.poll(paintedPoint).not.toBeNull();
+        const point = await paintedPoint();
+        if (!point) throw new Error('Expected visible, pickable Terminal paint');
+        await page.mouse.click(point.x, point.y);
       } else {
         await activate(door);
       }
@@ -1355,6 +1362,7 @@ for (const { name, width, height, theme, hasTouch, input } of harborViews) {
       const after: TownResponse = await (await request.get(townFactsPath)).json();
       expect(after.buildings.inn).toEqual(before.buildings.inn);
       if (width === 320) {
+        expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
       }
       await info.attach('restored-harbor-door', { body: await page.screenshot(), contentType: 'image/png' });
