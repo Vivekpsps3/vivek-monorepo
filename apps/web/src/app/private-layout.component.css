@@ -212,17 +212,19 @@
   }
 }
 
-@media (max-width: 640px) {
-  .suite-header__inner {
-    gap: var(--space-2);
-  }
-
+@media (max-width: 840px) {
   .app-switcher__overview {
     display: none;
   }
 
   .app-switcher__current {
     display: inline;
+  }
+}
+
+@media (max-width: 640px) {
+  .suite-header__inner {
+    gap: var(--space-2);
   }
 
   .user-menu-toggle {

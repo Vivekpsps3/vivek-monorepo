@@ -120,3 +120,29 @@ for (const [width, theme, reducedMotion] of [
     });
   });
 }
+
+test('app switcher and Search have separate targets at the tablet transition', async ({ page, request }) => {
+  expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
+  await page.goto('/hub');
+  const apps = page.getByRole('navigation', { name: 'Apps', exact: true });
+  const toggle = apps.getByRole('button', { name: /Switch apps and destinations/ });
+  const search = page.getByRole('button', { name: 'Search', exact: true });
+  const appsOverview = apps.locator('.app-switcher__overview').getByRole('link');
+  for (const width of [641, 768, 840, 841, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    if (width <= 840) await expect(appsOverview).toHaveCount(0);
+    else await expect(appsOverview).toHaveText(['Hub', 'Health', 'Finance', 'Travel', 'Media', 'Town', 'Pixels']);
+    const toggleBox = (await toggle.boundingBox())!;
+    const searchBox = (await search.boundingBox())!;
+    expect(toggleBox.x + toggleBox.width).toBeLessThanOrEqual(searchBox.x);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 768, height: 844 });
+  await toggle.press('Enter');
+  const gym = apps.getByRole('group', { name: 'Health', exact: true }).getByRole('link', { name: 'Gym' });
+  await expect(gym).toBeInViewport({ ratio: 1 });
+  await page.keyboard.press('Escape');
+  await expect(toggle).toBeFocused();
+  await search.press('Enter');
+  await expect(page.getByRole('combobox')).toBeFocused();
+});
