@@ -1362,6 +1362,9 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
         }
         await route.fallback();
       });
+      // The date jumps ahead three weeks to check logged-on history. That
+      // wall-clock change must not represent real idle time in this fixture.
+      await page.addInitScript(() => localStorage.setItem('finance-auto-lock', 'off'));
       await syntheticVault(page, SEED);
       await page.goto('/town/gym');
       const room = page.locator('app-health-room');
