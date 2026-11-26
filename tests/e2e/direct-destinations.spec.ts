@@ -128,6 +128,7 @@ test('app switcher and Search have separate targets at the tablet transition', a
   const toggle = apps.getByRole('button', { name: /Switch apps and destinations/ });
   const search = page.getByRole('button', { name: 'Search', exact: true });
   const appsOverview = apps.locator('.app-switcher__overview').getByRole('link');
+  await page.locator('html').evaluate(element => { element.style.fontSize = '110%'; });
   for (const width of [641, 768, 840, 841, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     if (width <= 840) await expect(appsOverview).toHaveCount(0);
