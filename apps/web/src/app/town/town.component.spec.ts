@@ -273,11 +273,10 @@ describe('Town page', () => {
     expect(el.querySelector('a[href="/town/memory"]')?.textContent).toContain('Memory Shelves');
     const list = el.querySelector('[aria-label="Town buildings"]');
     expect(list?.textContent).toContain('Library');
-    expect(list?.textContent).toContain('Inn');
+    expect(list?.querySelector('[data-building="inn"][href="/travel/terminal"]')?.textContent).toContain('Terminal');
     expect(list?.textContent).toContain('Clinic');
     expect(list?.textContent).toContain('Empty lot');
     expect(el.textContent).toContain('Harbor');
-    expect(el.querySelector('a[href="/travel"]')).not.toBeNull();
     const clinic = clinicLink(el);
     expect(clinic.getAttribute('href')).toBe('/town/clinic');
     expect(clinic.textContent).not.toMatch(/\d/);

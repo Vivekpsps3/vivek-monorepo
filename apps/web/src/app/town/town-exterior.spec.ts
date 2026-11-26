@@ -99,7 +99,7 @@ describe('Town exterior model', () => {
       const items = faces(kind);
       expect(items.map(item => item.district)).toEqual(jasmine.arrayContaining([...DISTRICTS.map(district => district.id)]));
       expect(byId(items, 'library').href).toBe('/town/library');
-      expect(byId(items, 'inn').href).toBe('/travel');
+      expect(byId(items, 'inn').href).toBe('/travel/terminal');
       expect(byId(items, 'clinic').href).toBe('/town/clinic');
       expect(byId(items, 'gym').href).toBe('/town/gym');
       expect(byId(items, 'theater').href).toBe('/media/library?kind=movie');
@@ -311,7 +311,7 @@ describe('Town exterior scene', () => {
     viewport.dispatchEvent(pointer('pointerdown', library.x, library.y));
     const libraryUp = pointer('pointerup', library.x, library.y);
     viewport.dispatchEvent(libraryUp);
-    expect(navigate).toHaveBeenCalledWith(['/town/library'], { queryParams: undefined });
+    expect(navigate).toHaveBeenCalledWith(['/town/library'], { queryParams: undefined, state: undefined });
     expect(painted).toHaveBeenCalledWith(libraryUp.clientX, libraryUp.clientY);
     expect(opened).toEqual([]);
 

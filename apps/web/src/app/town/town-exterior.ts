@@ -81,10 +81,10 @@ export function lotFace(input: {
   if (kind === 'library' || kind === 'inn') {
     const source = kind === 'library' ? 'Media' : 'Travel';
     return {
-      name: kind === 'library' ? 'Library' : 'Inn',
+      name: kind === 'library' ? 'Library' : 'Terminal',
       label: building?.source === 'unavailable' ? `Lv — · ${source} unavailable` : `Lv ${building?.level} · ${source}`,
       sprite: buildingSprite(kind, building?.stage ?? 1),
-      link: kind === 'library' ? '/town/library' : '/travel',
+      link: kind === 'library' ? '/town/library' : '/travel/terminal',
       external: false,
       control: 'link',
     };

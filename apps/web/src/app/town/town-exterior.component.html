@@ -91,7 +91,8 @@
                 <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
               </a>
             } @else if (building.control === 'link') {
-              <a class="action" [attr.data-building]="building.id" [routerLink]="building.path" [queryParams]="building.query" [attr.aria-current]="inspected() === building.id ? 'true' : null">
+              <a class="action" [attr.data-building]="building.id" [routerLink]="building.path" [queryParams]="building.query"
+                [state]="harborSource(building)" (click)="rememberHarbor(building, $event)" [attr.aria-current]="inspected() === building.id ? 'true' : null">
                 <ng-container *ngTemplateOutlet="buildingIcon; context: { $implicit: building.landmark }" />
                 <span class="copy"><span class="name">{{ building.name }}</span><span class="sub-label">{{ building.label }}</span></span>
               </a>

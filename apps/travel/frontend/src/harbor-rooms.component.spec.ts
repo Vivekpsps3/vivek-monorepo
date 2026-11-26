@@ -1,7 +1,7 @@
 import { provideHttpClient } from "@angular/common/http";
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing";
 import { TestBed } from "@angular/core/testing";
-import { ActivatedRoute, Router, convertToParamMap, provideRouter } from "@angular/router";
+import { ActivatedRoute, convertToParamMap, provideRouter } from "@angular/router";
 import { SESSION_CONTEXT } from "@vivek/ui";
 import { BehaviorSubject, Subject } from "rxjs";
 import { HarborRoomsComponent } from "./harbor-rooms.component";
@@ -121,9 +121,7 @@ describe("HarborRoomsComponent", () => {
     httpMock = TestBed.inject(HttpTestingController);
     const fixture = TestBed.createComponent(HarborRoomsComponent);
     fixture.componentRef.setInput("room", "gallery");
-    const router = TestBed.inject(Router);
-    spyOn(router, "navigate").and.resolveTo(true);
-    return { fixture, component: fixture.componentInstance, router, session, params };
+    return { fixture, component: fixture.componentInstance, session, params };
   }
 
   function flushBoth(

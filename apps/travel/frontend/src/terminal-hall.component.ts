@@ -10,7 +10,7 @@ import {
   signal,
 } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
-import { ActivatedRoute, Router } from "@angular/router";
+import { ActivatedRoute, Router, type Params } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { Subscription, filter, merge, take } from "rxjs";
 import { formatDay } from "@vivek/browser";
@@ -64,6 +64,7 @@ export class TerminalHallComponent {
   private readonly returns = inject(ReturnContext);
   private readonly session = inject(SESSION_CONTEXT);
   private readonly ownerId = this.session.currentUser?.id;
+  private enteredFromHarbor = false;
   private sessionActive = true;
   private handingOff = false;
   private homeEpoch = 0;
@@ -88,6 +89,9 @@ export class TerminalHallComponent {
       .pipe(take(1), takeUntilDestroyed())
       .subscribe(() => this.retire());
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
+      // A pending Back briefly selects the previous entry before the guard settles.
+      // Read the source when the Terminal route is active.
+      this.enteredFromHarbor = this.returns.origin() === "/town";
       this.selection.set(readHallQuery(params));
       this.room.set(readRoomQuery(params).room);
     });
@@ -137,13 +141,22 @@ export class TerminalHallComponent {
       });
   }
 
-  focusObject(object: "board" | "desk" | "table"): void {
-    void this.router.navigate([], {
+  harborSource(): string | undefined {
+    return this.enteredFromHarbor && this.ownsSession ? "/town" : undefined;
+  }
+
+  private updateQuery(queryParams: Params, mergeQuery = false): Promise<boolean> {
+    return this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { object, room: null, card: null, place: null },
-      queryParamsHandling: "merge",
+      queryParams,
+      queryParamsHandling: mergeQuery ? "merge" : "",
+      state: this.returns.sourceState("/town"),
       replaceUrl: true,
     });
+  }
+
+  focusObject(object: "board" | "desk" | "table"): void {
+    void this.updateQuery({ object, room: null, card: null, place: null }, true);
     if (object === "desk") {
       this.flightField()?.focus();
       return;
@@ -160,14 +173,11 @@ export class TerminalHallComponent {
       leg: target.transportId,
       day: target.day,
     });
-    await this.router.navigate(["/travel/terminal"], {
-      queryParams: {
-        object: "board",
-        trip: target.tripId,
-        leg: target.transportId,
-        day: target.day || null,
-      },
-      replaceUrl: true,
+    await this.updateQuery({
+      object: "board",
+      trip: target.tripId,
+      leg: target.transportId,
+      day: target.day || null,
     });
     this.returns.saveView("/travel/terminal", String(target.transportId));
     await this.router.navigate(["/travel/trips", target.tripId], {
@@ -178,10 +188,7 @@ export class TerminalHallComponent {
 
   async openDay(row: HallDay): Promise<void> {
     const path = hallReturnPath({ object: "table", trip: row.tripId, day: row.day });
-    await this.router.navigate(["/travel/terminal"], {
-      queryParams: { object: "table", trip: row.tripId, leg: null, day: row.day },
-      replaceUrl: true,
-    });
+    await this.updateQuery({ object: "table", trip: row.tripId, leg: null, day: row.day });
     this.returns.saveView("/travel/terminal", row.day);
     await this.router.navigate(["/travel/trips", row.tripId], {
       queryParams: { day: row.day },
@@ -255,22 +262,16 @@ export class TerminalHallComponent {
   }
 
   openRoom(room: "map" | "gallery"): void {
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { room, object: null, leg: null, day: null },
-      queryParamsHandling: "merge",
-      replaceUrl: true,
-    });
+    this.updateRoomSelection({ room, object: null, leg: null, day: null });
+  }
+
+  updateRoomSelection(query: Params): void {
+    void this.updateQuery(query, true);
   }
 
   closeRoom(): void {
     const room = this.room();
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { room: null, card: null, place: null },
-      queryParamsHandling: "merge",
-      replaceUrl: true,
-    }).then(() => {
+    void this.updateQuery({ room: null, card: null, place: null }, true).then(() => {
       afterNextRender(() => {
         if (this.destroy.destroyed) return;
         const id = room === "gallery" ? "terminal-souvenir-gallery" : "terminal-map-room";

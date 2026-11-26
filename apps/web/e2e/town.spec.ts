@@ -1246,3 +1246,118 @@ async function readOk(response: { ok(): boolean; text(): Promise<string> }): Pro
   expect(response.ok(), text).toBeTruthy();
   return text;
 }
+
+const harborViews = [
+  { name: 'phone touch', width: 390, height: 844, theme: 'dark', hasTouch: true, input: 'touch' },
+  { name: 'desktop mouse', width: 1280, height: 800, theme: 'light', hasTouch: false, input: 'mouse' },
+  { name: 'desktop keyboard', width: 1280, height: 800, theme: 'dark', hasTouch: false, input: 'keyboard' },
+  { name: 'phone with enlarged text', width: 320, height: 700, theme: 'light', hasTouch: true, input: 'touch' },
+] as const;
+
+for (const { name, width, height, theme, hasTouch, input } of harborViews) {
+  test.describe(`Harbor to Terminal on ${name}`, () => {
+    test.use({ viewport: { width, height }, hasTouch });
+
+    test('opens Terminal and returns to the framed Harbor door', async ({ page, request }, info) => {
+      expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+      if (width === 320) {
+        await page.addInitScript(() => { document.documentElement.style.fontSize = '32px'; });
+      }
+      const activate = async (locator: Locator): Promise<void> => {
+        if (input === 'keyboard') await locator.press('Enter');
+        else if (hasTouch) await locator.tap();
+        else await locator.click();
+      };
+      const created = await request.post('/travel/api/trips', { data: {
+        title: 'Harbor week', start_date: '2026-12-12', end_date: '2026-12-14', counts_as_pto: false,
+        stays: [{ city: 'Harbor Point', arrive_on: '2026-12-12', leave_on: '2026-12-14' }],
+      } });
+      expect(created.ok(), await created.text()).toBeTruthy();
+      const trip = await created.json() as { id: number };
+      await page.goto('/town');
+      const townFactsPath = '/api/town?tz=America%2FLos_Angeles';
+      const before: TownResponse = await (await request.get(townFactsPath)).json();
+      const harbor = page.getByRole('button', { name: 'Harbor', exact: true });
+      await activate(harbor);
+      const door = page.getByRole('list', { name: 'Town buildings' }).getByRole('link', { name: /^Terminal/ });
+      await expect(door).toHaveAttribute('href', '/travel/terminal');
+      expect((await door.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+      const scene = page.getByRole('group', { name: 'Town exterior' });
+      if (input === 'mouse') {
+        const landmark = scene.locator('[data-scene-object="inn"] .landmark');
+        await scene.scrollIntoViewIfNeeded();
+        await expect(landmark).toBeInViewport();
+        const paintedPoint = await landmark.evaluate(svg => {
+          const rect = svg.getBoundingClientRect();
+          for (let row = 1; row < 10; row += 1) {
+            for (let column = 1; column < 10; column += 1) {
+              const x = rect.left + rect.width * column / 10;
+              const y = rect.top + rect.height * row / 10;
+              if (document.elementFromPoint(x, y)?.closest('[data-scene-object="inn"]')) return { x, y };
+            }
+          }
+          throw new Error('Expected visible, pickable Terminal paint');
+        });
+        await page.mouse.click(paintedPoint.x, paintedPoint.y);
+      } else {
+        await activate(door);
+      }
+
+      await expect(page).toHaveURL(/\/travel\/terminal$/);
+      await expect(page.getByRole('heading', { name: 'Terminal', level: 1 })).toBeVisible();
+      const exit = page.getByRole('link', { name: '← Town harbor', exact: true });
+      await expect(exit).toHaveAttribute('href', '/town');
+      await activate(page.getByRole('button', { name: 'Map room', exact: true }));
+      const destination = page.getByRole('region', { name: 'Saved destinations' }).getByRole('button', { name: /Harbor Point/ });
+      await activate(destination);
+      const inMap = (url: URL): boolean => url.pathname === '/travel/terminal'
+        && url.searchParams.get('room') === 'map'
+        && url.searchParams.get('trip') === String(trip.id)
+        && url.searchParams.get('place') === 'Harbor Point';
+      await expect(page).toHaveURL(inMap);
+      await page.reload();
+      await expect(page).toHaveURL(inMap);
+      await expect(destination).toHaveAttribute('aria-pressed', 'true');
+      await expect(exit).toBeVisible();
+      await info.attach('terminal-map-origin', { body: await page.screenshot(), contentType: 'image/png' });
+
+      if (input === 'mouse') {
+        await activate(exit);
+      } else {
+        await activate(page.getByRole('button', { name: '← Terminal', exact: true }));
+        await activate(page.getByRole('button', { name: 'Booking desk', exact: true }));
+        const booking = (url: URL): boolean => url.pathname === '/travel/terminal'
+          && url.searchParams.get('object') === 'desk';
+        await expect(page).toHaveURL(booking);
+        const number = page.getByRole('textbox', { name: 'Flight number' });
+        await number.fill('UA404');
+        const confirmation = page.getByRole('dialog', { name: 'Leave this flight?', exact: true });
+        const attemptReturn = async (): Promise<void> => {
+          if (input === 'keyboard') await page.evaluate(() => history.back());
+          else await activate(exit);
+          await expect(confirmation).toBeVisible();
+        };
+        await attemptReturn();
+        await activate(confirmation.getByRole('button', { name: 'Keep planning', exact: true }));
+        await expect(page).toHaveURL(booking);
+        await expect(number).toHaveValue('UA404');
+        await expect(exit).toBeVisible();
+        await attemptReturn();
+        await activate(confirmation.getByRole('button', { name: 'Leave flight', exact: true }));
+      }
+
+      await expect(page).toHaveURL(/\/town$/);
+      await expect(harbor).toHaveAttribute('aria-pressed', 'true');
+      await expect(door).toBeFocused();
+      await expect(scene.locator('.active-name')).toHaveText('Terminal');
+      const after: TownResponse = await (await request.get(townFactsPath)).json();
+      expect(after.buildings.inn).toEqual(before.buildings.inn);
+      if (width === 320) {
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+      }
+      await info.attach('restored-harbor-door', { body: await page.screenshot(), contentType: 'image/png' });
+    });
+  });
+}

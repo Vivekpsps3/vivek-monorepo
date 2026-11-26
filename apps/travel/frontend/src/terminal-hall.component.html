@@ -1,5 +1,6 @@
 <main class="page travel-page terminal-hall">
-  <ui-page-header backLabel="← Trips" backLink="/travel" title="Terminal" eyebrow="Harbor">
+  <ui-page-header [backLabel]="harborSource() ? '← Town harbor' : '← Trips'"
+    [backLink]="harborSource() ?? '/travel'" [backSource]="harborSource()" title="Terminal" eyebrow="Harbor">
     <p>
       The departure board opens a saved leg. The booking desk starts with a
       flight number. The itinerary table opens a saved day. The map room and
@@ -49,7 +50,7 @@
     <p>Sign in to see this terminal.</p>
   } @else {
     @if (room(); as active) {
-      <travel-harbor-rooms [room]="active" (leave)="closeRoom()" />
+      <travel-harbor-rooms [room]="active" (leave)="closeRoom()" (queryChange)="updateRoomSelection($event)" />
     }
     <div [hidden]="!!room()">
     @if (error()) {

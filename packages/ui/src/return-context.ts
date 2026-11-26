@@ -175,8 +175,9 @@ interface ViewPosition {
   focus: string | null;
 }
 
-function focusKey(value: unknown): string | null {
+function focusKey(value: unknown, path: string): string | null {
   if (typeof value !== 'string') return null;
+  if (path === '/town' && value === 'inn') return value;
   return /^\d{1,16}$/.test(value) || isReturnDate(value) ? value : null;
 }
 
@@ -228,7 +229,7 @@ export class ReturnContext {
     const current = this.state();
     window.history.replaceState({
       ...current,
-      [VIEW]: { owner: this.owner, path, top: Math.round(window.scrollY), focus: focusKey(focus) },
+      [VIEW]: { owner: this.owner, path, top: Math.round(window.scrollY), focus: focusKey(focus, path) },
     }, '');
   }
 
@@ -236,7 +237,7 @@ export class ReturnContext {
     const saved = this.state()[VIEW];
     if (!this.owner || saved?.owner !== this.owner || saved.path !== path) return null;
     if (typeof saved.top !== 'number' || !Number.isSafeInteger(saved.top) || saved.top < 0) return null;
-    return { top: saved.top, focus: focusKey(saved.focus) };
+    return { top: saved.top, focus: focusKey(saved.focus, path) };
   }
 
   /** Saved return path for this owner, or null when the entry has none. */
