@@ -222,6 +222,9 @@ for (const view of views) {
       await press(page, page.getByRole('link', { name: '← Terminal', exact: true }), view.hasTouch);
       await expect(page).toHaveURL(new RegExp(`/travel/terminal\\?object=table&trip=${trip.id}&day=2026-12-13`));
       await expect(day).toBeFocused();
+      await page.reload();
+      await expect(page).toHaveURL(new RegExp(`/travel/terminal\\?object=table&trip=${trip.id}&day=2026-12-13`));
+      await expect(day).toBeFocused();
 
       const after = await (await request.get('/travel/api/trips/' + trip.id)).json();
       expect(after.transports.map((row) => row.id)).toEqual(transportIds);
@@ -237,6 +240,14 @@ for (const view of views) {
       expect(axe.violations.filter((item) => item.id === 'color-contrast' || ['serious', 'critical'].includes(item.impact))).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.screenshot({ path: test.info().outputPath(`terminal-hall-${view.name}.png`), fullPage: true });
+      const tripsBack = page.getByRole('link', { name: '← Trips', exact: true });
+      await press(page, tripsBack, view.hasTouch);
+      await expect(page).toHaveURL(/\/travel$/);
+      await press(page, page.getByRole('link', { name: 'Terminal', exact: true }), view.hasTouch);
+      await expect(page).toHaveURL(/\/travel\/terminal$/);
+      await expect(tripsBack).toHaveAttribute('href', '/travel');
+      await press(page, tripsBack, view.hasTouch);
+      await expect(page).toHaveURL(/\/travel$/);
     });
   });
 }

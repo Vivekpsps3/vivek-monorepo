@@ -3,6 +3,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { distinctUntilChanged, map } from 'rxjs';
+import { ReturnContext } from '@vivek/ui';
 import { SessionService } from '../platform/session.service';
 import {
   REST_CAMERA,
@@ -59,6 +60,7 @@ interface SceneGesture {
 export class TownExteriorComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly returns = inject(ReturnContext);
   private readonly session = inject(SessionService);
   private readonly scene = inject(SceneAppearanceService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -139,7 +141,12 @@ export class TownExteriorComponent {
       this.onScreen = false;
       this.ambience.set('still');
     });
-    afterNextRender(() => this.watchScene(destroyRef));
+    afterNextRender(() => {
+      this.watchScene(destroyRef);
+      if (this.returns.view('/town')?.focus !== 'inn') return;
+      this.showDistrict('harbor');
+      this.focusInspected('inn');
+    });
     this.session.user$.pipe(
       map(user => user?.id ?? null),
       distinctUntilChanged(),
@@ -204,7 +211,21 @@ export class TownExteriorComponent {
       void this.router.navigateByUrl(building.href);
       return;
     }
-    void this.router.navigate([building.path], { queryParams: building.query ?? undefined });
+    this.rememberHarbor(building);
+    void this.router.navigate([building.path], {
+      queryParams: building.query ?? undefined,
+      state: this.harborSource(building),
+    });
+  }
+
+  protected harborSource(building: ExteriorBuilding): Record<string, unknown> | undefined {
+    return building.id === 'inn' ? this.returns.link('/town') : undefined;
+  }
+
+  protected rememberHarbor(building: ExteriorBuilding, event?: MouseEvent): void {
+    if (building.id !== 'inn') return;
+    if (event && (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)) return;
+    this.returns.saveView('/town', building.id);
   }
 
   protected beginPointer(event: PointerEvent): void {

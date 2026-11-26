@@ -11,7 +11,7 @@ import {
   signal,
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { ActivatedRoute, Router, RouterLink } from "@angular/router";
+import { ActivatedRoute, RouterLink, type Params } from "@angular/router";
 import { Subscription, filter, merge, take } from "rxjs";
 import { formatMoney } from "@vivek/browser";
 import { FinanceTripSpendRegistry, SESSION_CONTEXT, silentErrorToast } from "@vivek/ui";
@@ -61,6 +61,7 @@ import type { Home } from "./travel.models";
 export class HarborRoomsComponent {
   readonly room = input.required<"map" | "gallery">();
   readonly leave = output<void>();
+  readonly queryChange = output<Params>();
   readonly formatMoney = formatMoney;
   readonly souvenirKind = cardKind;
   readonly destinationLabel = destinationLabel;
@@ -68,7 +69,6 @@ export class HarborRoomsComponent {
   readonly souvenirLabel = souvenirLabel;
   readonly roomDayLabel = roomDayLabel;
   private readonly http = inject(HttpClient);
-  private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroy = inject(DestroyRef);
   private readonly injector = inject(Injector);
@@ -240,7 +240,7 @@ export class HarborRoomsComponent {
     if (!this.sessionActive) return;
     this.chosenDay.set("");
     this.selection.set({ room: this.room(), trip: row.tripId, place: row.label, card: "" });
-    this.writeQuery({ trip: row.tripId, place: row.label || null, card: null });
+    this.queryChange.emit({ trip: row.tripId, place: row.label || null, card: null });
     this.reveal(row);
   }
 
@@ -249,14 +249,14 @@ export class HarborRoomsComponent {
     const card = cardKind(memory);
     if (!card) return;
     this.selection.set({ room: this.room(), trip: memory.trip_id, place: "", card });
-    this.writeQuery({ trip: memory.trip_id, card, place: null });
+    this.queryChange.emit({ trip: memory.trip_id, card, place: null });
   }
 
   selectDay(tripId: number, day: string): void {
     if (!this.sessionActive) return;
     this.chosenDay.set(day);
     this.selection.update((current) => ({ ...current, trip: tripId, room: this.room() }));
-    this.writeQuery({ trip: tripId });
+    this.queryChange.emit({ trip: tripId });
   }
 
   setNote(event: Event): void {
@@ -278,15 +278,6 @@ export class HarborRoomsComponent {
       );
       if (index >= 0) this.mapView?.show(index);
     }, { injector: this.injector });
-  }
-
-  private writeQuery(extra: Record<string, string | number | null>): void {
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: extra,
-      queryParamsHandling: "merge",
-      replaceUrl: true,
-    });
   }
 
   private zone(): string {
