@@ -53,7 +53,7 @@ Python, web lint, typecheck, Karma, both coverage gates, and the production bund
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened from `agent/game-09` with body `Closes #477`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/648
 - Roadmap #134 append-only status-note URL: added after merge.
 - Merged/activation status: not merged yet.
 - Remaining external prerequisites or approved scope decisions: GAME-04 still owns chapter rewards. GAME-11 still owns Harbor Rhythm. This leaf grants no Stamps and no XP.
