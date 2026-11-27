@@ -2,6 +2,7 @@ import {
   Component,
   DestroyRef,
   ViewChild,
+  afterNextRender,
   inject,
   input,
   output,
@@ -44,6 +45,29 @@ import {
 import { SettingsComponent } from "./settings.component";
 import { travelError, type Home } from "./travel.models";
 
+export interface FlightStartMemory {
+  ident: string;
+  departOn: string;
+  values: Record<string, unknown>;
+  overrides: string[];
+  filled: string[];
+  manual: boolean;
+  review: FlightReview | null;
+  candidates: Candidate[];
+  problem: string;
+  choiceFlights: Candidate[];
+  fetchedAt: string;
+  existingOpen: boolean;
+  trips: { id: number; title: string; start: string; end: string }[];
+  tripsError: string;
+  chosenTrip: number | null;
+  acceptedIdent: string;
+  acceptedDate: string;
+  acceptedManual: string;
+  looking: boolean;
+  dirty: boolean;
+}
+
 @Component({
   selector: "travel-flight-start",
   standalone: true,
@@ -57,13 +81,18 @@ import { travelError, type Home } from "./travel.models";
     UiFieldControlDirective,
   ],
   template: `<ui-card
-    ><section class="flight-start" aria-labelledby="flight-start-title">
-      <h2 id="flight-start-title">Start with a flight</h2>
-      <p class="muted">
-        Enter one flight number and date. Travel proposes the route and local
-        times. Nothing is saved until you choose a new trip or an existing trip.
-        You can still type the trip below.
-      </p>
+    ><section
+      class="flight-start"
+      [attr.aria-labelledby]="showIntro() ? 'flight-start-title' : null"
+      [attr.aria-label]="showIntro() ? null : 'Flight and date'"
+    >
+      @if (showIntro()) {
+        <h2 id="flight-start-title">Start with a flight</h2>
+        <p class="muted">
+          Enter one flight number and date. Travel proposes the route and local
+          times. Nothing is saved until you choose a new trip or an existing trip.
+        </p>
+      }
       <div class="form-row">
         <ui-field label="Flight number"
           ><input
@@ -240,6 +269,10 @@ import { travelError, type Home } from "./travel.models";
 })
 export class FlightStartComponent {
   readonly busy = input(false);
+  /** The new-trip choice already states this instruction. */
+  readonly showIntro = input(true);
+  /** Restored once when this form is shown again. Null on a fresh choice. */
+  readonly memory = input<FlightStartMemory | null>(null);
   readonly staged = output<AcceptedFlight>();
   readonly attach = output<{ tripId: number; leg: Record<string, unknown>; number: string }>();
   private readonly session = inject(SESSION_CONTEXT);
@@ -276,6 +309,10 @@ export class FlightStartComponent {
   readonly label = candidateLabel;
   @ViewChild(SettingsComponent) private settings?: SettingsComponent;
   constructor() {
+    afterNextRender(() => {
+      const memory = this.memory();
+      if (memory) this.restore(memory);
+    });
     this.changes
       .pipe(debounceTime(FLIGHT_LOOKUP_DELAY), takeUntilDestroyed())
       .subscribe(() => this.lookup());
@@ -312,6 +349,53 @@ export class FlightStartComponent {
   currentNumber(): string {
     return this.ident.toUpperCase().replace(/\s+/g, "");
   }
+  capture(): FlightStartMemory {
+    const review = this.review();
+    return {
+      ident: this.ident,
+      departOn: this.departOn,
+      values: { ...this.values },
+      overrides: [...this.overrides],
+      filled: [...this.filled],
+      manual: this.manual,
+      review: review ? { ...review, flight: { ...review.flight } } : null,
+      candidates: this.candidates().map((flight) => ({ ...flight })),
+      problem: this.problem(),
+      choiceFlights: this.choiceFlights.map((flight) => ({ ...flight })),
+      fetchedAt: this.fetchedAt,
+      existingOpen: this.existingOpen(),
+      trips: this.trips().map((trip) => ({ ...trip })),
+      tripsError: this.tripsError(),
+      chosenTrip: this.chosenTrip(),
+      acceptedIdent: this.acceptedIdent,
+      acceptedDate: this.acceptedDate,
+      acceptedManual: this.acceptedManual,
+      looking: this.looking(),
+      dirty: this.unfinished(),
+    };
+  }
+  restore(memory: FlightStartMemory): void {
+    this.ident = memory.ident;
+    this.departOn = memory.departOn;
+    this.values = { ...memory.values };
+    this.overrides = [...memory.overrides];
+    this.filled = [...memory.filled];
+    this.manual = memory.manual;
+    this.choiceFlights = memory.choiceFlights.map((flight) => ({ ...flight }));
+    this.fetchedAt = memory.fetchedAt;
+    this.acceptedIdent = memory.acceptedIdent;
+    this.acceptedDate = memory.acceptedDate;
+    this.acceptedManual = memory.acceptedManual;
+    this.review.set(memory.review ? { ...memory.review, flight: { ...memory.review.flight } } : null);
+    this.candidates.set(memory.candidates.map((flight) => ({ ...flight })));
+    this.problem.set(memory.problem);
+    this.existingOpen.set(memory.existingOpen);
+    this.trips.set(memory.trips.map((trip) => ({ ...trip })));
+    this.tripsError.set(memory.tripsError);
+    this.chosenTrip.set(memory.chosenTrip);
+    this.looking.set(false);
+    if (memory.looking && !memory.review) this.lookup();
+  }
   ready(): boolean {
     return canAccept({ review: this.review(), manual: this.manual, values: this.values });
   }
@@ -345,10 +429,12 @@ export class FlightStartComponent {
     this.chosenTrip.set(null);
   }
   onIdent(value: string): void {
+    if (value === this.ident) return;
     this.ident = value;
     this.revise();
   }
   onDate(value: string): void {
+    if (value === this.departOn) return;
     this.departOn = value;
     this.revise();
   }

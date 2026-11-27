@@ -1,7 +1,7 @@
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import path from 'node:path';
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { openTripAdd } from './dates.mjs';
+import { chooseTripStart, openTripAdd } from './dates.mjs';
 
 const dir = process.env.SCREENSHOT_DIR || 'test-results/artifacts/travel-ux';
 const widths = (process.env.SHOT_WIDTHS || '390,768,1280').split(',').map(Number);
@@ -26,6 +26,7 @@ for (const width of widths) for (const theme of themes) {
       await expect(page.locator('main h1')).toBeVisible();
       await shot(name);
     }
+    await chooseTripStart(page, 'manual');
     await page.getByLabel('Departure date').fill('2026-10-24');
     await page.getByLabel('Return date').fill('2026-10-30');
     await page.getByLabel('Destination city').fill('Puerto Viejo de la Costa Rica Sur');

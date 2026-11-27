@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { openTripAdd } from './dates.mjs';
+import { chooseTripStart, openTripAdd } from './dates.mjs';
 
 test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
@@ -58,6 +58,7 @@ test.describe('FORM1 empty trip forms', () => {
   test('new trip explains dates and the city, then a fresh visit has no errors', async ({ page }) => {
     const writes = trackWrites(page);
     await page.goto('/travel/trips/new');
+    await chooseTripStart(page, 'manual');
     const form = page.locator('form.travel-form');
     const save = page.getByRole('button', { name: 'Save trip', exact: true });
     await expect(save).toBeEnabled();
@@ -80,6 +81,7 @@ test.describe('FORM1 empty trip forms', () => {
     await page.getByRole('link', { name: 'Cancel', exact: true }).click();
     await page.getByRole('dialog', { name: 'Leave this trip draft?' }).getByRole('button', { name: 'Leave draft', exact: true }).click();
     await page.goto('/travel/trips/new');
+    await chooseTripStart(page, 'manual');
     await expect(page.locator('[aria-invalid="true"]')).toHaveCount(0);
     await expect(page.getByLabel('Departure date')).toHaveValue('');
   });
@@ -367,6 +369,7 @@ test('FORM3 skip link, focus, day choice, mobile controls, and screenshot path',
   expect(dayRing).toBe(true);
 
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   const save = page.getByRole('button', { name: 'Save trip', exact: true });
   await expect(save).toBeEnabled();
   const saveBox = await save.boundingBox();

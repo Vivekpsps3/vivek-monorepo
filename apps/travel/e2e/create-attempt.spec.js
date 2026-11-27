@@ -1,4 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
+import { chooseTripStart } from './dates.mjs';
 
 test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
@@ -6,6 +7,7 @@ test.beforeEach(async ({ request }) => {
 
 test('a lost create response retries the same trip', async ({ page, request }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-11-01');
   await page.getByLabel('Return date').fill('2026-11-02');
   await page.getByLabel('Destination city').fill('Kyoto');

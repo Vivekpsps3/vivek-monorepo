@@ -4,6 +4,7 @@ import {
   DestroyRef,
   ElementRef,
   ViewChild,
+  afterNextRender,
   inject,
   input,
   output,
@@ -36,17 +37,40 @@ import {
 import { existingTrips } from "./flight-start.mjs";
 import { travelError, type Home } from "./travel.models";
 
+export interface CalendarImportMemory {
+  fileName: string;
+  text: string;
+  settledText: string;
+  attemptKey: string;
+  attemptBody: string;
+  reading: boolean;
+  preview: CalendarPreview | null;
+  notice: string;
+  problem: string;
+  existingOpen: boolean;
+  trips: { id: number; title: string; start: string; end: string }[];
+  tripsError: string;
+  chosenTrip: number | null;
+  dirty: boolean;
+}
+
 @Component({
   selector: "travel-calendar-import",
   standalone: true,
   imports: [UiButtonComponent, UiCardComponent, UiFieldComponent, UiFieldControlDirective],
   template: `<ui-card
-    ><section class="calendar-import" aria-labelledby="calendar-import-title">
-      <h2 id="calendar-import-title">Import a calendar booking</h2>
-      <p class="muted">
-        Choose one flight calendar file. Travel shows the time zone and the leg
-        before it writes. A return date and PTO stay untouched.
-      </p>
+    ><section
+      class="calendar-import"
+      [attr.aria-labelledby]="showIntro() ? 'calendar-import-title' : null"
+      [attr.aria-label]="showIntro() ? null : 'Calendar file'"
+    >
+      @if (showIntro()) {
+        <h2 id="calendar-import-title">Import a calendar booking</h2>
+        <p class="muted">
+          Choose one flight calendar file. Travel shows the time zone and the leg
+          before it writes. A return date and PTO stay untouched.
+        </p>
+      }
       <ui-field
         label="Calendar booking"
         hint="One .ics flight booking. Nothing is saved until you confirm."
@@ -173,6 +197,10 @@ import { travelError, type Home } from "./travel.models";
 })
 export class CalendarImportComponent {
   readonly busy = input(false);
+  /** The new-trip choice already states this instruction. */
+  readonly showIntro = input(true);
+  /** Restored once when this form is shown again. Null on a fresh choice. */
+  readonly memory = input<CalendarImportMemory | null>(null);
   readonly leaving = output<void>();
   private readonly session = inject(SESSION_CONTEXT);
   private readonly ownerId = this.session.currentUser?.id;
@@ -205,6 +233,10 @@ export class CalendarImportComponent {
   @ViewChild("existingStatus") private existingStatus?: ElementRef<HTMLElement>;
 
   constructor() {
+    afterNextRender(() => {
+      const memory = this.memory();
+      if (memory) this.restore(memory);
+    });
     merge(
       this.session.cleared$,
       this.session.user$.pipe(filter((user) => user?.id !== this.ownerId)),
@@ -220,6 +252,43 @@ export class CalendarImportComponent {
 
   unfinished(): boolean {
     return calendarSectionDirty({ text: this.text, settledText: this.settledText });
+  }
+
+  capture(): CalendarImportMemory {
+    return {
+      fileName: this.fileName,
+      text: this.text,
+      settledText: this.settledText,
+      attemptKey: this.attemptKey,
+      attemptBody: this.attemptBody,
+      reading: this.reading(),
+      preview: this.preview(),
+      notice: this.notice(),
+      problem: this.problem(),
+      existingOpen: this.existingOpen(),
+      trips: this.trips().map((trip) => ({ ...trip })),
+      tripsError: this.tripsError(),
+      chosenTrip: this.chosenTrip(),
+      dirty: this.unfinished(),
+    };
+  }
+
+  restore(memory: CalendarImportMemory): void {
+    this.fileName = memory.fileName;
+    this.text = memory.text;
+    this.settledText = memory.settledText;
+    this.attemptKey = memory.attemptKey;
+    this.attemptBody = memory.attemptBody;
+    this.preview.set(memory.preview);
+    this.notice.set(memory.notice);
+    this.problem.set(memory.problem);
+    this.existingOpen.set(memory.existingOpen);
+    this.trips.set(memory.trips.map((trip) => ({ ...trip })));
+    this.tripsError.set(memory.tripsError);
+    this.chosenTrip.set(memory.chosenTrip);
+    this.reading.set(false);
+    this.saving.set(false);
+    if (memory.reading && memory.text && !memory.preview) this.readText(memory.text, this.epoch);
   }
 
   booking() {

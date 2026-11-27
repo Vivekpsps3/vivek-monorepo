@@ -4,6 +4,7 @@ import {
   ElementRef,
   HostListener,
   ViewChild,
+  computed,
   inject,
   signal,
 } from "@angular/core";
@@ -21,6 +22,8 @@ import {
   UiFieldComponent,
   UiFieldControlDirective,
   UiPageHeaderComponent,
+  UiSegmentedComponent,
+  type UiSegmentedOption,
 } from "@vivek/ui";
 import {
   addDays,
@@ -39,8 +42,14 @@ import {
   draftRequest,
   settleDraftResponse,
 } from "./draft-model.mjs";
-import { CalendarImportComponent } from "./calendar-import.component";
-import { FlightStartComponent } from "./flight-start.component";
+import {
+  CalendarImportComponent,
+  type CalendarImportMemory,
+} from "./calendar-import.component";
+import {
+  FlightStartComponent,
+  type FlightStartMemory,
+} from "./flight-start.component";
 import {
   destinationProposal,
   settleAttach,
@@ -65,6 +74,7 @@ import { dateOrderError, requiredText } from "./validate.mjs";
     UiFieldComponent,
     UiFieldControlDirective,
     UiPageHeaderComponent,
+    UiSegmentedComponent,
     PtoDaysComponent,
     FlightStartComponent,
     CalendarImportComponent,
@@ -75,15 +85,35 @@ import { dateOrderError, requiredText } from "./validate.mjs";
       backLink="/travel"
       title="Plan a trip"
     />
-    <travel-flight-start
-      [busy]="pending() !== ''"
-      (staged)="stageFlight($event)"
-      (attach)="attachFlight($event)"
-    />
-    <travel-calendar-import
-      [busy]="pending() !== ''"
-      (leaving)="calendarLeaving()"
-    />
+    <div class="trip-start">
+      @for (stamp of [startStamp()]; track stamp) {
+        <ui-segmented
+          label="How should this trip start?"
+          [options]="startOptions"
+          [value]="mode()"
+          (valueChange)="chooseMode($event)"
+        />
+      }
+      <p class="muted" id="trip-start-help">{{ startHelp() }}</p>
+    </div>
+    @if (mode() === "flight") {
+      <travel-flight-start
+        [showIntro]="false"
+        [memory]="flightDraft"
+        [busy]="pending() !== ''"
+        (staged)="stageFlight($event)"
+        (attach)="attachFlight($event)"
+      />
+    }
+    @if (mode() === "calendar") {
+      <travel-calendar-import
+        [showIntro]="false"
+        [memory]="calendarDraft"
+        [busy]="pending() !== ''"
+        (leaving)="calendarLeaving()"
+      />
+    }
+    @if (mode() === "manual") {
     <ui-card
       ><form
       class="travel-form"
@@ -322,6 +352,7 @@ import { dateOrderError, requiredText } from "./validate.mjs";
         />
       }
     </ui-dialog>
+    }
   </main>`,
 })
 export class NewTripComponent {
@@ -337,6 +368,28 @@ export class NewTripComponent {
   private readonly host = inject(ElementRef<HTMLElement>);
   @ViewChild(FlightStartComponent) private flightStart?: FlightStartComponent;
   @ViewChild(CalendarImportComponent) private calendarImport?: CalendarImportComponent;
+  readonly startOptions: readonly UiSegmentedOption[] = [
+    { value: "flight", label: "Flight/date" },
+    { value: "calendar", label: "Calendar booking" },
+    { value: "manual", label: "Manual" },
+  ];
+  readonly mode = signal<TripStart | null>(null);
+  /** Bumped to remount the choice control when a settings draft blocks the switch. */
+  readonly startStamp = signal(0);
+  flightDraft: FlightStartMemory | null = null;
+  calendarDraft: CalendarImportMemory | null = null;
+  readonly startHelp = computed(() => {
+    switch (this.mode()) {
+      case "flight":
+        return "Enter one flight number and date. Travel proposes the route before anything is saved.";
+      case "calendar":
+        return "Choose one flight calendar file. Travel shows the leg before it writes. A return and PTO stay untouched.";
+      case "manual":
+        return "Enter the dates and destination you already know.";
+      default:
+        return "Choose a flight and date, a calendar booking, or dates you already know.";
+    }
+  });
   constructor() {
     merge(
       this.session.cleared$,
@@ -348,10 +401,35 @@ export class NewTripComponent {
       | AcceptedFlight
       | undefined;
     if (incoming?.ok === true && incoming.end === "") {
+      this.mode.set("manual");
       queueMicrotask(() => {
         if (this.sessionActive) this.stageFlight(incoming);
       });
     }
+  }
+  chooseMode(value: string | number | null): void {
+    if (value !== "flight" && value !== "calendar" && value !== "manual") return;
+    void this.switchMode(value);
+  }
+  private async switchMode(next: TripStart): Promise<void> {
+    if (next === this.mode()) return;
+    const flight = this.flightStart;
+    if (this.mode() === "flight" && flight?.connectionOpen()) {
+      await flight.closeConnection();
+      if (flight.connectionOpen()) {
+        this.startStamp.update((stamp) => stamp + 1);
+        return;
+      }
+    }
+    this.captureActive();
+    this.mode.set(next);
+  }
+  private captureActive(): void {
+    if (this.mode() === "flight" && this.flightStart) this.flightDraft = this.flightStart.capture();
+    if (this.mode() === "calendar" && this.calendarImport) {
+      this.calendarDraft = this.calendarImport.capture();
+    }
+    if (this.mode() === "manual") this.transportOpen = false;
   }
   readonly model = signal(blankRange());
   readonly fields = signal<Record<string, string>>({});
@@ -442,8 +520,12 @@ export class NewTripComponent {
   private draftAttemptBody = "";
   private unfinished(): boolean {
     if (this.saved) return false;
-    if (this.flightStart?.unfinished()) return true;
-    if (this.calendarImport?.unfinished()) return true;
+    if (this.mode() === "flight") {
+      if (this.flightStart?.unfinished()) return true;
+    } else if (this.flightDraft?.dirty) return true;
+    if (this.mode() === "calendar") {
+      if (this.calendarImport?.unfinished()) return true;
+    } else if (this.calendarDraft?.dirty) return true;
     if (!(this.start || this.end || this.transports.length || this.confirmedDestination)) return false;
     const built = draftRequest(this.draftSnapshot());
     return !(built.ok && this.savedDraftBody === JSON.stringify(built.body));
@@ -493,6 +575,9 @@ export class NewTripComponent {
     this.stagedStart = "";
     this.flightStart?.clear();
     this.calendarImport?.clear();
+    this.flightDraft = null;
+    this.calendarDraft = null;
+    this.mode.set(null);
   }
   calendarLeaving(): void {
     this.saved = true;
@@ -725,6 +810,7 @@ export class NewTripComponent {
     });
   }
   stageFlight(event: AcceptedFlight): void {
+    if (this.flightStart) this.flightDraft = this.flightStart.capture();
     const nextStart = stageStart(this.start, this.stagedStart, event.start);
     const previous = this.flightProposal()?.value || "";
     const clearPrevious = Boolean(previous) && this.confirmedDestination === previous;
@@ -747,6 +833,7 @@ export class NewTripComponent {
     this.flightProposal.set(event.proposal);
     this.stagedFlightNumber.set(event.number);
     this.error.set("");
+    if (this.mode() !== "manual") this.mode.set("manual");
   }
   confirmDestination(): void {
     const proposal = this.flightProposal();
@@ -800,3 +887,5 @@ interface DraftSaved {
   revision: number;
   end_date: string | null;
 }
+
+type TripStart = "flight" | "calendar" | "manual";
