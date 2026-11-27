@@ -15,7 +15,7 @@
       <p>Add a balance, a holding, or this month's card activity. Home fills in as you go.</p>
       <div class="home-empty__actions">
         <a class="home-empty__primary" routerLink="/finance/have">Add a balance</a>
-        <a class="home-empty__secondary" routerLink="/finance/spending" [queryParams]="{ add: '1' }">Import card activity</a>
+        <a class="home-empty__secondary" routerLink="/finance/imports" [queryParams]="{ start: 'bank' }">Import card activity</a>
       </div>
     </section>
 
@@ -167,7 +167,7 @@
         }
       </div>
       <ol class="first-steps__list">
-        @for (step of firstSteps; track step.id) {
+        @for (step of firstStepRows; track step.id) {
           <li [class.done]="step.done">
             @if (step.done) {
               <!-- K1 seam: <ui-icon name="check" size="sm" /> goes here once K1's icon set lands on main. -->

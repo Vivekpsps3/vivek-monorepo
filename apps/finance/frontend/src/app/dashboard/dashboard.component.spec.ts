@@ -74,4 +74,73 @@ describe('Dashboard', () => {
     fixture.destroy();
   });
 
+  it('opens card import in Imports and does not repeat starter actions', async () => {
+    const host = await renderHome({
+      netWorth: { total: 0, portfolio: 0, other_assets: 0, liabilities: 0 },
+      assets: [],
+      transactions: [],
+    });
+    const card = host.querySelector('.home-empty__secondary') as HTMLAnchorElement;
+    expect(card.textContent?.trim()).toBe('Import card activity');
+    expect(card.getAttribute('href')).toBe('/finance/imports?start=bank');
+    expect(card.getAttribute('href')).not.toContain('add=1');
+    const stepLinks = [...host.querySelectorAll('.first-steps a')].map(link => link.textContent?.trim());
+    expect(stepLinks).toEqual(['Add holdings', 'Add pay and bills']);
+    expect(host.querySelector('.first-steps__progress')?.textContent).toContain('0 of 4 done');
+  });
+
+  it('keeps a dated manual add distinct from import on a vault with records', async () => {
+    const host = await renderHome({
+      netWorth: { total: 4200, portfolio: 0, other_assets: 4200, liabilities: 0 },
+      assets: [{ id: 1, name: 'Checking', category: 'cash', current_value: 4200, as_of_date: '2026-10-22' }],
+      transactions: [],
+    });
+    expect(host.querySelector('.home-empty')).toBeNull();
+    expect(host.textContent).not.toContain('Import card activity');
+    const balance = host.querySelector('.home-tile--balance');
+    const steps = host.querySelector('.first-steps');
+    expect(balance).not.toBeNull();
+    expect(steps).not.toBeNull();
+    expect(balance!.compareDocumentPosition(steps!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const activity = [...host.querySelectorAll('.first-steps a')].find(link => link.textContent?.trim() === 'Add activity') as HTMLAnchorElement;
+    expect(activity.getAttribute('href')).toBe('/finance/imports?start=bank');
+    const manual = host.querySelector('.home-tile--activity a') as HTMLAnchorElement;
+    expect(manual.textContent).toContain('Add a transaction');
+    expect(manual.getAttribute('href')).toContain('add=1');
+    expect(manual.getAttribute('href')).toMatch(/date=\d{4}-\d{2}-\d{2}/);
+    expect(manual.getAttribute('href')).not.toContain('imports');
+  });
+
 });
+
+async function renderHome(seed: {
+  netWorth: { total: number; portfolio: number; other_assets: number; liabilities: number };
+  assets: unknown[];
+  transactions: unknown[];
+}): Promise<HTMLElement> {
+  const finance = {
+    netWorth$: of(seed.netWorth),
+    cashflowSummary$: of({ total_income: 0, total_expenses: 0, net_cashflow: 0, income_occurrences: [] }),
+    holdings$: of([]),
+    dashboardTransactions$: of(seed.transactions),
+    assets$: of(seed.assets),
+    liabilities$: of([]),
+    fixedExpenses$: of([]),
+    jobIncomes$: of([]),
+    subscriptions$: of([]),
+    loadDashboard: jasmine.createSpy('loadDashboard').and.returnValue(of([])),
+    getLiabilities: jasmine.createSpy('getLiabilities').and.returnValue(of([])),
+  } as unknown as FinanceService;
+  await TestBed.configureTestingModule({
+    imports: [DashboardComponent],
+    providers: [{ provide: FinanceService, useValue: finance }, provideRouter([])],
+  }).overrideComponent(DashboardComponent, {
+    remove: { imports: [ChartsComponent] },
+    add: { imports: [DashboardChartsStubComponent] },
+  }).compileComponents();
+  const fixture: ComponentFixture<DashboardComponent> = TestBed.createComponent(DashboardComponent);
+  fixture.detectChanges();
+  await fixture.whenStable();
+  fixture.detectChanges();
+  return fixture.nativeElement as HTMLElement;
+}
