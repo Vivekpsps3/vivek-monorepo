@@ -66,6 +66,7 @@ for (const width of [320, 1440]) for (const theme of ['light', 'dark'] as const)
 test('forced colors and reduced motion retain usable native controls and modal focus', async ({ page }) => {
   await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
   await page.goto('/travel/trips/new');
+  await page.getByRole('radio', { name: 'Manual', exact: true }).click();
   await page.getByLabel('Departure date').fill('2026-12-01');
   await page.getByLabel('Return date').fill('2026-12-03');
   await page.getByRole('textbox', { name: 'Destination city', exact: true }).fill('Kyoto');

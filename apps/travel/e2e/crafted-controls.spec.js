@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../../../tests/e2e/fixtures';
+import { chooseTripStart } from './dates.mjs';
 
 test.use({ hasTouch: true });
 
@@ -9,6 +10,7 @@ for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
     await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
     await page.goto('/travel/trips/new');
+    await chooseTripStart(page, 'manual');
     const saveTrip = page.getByRole('button', { name: 'Save trip', exact: true });
     await saveTrip.focus();
     await page.keyboard.press('Enter');

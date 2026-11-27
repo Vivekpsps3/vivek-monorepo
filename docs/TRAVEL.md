@@ -6,7 +6,7 @@ Use the root workflow in [Development](DEVELOPMENT.md). There is one service and
 
 ## Trips and forms
 
-A trip spans departure through return, inclusive. Plan a trip starts with a flight number and date, one calendar file, or typed dates and a destination. Add destination changes on the first date at the next city; keep one optional trip-name editor. Every destination needs a name. Reversed dates cannot save. Same-day and one-night trips have explicit wording.
+A trip spans departure through return, inclusive. Plan a trip offers Flight/date, Calendar booking, or Manual, and opens only that form. A terminal booking that already accepted a flight opens Manual with that leg and an empty return. Add destination changes on the first date at the next city; keep one optional trip-name editor. Every destination needs a name. Reversed dates cannot save. Same-day and one-night trips have explicit wording.
 
 Save draft on Plan a trip stores one confirmed outbound leg when the return is still unknown. The draft keeps the departure date, that leg, and a return date or destination city only when those fields were typed. An arrival time does not become the return date, and the draft does not create a PTO charge. Saving a complete trip still requires the return date and still allocates PTO. A failed or late draft save leaves the current form in place. Signing out clears the private in-memory draft.
 

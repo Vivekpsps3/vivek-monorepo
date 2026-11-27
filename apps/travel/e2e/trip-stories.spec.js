@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { formatDateRange, formatDay, ptoOption, tripHeader } from './dates.mjs';
+import { chooseTripStart, formatDateRange, formatDay, ptoOption, tripHeader } from './dates.mjs';
 
 test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
@@ -51,6 +51,7 @@ test('home lists an open reminder and unbooked necessary parking', async ({ page
 
 test('a two-city trip saves both cities under one name', async ({ page }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-12-01');
   await page.getByLabel('Return date').fill('2026-12-05');
   await page.getByLabel('Destination city').fill('Kyoto');
@@ -72,6 +73,7 @@ test('a return before departure stays on the draft', async ({ page }) => {
     if (request.method() === 'POST' && request.url().includes('/travel/api/trips')) writes.push(request.url());
   });
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-12-20');
   await page.getByLabel('Return date').fill('2026-12-10');
   await expect(page.getByText('Now pick the day you come back.', { exact: true })).toBeVisible();
@@ -120,6 +122,7 @@ test('a half-day PTO choice saves as 0.5', async ({ page }) => {
 
 async function plan(page, start, end, city) {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill(start);
   await page.getByLabel('Return date').fill(end);
   await page.getByLabel('Destination city').fill(city);

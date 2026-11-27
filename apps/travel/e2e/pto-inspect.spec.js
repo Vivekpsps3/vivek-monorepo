@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../../../tests/e2e/fixtures';
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
-import { formatDay, ptoChoice, ptoOption } from './dates.mjs';
+import { chooseTripStart, formatDay, ptoChoice, ptoOption } from './dates.mjs';
 import { longDate, overlapSentence } from '../frontend/src/pto-model.mjs';
 
 const policy = {
@@ -221,6 +221,7 @@ test('an unsaved date change keeps the overlapping choice', async ({ page, reque
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-12-14');
   await page.getByLabel('Return date').fill('2026-12-16');
   await page.getByRole('heading', { name: 'Time off', exact: true }).click();

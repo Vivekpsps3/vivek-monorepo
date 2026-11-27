@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../../../tests/e2e/fixtures';
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
-import { openTripAdd } from './dates.mjs';
+import { chooseTripStart, openTripAdd } from './dates.mjs';
 
 const morning = {
   ident: 'UAL837', ident_iata: 'UA837', status: 'Scheduled',
@@ -180,6 +180,7 @@ for (const view of settingsViews) {
       }));
       await page.goto('/travel/trips/new');
       await chooseColorTheme(page, view.theme);
+      await chooseTripStart(page, 'manual');
       await page.getByLabel('Departure date', { exact: true }).fill('2026-11-02');
       await page.getByLabel('Return date').fill('2026-11-04');
       await page.getByLabel('Destination city').fill('Tokyo');

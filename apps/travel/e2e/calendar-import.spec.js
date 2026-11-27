@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../../../tests/e2e/fixtures';
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
+import { chooseTripStart } from './dates.mjs';
 
 const booking = [
   'BEGIN:VCALENDAR',
@@ -47,6 +48,7 @@ function savedWrites(page) {
 }
 
 async function chooseCalendar(page, name, contents) {
+  await chooseTripStart(page, 'calendar');
   const response = page.waitForResponse((res) =>
     res.url().includes('/calendar-bookings/preview') && res.request().method() === 'POST');
   await calendarFile(page).setInputFiles(file(name, contents));
@@ -68,8 +70,9 @@ test('a calendar booking previews the flight and saves only after confirmation',
   await expect(card).toContainText('Scheduled departure: 2026-11-02 10:00 America/Los_Angeles');
   await expect(card).toContainText('Scheduled arrival: 2026-11-04 07:30 Asia/Tokyo');
   await expect(card).toContainText('Proposed. Not saved yet.');
-  await expect(page.getByLabel('Departure date')).toHaveValue('');
-  await expect(page.getByLabel('Return date')).toHaveValue('');
+  await expect(page.locator('input[name="start"]')).toHaveCount(0);
+  await expect(page.locator('input[name="end"]')).toHaveCount(0);
+  await expect(page.locator('input[name="flightIdent"]')).toHaveCount(0);
   expect(writes).toEqual([]);
 
   const posted = page.waitForRequest((req) => req.method() === 'POST' && req.url().includes('/travel/api/trip-drafts'));
@@ -88,7 +91,7 @@ test('a calendar booking previews the flight and saves only after confirmation',
   expect(body.legs[0].depart_at).toContain('2026-11-02T10:00');
   expect(body.legs[0].arrive_at).toContain('2026-11-04T07:30');
   await expect(page.getByText('The return date is still unknown, and this draft has no PTO charge.')).toBeVisible();
-  await expect(page.getByLabel('Return date')).toHaveValue('');
+  await expect(page.locator('input[name="end"]')).toHaveCount(0);
 
   const drafts = await (await request.get('/travel/api/trip-drafts')).json();
   expect(drafts.drafts).toHaveLength(1);
@@ -164,6 +167,7 @@ test('a late preview does not replace the booking on screen', async ({ page }) =
   });
   try {
     await page.goto('/travel/trips/new');
+    await chooseTripStart(page, 'calendar');
     await calendarFile(page).setInputFiles(file('synthetic-ua837.ics', booking));
     await started;
     await chooseCalendar(page, 'synthetic-ua838.ics', later);
@@ -337,14 +341,14 @@ for (const view of views) {
         issue.id === 'color-contrast' || issue.impact === 'serious' || issue.impact === 'critical',
       )).toEqual([]);
       await page.screenshot({ path: test.info().outputPath(`calendar-import-${view.name}.png`) });
-      await expect(page.getByLabel('Return date')).toHaveValue('');
+      await expect(page.locator('input[name="end"]')).toHaveCount(0);
       if (view.hasTouch) await save.tap();
       else {
         await save.focus();
         await page.keyboard.press('Enter');
       }
       await expect(page.getByText('The return date is still unknown, and this draft has no PTO charge.')).toBeVisible();
-      await expect(page.getByLabel('Return date')).toHaveValue('');
+      await expect(page.locator('input[name="end"]')).toHaveCount(0);
       const drafts = await (await request.get('/travel/api/trip-drafts')).json();
       expect(drafts.drafts).toHaveLength(1);
       expect(drafts.drafts[0].end_date).toBeNull();

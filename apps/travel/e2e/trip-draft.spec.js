@@ -1,4 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
+import { chooseTripStart } from './dates.mjs';
 
 test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
@@ -33,6 +34,7 @@ function holdDraft(page) {
 
 test('an outbound draft saves no invented return and no PTO charge', async ({ page, request }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-06-01');
   await addOutbound(page);
   const posted = page.waitForRequest((req) => req.method() === 'POST' && req.url().includes('/travel/api/trip-drafts'));
@@ -65,6 +67,7 @@ test('an outbound draft saves no invented return and no PTO charge', async ({ pa
 
 test('a failed draft save keeps the outbound leg and a retry stores it once', async ({ page, request }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-06-01');
   await addOutbound(page);
   let posts = 0;
@@ -98,6 +101,7 @@ test('a failed draft save keeps the outbound leg and a retry stores it once', as
 
 test('a late draft response keeps newer departure input', async ({ page, request }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-06-01');
   await addOutbound(page);
   const held = await holdDraft(page);
@@ -116,6 +120,7 @@ test('a late draft response keeps newer departure input', async ({ page, request
 
 test('session expiry clears an unsaved trip draft without a discard prompt', async ({ page }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-06-01');
   await addOutbound(page);
   const ended = await page.request.post('/api/auth/logout', {
