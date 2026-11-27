@@ -329,12 +329,21 @@ class QuestStepView(_Shape):
     recorded_action: str | None
 
 
+class QuestKeepsakeView(_Shape):
+    id: str
+    name: str
+    kind: Literal["postcard", "seal", "pennant", "print"]
+    kept: bool
+
+
 class QuestView(_Shape):
     id: str
     title: str
     detail: str
     completed: int
     total: int
+    reward_stamps: Literal[10]
+    keepsake: QuestKeepsakeView
     steps: list[QuestStepView]
 
 
