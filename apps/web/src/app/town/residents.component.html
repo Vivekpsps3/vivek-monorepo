@@ -36,7 +36,7 @@
         <ul>
           @for (conversation of resident.conversations; track conversation.id) {
             <li [attr.data-conversation]="conversation.id" [attr.data-completed]="conversation.completed">
-              <p>{{ conversation.line }}</p>
+              <p>{{ opening(resident, conversation) }}</p>
               @if (conversation.stamps === 2) {
                 <p>{{ conversation.completed ? '2 Stamps were given once.' : 'Gives 2 Stamps once.' }}</p>
               }
@@ -55,13 +55,32 @@
     <p id="dialogue-error" role="alert" tabindex="-1">{{ error() }}</p>
   }
   @if (confirmation(); as choice) {
-    <section aria-labelledby="dialogue-confirmation">
+    <section aria-labelledby="dialogue-confirmation" [attr.data-resident-scene]="activeScene() ? choice.residentId + ':' + choice.conversationId : null">
       <h2 id="dialogue-confirmation" tabindex="-1">{{ choice.completed ? 'Replay' : 'Finish' }} {{ choice.title }} with {{ choice.name }}?</h2>
+      @if (activeScene(); as scene) {
+        @for (paragraph of scene.paragraphs; track paragraph) {
+          <p>{{ paragraph }}</p>
+        }
+        @if (mention(); as object) {
+          <p [attr.data-mention-sample]="object.sample" [attr.data-mention-label]="object.label">{{ object.label }}</p>
+          <p>{{ object.detail }}</p>
+        }
+        <p data-rank-effect>{{ rankEffect() }}</p>
+        <div class="choices" role="group" aria-labelledby="dialogue-choices">
+          <p id="dialogue-choices">Choose a reply</p>
+          @for (reply of scene.choices; track reply.id) {
+            <button type="button" class="action" [attr.data-dialogue-choice]="reply.id" [attr.aria-pressed]="selectedChoiceId() === reply.id" [disabled]="busy()" (click)="choose(reply.id)">{{ reply.label }}</button>
+          }
+        </div>
+        @if (selectedReply(); as reply) {
+          <p data-selected-reply>{{ reply }}</p>
+        }
+      }
       <label for="dialogue-note">Note for yourself</label>
       <textarea id="dialogue-note" [value]="note()" (input)="remember($event)"></textarea>
       <p>Stays in this session. Not saved.</p>
       <div class="actions">
-        <button type="button" class="action" [disabled]="busy()" (click)="confirm()">{{ error() ? 'Retry talk' : 'Finish talk' }}</button>
+        <button type="button" class="action" [disabled]="busy() || (!!activeScene() && !selectedChoiceId())" (click)="confirm()">{{ error() ? 'Retry talk' : 'Finish talk' }}</button>
         <button type="button" class="action" [disabled]="busy()" (click)="cancel()">Cancel</button>
       </div>
     </section>

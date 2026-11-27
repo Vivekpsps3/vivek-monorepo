@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { BehaviorSubject, Subject } from 'rxjs';
+import { DEK_STORE, LOCK_SIGNAL, VAULT_PRESENCE } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
 import { ResidentsComponent } from './residents.component';
 import { TownApiService, type DialogueDirectory, type DialogueResident } from './town.api';
@@ -53,6 +54,9 @@ describe('Residents', () => {
   let api: { getResidents: jasmine.Spy; completeConversation: jasmine.Spy };
 
   beforeEach(() => {
+    localStorage.removeItem(VAULT_PRESENCE);
+    localStorage.removeItem(DEK_STORE);
+    localStorage.removeItem(LOCK_SIGNAL);
     user = new BehaviorSubject<{ id: number } | null>({ id: 1 });
     loads = [];
     writes = [];
@@ -104,13 +108,23 @@ describe('Residents', () => {
     expect(el.querySelector('[data-resident="mara"]')?.getAttribute('data-present')).toBe('false');
     expect(el.textContent).toContain('Away from the Library right now.');
     expect(el.textContent).toContain('Talk about Welcome');
-    expect(el.textContent).not.toMatch(/quest|you missed|yesterday|weight|blood pressure|paycheck/i);
+    expect(el.textContent).toContain('Mara keeps the Reading Hall. The shelves, the desk, and the wall calendar stay here when you are away.');
+    expect(el.textContent).not.toContain('A public line.');
+    expect(el.textContent).not.toMatch(/quest|you missed|yesterday|weight|blood pressure|paycheck|great job|well done/i);
     expect(el.querySelector('#talk-mara-welcome')?.hasAttribute('disabled')).toBeFalse();
   });
 
   it('keeps a failed note and retries the same identity without applying a conflict', async () => {
     const { harness, el, click, typeNote } = await open();
     click('Talk about Welcome');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank rises by 1. 2 Stamps, once.');
+    const finish = Array.from(el.querySelectorAll('button')).find(item => item.textContent?.trim() === 'Finish talk');
+    expect(finish?.hasAttribute('disabled')).toBeTrue();
+    click('Start with the shelves.');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('The shelves, then.');
+    click('Start with the reading desk.');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('The desk, then.');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank rises by 1. 2 Stamps, once.');
     typeNote('Synthetic session note');
     click('Finish talk');
     const body = { resident_id: 'mara', conversation_id: 'welcome', expected_revision: 0 };
@@ -118,6 +132,7 @@ describe('Residents', () => {
     writes[0].error({ status: 503 });
     harness.detectChanges();
     expect(el.querySelector<HTMLTextAreaElement>('#dialogue-note')?.value).toBe('Synthetic session note');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('The desk, then.');
     expect(el.textContent).toContain('Try it again');
     expect(el.textContent).toContain('Finish Welcome with Mara?');
     click('Retry talk');
@@ -128,6 +143,7 @@ describe('Residents', () => {
     expect(el.textContent).toContain('This conversation changed');
     expect(el.textContent).not.toContain('STALE');
     expect(el.textContent).not.toContain('Synthetic session note');
+    expect(el.textContent).not.toContain('The desk, then.');
     expect(el.textContent).not.toContain('Finish Welcome with Mara?');
     expect(el.querySelector('main')?.getAttribute('data-revision')).toBe('1');
     expect(el.textContent).toContain('Mara keeps the Reading Hall and explains the shelves.');
@@ -136,6 +152,7 @@ describe('Residents', () => {
   it('drops a held success and the note after the owner changes', async () => {
     const { harness, el, click, typeNote } = await open();
     click('Talk about Welcome');
+    click('Start with the shelves.');
     typeNote('Synthetic session note');
     click('Finish talk');
     user.next({ id: 2 });
@@ -145,12 +162,14 @@ describe('Residents', () => {
     expect(el.querySelector('main')?.getAttribute('data-revision')).toBe('0');
     expect(el.textContent).not.toContain('Rank is 9');
     expect(el.textContent).not.toContain('Synthetic session note');
+    expect(el.textContent).not.toContain('The shelves, then.');
     expect(el.textContent).not.toContain('Finish Welcome with Mara?');
   });
 
   it('drops a late error after the owner changes', async () => {
     const { harness, el, click, typeNote } = await open();
     click('Talk about Welcome');
+    click('Start with the shelves.');
     typeNote('Synthetic session note');
     click('Finish talk');
     user.next({ id: 2 });
@@ -159,16 +178,19 @@ describe('Residents', () => {
     harness.detectChanges();
     expect(el.textContent).not.toContain('Try it again');
     expect(el.textContent).not.toContain('Synthetic session note');
+    expect(el.textContent).not.toContain('The shelves, then.');
     expect(el.textContent).not.toContain('Finish Welcome with Mara?');
   });
 
   it('clears a note on escape and reports replay or a non-welcome rank once', async () => {
     const { harness, el, click, typeNote } = await open();
     click('Talk about Welcome');
+    click('Start with the shelves.');
     typeNote('Synthetic session note');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     harness.detectChanges();
     expect(el.textContent).not.toContain('Synthetic session note');
+    expect(el.textContent).not.toContain('The shelves, then.');
     expect(el.textContent).not.toContain('Finish Welcome with Mara?');
   });
 
@@ -176,6 +198,8 @@ describe('Residents', () => {
     const welcomeDone = directory(1, ['welcome']);
     const { harness, el, click } = await open('/town/residents?resident=mara', welcomeDone);
     click('Replay Welcome');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank stays. No Stamps.');
+    click('Start with the shelves.');
     click('Finish talk');
     expect(api.completeConversation.calls.mostRecent().args[0]).toEqual({
       resident_id: 'mara',
@@ -186,6 +210,8 @@ describe('Residents', () => {
     harness.detectChanges();
     expect(el.textContent).toContain('Rank stays at 1.');
     click('Talk about How this place works');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank rises by 1. No Stamps.');
+    click('Explain the public shelves.');
     click('Finish talk');
     writes[1].next(directory(2, ['welcome', 'how-it-works']));
     harness.detectChanges();
@@ -212,5 +238,66 @@ describe('Residents', () => {
     harness.detectChanges();
     expect(el.textContent).toContain('Residents are unavailable right now.');
     expect(el.textContent).not.toContain('Synthetic session note');
+  });
+
+  it('keeps an unauthored resident on the shared line', async () => {
+    const { el } = await open('/town/residents?resident=imani');
+    expect(el.textContent).toContain('A public line.');
+    expect(el.textContent).not.toContain('Choose a reply');
+    expect(el.textContent).not.toContain('Sample civic ledger');
+  });
+
+  it('uses a labeled sample for Ada when Finance is locked and the door when it is open', async () => {
+    const { harness, el, click } = await open('/town/residents?resident=ada');
+    click('Talk about A short activity');
+    expect(el.querySelector('[data-mention-sample]')?.getAttribute('data-mention-label')).toBe('Sample civic ledger');
+    expect(el.textContent).toContain('Labeled sample. Not a Finance record.');
+    expect(el.textContent).not.toContain('Northwind Checking');
+    expect(el.textContent).not.toContain('Spent 4321 on synthetic rent');
+    expect(el.textContent).not.toContain('Private goal harbor cottage');
+    click('Cancel');
+    localStorage.setItem(VAULT_PRESENCE, '1');
+    click('Talk about A short activity');
+    expect(el.querySelector('[data-mention-sample]')?.getAttribute('data-mention-sample')).toBe('false');
+    expect(el.querySelector('[data-mention-label]')?.textContent).toBe('Treasury door');
+    expect(el.textContent).not.toContain('Northwind Checking');
+    click('Notice the object she set out.');
+    click('Finish talk');
+    expect(api.completeConversation.calls.mostRecent().args[0]).toEqual({
+      resident_id: 'ada',
+      conversation_id: 'activity',
+      expected_revision: 0,
+    });
+    const saved = directory();
+    saved.revision = 1;
+    const ada = saved.residents.find(item => item.id === 'ada');
+    if (ada) {
+      ada.rank = 1;
+      ada.conversations = ada.conversations.map(item => item.id === 'activity' ? { ...item, completed: true } : item);
+    }
+    writes[0].next(saved);
+    harness.detectChanges();
+    expect(el.textContent).toContain('Rank is 1. No extra Stamps.');
+    expect(el.querySelector('[data-resident="ada"]')?.getAttribute('data-rank')).toBe('1');
+    localStorage.setItem(VAULT_PRESENCE, '2');
+    click('Talk about A preference');
+    expect(el.querySelector('[data-mention-label]')?.textContent).toBe('Sample civic ledger');
+  });
+
+  it('clears a reply and a note when Finance locks and ignores the losing response', async () => {
+    const { harness, el, click, typeNote } = await open();
+    click('Talk about Welcome');
+    click('Start with the shelves.');
+    typeNote('Synthetic session note');
+    click('Finish talk');
+    window.dispatchEvent(new StorageEvent('storage', { key: LOCK_SIGNAL, newValue: '1' }));
+    writes[0].next(directory(9, ['welcome']));
+    loads.at(-1)?.next(directory());
+    harness.detectChanges();
+    expect(el.querySelector('main')?.getAttribute('data-revision')).toBe('0');
+    expect(el.textContent).not.toContain('Rank is 9');
+    expect(el.textContent).not.toContain('Synthetic session note');
+    expect(el.textContent).not.toContain('The shelves, then.');
+    expect(el.textContent).not.toContain('Finish Welcome with Mara?');
   });
 });
