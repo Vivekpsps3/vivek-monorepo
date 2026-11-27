@@ -13,7 +13,7 @@
 .composition,
 .counter,
 .plaque,
-.inspector {
+.account-detail {
   min-width: 0;
 }
 
@@ -32,6 +32,10 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.drawers > li {
+  min-width: 0;
 }
 
 .drawer {
@@ -60,7 +64,7 @@
 .drawer-name,
 .drawer-meta,
 .plaque,
-.inspector p {
+.account-detail p {
   overflow-wrap: anywhere;
 }
 
@@ -75,26 +79,39 @@
   font-size: var(--text-lg);
 }
 
-.plaque,
-.inspector {
+.plaque {
   padding: var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
 }
 
+.account-detail {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--brass);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .plaque h2,
-.inspector h2,
 .plaque p,
-.inspector p,
+.account-detail p,
 .empty-counter p,
 .load-error p {
   margin: 0;
 }
 
 .plaque p + p,
-.inspector p + p,
-.inspector ui-button,
 .empty-counter p + p {
   margin-top: var(--space-3);
 }
@@ -126,26 +143,15 @@
 }
 
 @media (min-width: 800px) {
-  .room-layout {
-    grid-template-columns: minmax(0, 1.6fr) minmax(16rem, 0.7fr);
-    align-items: start;
-  }
-
   .drawers {
-    grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
-  }
-}
-
-@media (max-width: 799px) {
-  .inspector {
-    border-top: 3px solid var(--brass);
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .drawer,
   .plaque,
-  .inspector {
+  .account-detail {
     transition: none;
   }
 }

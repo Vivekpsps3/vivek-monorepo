@@ -80,6 +80,10 @@ export class AccountsHallComponent implements OnInit, OnDestroy {
   readonly loadFailed = signal(false);
   readonly projection = computed(() => projectAccountHall(this.records(), this.worth(), this.revealed()));
   readonly revealedDrawer = computed(() => this.projection().drawers.find(drawer => drawer.revealed) ?? null);
+  readonly revealedNotes = computed(() => {
+    const drawer = this.revealedDrawer();
+    return drawer ? this.notesFor(drawer.key) : '';
+  });
   readonly balanceDates = computed(() => portfolioDateSummary(this.records().map(record => record.asOf)));
   readonly balanceEditor: AccountBalanceEditor;
 
@@ -134,33 +138,63 @@ export class AccountsHallComponent implements OnInit, OnDestroy {
       });
   }
 
-  unlock(key: string): void {
-    const record = this.records().find(row => accountHallKey(row.kind, row.id) === key);
-    const source = record?.kind === 'debt'
-      ? this.debts().find(row => row.id === record.id)
-      : this.assets().find(row => row.id === record?.id);
-    if (!record || !source || this.sealed || !this.vault.isUnlocked) return;
-    const same = this.revealed() === key
-      && this.balanceEditor.draft?.id === record.id
-      && this.balanceEditor.draft.kind === record.kind;
+  /** Reveal one published account. Selection does not open the editor or write. */
+  inspect(key: string): void {
+    if (!this.recordSource(key)) return;
     this.revealed.set(key);
-    if (!same) {
-      this.balanceEditor.open(record.kind, {
-        id: record.id,
-        name: record.name,
-        category: record.category,
-        value: record.value,
-        as_of_date: record.asOf,
-        notes: source.notes,
-        review_interval_days: source.review_interval_days,
-      });
-    }
+  }
+
+  /** Open the shared account editor for the revealed record. */
+  edit(key: string): void {
+    const found = this.recordSource(key);
+    if (!found) return;
+    const { record, source } = found;
+    this.revealed.set(key);
+    const same = this.balanceEditor.draft?.id === record.id && this.balanceEditor.draft.kind === record.kind;
+    if (same) return;
+    this.balanceEditor.open(record.kind, {
+      id: record.id,
+      name: record.name,
+      category: record.category,
+      value: record.value,
+      as_of_date: record.asOf,
+      notes: source.notes,
+      review_interval_days: source.review_interval_days,
+    });
   }
 
   lockBalances(): void {
+    const key = this.revealed();
     this.revealed.set(null);
     this.balanceEditor.close();
     this.cdr.markForCheck();
+    this.focusOrigin(key);
+  }
+
+  private notesFor(key: string): string {
+    return String(this.recordSource(key)?.source.notes || '').trim();
+  }
+
+  private recordSource(key: string): { record: AccountHallRecord; source: Asset | Liability } | null {
+    if (this.sealed || !this.vault.isUnlocked) return null;
+    const record = this.records().find(row => accountHallKey(row.kind, row.id) === key);
+    if (!record) return null;
+    const source = record.kind === 'debt'
+      ? this.debts().find(row => row.id === record.id)
+      : this.assets().find(row => row.id === record.id);
+    return source ? { record, source } : null;
+  }
+
+  /** Dialog close restores the Edit control. Lock removes that control, so return to the drawer. */
+  private focusOrigin(key: string | null): void {
+    setTimeout(() => {
+      if (this.destroyed) return;
+      const drawer = key ? document.querySelector<HTMLElement>(`[data-drawer="${key}"]`) : null;
+      if (drawer?.isConnected) drawer.focus({ preventScroll: true });
+      else if (document.activeElement === document.body || document.activeElement === null) {
+        document.getElementById('accounts-hall-heading')?.focus({ preventScroll: true });
+      }
+    });
   }
 
   private finishLoad(session: number, generation: number, failed: boolean): void {

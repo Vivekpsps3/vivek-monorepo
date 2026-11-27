@@ -68,7 +68,7 @@ describe('AccountsHallComponent', () => {
     };
   }
 
-  it('opens the unlocked drawer in the shared editor and updates both views once', () => {
+  it('inspects a drawer without writing, then edits it in the shared editor', () => {
     const { fixture, finance, publishes, netWorth$ } = setup();
     const host: HTMLElement = fixture.nativeElement;
     expect(host.textContent).toContain('Hidden');
@@ -82,6 +82,15 @@ describe('AccountsHallComponent', () => {
     const practical = netWorth$.subscribe(value => { if (value) seen.push(value.total); });
     const before = seen.length;
     (host.querySelector('[data-drawer="asset:11"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.balanceEditor.draft).toBeNull();
+    expect(finance.updateAsset).not.toHaveBeenCalled();
+    const detail = host.querySelector('[data-account-detail]');
+    expect(detail?.textContent).toContain('Statement');
+    expect(detail?.textContent).toContain('Published balance');
+    expect(host.querySelector('aside')).toBeNull();
+    const edit = [...host.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Edit');
+    (edit as HTMLButtonElement).click();
     fixture.detectChanges();
 
     const editor = fixture.componentInstance.balanceEditor;
@@ -119,13 +128,16 @@ describe('AccountsHallComponent', () => {
     finance.updateAsset.and.returnValue(held);
     (fixture.nativeElement.querySelector('[data-drawer="asset:11"]') as HTMLButtonElement).click();
     fixture.detectChanges();
+    const edit = [...fixture.nativeElement.querySelectorAll('button')].find((button: HTMLButtonElement) => button.textContent?.trim() === 'Edit');
+    (edit as HTMLButtonElement).click();
+    fixture.detectChanges();
     const editor = fixture.componentInstance.balanceEditor;
     editor.draft!.value = '1399.25';
     editor.draft!.notes = 'Unpublished coastal draft';
     editor.save();
 
     finance.updateLiability.and.returnValue(throwError(() => new Error('no')));
-    fixture.componentInstance.unlock('debt:21');
+    fixture.componentInstance.edit('debt:21');
     fixture.detectChanges();
     expect(editor.draft?.id).toBe(21);
     expect(editor.draft?.notes).toBe('');

@@ -2,8 +2,10 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  ElementRef,
   OnDestroy,
   OnInit,
+  afterRenderEffect,
   computed,
   inject,
   signal,
@@ -22,7 +24,10 @@ import { FinanceService } from '../services/finance.service';
 import {
   UNASSIGNED_ACCOUNT_FILTER,
   emptyGalleryFilters,
+  galleryActivityQuery,
   galleryFilterChoices,
+  galleryFilterSummary,
+  galleryHasAdvancedFilters,
   galleryToday,
   projectTreasuryGallery,
   readGalleryQuery,
@@ -45,9 +50,11 @@ export class TreasuryGalleryComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly destroy$ = new Subject<void>();
   private destroyed = false;
   private sealed = false;
+  private arrivalHandled = false;
   private loadGeneration = 0;
   private boundSession = 0;
 
@@ -63,6 +70,8 @@ export class TreasuryGalleryComponent implements OnInit, OnDestroy {
   private readonly holdings = signal<Holding[]>([]);
   private readonly transactions = signal<Transaction[]>([]);
   readonly choices = computed(() => galleryFilterChoices(this.exposed() ? this.transactions() : [], this.filters()));
+  readonly filterSummary = computed(() => galleryFilterSummary(this.filters(), this.choices()));
+  readonly activityQuery = computed(() => galleryActivityQuery(this.filters()));
   readonly projection = computed(() => projectTreasuryGallery({
     holdings: this.exposed() ? this.holdings() : [],
     transactions: this.exposed() ? this.transactions() : [],
@@ -77,6 +86,35 @@ export class TreasuryGalleryComponent implements OnInit, OnDestroy {
     const type = this.filters().typeFilter;
     return type === 'income' ? 'income' : type === 'expense' ? 'spending' : 'all';
   });
+
+  constructor() {
+    afterRenderEffect(() => {
+      const ledgerId = this.openedLedger();
+      const positionId = this.openedPosition();
+      const loading = this.loading();
+      const count = this.projection().plaques.length + this.projection().lines.length;
+      const advanced = galleryHasAdvancedFilters(this.filters(), this.sort());
+      const root = this.host.nativeElement as HTMLElement;
+      if (this.arrivalHandled || this.destroyed || this.sealed) return;
+      if (ledgerId == null && positionId == null) {
+        if (count > 0 || !loading) this.arrivalHandled = true;
+        if (advanced) root.querySelector('details.activity-filters')?.setAttribute('open', '');
+        return;
+      }
+      const selector = ledgerId != null ? `[data-ledger-line="${ledgerId}"]` : `[data-plaque="${positionId}"]`;
+      const origin = root.querySelector(selector);
+      if (!origin) {
+        if (!loading) this.arrivalHandled = true;
+        if (advanced) root.querySelector('details.activity-filters')?.setAttribute('open', '');
+        return;
+      }
+      this.arrivalHandled = true;
+      if (advanced) root.querySelector('details.activity-filters')?.setAttribute('open', '');
+      if (!(origin instanceof HTMLElement)) return;
+      origin.focus({ preventScroll: true });
+      origin.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }
 
   ngOnInit(): void {
     this.boundSession = this.finance.sessionToken;
@@ -129,14 +167,16 @@ export class TreasuryGalleryComponent implements OnInit, OnDestroy {
     if (!this.acceptsPublication() || !this.holdings().some(row => row.id === id)) return;
     this.openedPosition.set(id);
     this.writeRoute(false);
-    this.showInspector();
   }
 
   openLedger(id: number): void {
     if (!this.acceptsPublication() || !this.projection().lines.some(line => line.id === id)) return;
     this.openedLedger.set(id);
     this.writeRoute(false);
-    this.showInspector();
+  }
+
+  ledgerActivityQuery(id: number): Record<string, string | null> {
+    return { ...galleryActivityQuery(this.filters()), edit: String(id) };
   }
 
   setSearch(value: string): void {
@@ -185,6 +225,9 @@ export class TreasuryGalleryComponent implements OnInit, OnDestroy {
 
   private writeRoute(replaceUrl: boolean): void {
     if (!this.acceptsPublication()) return;
+    const left = window.scrollX;
+    const top = window.scrollY;
+    const focused = document.activeElement;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: writeGalleryQuery({
@@ -194,6 +237,17 @@ export class TreasuryGalleryComponent implements OnInit, OnDestroy {
         ledgerId: this.openedLedger(),
       }),
       replaceUrl,
+    }).then(() => {
+      if (this.destroyed || this.sealed) return;
+      const restore = () => {
+        if (this.destroyed || this.sealed) return;
+        if (window.scrollX !== left || window.scrollY !== top) window.scrollTo(left, top);
+        if (focused instanceof HTMLElement && focused.isConnected && document.activeElement === document.body) {
+          focused.focus({ preventScroll: true });
+        }
+      };
+      restore();
+      requestAnimationFrame(restore);
     });
   }
 
@@ -207,12 +261,6 @@ export class TreasuryGalleryComponent implements OnInit, OnDestroy {
     this.loading.set(false);
     this.loadFailed.set(failed);
     this.cdr.markForCheck();
-  }
-
-  /** A phone tap scrolls the chosen plaque into view. Bring the inspector back. */
-  private showInspector(): void {
-    if (this.destroyed || this.sealed) return;
-    document.querySelector('[data-inspector-position]')?.scrollIntoView({ block: 'start', inline: 'nearest' });
   }
 
   private acceptsPublication(): boolean {

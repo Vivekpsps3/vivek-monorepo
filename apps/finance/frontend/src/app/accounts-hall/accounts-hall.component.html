@@ -25,7 +25,8 @@
               [class.revealed]="drawer.revealed"
               [attr.data-drawer]="drawer.key"
               [attr.aria-current]="drawer.revealed ? 'true' : null"
-              (click)="unlock(drawer.key)"
+              [attr.aria-expanded]="drawer.revealed ? 'true' : 'false'"
+              (click)="inspect(drawer.key)"
             >
               <span class="drawer-name">{{ drawer.name }}</span>
               <span class="drawer-meta">{{ drawer.category | formatCategory }}</span>
@@ -39,6 +40,22 @@
                 <span class="drawer-amount">Hidden</span>
               }
             </button>
+            @if (drawer.revealed) {
+              <div class="account-detail" data-account-detail role="group" [attr.aria-label]="'Details for ' + drawer.name">
+                @if (drawer.amount !== null) {
+                  <p>Published balance <strong class="money">{{ drawer.amount | money }}</strong></p>
+                } @else if (drawer.problem) {
+                  <p>Needs fixing</p>
+                }
+                @if (revealedNotes(); as notes) {
+                  <p data-account-notes>{{ notes }}</p>
+                }
+                <div class="account-actions">
+                  <ui-button variant="secondary" (clicked)="edit(drawer.key)">Edit</ui-button>
+                  <ui-button variant="ghost" (clicked)="lockBalances()">Lock balances</ui-button>
+                </div>
+              </div>
+            }
           </li>
         } @empty {
           @if (!loading() && !loadFailed()) {
@@ -79,27 +96,6 @@
       }
     </section>
   </div>
-
-  <aside class="inspector" [attr.data-inspector]="revealedDrawer() ? 'ready' : 'empty'" aria-label="Account drawer">
-    @if (revealedDrawer(); as drawer) {
-      <h2>{{ drawer.name }}</h2>
-      <p>{{ drawer.category | formatCategory }}</p>
-      @let date = drawer.asOf | appDate;
-      <p>{{ date === 'No date' ? 'No source date' : 'As of ' + date }}</p>
-      @if (drawer.amount !== null) {
-        <p class="money">{{ drawer.amount | money }}</p>
-      } @else if (drawer.problem) {
-        <p>Needs fixing</p>
-      }
-      <p>The same account editor is open. Saving writes this balance once.</p>
-      @if (balanceEditor.draft === null) {
-        <ui-button variant="secondary" (clicked)="lockBalances()">Lock balances</ui-button>
-      }
-    } @else {
-      <h2>Counter</h2>
-      <p>Choose an account drawer. Its amount stays hidden until you unlock that drawer.</p>
-    }
-  </aside>
 </div>
 
 <app-account-balance-editor [editor]="balanceEditor" [showLock]="true" (locked)="lockBalances()" />
