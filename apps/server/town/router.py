@@ -19,6 +19,7 @@ from apps.server.town import writes
 from apps.server.town.clock import get_town_clock, resolve_tz
 from apps.server.town.keepsakes import read_keepsakes
 from apps.server.town.layouts import ROOMS, parse_body, read_layout, save_layout
+from apps.server.town.quests import read_journal, record_step
 from apps.server.town.schemas import (
     CheckinDays,
     CheckinResult,
@@ -26,6 +27,7 @@ from apps.server.town.schemas import (
     HabitList,
     HubTownSummary,
     Keepsakes,
+    QuestJournalView,
     RoomLayoutView,
     StampWalletView,
     Town,
@@ -270,6 +272,29 @@ async def post_stamp_refund(
     wallet, created = refund_stamps(db, user.id, payload, now)
     response.status_code = 201 if created else 200
     return StampWalletView.model_validate(wallet)
+
+
+@router.get("/quests", response_model=QuestJournalView)
+def get_quests(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+) -> QuestJournalView:
+    return QuestJournalView.model_validate(read_journal(db, principal.id))
+
+
+@router.post("/quests/steps", response_model=QuestJournalView)
+async def post_quest_step(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db, scope="function"),
+    user: User = Depends(get_current_user),
+    now: datetime = Depends(get_town_clock),
+) -> QuestJournalView:
+    payload = await writes.json_object(request)
+    # A competing SQLite writer can wait for the first request to commit.
+    view, created = await run_in_threadpool(record_step, db, user.id, payload, now)
+    response.status_code = 201 if created else 200
+    return QuestJournalView.model_validate(view)
 
 
 @router.get("/layouts/{room_id}", response_model=RoomLayoutView, response_model_exclude_unset=True)

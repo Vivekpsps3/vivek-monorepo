@@ -1,4 +1,4 @@
-"""Town habits, check-ins, cadence rows, and cosmetic room layouts.
+"""Town habits, check-ins, cadence rows, cosmetic room layouts, and quest steps.
 
 TownBase is its own registry, separate from Finance, Travel, and Media.
 Owner foreign keys to users.id are attached by apps.server.schema.OWNER_TABLES.
@@ -26,11 +26,14 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 # Same function as engine.name_key. A folded key longer than 40 characters
 # raises APIError 422 name_too_long with field_errors.name set; it is not truncated.
 from apps.server.town.engine import name_key as make_name_key
+from apps.server.town.quest_catalog import triple_check_sql
 
 __all__ = [
     "Habit",
     "HabitCadence",
     "HabitCheckin",
+    "QuestJournal",
+    "QuestStep",
     "RoomLayout",
     "StampEntitlement",
     "StampReceipt",
@@ -226,3 +229,35 @@ class RoomLayout(TownBase):
     revision: Mapped[int] = mapped_column(Integer, nullable=False)
     payload: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class QuestJournal(TownBase):
+    """One revision for every optional chapter. Absence of a row means revision 0."""
+
+    __tablename__ = "town_quest_journals"
+    __table_args__ = (CheckConstraint("revision >= 1", name="ck_town_quest_journals_revision"),)
+
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class QuestStep(TownBase):
+    """One recorded game action per owner, quest, and step."""
+
+    __tablename__ = "town_quest_steps"
+    __table_args__ = (
+        Index("ix_town_quest_steps_user_id", "user_id"),
+        Index("uq_town_quest_step", "user_id", "quest_id", "step_id", unique=True),
+        CheckConstraint("length(quest_id) BETWEEN 1 AND 40", name="ck_town_quest_steps_quest"),
+        CheckConstraint("length(step_id) BETWEEN 1 AND 40", name="ck_town_quest_steps_step"),
+        CheckConstraint("length(action_id) BETWEEN 1 AND 80", name="ck_town_quest_steps_action"),
+        CheckConstraint(triple_check_sql(), name="ck_town_quest_steps_triple"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    quest_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    step_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    action_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

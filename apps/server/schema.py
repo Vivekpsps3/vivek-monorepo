@@ -34,6 +34,8 @@ OWNER_TABLES = {
     "town_stamp_receipts",
     "town_stamp_entitlements",
     "town_room_layouts",
+    "town_quest_journals",
+    "town_quest_steps",
     "world_concepts",
 }
 
