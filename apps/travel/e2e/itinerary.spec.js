@@ -65,7 +65,7 @@ test('DAY1 red-eye, unscheduled, and out-of-range records stay in order', async 
   expect(outsideText).not.toContain('Museum');
 });
 
-test('DAY2 one roving tab stop selects the day and Add a plan keeps that date', async ({ page, request }) => {
+test('DAY2 one roving tab stop selects the day and Add on that day keeps that date', async ({ page, request }) => {
   const trip = await createTrip(request, 'Free days', '2026-12-12', '2026-12-14');
   await page.goto('/travel/trips/' + trip.id);
   const strip = page.getByRole('tablist', { name: 'Trip dates' });
@@ -88,7 +88,8 @@ test('DAY2 one roving tab stop selects the day and Add a plan keeps that date', 
   await page.clock.runFor(50);
   await expect(tripDay(page, '2026-12-13')).toBeFocused();
   await page.clock.resume();
-  await page.getByRole('button', { name: 'Add a plan', exact: true }).click();
+  await tripDay(page, '2026-12-13').getByRole('button', { name: /Add on / }).click();
+  await page.getByRole('menuitem', { name: 'Activity', exact: true }).click();
   await expect(page.locator('input[name="date"]')).toHaveValue('2026-12-13');
   await page.locator('input[name="title"]').fill('Free day plan');
   await page.getByRole('button', { name: 'Save activity' }).click();

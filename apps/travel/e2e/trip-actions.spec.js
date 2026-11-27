@@ -100,7 +100,7 @@ for (const width of [390, 1280]) {
       const trip = await createTrip(request);
       await seedRows(request, trip);
       await page.goto('/travel/trips/' + trip.id);
-      for (const name of ['Destinations', 'Itinerary', 'Reminders', 'Trip costs']) {
+      for (const name of ['Destinations', 'Itinerary', 'Trip costs']) {
         await expect(page.getByRole('heading', { level: 2, name, exact: true })).toBeVisible();
       }
       const narrow = width <= 640;
@@ -115,7 +115,7 @@ for (const width of [390, 1280]) {
         ['Museum', ['Edit activity', 'Remove']],
         ['Airport lot', ['Edit parking', 'Remove']],
         ['Window seat', ['Remove note']],
-        ['Pack charger', ['Remove']],
+        ['Pack charger', ['Edit reminder', 'Remove']],
         ['Museum pass', ['Edit cost', 'Remove cost']],
       ];
       for (const [label, actions] of rows) {

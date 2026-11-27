@@ -1,8 +1,18 @@
 <main class="page travel-page">
   @if (!data()) {
     <a class="ui-page-header__back" [href]="hallBack()">{{ hallBackLabel() }}</a>
+    @if (error()) {
+      <div class="local-error" role="alert">
+        Couldn't load this trip.
+        {{ error() }}
+        <ui-button variant="ghost" (click)="load()">Retry trip</ui-button>
+      </div>
+    } @else {
+      <p class="trip-load" role="status" aria-label="Loading trip…">Loading trip…</p>
+      <ui-button variant="ghost" (click)="load()">Retry trip</ui-button>
+    }
   }
-  @if (error() && !editor) {
+  @if (data() && error() && !editor) {
     <div class="local-error" role="alert">
       {{ error() }}
       <ui-button variant="ghost" (click)="load()">Retry trip</ui-button>
@@ -171,6 +181,28 @@
               @if (cityOn(day.onDate)) {
                 <p class="muted">{{ cityOn(day.onDate) }}</p>
               }
+              <div class="itinerary-day-add">
+                <ui-menu [label]="'Add on ' + day.label" icon="plus" align="start">
+                  <button type="button" uiMenuItem (select)="addOn(day.onDate, 'transport')">
+                    Transport
+                  </button>
+                  <button type="button" uiMenuItem (select)="addOn(day.onDate, 'activity')">
+                    Activity
+                  </button>
+                  <button type="button" uiMenuItem (select)="addOn(day.onDate, 'destination')">
+                    Lodging
+                  </button>
+                  <button type="button" uiMenuItem (select)="addOn(day.onDate, 'parking')">
+                    Parking
+                  </button>
+                  <button type="button" uiMenuItem (select)="addOn(day.onDate, 'note')">
+                    Note
+                  </button>
+                  <button type="button" uiMenuItem (select)="addOn(day.onDate, 'reminder')">
+                    Reminder
+                  </button>
+                </ui-menu>
+              </div>
               @if (day.lodging.length) {
                 <h4 class="itinerary-group">Lodging</h4>
                 <ng-container *ngTemplateOutlet="itineraryRows; context: { entries: day.lodging }" />
@@ -180,35 +212,8 @@
                 <h4 class="itinerary-group">Unscheduled</h4>
                 <ng-container *ngTemplateOutlet="itineraryRows; context: { entries: day.unscheduled }" />
               }
-              <ui-menu [label]="'Add on ' + day.label" icon="plus" align="start">
-                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'transport')">
-                  Transport
-                </button>
-                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'activity')">
-                  Activity
-                </button>
-                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'destination')">
-                  Lodging
-                </button>
-                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'parking')">
-                  Parking
-                </button>
-                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'note')">
-                  Note
-                </button>
-                <button type="button" uiMenuItem (select)="addOn(day.onDate, 'reminder')">
-                  Reminder
-                </button>
-              </ui-menu>
               @if (!day.entries.length && !day.unscheduled.length && !day.lodging.length) {
                 <p class="muted">A free day. Add something when you're ready.</p>
-                <ui-button variant="ghost" size="sm" (click)="addPlan(day.onDate)">
-                  Add a plan
-                </ui-button>
-              } @else {
-                <ui-button variant="ghost" size="sm" (click)="addPlan(day.onDate)">
-                  Add activity on {{ day.label }}
-                </ui-button>
               }
             </section>
           }
@@ -392,11 +397,6 @@
         </ui-button>
       </section>
     </ui-card>
-    <travel-trip-reminders
-      [reminders]="trip.reminders"
-      [busy]="saving()"
-      (add)="addReminder($event.title, $event.revert)"
-    />
     <travel-trip-costs
       [budget]="trip.budget"
       [tripId]="trip.id"
@@ -414,17 +414,7 @@
       [open]="!!editor"
       labelledBy="travel-editor-title"
       (closed)="close()"
-      ><h2 id="travel-editor-title">
-        {{
-          editor === "trip"
-            ? "Edit trip"
-            : editor === "location"
-              ? "Choose location"
-              : editor === "transport"
-                ? "Transport"
-                : "Add " + editor
-        }}
-      </h2>
+      ><h2 id="travel-editor-title">{{ editorTitle() }}</h2>
       @if (editor === "transport") {
         <travel-transport-editor
           [initial]="transport"
