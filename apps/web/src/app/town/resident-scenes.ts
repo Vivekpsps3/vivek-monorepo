@@ -19,7 +19,7 @@ export interface SceneChoice {
 }
 
 export interface ResidentScene {
-  readonly residentId: 'mara' | 'ada';
+  readonly residentId: 'mara' | 'ada' | 'imani' | 'jun';
   readonly conversationId: 'welcome' | 'how-it-works' | 'preference' | 'activity' | 'reflection';
   readonly paragraphs: readonly string[];
   readonly choices: readonly [SceneChoice, SceneChoice];
@@ -39,6 +39,20 @@ export interface AdaMentionInput {
   readonly goal: string | null;
 }
 
+export interface ImaniMentionInput {
+  readonly empty: boolean;
+  readonly tripTitle: string | null;
+  readonly destination: string | null;
+  readonly taken: string | null;
+}
+
+export interface JunMentionInput {
+  readonly locked: boolean;
+  readonly workout: string | null;
+  readonly badge: string | null;
+  readonly measurement: string | null;
+}
+
 export const SAMPLE_CIVIC_LEDGER: MentionedObject = Object.freeze({
   label: 'Sample civic ledger',
   detail: 'Labeled sample. Not a Finance record.',
@@ -46,10 +60,36 @@ export const SAMPLE_CIVIC_LEDGER: MentionedObject = Object.freeze({
 });
 
 export const TREASURY_PUBLIC_OBJECT = 'Treasury door';
+export const TERMINAL_PUBLIC_OBJECT = 'Harbor terminal';
+export const GYM_PUBLIC_OBJECT = 'Training floor';
+
+export const SAMPLE_DEPARTURE_BOARD: MentionedObject = Object.freeze({
+  label: 'Sample departure board',
+  detail: 'Labeled sample. Not a saved trip.',
+  sample: true,
+});
+
+export const SAMPLE_TRAINING_CARD: MentionedObject = Object.freeze({
+  label: 'Sample training card',
+  detail: 'Labeled sample. Not a Health record.',
+  sample: true,
+});
 
 const PUBLIC_DOOR: MentionedObject = Object.freeze({
   label: TREASURY_PUBLIC_OBJECT,
   detail: 'A public door. Records stay in Finance.',
+  sample: false,
+});
+
+const PUBLIC_TERMINAL: MentionedObject = Object.freeze({
+  label: TERMINAL_PUBLIC_OBJECT,
+  detail: 'A public desk. Trips stay in Travel.',
+  sample: false,
+});
+
+const PUBLIC_FLOOR: MentionedObject = Object.freeze({
+  label: GYM_PUBLIC_OBJECT,
+  detail: 'A public floor. Records stay in Health.',
   sample: false,
 });
 
@@ -120,6 +160,73 @@ const SCENES: readonly ResidentScene[] = [
     choice('public', 'The square can stay public.', 'Public square.'),
     choice('wait', 'The door can wait.', 'The door can wait.'),
   ]),
+  scene('imani', 'welcome', [
+    'Imani keeps the harbor terminal. The departure board, the booking desk, and the map room stay here when you are away.',
+    'This first meeting is not a review of a route.',
+  ], [
+    choice('board', 'Start with the departure board.', 'The board, then.'),
+    choice('desk', 'Start with the booking desk.', 'The desk, then.'),
+  ]),
+  scene('imani', 'how-it-works', [
+    'Saved trips stay in Travel. The terminal does not keep a second itinerary.',
+    'An empty board still leaves room to imagine a route. A labeled sample does not become a saved trip.',
+  ], [
+    choice('board', 'Explain the public board.', 'The board points at Travel. It does not copy a route into this talk.'),
+    choice('sample', 'Leave the sample on the desk.', 'The sample stays labeled. It is not a saved trip.'),
+  ]),
+  scene('imani', 'preference', [
+    'Imani asks which kind of route you like to imagine. The answer is a taste, not a Travel record.',
+  ], [
+    choice('train', 'Imagine a slow coastal train.', 'A slow coastal train.'),
+    choice('ferry', 'Imagine a night ferry.', 'A night ferry.'),
+  ]),
+  scene('imani', 'activity', [
+    'There is one small thing you can notice. You can look at the sample departure board, or leave it.',
+    'Looking does not write to Travel.',
+  ], [
+    choice('board', 'Look at the sample board.', 'Sample departure board. Labeled sample. Not a saved trip.'),
+    choice('leave', 'Leave the board alone.', 'The board stays as it is.'),
+  ]),
+  scene('imani', 'reflection', [
+    'Imani looks at the terminal, not at a private itinerary.',
+    'A chapter can end without a score.',
+  ], [
+    choice('imagine', 'The terminal is for imagining a route.', 'Imagining a route.'),
+    choice('unwritten', 'The terminal can leave a route unwritten.', 'An unwritten route.'),
+  ]),
+  scene('jun', 'welcome', [
+    'Jun keeps the training floor. The routine desk, the station, and the bench stay in the room.',
+    'This first meeting does not open a Health record.',
+  ], [
+    choice('desk', 'Start at the routine desk.', 'The desk, then.'),
+    choice('floor', 'Start with the open floor.', 'The open floor, then.'),
+  ]),
+  scene('jun', 'how-it-works', [
+    'The Gym is a room you can walk. Health keeps any measurements.',
+    'When Health is locked, the card on the desk is a labeled sample. It does not start a session.',
+  ], [
+    choice('floor', 'Explain the public floor.', 'The floor is a room. Records stay in Health.'),
+    choice('sample', 'Use the labeled sample.', 'The sample is labeled. It is not a session.'),
+  ]),
+  scene('jun', 'preference', [
+    'Jun asks how you like the room to feel. The answer is a taste, not a result.',
+  ], [
+    choice('quiet', 'A quiet corner.', 'A quiet corner.'),
+    choice('path', 'A clear path across the floor.', 'A clear path.'),
+  ]),
+  scene('jun', 'activity', [
+    'You can notice one part of the room, or leave it. Noticing does not log a workout.',
+  ], [
+    choice('floor', 'Notice the open floor.', 'The open floor only.'),
+    choice('leave', 'Leave the floor alone.', 'No session from this talk.'),
+  ]),
+  scene('jun', 'reflection', [
+    'Jun looks at the floor, not at a private log.',
+    'A chapter can end without a score.',
+  ], [
+    choice('return', 'The floor can stay a place to return to.', 'A place to return to.'),
+    choice('wait', 'The floor can wait.', 'The floor can wait.'),
+  ]),
 ];
 
 const BY_KEY = new Map(SCENES.map(item => [key(item.residentId, item.conversationId), item]));
@@ -153,6 +260,23 @@ export function adaMention(input: AdaMentionInput): MentionedObject {
     detail: PUBLIC_DOOR.detail,
     sample: false,
   });
+}
+
+/**
+ * Empty Travel, or any trip title, destination, or taken phrase, stays a labeled sample.
+ * A non-empty board still does not name a trip.
+ */
+export function imaniMention(input: ImaniMentionInput): MentionedObject {
+  const secrets = [input.tripTitle, input.destination, input.taken].filter(secret => typeof secret === 'string' && secret.trim() !== '');
+  if (input.empty || secrets.length > 0) return SAMPLE_DEPARTURE_BOARD;
+  return PUBLIC_TERMINAL;
+}
+
+/** Locked Health, or any workout, badge, or measurement, stays a labeled sample. */
+export function junMention(input: JunMentionInput): MentionedObject {
+  const secrets = [input.workout, input.badge, input.measurement].filter(secret => typeof secret === 'string' && secret.trim() !== '');
+  if (input.locked || secrets.length > 0) return SAMPLE_TRAINING_CARD;
+  return PUBLIC_FLOOR;
 }
 
 export function authoredLines(scene: ResidentScene, mention: MentionedObject | null): readonly string[] {

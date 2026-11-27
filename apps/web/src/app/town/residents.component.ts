@@ -9,6 +9,8 @@ import {
   adaMention,
   dialogueRankEffect,
   dialogueVaultOpen,
+  imaniMention,
+  junMention,
   sceneFor,
   type MentionedObject,
 } from './resident-scenes';
@@ -125,15 +127,31 @@ export class ResidentsComponent {
 
   protected mention(): MentionedObject | null {
     const choice = this.confirmation();
-    if (!choice || choice.residentId !== 'ada') return null;
-    const open = dialogueVaultOpen(this.owner);
-    return adaMention({
-      locked: !open,
-      publicLabel: open ? TREASURY_PUBLIC_OBJECT : null,
-      account: null,
-      spending: null,
-      goal: null,
-    });
+    if (!choice) return null;
+    if (choice.residentId === 'ada') {
+      const open = dialogueVaultOpen(this.owner);
+      return adaMention({
+        locked: !open,
+        publicLabel: open ? TREASURY_PUBLIC_OBJECT : null,
+        account: null,
+        spending: null,
+        goal: null,
+      });
+    }
+    if (choice.residentId === 'imani') {
+      // This talk does not read Travel, so the board stays the labeled sample.
+      return imaniMention({ empty: true, tripTitle: null, destination: null, taken: null });
+    }
+    if (choice.residentId === 'jun') {
+      // Vault presence only. Workouts and badges stay in Health.
+      return junMention({
+        locked: !dialogueVaultOpen(this.owner),
+        workout: null,
+        badge: null,
+        measurement: null,
+      });
+    }
+    return null;
   }
 
   protected choose(id: string): void {
