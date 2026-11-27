@@ -98,6 +98,11 @@ export function settleItineraryWrite(input: {
   currentTripId: number;
 }): boolean;
 
+export function itineraryDayOpen(
+  day: { onDate: string; entries?: unknown[]; unscheduled?: unknown[] } | null | undefined,
+  selectedDay: string,
+): boolean;
+
 export function clearItineraryDraft(): {
   editor: string;
   noteBody: string;

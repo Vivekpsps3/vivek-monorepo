@@ -25,7 +25,6 @@ Verify prerequisite outcomes on fresh main. [TUX-06 / #411](https://github.com/V
 
 - `apps/travel/frontend/src/trip.component.html`
 - `apps/travel/frontend/src/trip.component.ts`
-- `apps/travel/frontend/src/trip-reminders.component.ts`
 
 ## Target paths
 
