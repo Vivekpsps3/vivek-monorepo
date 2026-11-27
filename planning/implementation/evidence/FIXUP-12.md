@@ -60,7 +60,7 @@ The first Hub Playwright run failed before the bundle existed (`index.csr.html` 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only):
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/641
 - Roadmap #134 append-only status-note URL:
 - Merged/activation status: not merged. Not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. `hubWindow` stays in Pixels with no caller.
