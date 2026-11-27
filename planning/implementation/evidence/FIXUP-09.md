@@ -62,8 +62,8 @@ Commands ran in `/tmp/vivek-fixup-09`. `make test-fast` used `PATH="/tmp/vivek-f
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): after the pull request is opened. Body is `Closes #587` only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/639 (`Closes #587` only).
 - Roadmap #134 append-only status-note URL: after merge.
 - Merged/activation status (actual evidence, not assumption): not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: none inside this leaf. #578, #304, #134, and #277 stay open.
-- Next actor: push `agent/fixup-09`, wait for green required checks, then merge with a merge commit.
+- Next actor: wait for green required checks, then merge with a merge commit.
