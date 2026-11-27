@@ -57,9 +57,8 @@ async function seedTrip(request, reminders = []) {
 
 async function openReminders(page, trip) {
   await page.goto('/travel/trips/' + trip.id);
-  const section = page.locator('travel-trip-reminders');
-  await expect(section.getByRole('heading', { name: 'Reminders', exact: true })).toBeVisible();
-  return section;
+  await expect(page.getByRole('heading', { level: 1, name: 'Reminders trip', exact: true })).toBeVisible();
+  await expect(page.locator('travel-trip-reminders')).toHaveCount(0);
 }
 
 function itineraryCard(page) {
@@ -138,40 +137,6 @@ for (const combo of COMBOS) {
       await expectClean(page, violations);
     });
 
-    test(`[${combo.width} ${combo.theme}] inline add posts title only and clears`, async ({ page, request }) => {
-      const violations = watchConsole(page);
-      const trip = await seedTrip(request);
-      let posted = null;
-      await page.route('**/travel/api/trips/' + trip.id + '/reminders', async (route) => {
-        if (route.request().method() === 'POST') posted = route.request().postDataJSON();
-        await route.continue();
-      });
-      const section = await openReminders(page, trip);
-      await section.getByLabel('New reminder').fill('Book the airport shuttle');
-      await section.getByRole('button', { name: 'Add to list', exact: true }).click();
-      const row = page.locator('#itinerary-unscheduled article').filter({ hasText: 'Book the airport shuttle' });
-      await expect(row).toHaveCount(1);
-      await expect(section.getByLabel('New reminder')).toHaveValue('');
-      expect(posted).toEqual({ title: 'Book the airport shuttle' });
-      await expect(row.locator('.reminder-due')).toHaveText('');
-      await expectClean(page, violations);
-    });
-
-    test(`[${combo.width} ${combo.theme}] inline add validates`, async ({ page, request }) => {
-      const violations = watchConsole(page);
-      const trip = await seedTrip(request);
-      const section = await openReminders(page, trip);
-      const input = section.getByLabel('New reminder');
-      await section.getByRole('button', { name: 'Add to list', exact: true }).click();
-      await expect(section.getByText('Enter a reminder.', { exact: true })).toBeVisible();
-      await expect(input).toBeFocused();
-      await input.fill('x'.repeat(201));
-      await section.getByRole('button', { name: 'Add to list', exact: true }).click();
-      await expect(section.getByText('Keep it under 200 characters.', { exact: true })).toBeVisible();
-      await expect(input).toBeFocused();
-      await expectClean(page, violations);
-    });
-
     test(`[${combo.width} ${combo.theme}] no raw ISO due text`, async ({ page, request }) => {
       const violations = watchConsole(page);
       const trip = await seedTrip(request, [
@@ -182,18 +147,6 @@ for (const combo of COMBOS) {
       await expect(itineraryCard(page).locator('label')).toHaveCount(2);
       const text = await itineraryCard(page).innerText();
       expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
-      await expectClean(page, violations);
-    });
-
-    test(`[${combo.width} ${combo.theme}] empty state then first reminder`, async ({ page, request }) => {
-      const violations = watchConsole(page);
-      const trip = await seedTrip(request);
-      const section = await openReminders(page, trip);
-      await expect(section.getByText("No reminders yet. Add the things you don't want to forget.", { exact: true })).toBeVisible();
-      await section.getByLabel('New reminder').fill('First one');
-      await section.getByRole('button', { name: 'Add to list', exact: true }).click();
-      await expect(page.locator('#itinerary-unscheduled label')).toHaveText(['First one']);
-      await expect(section.getByText("No reminders yet. Add the things you don't want to forget.", { exact: true })).toHaveCount(0);
       await expectClean(page, violations);
     });
 

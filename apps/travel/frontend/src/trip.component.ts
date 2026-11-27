@@ -43,7 +43,6 @@ import {
 } from "./pto-model.mjs";
 import { TransportEditorComponent } from "./transport-editor.component";
 import { TripCostsComponent } from "./trip-costs.component";
-import { TripRemindersComponent } from "./trip-reminders.component";
 import { showDay, showMoney, showRange } from "./display";
 import {
   nightsWord,
@@ -55,6 +54,7 @@ import { formatDateRange, formatDay, formatMoney, fromDollars } from "@vivek/bro
 import { Plan, Stay, Transport, Trip, travelError } from "./travel.models";
 import {
   clearItineraryDraft,
+  itineraryDayOpen,
   projectItinerary,
   restoredLocalDate,
   settleItineraryWrite,
@@ -80,7 +80,6 @@ import { fieldErrors } from "./validate.mjs";
     MapComponent,
     TransportEditorComponent,
     TripCostsComponent,
-    TripRemindersComponent,
     PtoDaysComponent,
   ],
   templateUrl: "./trip.component.html",
@@ -259,6 +258,8 @@ export class TripComponent {
   parkingDate = "";
   private parkingStartAt = "";
   private reminderPending = new Map<number, boolean>();
+  private loadGeneration = 0;
+  private focusAfterLoad = "";
   readonly nowMinute = signal(localNowMinute());
 
   /** A keystroke during a save makes that response stale. The newer draft stays. */
@@ -278,12 +279,50 @@ export class TripComponent {
     const trip = this.data();
     if (!trip) return;
     const day = this.route.snapshot.queryParamMap.get("day") || "";
+    const focus = this.focusAfterLoad;
     if (day && trip.days.some((item) => item.on_date === day)) {
       this.selectedDay = day;
       this.rovingDay = day;
+      if (focus === day) this.focusAfterLoad = "";
+      this.revealDay(day, focus === day);
       return;
     }
     if (!day) this.selectedDay = "";
+  }
+
+  /** Bring the named day and its add action into the viewport, under the sticky header. */
+  private revealDay(iso: string, focusContent: boolean): void {
+    const attempt = () => {
+      if (this.destroy.destroyed || !this.sessionActive || this.selectedDay !== iso) return false;
+      const node = document.getElementById("itinerary-day-" + iso);
+      if (!(node instanceof HTMLElement)) return false;
+      if (!this.dayActionVisible(node)) node.scrollIntoView({ block: "start" });
+      const rows = node.querySelectorAll("article");
+      const tail = rows[rows.length - 1];
+      if (tail instanceof HTMLElement && tail.getBoundingClientRect().bottom > window.innerHeight - 1) {
+        tail.scrollIntoView({ block: "nearest" });
+      }
+      if (focusContent && document.activeElement !== node) node.focus();
+      return this.dayActionVisible(node);
+    };
+    afterNextRender(() => {
+      if (attempt()) return;
+      requestAnimationFrame(() => attempt());
+    }, { injector: this.injector });
+    setTimeout(() => {
+      if (!attempt()) requestAnimationFrame(() => attempt());
+    });
+  }
+
+  private dayActionVisible(node: HTMLElement): boolean {
+    const header = document.querySelector(".suite-header");
+    const headerBottom = header instanceof HTMLElement ? header.getBoundingClientRect().bottom : 0;
+    const action = node.querySelector(".itinerary-day-add");
+    const top = node.getBoundingClientRect().top;
+    const bottom = action instanceof HTMLElement
+      ? action.getBoundingClientRect().bottom
+      : node.getBoundingClientRect().bottom;
+    return top >= headerBottom - 1 && bottom <= window.innerHeight + 1;
   }
 
   stripTabIndex(iso: string, index: number): number {
@@ -333,20 +372,8 @@ export class TripComponent {
         queryParamsHandling: "merge",
       });
     }
-    if (focusContent) {
-      // An empty day's panel is created by this selection. A timer can fire
-      // before Angular renders it, so focus only after the panel exists.
-      afterNextRender(() => {
-        if (!this.destroy.destroyed && this.selectedDay === iso) {
-          document.getElementById("itinerary-day-" + iso)?.focus();
-        }
-      }, { injector: this.injector });
-    }
-  }
-
-  addPlan(iso: string): void {
-    this.selectDay(iso);
-    this.open("activity");
+    // An empty day's panel is created by this selection. Focus only after it exists.
+    this.revealDay(iso, focusContent);
   }
 
   cityOn(iso: string): string {
@@ -408,7 +435,17 @@ export class TripComponent {
   entryAction(entry: ItineraryEntry): string {
     if (entry.source === "plan") return "Edit activity";
     if (entry.source === "transport") return "Edit transport";
+    if (entry.source === "reminder") return "Edit reminder";
     return "Edit parking";
+  }
+
+  editorTitle(): string {
+    if (this.editor === "trip") return "Edit trip";
+    if (this.editor === "location") return "Choose location";
+    if (this.editor === "transport") return "Transport";
+    if (!this.editingId) return "Add " + this.editor;
+    if (this.editor === "budget") return "Edit cost";
+    return "Edit " + this.editor;
   }
 
   editEntry(entry: ItineraryEntry): void {
@@ -420,6 +457,11 @@ export class TripComponent {
     if (entry.source === "transport") {
       const transport = this.transportFor(entry);
       if (transport) this.open("transport", transport);
+      return;
+    }
+    if (entry.source === "reminder") {
+      const reminder = this.reminderFor(entry);
+      if (reminder) this.open("reminder", reminder);
       return;
     }
     const parking = this.parkingFor(entry);
@@ -443,7 +485,12 @@ export class TripComponent {
   }
 
   entryCanEdit(entry: ItineraryEntry): boolean {
-    return entry.source === "plan" || entry.source === "transport" || entry.source === "parking";
+    return (
+      entry.source === "plan" ||
+      entry.source === "transport" ||
+      entry.source === "parking" ||
+      entry.source === "reminder"
+    );
   }
 
   entryHasActions(entry: ItineraryEntry): boolean {
@@ -503,13 +550,8 @@ export class TripComponent {
     else if (entry.source === "reminder") void this.remove("/reminders/" + entry.id, "reminder");
   }
 
-  dayOpen(day: { onDate: string; entries: unknown[]; unscheduled: unknown[]; lodging?: unknown[] }): boolean {
-    return (
-      day.entries.length > 0 ||
-      day.unscheduled.length > 0 ||
-      (day.lodging?.length ?? 0) > 0 ||
-      this.selectedDay === day.onDate
-    );
+  dayOpen(day: { onDate: string; entries?: unknown[]; unscheduled?: unknown[] }): boolean {
+    return itineraryDayOpen(day, this.selectedDay);
   }
 
   addOn(iso: string, kind: string): void {
@@ -628,6 +670,7 @@ export class TripComponent {
     return "/trips/" + this.id;
   }
   load(preservePto = this.ptoDirty): void {
+    const generation = ++this.loadGeneration;
     this.loadingRequest?.unsubscribe();
     this.error.set("");
     this.loadingRequest = this.http
@@ -635,7 +678,7 @@ export class TripComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (d) => {
-          if (!this.sessionActive || this.destroy.destroyed) return;
+          if (generation !== this.loadGeneration || !this.sessionActive || this.destroy.destroyed) return;
           this.reminderPending = new Map();
           this.data.set(d);
           if (!preservePto) {
@@ -669,7 +712,10 @@ export class TripComponent {
           this.applyRouteDay();
           this.openSavedLeg();
         },
-        error: (e) => this.error.set(travelError(e)),
+        error: (e) => {
+          if (generation !== this.loadGeneration || this.destroy.destroyed) return;
+          this.error.set(travelError(e));
+        },
       });
   }
   private ptoSnapshot(): string {
@@ -787,7 +833,8 @@ export class TripComponent {
       | Plan
       | Stay
       | Trip["parking"][number]
-      | Trip["budget"]["manual"][number],
+      | Trip["budget"]["manual"][number]
+      | Trip["reminders"][number],
   ): void {
     this.error.set("");
     this.resetFields();
@@ -822,14 +869,17 @@ export class TripComponent {
         ...item,
       } as typeof this.budget;
     if (kind === "note") this.note = { body: "", on_date: chosen };
-    if (kind === "reminder")
+    if (kind === "reminder") {
+      const record = item as Trip["reminders"][number] | undefined;
+      const due = String(record?.due_at || "");
       this.reminder = {
-        title: "",
-        due_at: chosen ? chosen + "T00:00" : "",
-        kind: "general",
-        notes: "",
-        done: false,
+        title: record?.title || "",
+        due_at: due ? due.slice(0, 16) : chosen ? chosen + "T00:00" : "",
+        kind: record?.kind || "general",
+        notes: record?.notes || "",
+        done: Boolean(record?.done),
       };
+    }
     if (kind === "transport") this.transport = item ? { ...item } : null;
     if (kind === "activity")
       this.plan = {
@@ -988,6 +1038,7 @@ export class TripComponent {
   }
   private focusDay(iso: string): void {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    this.focusAfterLoad = iso;
     const apply = () => {
       if (this.destroy.destroyed || !this.sessionActive) return;
       const trip = this.data();
@@ -1367,9 +1418,6 @@ export class TripComponent {
       onFail,
     );
   }
-  addReminder(title: string, onFail: () => void): void {
-    this.mutate(this.endpoint("/reminders"), { title }, "post", false, onFail);
-  }
   saveParking(): void {
     if (this.explain()) return;
     const previousDate = this.parkingStartAt.slice(0, 10);
@@ -1404,13 +1452,14 @@ export class TripComponent {
   }
   saveReminder(): void {
     if (this.explain()) return;
+    const due = String(this.reminder.due_at || "").slice(0, 10);
     this.mutate(
-      this.endpoint("/reminders"),
+      this.editingId ? "/reminders/" + this.editingId : this.endpoint("/reminders"),
       this.reminder,
-      "post",
+      this.editingId ? "patch" : "post",
       true,
       undefined,
-      String(this.reminder.due_at || "").slice(0, 10),
+      due,
     );
   }
   endpoint(suffix: string): string {

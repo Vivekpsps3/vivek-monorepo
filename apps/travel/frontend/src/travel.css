@@ -410,6 +410,10 @@
 .travel-page .itinerary-day {
   padding: 1.25rem 0;
   border-bottom: 1px solid var(--border);
+  scroll-margin-top: calc(var(--header-h) + var(--space-3));
+}
+.travel-page .itinerary-day-add {
+  margin: 0.75rem 0;
 }
 .travel-page .place-choice {
   display: block;

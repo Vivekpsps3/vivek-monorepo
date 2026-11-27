@@ -85,7 +85,7 @@ test('failed optional editors keep their draft and a retry saves one item', asyn
   await retrySave(page, 'Save reminder', field(page, 'Reminder'), 'Pack');
   const itinerary = page.locator('ui-card').filter({ has: page.getByRole('heading', { level: 2, name: 'Itinerary', exact: true }) });
   await expect(itinerary.getByRole('checkbox', { name: 'Pack', exact: true })).toHaveCount(1);
-  await expect(page.locator('.trip-reminders').getByRole('checkbox')).toHaveCount(0);
+  await expect(page.locator('travel-trip-reminders')).toHaveCount(0);
   const savedReminders = (await (await request.get(`/travel/api/trips/${trip.id}`)).json()).reminders;
   expect(savedReminders.filter(reminder => reminder.title === 'Pack')).toHaveLength(1);
 

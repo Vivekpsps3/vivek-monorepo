@@ -348,6 +348,16 @@ export function projectItinerary(trip) {
   };
 }
 
+/**
+ * A lodging-only day stays on the date strip until it is the selected day.
+ * Real agenda still opens, so the rest of the trip remains readable.
+ */
+export function itineraryDayOpen(day, selectedDay) {
+  if (!day) return false;
+  if (selectedDay && day.onDate === selectedDay) return true;
+  return (day.entries?.length || 0) > 0 || (day.unscheduled?.length || 0) > 0;
+}
+
 /** A response may change the open trip only when it is still the current save. */
 export function settleItineraryWrite({ epoch, currentEpoch, sessionActive, tripId, currentTripId }) {
   return Boolean(sessionActive)

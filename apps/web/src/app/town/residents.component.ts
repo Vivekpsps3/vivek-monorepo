@@ -7,11 +7,14 @@ import { SessionService } from '../platform/session.service';
 import {
   TREASURY_PUBLIC_OBJECT,
   adaMention,
+  chapterVisit,
   dialogueRankEffect,
   dialogueVaultOpen,
   imaniMention,
   junMention,
   sceneFor,
+  solMention,
+  wrenMention,
   type MentionedObject,
 } from './resident-scenes';
 import {
@@ -125,6 +128,13 @@ export class ResidentsComponent {
     return dialogueRankEffect(choice.completed, choice.conversationId, choice.stamps);
   }
 
+  protected chapterLine(): string {
+    const choice = this.confirmation();
+    if (!choice || choice.conversationId !== 'reflection') return '';
+    if (choice.residentId !== 'wren' && choice.residentId !== 'sol') return '';
+    return chapterVisit(choice.completed);
+  }
+
   protected mention(): MentionedObject | null {
     const choice = this.confirmation();
     if (!choice) return null;
@@ -150,6 +160,14 @@ export class ResidentsComponent {
         badge: null,
         measurement: null,
       });
+    }
+    if (choice.residentId === 'wren') {
+      // This talk does not read a review, a concept note, an album, or a score.
+      return wrenMention({ locked: !dialogueVaultOpen(this.owner), review: null, conceptNote: null });
+    }
+    if (choice.residentId === 'sol') {
+      // This talk does not read a review or a concept note.
+      return solMention({ locked: !dialogueVaultOpen(this.owner), review: null, conceptNote: null });
     }
     return null;
   }
