@@ -18,7 +18,7 @@ from apps.travel.backend.services.leave_math import Bucket, walk_bucket
 
 PARENT = "site_leave_carry_v1"
 REVISION = "site_leave_accrual_v1"
-HEAD = "site_town_quests_v1"
+HEAD = "site_town_dialogue_v1"
 COMPATIBLE = {
     "site_schema_v1",
     "site_auth_challenge_purpose_v2",
@@ -139,6 +139,10 @@ def test_upgrade_preserves_rows_and_keeps_one_daily_head(tmp_path):
         "add_table:None:town_quest_steps",
         "add_index:town_quest_steps:ix_town_quest_steps_user_id",
         "add_index:town_quest_steps:uq_town_quest_step",
+        "add_table:None:town_dialogue_journals",
+        "add_table:None:town_dialogue_completions",
+        "add_index:town_dialogue_completions:ix_town_dialogue_completions_user_id",
+        "add_index:town_dialogue_completions:uq_town_dialogue_completion",
     }
     with sqlite3.connect(database) as db:
         assert (

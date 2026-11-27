@@ -93,6 +93,32 @@ export interface QuestStepWrite {
   action_id: string;
   expected_revision: number;
 }
+export interface DialogueConversation {
+  id: string;
+  title: string;
+  line: string;
+  stamps: number;
+  completed: boolean;
+}
+export interface DialogueResident {
+  id: string;
+  name: string;
+  place: string;
+  purpose: string;
+  present: boolean;
+  rank: number;
+  conversations: DialogueConversation[];
+}
+export interface DialogueDirectory {
+  revision: number;
+  hour: number;
+  residents: DialogueResident[];
+}
+export interface DialogueWrite {
+  resident_id: string;
+  conversation_id: string;
+  expected_revision: number;
+}
 
 @Injectable({ providedIn: 'root' })
 export class TownApiService {
@@ -146,5 +172,11 @@ export class TownApiService {
   }
   recordQuestStep(body: QuestStepWrite) {
     return this.http.post<QuestJournal>('/api/town/quests/steps', body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
+  getResidents() {
+    return this.http.get<DialogueDirectory>('/api/town/residents', this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
+  completeConversation(body: DialogueWrite) {
+    return this.http.post<DialogueDirectory>('/api/town/residents/conversations', body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
   }
 }

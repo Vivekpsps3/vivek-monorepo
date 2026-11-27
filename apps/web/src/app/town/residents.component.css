@@ -1,0 +1,28 @@
+:host { display: block; color: var(--text); animation: none; }
+main { box-sizing: border-box; max-width: 40rem; margin: auto; padding: clamp(12px, 4vw, 32px); }
+header, .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+header { justify-content: space-between; margin-bottom: 16px; }
+h1, h2, p, label { margin: 0; overflow-wrap: anywhere; }
+article, section { display: grid; gap: 8px; margin-top: 20px; justify-items: start; }
+ul { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+li { display: grid; gap: 8px; justify-items: start; min-width: 0; }
+button, a.action, textarea {
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+a.action { display: inline-flex; align-items: center; text-decoration: none; }
+button { cursor: pointer; }
+button:disabled { cursor: wait; opacity: .7; }
+textarea { width: 100%; resize: vertical; }
+:is(button, a, textarea, [tabindex]):focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  :host, main, button, a, textarea { animation: none; transition: none; }
+}
