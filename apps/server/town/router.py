@@ -19,6 +19,8 @@ from apps.server.path_ids import MAX_PATH_ID
 from apps.server.town import writes
 from apps.server.town.clock import get_town_clock, resolve_tz
 from apps.server.town.dialogue import complete_conversation, read_directory
+from apps.server.town.discoveries import read_journal as read_discoveries
+from apps.server.town.discoveries import record_discovery
 from apps.server.town.keepsakes import read_keepsakes
 from apps.server.town.layouts import ROOMS, parse_body, read_layout, save_layout
 from apps.server.town.quests import read_journal, record_step
@@ -26,6 +28,7 @@ from apps.server.town.schemas import (
     CheckinDays,
     CheckinResult,
     DialogueDirectoryView,
+    DiscoveryJournalView,
     Habit,
     HabitList,
     HubTownSummary,
@@ -329,6 +332,28 @@ async def post_resident_conversation(
     )
     response.status_code = 201 if created else 200
     return DialogueDirectoryView.model_validate(view)
+
+
+@router.get("/discoveries", response_model=DiscoveryJournalView)
+def get_discoveries(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+) -> DiscoveryJournalView:
+    return DiscoveryJournalView.model_validate(read_discoveries(db, principal.id))
+
+
+@router.post("/discoveries", response_model=DiscoveryJournalView)
+async def post_discovery(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db, scope="function"),
+    user: User = Depends(get_current_user),
+    now: datetime = Depends(get_town_clock),
+) -> DiscoveryJournalView:
+    payload = await writes.json_object(request)
+    view, created = await run_in_threadpool(record_discovery, db, user.id, payload, now)
+    response.status_code = 201 if created else 200
+    return DiscoveryJournalView.model_validate(view)
 
 
 @router.get("/layouts/{room_id}", response_model=RoomLayoutView, response_model_exclude_unset=True)

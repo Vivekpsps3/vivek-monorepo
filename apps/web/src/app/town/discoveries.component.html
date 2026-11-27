@@ -1,0 +1,53 @@
+<main [attr.data-revision]="journal()?.revision" [attr.data-hints]="hints() ? 'shown' : 'hidden'">
+  <header>
+    <a class="action" routerLink="/town">Back to Town</a>
+    <h1>Discoveries</h1>
+  </header>
+  <p>Twelve places. Each one is found once. These discoveries stay found.</p>
+  @if (loadError()) {
+    <p id="discovery-load-error" role="alert" tabindex="-1">Discoveries are unavailable right now.</p>
+    <button type="button" class="action" (click)="load()">Retry</button>
+  }
+  @if (loading() && !journal()) {
+    <p>Checking discoveries.</p>
+  }
+  @if (journal(); as journal) {
+    <button type="button" class="action" [attr.aria-pressed]="hints()" (click)="toggleHints()">
+      {{ hints() ? 'Hide location hints' : 'Show location hints' }}
+    </button>
+    <p>{{ foundCount(journal) }} of {{ journal.discoveries.length }} found.</p>
+    <ul>
+      @for (item of journal.discoveries; track item.id) {
+        <li [attr.data-discovery]="item.id" [attr.data-found]="item.found ? 'true' : 'false'">
+          <h2>{{ item.name }}</h2>
+          <p>{{ item.district }}</p>
+          @if (item.found) {
+            <p>{{ item.reaction }}</p>
+          }
+          @if (hints()) {
+            <p class="hint">{{ item.hint }}</p>
+          }
+          <button type="button" class="action" [id]="buttonId(item)" (click)="choose(item)">
+            {{ item.found ? 'Read ' + item.name + ' again' : 'Activate ' + item.name }}
+          </button>
+        </li>
+      }
+    </ul>
+  }
+  @if (notice()) {
+    <p id="discovery-notice" role="status" tabindex="-1">{{ notice() }}</p>
+  }
+  @if (error()) {
+    <p id="discovery-error" role="alert" tabindex="-1">{{ error() }}</p>
+  }
+  @if (confirmation(); as choice) {
+    <section aria-labelledby="discovery-confirmation">
+      <h2 id="discovery-confirmation" tabindex="-1">{{ choice.found ? 'Read ' + choice.name + ' again?' : 'Activate ' + choice.name + '?' }}</h2>
+      <p>{{ choice.found ? 'This was already found. Reading it again does not add another journal stamp.' : 'This town toy does not change a library item, trip, finance record, or health record, and it grants no Stamps.' }}</p>
+      <div class="actions">
+        <button type="button" class="action" [disabled]="busy()" (click)="confirm()">{{ error() ? 'Retry discovery' : 'Confirm discovery' }}</button>
+        <button type="button" class="action" [disabled]="busy()" (click)="cancel()">Cancel</button>
+      </div>
+    </section>
+  }
+</main>

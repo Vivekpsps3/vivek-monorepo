@@ -132,6 +132,13 @@
       "query": "resident=mara"
     },
     {
+      "id": "town-discoveries",
+      "path": "town/discoveries",
+      "owner": "town",
+      "status": "mounted",
+      "query": "object=ferry-bell"
+    },
+    {
       "id": "town-home",
       "path": "town/home",
       "owner": "town",

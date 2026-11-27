@@ -22,6 +22,13 @@
           <use href="/town/exterior/coast.svg#town" />
         </svg>
         <div class="sky" aria-hidden="true"><span class="idle-mark"></span></div>
+        @for (mark of discoveries; track mark.id) {
+          <span class="discovery" aria-hidden="true" [attr.data-discovery]="mark.id"
+            [style.left.%]="mark.frame.left" [style.top.%]="mark.frame.top"
+            [style.width.%]="mark.frame.width" [style.height.%]="mark.frame.height">
+            <span class="spot"></span>
+          </span>
+        }
         @for (building of buildings(); track building.id) {
           <div class="piece" aria-hidden="true" [attr.data-scene-object]="building.id"
             [class.selected]="activeBuilding()?.id === building.id"
@@ -108,6 +115,18 @@
                 </span>
               </button>
             }
+          </li>
+        }
+      </ul>
+    </details>
+    <details class="building-picker">
+      <summary>Discoveries</summary>
+      <ul class="buildings" role="list" aria-label="Town discoveries">
+        @for (mark of discoveries; track mark.id) {
+          <li role="listitem">
+            <a class="action" [attr.data-discovery-link]="mark.id" [routerLink]="['/town/discoveries']" [queryParams]="{ object: mark.id }">
+              <span class="copy"><span class="name">{{ mark.name }}</span><span class="sub-label">{{ mark.district }}</span></span>
+            </a>
           </li>
         }
       </ul>

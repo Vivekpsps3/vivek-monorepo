@@ -28,6 +28,7 @@ import type { TreasuryView } from './weeks-kept';
 import { sceneAudio } from './scene-audio';
 import { SceneAppearanceService } from '../platform/scene-appearance.service';
 import { TownPlaceComponent, type PlaceCrumb } from './town-place.component';
+import { DISCOVERY_MARKS } from './discoveries';
 import {
   EMPTY_FEEDBACK,
   feedbackAttr,
@@ -84,6 +85,7 @@ export class TownExteriorComponent {
   private readonly narrow = signal(false);
   private readonly picked = signal<string | null>(null);
   protected readonly districts = DISTRICTS;
+  protected readonly discoveries = DISCOVERY_MARKS;
   protected readonly camera = signal<SceneCamera>(REST_CAMERA);
   protected readonly framed = signal<DistrictId | null>(null);
   protected readonly focusedBuilding = signal<string | null>(null);
@@ -268,7 +270,14 @@ export class TownExteriorComponent {
     if (!element) return;
     // The SVG paint participates in native hit testing. Shadows, captions and
     // empty corners never claim a tap, even when a nearer landmark overlaps.
-    const piece = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-scene-object]');
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    const discovery = hit?.closest('[data-discovery]');
+    if (discovery && element.contains(discovery)) {
+      const id = discovery.getAttribute('data-discovery');
+      if (id) void this.router.navigate(['/town/discoveries'], { queryParams: { object: id } });
+      return;
+    }
+    const piece = hit?.closest('[data-scene-object]');
     if (!piece || !element.contains(piece)) return;
     const building = this.buildings().find(item => item.id === piece.getAttribute('data-scene-object'));
     if (building) this.choose(building);
