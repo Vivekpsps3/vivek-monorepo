@@ -125,6 +125,13 @@
       "status": "mounted"
     },
     {
+      "id": "town-residents",
+      "path": "town/residents",
+      "owner": "town",
+      "status": "mounted",
+      "query": "resident=mara"
+    },
+    {
       "id": "town-home",
       "path": "town/home",
       "owner": "town",

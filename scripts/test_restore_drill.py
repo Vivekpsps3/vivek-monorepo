@@ -49,6 +49,8 @@ EXPECTED_OWNERS = {
     "pto_entries": 1,
     "pto_policy": 1,
     "season_progress": 1,
+    "town_dialogue_completions": 0,
+    "town_dialogue_journals": 0,
     "town_quest_journals": 0,
     "town_quest_steps": 0,
     "town_room_layouts": 0,
