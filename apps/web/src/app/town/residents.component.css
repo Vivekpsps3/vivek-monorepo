@@ -4,7 +4,8 @@ header, .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12p
 header { justify-content: space-between; margin-bottom: 16px; }
 h1, h2, p, label { margin: 0; overflow-wrap: anywhere; }
 article, section { display: grid; gap: 8px; margin-top: 20px; justify-items: start; }
-ul { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+ul, .choices { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.choices { gap: 8px; }
 li { display: grid; gap: 8px; justify-items: start; min-width: 0; }
 button, a.action, textarea {
   box-sizing: border-box;
