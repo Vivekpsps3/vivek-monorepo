@@ -31,7 +31,7 @@ Net worth on the empty page is 138px at 390 and 114px at 1280. Quick add, the la
 | Candidate | Disposition and owner | Proof |
 | --- | --- | --- |
 | Hub year strip and `pixels-hub-card.ts` | Removed. Date selection stays on the Pixels year grid (`/pixels?year=&day=`). Hub no longer reads Pixels. | Year-grid browser journey and zero `/api/pixels` requests from Hub |
-| Open Travel, Open Media, Open Finance | Removed. Trip action, continuation row, and net-worth amount remain the routes. | Compact Hub and coastal Finance tap |
+| Open Travel, Open Media, Open Finance | Removed. The Trips shortcut, Media app link, continuation row, and net-worth amount remain the routes. | Compact Hub, coastal Finance tap, travel map journey, episode undo after leaving Hub |
 | Second Unlock | Removed from Net worth. Up next keeps the one Unlock, including on the agenda. | One Unlock link; locked sentence remains |
 | Empty Next trip, In progress, and Town setup cards | Hidden when there is nothing to continue. Failure and loading cards stay, with retry. | Empty and 503 browser checks |
 | Town progress disclosure | Replaced by one level line and a small preview link. | TF5 Hub card |
