@@ -69,7 +69,9 @@ import { spendingModeInference } from './spending-mode';
 import {
   clearPlanningDrafts,
   readSimulationDraft,
+  readSpendingSelection,
   retainPlanningDraftsUntilLock,
+  writeSpendingSelection,
   writeSimulationDraft,
 } from './planning-session';
 import {
@@ -143,6 +145,8 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
 
   useTxSpending = true;
   spendingMode: 'recurring' | 'components' | 'manual' = 'recurring';
+  /** Category amounts count only after the user edits them or saves that mode. */
+  private spendingComponentsChosen = false;
   useTxIncome = true;
   useNetCashflowOverride = false;
   useInferredAllocation = true;
@@ -263,11 +267,13 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
           this.assumptions.spending_mode = 'recurring';
           this.assumptions.spending_components = this.defaultSpendingComponents(inp);
           this.spendingMode = 'recurring';
+          this.spendingComponentsChosen = false;
           this.assumptions.monthly_income = inp.avg_monthly_income || null;
           this.assumptions.portfolio_allocation = this.inferredAllocation();
           this.assumptions.checkpoints = this.defaultCheckpoints(inp);
           this.startingNetWorth = inp.net_worth_total;
           this.restoreSimulationDraft();
+          this.restoreSpendingSelection();
         },
         error: err => {
           this.error = err?.message ?? 'Could not load planning inputs.';
@@ -406,6 +412,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   onSpendingModeChange(mode: 'recurring' | 'components' | 'manual'): void {
+    const previousBaseline = this.spendingBaseline;
     const previousAmount = this.effectiveAnnualSpending();
     this.spendingMode = mode;
     this.assumptions.spending_mode = mode;
@@ -415,9 +422,13 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
         recurring_annual_spending: 0, implied_annual_spending: 0,
       } as PlanningInputsPreview);
     }
-    if (mode === 'manual' && this.assumptions.annual_spending == null) {
-      this.assumptions.annual_spending = previousAmount;
+    if (mode === 'components') {
+      this.spendingComponentsChosen = previousBaseline !== 'missing';
     }
+    if (mode === 'manual' && this.assumptions.annual_spending == null) {
+      this.assumptions.annual_spending = previousBaseline === 'missing' ? null : previousAmount;
+    }
+    this.rememberSpendingSelection();
     this.rememberSimulationDraft();
     this.cdr.markForCheck();
   }
@@ -456,7 +467,9 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
       next: profile => {
         this.assumptions = normalizedAcceptedPayload;
         this.spendingMode = 'components';
+        this.spendingComponentsChosen = true;
         this.useTxSpending = false;
+        this.rememberSpendingSelection();
         if (this.selectedProfileId != null) {
           this.profiles = this.profiles.map(row => row.id === profile.id ? profile : row);
         } else {
@@ -487,6 +500,47 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
 
   showSpendingPlan(): boolean {
     return this.activeTool === 'overview' || this.activeTool === 'simulation' || this.activeTool === 'retirement-target';
+  }
+
+  /**
+   * Missing means no recorded schedule and no entered amount.
+   * An entered zero stays explicit-zero so the retirement math can show a zero target.
+   */
+  get spendingBaseline(): 'missing' | 'explicit-zero' | 'known' {
+    if (this.spendingMode === 'manual') {
+      const amount = this.assumptions.annual_spending;
+      if (amount == null || !Number.isFinite(Number(amount))) return 'missing';
+      return Number(amount) === 0 ? 'explicit-zero' : 'known';
+    }
+    if (this.spendingMode === 'components') {
+      if (!this.spendingComponentsChosen) return 'missing';
+      return this.componentAnnualSpending === 0 ? 'explicit-zero' : 'known';
+    }
+    const schedules = (this.inputs?.active_bill_count ?? 0) + (this.inputs?.active_subscription_count ?? 0);
+    if (schedules === 0) return 'missing';
+    const amount = Number(this.inputs?.recurring_annual_spending ?? this.inputs?.implied_annual_spending ?? 0);
+    return amount === 0 ? 'explicit-zero' : 'known';
+  }
+
+  get spendingLeadsTool(): boolean {
+    return this.activeTool === 'retirement-target' && this.spendingBaseline === 'missing';
+  }
+
+  get retirementResultsReady(): boolean {
+    return this.spendingBaseline !== 'missing';
+  }
+
+  get retirementBasisNote(): string {
+    if (this.spendingBaseline === 'explicit-zero') {
+      if (this.spendingMode === 'manual') return 'Using the $0 yearly spending you entered.';
+      if (this.spendingMode === 'components') return 'Using the $0 yearly total from the categories you entered.';
+      return 'Your bills and subscriptions total $0 a year.';
+    }
+    return this.spendingBasisSentence;
+  }
+
+  get deepTool(): boolean {
+    return this.activeTool !== 'overview';
   }
 
   showAdvancedEvidence(): boolean {
@@ -654,7 +708,9 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   private syncTogglesFromProfile(payload: ProfilePayload): void {
     this.spendingMode = payload.spending_mode || spendingModeInference.inferMissing(payload);
     this.assumptions.spending_mode = this.spendingMode;
+    this.spendingComponentsChosen = this.spendingMode === 'components';
     this.useTxSpending = this.spendingMode === 'recurring';
+    this.rememberSpendingSelection();
     this.useTxIncome = payload.monthly_income == null;
     this.useNetCashflowOverride = payload.net_annual_cashflow_override != null;
     this.useInferredAllocation = payload.portfolio_allocation == null;
@@ -670,6 +726,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     this.spendingMode = 'recurring';
     this.assumptions.spending_mode = 'recurring';
     this.assumptions.annual_spending = null;
+    this.spendingComponentsChosen = false;
     this.assumptions.spending_components = this.defaultSpendingComponents(this.inputs || {
       recurring_annual_spending: 0, implied_annual_spending: 0,
     } as PlanningInputsPreview);
@@ -681,6 +738,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     if (this.inputs) {
       this.startingNetWorth = this.inputs.net_worth_total;
     }
+    this.rememberSpendingSelection();
   }
 
   async deleteSelectedProfile(): Promise<void> {
@@ -734,7 +792,9 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   onAnnualSpendingInput(value: number | null): void {
-    this.assumptions.annual_spending = value;
+    const parsed = value == null || (value as unknown) === '' ? null : Number(value);
+    this.assumptions.annual_spending = parsed != null && Number.isFinite(parsed) ? parsed : null;
+    this.rememberSpendingSelection();
     this.rememberSimulationDraft();
   }
 
@@ -754,10 +814,12 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   setSpendingComponent(key: keyof SpendingComponents, value: number | null): void {
+    this.spendingComponentsChosen = true;
     this.assumptions.spending_components = {
       ...this.effectiveSpendingComponents,
       [key]: Math.max(0, Number(value) || 0),
     };
+    this.rememberSpendingSelection();
     this.cdr.markForCheck();
   }
 
@@ -1050,6 +1112,34 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     this.assumptions.spending_mode = draft.spendingMode;
     this.useTxSpending = draft.spendingMode === 'recurring';
     this.assumptions.annual_spending = draft.annualSpending;
+    this.spendingComponentsChosen = draft.spendingMode === 'components';
+  }
+
+  private rememberSpendingSelection(): void {
+    const parts = this.effectiveSpendingComponents;
+    writeSpendingSelection({
+      spendingMode: this.spendingMode,
+      annualSpending: this.assumptions.annual_spending ?? null,
+      componentsChosen: this.spendingComponentsChosen,
+      fixedAnnual: parts.fixed_annual,
+      variableAnnual: parts.variable_annual,
+      irregularAnnual: parts.irregular_annual,
+    });
+  }
+
+  private restoreSpendingSelection(): void {
+    const saved = readSpendingSelection();
+    if (!saved) return;
+    this.spendingMode = saved.spendingMode;
+    this.assumptions.spending_mode = saved.spendingMode;
+    this.useTxSpending = saved.spendingMode === 'recurring';
+    this.assumptions.annual_spending = saved.annualSpending;
+    this.spendingComponentsChosen = saved.componentsChosen;
+    this.assumptions.spending_components = {
+      fixed_annual: saved.fixedAnnual,
+      variable_annual: saved.variableAnnual,
+      irregular_annual: saved.irregularAnnual,
+    };
   }
 
   private defaultCheckpoints(inp: PlanningInputsPreview): PlanningCheckpoint[] {

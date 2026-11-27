@@ -112,6 +112,10 @@ test.describe('planning tools at phone size', () => {
     await expect(page).toHaveURL(/\/finance\/planning\/savings$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Savings' })).toBeVisible();
     await expect(page.getByText(PROJECTED)).toBeVisible();
+    const goal = page.getByRole('textbox', { name: 'Goal name', exact: true });
+    await expectInView(page, goal);
+    await goal.tap();
+    await expect(goal).toBeFocused();
   });
 });
 
@@ -134,4 +138,104 @@ test.describe('planning tools at desktop size', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Planning' })).toBeVisible();
     await expect(page.getByText('Your current facts')).toBeVisible();
   });
+});
+
+async function expectInView(
+  page: import('@playwright/test').Page,
+  locator: import('@playwright/test').Locator,
+  minHeight = 44,
+): Promise<void> {
+  await expect(locator).toBeVisible();
+  const box = await locator.boundingBox();
+  expect(box).toBeTruthy();
+  const viewport = page.viewportSize();
+  expect(viewport).toBeTruthy();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y).toBeLessThan(viewport!.height);
+  expect(box!.height).toBeGreaterThanOrEqual(minHeight);
+}
+
+test('direct tools open on their first control in both viewports and themes', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const vault = await syntheticVault(page, seed);
+  await vault.open('/planning');
+  const tools = [
+    { path: '/planning/retirement', minHeight: 44, focus: true, control: () => page.getByRole('combobox', { name: 'Spending basis', exact: true }) },
+    { path: '/planning/simulation', minHeight: 44, focus: true, control: () => page.getByRole('spinbutton', { name: 'Horizon', exact: true }) },
+    { path: '/planning/savings', minHeight: 44, focus: true, control: () => page.getByRole('textbox', { name: 'Goal name', exact: true }) },
+    { path: '/planning/debt', minHeight: 44, focus: true, control: () => page.getByRole('combobox', { name: /Use a saved liability/ }) },
+    { path: '/planning/projection', minHeight: 16, focus: false, control: () => page.locator('.insights-answer h2') },
+    { path: '/planning/research', minHeight: 44, focus: true, control: () => page.getByRole('textbox', { name: 'Ticker', exact: true }) },
+  ];
+  for (const theme of ['light', 'dark'] as const) {
+    await page.evaluate(value => {
+      localStorage.setItem('suite-theme', value);
+      document.documentElement.setAttribute('data-theme', value);
+      document.documentElement.style.colorScheme = value;
+    }, theme);
+    for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }] as const) {
+      await page.setViewportSize(viewport);
+      for (const tool of tools) {
+        await vault.open(tool.path);
+        await page.evaluate(value => {
+          document.documentElement.setAttribute('data-theme', value);
+          document.documentElement.style.colorScheme = value;
+          window.scrollTo(0, 0);
+          document.getElementById('main-content')?.scrollTo(0, 0);
+        }, theme);
+        const control = tool.control();
+        await expectInView(page, control, tool.minHeight);
+        if (tool.focus) {
+          await control.focus();
+          await expect(control).toBeFocused();
+        }
+      }
+    }
+  }
+
+  await page.setViewportSize({ width: 320, height: 844 });
+  await vault.open('/planning/retirement');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const narrow = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(narrow).toBeLessThanOrEqual(321);
+  await expectInView(page, page.getByRole('combobox', { name: 'Spending basis', exact: true }));
+});
+
+test('a missing spending baseline is not a zero retirement target', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const vault = await syntheticVault(page, seed);
+  await vault.open('/planning/retirement');
+  await expect(page.getByRole('status').filter({ hasText: 'Choose a basis' })).toBeVisible();
+  await expect(page.getByText('FI target', { exact: true })).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Spending basis', exact: true }).selectOption('manual');
+  await expect(page.getByText('FI target', { exact: true })).toHaveCount(0);
+  const manual = page.getByLabel('Manual annual spending', { exact: true });
+  await manual.fill('0');
+  await manual.blur();
+  await expect(page.getByText('Using the $0 yearly spending you entered.')).toBeVisible();
+  await expect(page.getByText('FI target', { exact: true })).toBeVisible();
+  await manual.fill('40000');
+  await manual.blur();
+  await expect(page.getByLabel('Retirement estimate')).toContainText('1,000,000');
+  await expect(page.getByText('you entered')).toHaveCount(0);
+
+  await vault.open('/planning/savings');
+  await vault.open('/planning/retirement');
+  await expect(page.getByLabel('Manual annual spending', { exact: true })).toHaveValue('40000');
+  await expect(page.getByText('FI target', { exact: true })).toBeVisible();
+});
+
+test('a stale holding date stays visible beside a known retirement target', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const stale = {
+    ...seed,
+    holdings: [{ ...seed.holdings[0], quote_date: null, position_as_of: null, price_source: 'manual' }],
+    fixed_expenses: [{ id: 3, name: 'Rent', annual_amount: 12000, is_active: true }],
+  };
+  const vault = await syntheticVault(page, stale);
+  vault.failQuote('VOO', 503);
+  await vault.open('/planning/retirement');
+  await expect(page.getByText('1 holding has no price date.')).toBeVisible();
+  await expect(page.getByText('FI target', { exact: true })).toBeVisible();
+  await expect(page.getByText('Yearly spending is not recorded')).toHaveCount(0);
 });

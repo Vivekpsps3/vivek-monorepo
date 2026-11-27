@@ -2,9 +2,11 @@ import {
   clearPlanningDrafts,
   readRetirementDraft,
   readSavingsDraft,
+  readSpendingSelection,
   writeRetirementDraft,
   writeSavingsDraft,
   writeSimulationDraft,
+  writeSpendingSelection,
   readSimulationDraft,
 } from './planning-session';
 
@@ -66,5 +68,28 @@ describe('planning session drafts', () => {
     clearPlanningDrafts();
     expect(readRetirementDraft()).toBeNull();
     expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('keeps an entered zero distinct from an unset spending amount', () => {
+    writeSpendingSelection({
+      spendingMode: 'manual',
+      annualSpending: 0,
+      componentsChosen: false,
+      fixedAnnual: 0,
+      variableAnnual: 0,
+      irregularAnnual: 0,
+    });
+    expect(readSpendingSelection()?.annualSpending).toBe(0);
+    writeSpendingSelection({
+      spendingMode: 'manual',
+      annualSpending: null,
+      componentsChosen: false,
+      fixedAnnual: 0,
+      variableAnnual: 0,
+      irregularAnnual: 0,
+    });
+    expect(readSpendingSelection()?.annualSpending).toBeNull();
+    clearPlanningDrafts();
+    expect(readSpendingSelection()).toBeNull();
   });
 });

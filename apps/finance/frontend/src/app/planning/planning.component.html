@@ -3,8 +3,8 @@
     [embedded]="embedded"
     [title]="pageTitle"
   />
-  @if (!embedded) {
-    <app-planning-tool-index [compact]="activeTool !== 'overview'" />
+  @if (!embedded && activeTool === 'overview') {
+    <app-planning-tool-index />
   }
 
   @if (!loading && !error && !hasPlanningInputs) {
@@ -18,280 +18,59 @@
     </ui-card>
   }
 
-  @if (hasPlanningInputs) {
-  <ui-card [title]="'Your current facts'">
-
-    <div class="planning-facts-grid">
-      <div>
-        <span>{{ factsCopy.netWorth.label }}</span>
-        <strong>{{ formatMoney(inputs?.net_worth_total) }}</strong>
-        <a routerLink="/finance/have">Open accounts</a>
-        <small>{{ factsCopy.netWorth.small }}</small>
-      </div>
-      <div>
-        <span>{{ factsCopy.portfolio.label }}</span>
-        <strong>{{ formatMoney(inputs?.net_worth_portfolio) }}</strong>
-        <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }">Open holdings</a>
-        <small>{{ factsCopy.portfolio.small }}</small>
-      </div>
-      <div>
-        <span>{{ factsCopy.takeHome.label }}</span>
-        <strong>{{ factsCopy.takeHome.amount }}</strong>
-        <a routerLink="/finance/pay">Open jobs and pay</a>
-        <small>{{ factsCopy.takeHome.small }}</small>
-      </div>
-      <div>
-        <span>{{ factsCopy.scheduled.label }}</span>
-        <strong>{{ formatMoney(inputs?.recurring_annual_spending) }} a year</strong>
-        <a routerLink="/finance/bills">Open bills and subscriptions</a>
-        <small>{{ factsCopy.scheduled.small }}</small>
-      </div>
-    </div>
-    @for (warning of dateWarnings; track warning.text) {
-      <p class="mc-help">{{ warning.text }} <a [routerLink]="warning.link" [queryParams]="warning.queryParams">{{ warning.linkText }}</a></p>
-    }
-    @if (sourceRefreshError) {
-      <p class="mc-error" role="status">{{ sourceRefreshError }} <ui-button variant="ghost" size="sm" (clicked)="refreshSourceFacts()">Retry loading current facts</ui-button></p>
-    }
-    @if (showAdvancedEvidence()) {
-      <details class="planning-evidence-details">
-        <summary>How these facts and estimates are used</summary>
-        <ul class="evidence-list">
-          @for (card of evidenceCards; track card.label) {
-            <li>
-              <div>
-                <strong>{{ evidenceKindLabel(card.kind) }} · {{ card.label }}</strong>
-                <p>{{ card.detail }}</p>
-              </div>
-            </li>
-          }
-        </ul>
-      </details>
-    }
-  </ui-card>
-  }
-
-  @if (showSpendingFallbackBanner()) {
-    <div class="mc-callout mc-spending-fallback" role="status">
-      <p>
-        <strong>No recurring spending schedules found.</strong>
-      </p>
-    </div>
-  }
-
   @if (error) {
     <p class="mc-error" role="alert">{{ error }}</p>
-  }
-
-  @if (!loading) {
-    @if (showSpendingPlan()) {
-    <ui-card [title]="'Annual spending plan'">
-
-      <div class="mc-control-grid">
-        <label class="mc-field">
-          <span>Spending basis</span>
-          <select name="spendingMode" aria-label="Spending basis" aria-describedby="spending-basis-help" [ngModel]="spendingMode" (ngModelChange)="onSpendingModeChange($event)">
-            <option value="recurring">Bills and subscriptions</option>
-            <option value="components">Add up categories</option>
-            <option value="manual">One yearly total</option>
-          </select>
-        </label>
-      </div>
-      <p class="mc-help" id="spending-basis-help">{{ spendingBasisSentence }}</p>
-      <details class="spending-learn-more">
-        <summary>Learn more</summary>
-        <p>Bills and subscriptions don't include card purchases or other spending that changes month to month. To count that, choose Add up categories and enter a variable amount, or enter one yearly total.</p>
-      </details>
-      @if (spendingMode === 'components') {
-        <div class="mc-control-grid">
-          <label class="mc-field">
-            <span>Fixed annual spending </span>
-            <input name="fixed_annual" aria-label="Fixed annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.fixed_annual" (ngModelChange)="setSpendingComponent('fixed_annual', $event)" />
-          </label>
-          <label class="mc-field">
-            <span>Variable annual spending</span>
-            <input name="variable_annual" aria-label="Variable annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.variable_annual" (ngModelChange)="setSpendingComponent('variable_annual', $event)" />
-          </label>
-          <label class="mc-field">
-            <span>Irregular annual spending </span>
-            <input name="irregular_annual" aria-label="Irregular annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.irregular_annual" (ngModelChange)="setSpendingComponent('irregular_annual', $event)" />
-          </label>
-        </div>
-        <p class="tool-metric" aria-label="Composed annual spending">Composed annual spending: {{ formatMoney(componentAnnualSpending) }}</p>
-      } @else if (spendingMode === 'manual') {
-        <label class="mc-field">
-          <span>Manual annual spending</span>
-          <input name="annual_spending" aria-label="Manual annual spending" type="number" min="0" step="100" [ngModel]="assumptions.annual_spending" (ngModelChange)="onAnnualSpendingInput($event)" />
-        </label>
-      }
-
-      <details class="spending-suggestion-details">
-        <summary>Suggest variable spending from the last three completed months </summary>
-        <fieldset class="spending-choice-group">
-          <legend>Accounts</legend>
-          @if (!spendingAccounts.length) {
-            <p class="muted">No confirmed bank accounts are available yet.</p>
-          }
-          @for (account of spendingAccounts; track account.account_key) {
-            <label class="mc-check">
-              <input name="togglespendingaccount" type="checkbox" [attr.aria-label]="'Select account ' + account.display_name" [checked]="isSelected(selectedSpendingAccountKeys, account.account_key)" (change)="toggleSpendingAccount(account.account_key, $any($event.target).checked)" />
-              <span>{{ account.display_name }} · {{ account.account_mask }}</span>
-            </label>
-          }
-        </fieldset>
-        <fieldset class="spending-choice-group">
-          <legend>Categories</legend>
-          @for (category of availableSpendingCategories; track category) {
-            <label class="mc-check">
-              <input name="togglespendingcategory" type="checkbox" [attr.aria-label]="'Select category ' + (category === '*' ? 'All spending categories' : category)" [checked]="isSelected(selectedSpendingCategories, category)" (change)="toggleSpendingCategory(category, $any($event.target).checked)" />
-              <span>{{ category === '*' ? 'All spending categories' : category }}</span>
-            </label>
-          }
-        </fieldset>
-        @if (recurringExclusionCandidates.length) {
-          <fieldset class="spending-choice-group">
-            <legend>Exclude charges already represented in recurring schedules</legend>
-            @for (tx of recurringExclusionCandidates; track tx.id) {
-              <label class="mc-check">
-                <input name="togglerecurringexclusion" type="checkbox" [checked]="isSelected(excludedRecurringTransactionIds, tx.id)" (change)="toggleRecurringExclusion(tx.id, $any($event.target).checked)" />
-                <span>{{ tx.date | appDate }} · {{ tx.merchant || tx.description || tx.category }} · {{ formatMoney(tx.amount) }}</span>
-              </label>
-            }
-          </fieldset>
-        }
-        @if (spendingSuggestion.invalidAccountKeys.length) {
-          <p class="mc-error" role="status">A selected account is no longer confirmed. Choose a confirmed account before estimating.</p>
-        }
-        @if (spendingSuggestion.coverageGaps.length) {
-          <p class="mc-error" role="status">
-            Coverage is incomplete. Missing days:
-            @for (gap of spendingSuggestion.coverageGaps; track gap.accountKey) {
-              {{ gap.accountKey }} {{ gap.from }}–{{ gap.through }}{{ !$last ? '; ' : '' }}
-            }
-          </p>
-        }
-        @if (spendingSuggestion.canSuggest) {
-          <p class="spending-suggestion-result" role="status">
-            Suggested annual variable spending: <strong>{{ formatMoney(spendingSuggestion.annualSuggestion) }}</strong>
-            from {{ spendingSuggestion.transactionCount }} eligible recorded rows. Refunds reduce spend; payments, transfers, and ambiguous credits are excluded.
-          </p>
-        } @else {
-          <p class="muted" role="status">Choose at least one confirmed account and category, then provide complete receipt coverage before a suggestion is available.</p>
-        }
-        <div class="mc-inline-actions">
-          <ui-button variant="primary" size="sm" ariaLabel="Accept spending suggestion" [disabled]="!spendingSuggestion.canSuggest || acceptingSpendingSuggestion" (clicked)="acceptSpendingSuggestion()">
-            {{ acceptingSpendingSuggestion ? 'Saving accepted estimate…' : 'Accept and save estimate' }}
-          </ui-button>
-        </div>
-      </details>
-    </ui-card>
-    }
   }
 
   @if (loading) {
     <ui-skeleton height="320px" />
   } @else {
-    <section class="planning-tools-grid" [hidden]="activeTool === 'simulation'">
-      @if (activeTool === 'overview') {
+    @if (activeTool === 'overview') {
+      @if (hasPlanningInputs) {
+        <ng-container [ngTemplateOutlet]="currentFacts" />
+      }
+      @if (showSpendingPlan()) {
+        <ng-container [ngTemplateOutlet]="spendingPlan" />
+      }
+      @if (hasPlanningInputs) {
         <ui-card [title]="'Planning snapshot'">
           <p class="tool-metric">{{ formatMoney(inputs?.net_worth_total) }}</p>
-          <p>Observed balance sheet with {{ formatSignedMoney(effectiveNetCashflow()) }} annual cashflow using your selected assumptions.</p>
-          <div class="tool-breakdown">
-            <span>{{ sourceLabel('net_worth') }}</span>
-            <span>{{ sourceLabel('income') }}</span>
-            <span>{{ spendingSourceLine }}</span>
-            <span>Annual spending: {{ formatMoney(effectiveAnnualSpending()) }}</span>
-            <span>Fixed expenses: {{ formatMoney(inputs?.annual_fixed_expenses) }}</span>
-            <span>Subscriptions: {{ formatMoney(inputs?.annual_subscriptions) }}</span>
-          </div>
+          @if (spendingBaseline === 'missing') {
+            <p>Observed balance sheet. Yearly spending is not recorded, so this is not a cashflow estimate.</p>
+          } @else {
+            <p>Observed balance sheet with {{ formatSignedMoney(effectiveNetCashflow()) }} annual cashflow using your selected assumptions.</p>
+            <div class="tool-breakdown">
+              <span>{{ sourceLabel('net_worth') }}</span>
+              <span>{{ sourceLabel('income') }}</span>
+              <span>{{ spendingSourceLine }}</span>
+              <span>Annual spending: {{ formatMoney(effectiveAnnualSpending()) }}</span>
+              <span>Fixed expenses: {{ formatMoney(inputs?.annual_fixed_expenses) }}</span>
+              <span>Subscriptions: {{ formatMoney(inputs?.annual_subscriptions) }}</span>
+            </div>
+          }
         </ui-card>
       }
+    }
+
+    @if (spendingLeadsTool) {
+      <p class="planning-readiness" role="status">Yearly spending is not recorded. Choose a basis before reading a retirement target. An empty basis is not a $0 plan.</p>
+      <ng-container [ngTemplateOutlet]="spendingPlan" />
+    }
+
+    <section class="planning-tools-grid" [hidden]="activeTool === 'simulation' || activeTool === 'overview'">
       <app-planning-quick-tools
         [activeTool]="activeTool"
         [inputs]="inputs"
         [annualSpending]="effectiveAnnualSpending()"
         [annualCashflow]="effectiveNetCashflow()"
         [spendingMode]="spendingMode"
-        [spendingComponents]="effectiveSpendingComponents" />
+        [spendingComponents]="effectiveSpendingComponents"
+        [showRetirementResults]="retirementResultsReady"
+        [retirementBasisNote]="retirementBasisNote" />
     </section>
 
     @if (activeTool === 'simulation') {
-    <ui-card [title]="'Saved inputs'">
-
-      @if (savedInputsError) {
-        <div id="saved-inputs-card">
-          <p class="mc-error mc-saved-inputs-error" role="alert" tabindex="-1" data-error-summary>
-            <span aria-hidden="true">⚠</span> {{ savedInputsError }}
-          </p>
-        </div>
-      }
-      <div class="mc-profiles-row">
-        <label class="mc-field">
-          <span>Load saved inputs</span>
-          <select name="selectedprofileid" [value]="selectedProfileId ?? ''" (change)="onProfileSelected($any($event.target).value)">
-            <option value="">None (custom session)</option>
-            @for (p of profiles; track p.id) {
-              <option [value]="p.id">{{ p.name }}</option>
-            }
-          </select>
-        </label>
-        <label class="mc-field mc-field--grow">
-          <span>Name</span>
-          <input name="savedInputName" type="text" [(ngModel)]="savedInputName" placeholder="e.g. Retirement baseline" maxlength="120" [attr.aria-invalid]="savedInputError ? true : null" />
-          @if (savedInputError) {
-            <span class="mc-field-error">{{ savedInputError }}</span>
-          }
-        </label>
-        <div class="mc-inline-actions">
-          <ui-button
-            variant="secondary"
-            size="sm"
-            (clicked)="saveSavedInputs()"
-            [disabled]="savingProfile"
-          >
-            {{ selectedProfileId != null ? 'Update' : 'Save' }}
-          </ui-button>
-          <ui-button
-            variant="ghost"
-            size="sm"
-            (clicked)="deleteSelectedProfile()"
-            [ariaDisabled]="selectedProfileId === null"
-            [describedBy]="selectedProfileId === null ? 'delete-saved-inputs-hint' : undefined">
-            Delete
-          </ui-button>
-        </div>
-        @if (selectedProfileId === null) {
-          <small id="delete-saved-inputs-hint" class="mc-field-hint">Choose saved inputs to delete.</small>
-        }
-      </div>
-    </ui-card>
-
-    @if (runStale && runStaleMessage) { <p class="mc-warning" role="status">{{ runStaleMessage }}</p> }
-    <section class="mc-summary-band" aria-label="Planning inputs">
-      <div class="mc-metric">
-        <span>Current net worth</span>
-        <strong>{{ formatMoney(inputs?.net_worth_total) }}</strong>
-        <small>Current balances</small>
-      </div>
-      <div class="mc-metric">
-        <span>Holdings share</span>
-        <strong>{{ formatPct(inferredAllocation()) }}</strong>
-        <small>{{ formatMoney(inputs?.net_worth_portfolio) }} portfolio value</small>
-      </div>
-      <div class="mc-metric">
-        <span>Annual cashflow</span>
-        <strong>{{ formatSignedMoney(effectiveNetCashflow()) }}</strong>
-        <small>
-          {{ effectiveCashflowDescription() }}
-        </small>
-      </div>
-      <div class="mc-metric">
-        <span>Run size</span>
-        <strong>{{ nPaths | number }} paths</strong>
-        <small>{{ horizonYears }} years · seed {{ seed }}</small>
-      </div>
-    </section>
-
+      @if (runStale && runStaleMessage) { <p class="mc-warning" role="status">{{ runStaleMessage }}</p> }
     <div class="mc-workbench">
       <aside class="mc-panel" aria-label="Scenario builder">
         <ui-card [title]="'Run setup'">
@@ -626,8 +405,11 @@
         </ui-card>
         </details>
 
+        @if (spendingBaseline === 'missing') {
+          <p class="mc-help" id="simulation-spending-needed" role="status">Add yearly spending before running. A missing amount is not a $0 plan.</p>
+        }
         <div class="mc-run-row">
-          <ui-button variant="primary" [disabled]="running" (clicked)="runSimulation()">
+          <ui-button variant="primary" [disabled]="running || spendingBaseline === 'missing'" [attr.aria-describedby]="spendingBaseline === 'missing' ? 'simulation-spending-needed' : null" (clicked)="runSimulation()">
             {{ running ? 'Running' : 'Run' }}
           </ui-button>
         </div>
@@ -639,6 +421,269 @@
         [scenarioRun]="scenarioRun"
         [chartData]="chartData" />
     </div>
+
+    }
+
+    @if (deepTool && hasPlanningInputs) {
+      <details class="planning-disclosure" [open]="dateWarnings.length > 0 || !!sourceRefreshError">
+        <summary>Your current facts</summary>
+        <ng-container [ngTemplateOutlet]="currentFacts" />
+      </details>
+    }
+
+    @if (deepTool && showSpendingPlan() && !spendingLeadsTool) {
+      <ng-container [ngTemplateOutlet]="spendingPlan" />
+    }
+
+    @if (activeTool === 'simulation') {
+    <section class="mc-summary-band" aria-label="Planning inputs">
+      <div class="mc-metric">
+        <span>Current net worth</span>
+        <strong>{{ formatMoney(inputs?.net_worth_total) }}</strong>
+        <small>Current balances</small>
+      </div>
+      <div class="mc-metric">
+        <span>Holdings share</span>
+        <strong>{{ formatPct(inferredAllocation()) }}</strong>
+        <small>{{ formatMoney(inputs?.net_worth_portfolio) }} portfolio value</small>
+      </div>
+      <div class="mc-metric">
+        <span>Annual cashflow</span>
+        @if (spendingBaseline === 'missing') {
+          <strong>Not recorded</strong>
+          <small>Add yearly spending before using this cashflow.</small>
+        } @else {
+          <strong>{{ formatSignedMoney(effectiveNetCashflow()) }}</strong>
+          <small>
+            {{ effectiveCashflowDescription() }}
+          </small>
+        }
+      </div>
+      <div class="mc-metric">
+        <span>Run size</span>
+        <strong>{{ nPaths | number }} paths</strong>
+        <small>{{ horizonYears }} years · seed {{ seed }}</small>
+      </div>
+    </section>
+    <ui-card [title]="'Saved inputs'">
+
+      @if (savedInputsError) {
+        <div id="saved-inputs-card">
+          <p class="mc-error mc-saved-inputs-error" role="alert" tabindex="-1" data-error-summary>
+            <span aria-hidden="true">⚠</span> {{ savedInputsError }}
+          </p>
+        </div>
+      }
+      <div class="mc-profiles-row">
+        <label class="mc-field">
+          <span>Load saved inputs</span>
+          <select name="selectedprofileid" [value]="selectedProfileId ?? ''" (change)="onProfileSelected($any($event.target).value)">
+            <option value="">None (custom session)</option>
+            @for (p of profiles; track p.id) {
+              <option [value]="p.id">{{ p.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="mc-field mc-field--grow">
+          <span>Name</span>
+          <input name="savedInputName" type="text" [(ngModel)]="savedInputName" placeholder="e.g. Retirement baseline" maxlength="120" [attr.aria-invalid]="savedInputError ? true : null" />
+          @if (savedInputError) {
+            <span class="mc-field-error">{{ savedInputError }}</span>
+          }
+        </label>
+        <div class="mc-inline-actions">
+          <ui-button
+            variant="secondary"
+            size="sm"
+            (clicked)="saveSavedInputs()"
+            [disabled]="savingProfile"
+          >
+            {{ selectedProfileId != null ? 'Update' : 'Save' }}
+          </ui-button>
+          <ui-button
+            variant="ghost"
+            size="sm"
+            (clicked)="deleteSelectedProfile()"
+            [ariaDisabled]="selectedProfileId === null"
+            [describedBy]="selectedProfileId === null ? 'delete-saved-inputs-hint' : undefined">
+            Delete
+          </ui-button>
+        </div>
+        @if (selectedProfileId === null) {
+          <small id="delete-saved-inputs-hint" class="mc-field-hint">Choose saved inputs to delete.</small>
+        }
+      </div>
+    </ui-card>
+
+    }
+
+    @if (deepTool && !embedded) {
+      <app-planning-tool-index [compact]="true" />
     }
   }
 </div>
+
+<ng-template #currentFacts>
+  <ui-card [title]="'Your current facts'">
+    <div class="planning-facts-grid">
+      <div>
+        <span>{{ factsCopy.netWorth.label }}</span>
+        <strong>{{ formatMoney(inputs?.net_worth_total) }}</strong>
+        <a routerLink="/finance/have">Open accounts</a>
+        <small>{{ factsCopy.netWorth.small }}</small>
+      </div>
+      <div>
+        <span>{{ factsCopy.portfolio.label }}</span>
+        <strong>{{ formatMoney(inputs?.net_worth_portfolio) }}</strong>
+        <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }">Open holdings</a>
+        <small>{{ factsCopy.portfolio.small }}</small>
+      </div>
+      <div>
+        <span>{{ factsCopy.takeHome.label }}</span>
+        <strong>{{ factsCopy.takeHome.amount }}</strong>
+        <a routerLink="/finance/pay">Open jobs and pay</a>
+        <small>{{ factsCopy.takeHome.small }}</small>
+      </div>
+      <div>
+        <span>{{ factsCopy.scheduled.label }}</span>
+        <strong>{{ formatMoney(inputs?.recurring_annual_spending) }} a year</strong>
+        <a routerLink="/finance/bills">Open bills and subscriptions</a>
+        <small>{{ factsCopy.scheduled.small }}</small>
+      </div>
+    </div>
+    @for (warning of dateWarnings; track warning.text) {
+      <p class="mc-help">{{ warning.text }} <a [routerLink]="warning.link" [queryParams]="warning.queryParams">{{ warning.linkText }}</a></p>
+    }
+    @if (sourceRefreshError) {
+      <p class="mc-error" role="status">{{ sourceRefreshError }} <ui-button variant="ghost" size="sm" (clicked)="refreshSourceFacts()">Retry loading current facts</ui-button></p>
+    }
+    @if (showAdvancedEvidence()) {
+      <details class="planning-evidence-details">
+        <summary>How these facts and estimates are used</summary>
+        <ul class="evidence-list">
+          @for (card of evidenceCards; track card.label) {
+            <li>
+              <div>
+                <strong>{{ evidenceKindLabel(card.kind) }} · {{ card.label }}</strong>
+                <p>{{ card.detail }}</p>
+              </div>
+            </li>
+          }
+        </ul>
+      </details>
+    }
+  </ui-card>
+
+</ng-template>
+
+<ng-template #spendingPlan>
+  @if (showSpendingFallbackBanner()) {
+    <div class="mc-callout mc-spending-fallback" role="status">
+      <p>
+        <strong>No recurring spending schedules found.</strong>
+      </p>
+    </div>
+  }
+
+    <ui-card [title]="'Annual spending plan'">
+
+      <div class="mc-control-grid">
+        <label class="mc-field">
+          <span>Spending basis</span>
+          <select name="spendingMode" aria-label="Spending basis" aria-describedby="spending-basis-help" [ngModel]="spendingMode" (ngModelChange)="onSpendingModeChange($event)">
+            <option value="recurring">Bills and subscriptions</option>
+            <option value="components">Add up categories</option>
+            <option value="manual">One yearly total</option>
+          </select>
+        </label>
+      </div>
+      <p class="mc-help" id="spending-basis-help">{{ spendingBasisSentence }}</p>
+      <details class="spending-learn-more">
+        <summary>Learn more</summary>
+        <p>Bills and subscriptions don't include card purchases or other spending that changes month to month. To count that, choose Add up categories and enter a variable amount, or enter one yearly total.</p>
+      </details>
+      @if (spendingMode === 'components') {
+        <div class="mc-control-grid">
+          <label class="mc-field">
+            <span>Fixed annual spending </span>
+            <input name="fixed_annual" aria-label="Fixed annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.fixed_annual" (ngModelChange)="setSpendingComponent('fixed_annual', $event)" />
+          </label>
+          <label class="mc-field">
+            <span>Variable annual spending</span>
+            <input name="variable_annual" aria-label="Variable annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.variable_annual" (ngModelChange)="setSpendingComponent('variable_annual', $event)" />
+          </label>
+          <label class="mc-field">
+            <span>Irregular annual spending </span>
+            <input name="irregular_annual" aria-label="Irregular annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.irregular_annual" (ngModelChange)="setSpendingComponent('irregular_annual', $event)" />
+          </label>
+        </div>
+        <p class="tool-metric" aria-label="Composed annual spending">Composed annual spending: {{ formatMoney(componentAnnualSpending) }}</p>
+      } @else if (spendingMode === 'manual') {
+        <label class="mc-field">
+          <span>Manual annual spending</span>
+          <input name="annual_spending" aria-label="Manual annual spending" type="number" min="0" step="100" [ngModel]="assumptions.annual_spending" (ngModelChange)="onAnnualSpendingInput($event)" />
+        </label>
+      }
+
+      <details class="spending-suggestion-details">
+        <summary>Suggest variable spending from the last three completed months </summary>
+        <fieldset class="spending-choice-group">
+          <legend>Accounts</legend>
+          @if (!spendingAccounts.length) {
+            <p class="muted">No confirmed bank accounts are available yet.</p>
+          }
+          @for (account of spendingAccounts; track account.account_key) {
+            <label class="mc-check">
+              <input name="togglespendingaccount" type="checkbox" [attr.aria-label]="'Select account ' + account.display_name" [checked]="isSelected(selectedSpendingAccountKeys, account.account_key)" (change)="toggleSpendingAccount(account.account_key, $any($event.target).checked)" />
+              <span>{{ account.display_name }} · {{ account.account_mask }}</span>
+            </label>
+          }
+        </fieldset>
+        <fieldset class="spending-choice-group">
+          <legend>Categories</legend>
+          @for (category of availableSpendingCategories; track category) {
+            <label class="mc-check">
+              <input name="togglespendingcategory" type="checkbox" [attr.aria-label]="'Select category ' + (category === '*' ? 'All spending categories' : category)" [checked]="isSelected(selectedSpendingCategories, category)" (change)="toggleSpendingCategory(category, $any($event.target).checked)" />
+              <span>{{ category === '*' ? 'All spending categories' : category }}</span>
+            </label>
+          }
+        </fieldset>
+        @if (recurringExclusionCandidates.length) {
+          <fieldset class="spending-choice-group">
+            <legend>Exclude charges already represented in recurring schedules</legend>
+            @for (tx of recurringExclusionCandidates; track tx.id) {
+              <label class="mc-check">
+                <input name="togglerecurringexclusion" type="checkbox" [checked]="isSelected(excludedRecurringTransactionIds, tx.id)" (change)="toggleRecurringExclusion(tx.id, $any($event.target).checked)" />
+                <span>{{ tx.date | appDate }} · {{ tx.merchant || tx.description || tx.category }} · {{ formatMoney(tx.amount) }}</span>
+              </label>
+            }
+          </fieldset>
+        }
+        @if (spendingSuggestion.invalidAccountKeys.length) {
+          <p class="mc-error" role="status">A selected account is no longer confirmed. Choose a confirmed account before estimating.</p>
+        }
+        @if (spendingSuggestion.coverageGaps.length) {
+          <p class="mc-error" role="status">
+            Coverage is incomplete. Missing days:
+            @for (gap of spendingSuggestion.coverageGaps; track gap.accountKey) {
+              {{ gap.accountKey }} {{ gap.from }}–{{ gap.through }}{{ !$last ? '; ' : '' }}
+            }
+          </p>
+        }
+        @if (spendingSuggestion.canSuggest) {
+          <p class="spending-suggestion-result" role="status">
+            Suggested annual variable spending: <strong>{{ formatMoney(spendingSuggestion.annualSuggestion) }}</strong>
+            from {{ spendingSuggestion.transactionCount }} eligible recorded rows. Refunds reduce spend; payments, transfers, and ambiguous credits are excluded.
+          </p>
+        } @else {
+          <p class="muted" role="status">Choose at least one confirmed account and category, then provide complete receipt coverage before a suggestion is available.</p>
+        }
+        <div class="mc-inline-actions">
+          <ui-button variant="primary" size="sm" ariaLabel="Accept spending suggestion" [disabled]="!spendingSuggestion.canSuggest || acceptingSpendingSuggestion" (clicked)="acceptSpendingSuggestion()">
+            {{ acceptingSpendingSuggestion ? 'Saving accepted estimate…' : 'Accept and save estimate' }}
+          </ui-button>
+        </div>
+      </details>
+    </ui-card>
+
+</ng-template>

@@ -2,9 +2,6 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="'Projection'" />
-  @if (!embedded) {
-    <app-planning-tool-index [compact]="true" />
-  }
   <p class="projection-note">{{ projectedNote }}</p>
 
   @if (loading) {
@@ -266,5 +263,8 @@
         </details>
       </div>
     </section>
+  }
+  @if (!embedded) {
+    <app-planning-tool-index [compact]="true" />
   }
 </div>
