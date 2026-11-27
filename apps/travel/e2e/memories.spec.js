@@ -64,32 +64,69 @@ async function openMemories(page) {
   await expect(page.getByRole('navigation', { name: 'Travel sections' }).getByRole('link', { name: 'Memories', exact: true })).toHaveAttribute('aria-current', 'page');
 }
 
+function manageSummary(page, title) {
+  return card(page, title).locator('summary');
+}
+
+async function revealManage(page, title, activate) {
+  const root = card(page, title);
+  const redate = root.getByRole('button', { name: `Redate ${title}`, exact: true });
+  if (await redate.isVisible()) return;
+  const manage = manageSummary(page, title);
+  await expect(manage).toHaveText(`Manage ${title}`);
+  if (activate) await activate(manage);
+  else await manage.click();
+  await expect(redate).toBeVisible();
+}
+
 async function expectHonestOverlaps(page) {
   const north = card(page, 'Late north');
   const south = card(page, 'Late south');
+  const harbor = card(page, 'Planned harbor');
+  const coast = card(page, 'Completed coast');
+  const fjord = card(page, 'Booked fjord');
   await expect(north).toContainText('March 1, 2020 through March 10, 2020');
-  await expect(north).toContainText('after this trip ended on March 10, 2020');
-  await expect(north).toContainText('Town does not credit it.');
-  await expect(north).toContainText('Overlaps Late south (March 8, 2020 through March 15, 2020). Both spans stay.');
-  await expect(north).toContainText('The place is the saved destination Oslo.');
+  await expect(north).toContainText('10 days');
+  await expect(north).toContainText('Oslo');
+  await expect(north).toContainText('No credit · logged late');
+  await expect(north.locator('dt').filter({ hasText: /^Logged$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText(
+    /^[A-Z][a-z]+ \d{1,2}, \d{4}$/,
+  );
+  await expect(harbor.locator('dt', { hasText: 'Logged' })).toHaveCount(0);
+  await expect(coast.locator('dt', { hasText: 'Logged' })).toHaveCount(0);
+  await expect(north).toContainText('Late south');
+  await expect(north).not.toContainText('March 8, 2020 through March 15, 2020');
+  await expect(north).not.toContainText('Both spans stay');
+  await expect(north).not.toContainText('Source trip');
   await expect(south).toContainText('March 8, 2020 through March 15, 2020');
-  await expect(south).toContainText('after this trip ended on March 15, 2020');
-  await expect(south).toContainText('Town does not credit it.');
-  await expect(south).toContainText('Overlaps Late north (March 1, 2020 through March 10, 2020). Both spans stay.');
-  await expect(south).toContainText('No saved destination. This memory does not invent a place.');
-  await expect(card(page, 'Planned harbor')).toContainText('This trip is planned. Town does not credit a planned trip.');
-  await expect(card(page, 'Planned harbor')).toContainText('The place is the saved destination Lisbon.');
-  await expect(card(page, 'Completed coast')).toContainText(
-    'Town credits this completed trip once on August 7, 2090, the day after it ends.',
-  );
-  await expect(card(page, 'Completed coast')).toContainText(
-    'That credit date is separate from the span August 1, 2090 through August 6, 2090.',
-  );
-  await expect(card(page, 'Booked fjord')).toContainText(
-    'Town credits this booked trip once on June 4, 2090, the day after it ends.',
-  );
+  await expect(south).toContainText('No saved city');
+  await expect(south).toContainText('No credit · logged late');
+  await expect(south).toContainText('Late north');
+  await expect(south).not.toContainText('Oslo');
+  await expect(south).not.toContainText('does not invent a place');
+  await expect(harbor).toContainText('No credit · planned');
+  await expect(harbor).toContainText('Lisbon');
+  await expect(harbor).not.toContainText('Town does not credit a planned trip');
+  await expect(coast).toContainText('August 1, 2090 through August 6, 2090');
+  await expect(coast).toContainText('August 7, 2090');
+  await expect(coast).toContainText('Portland');
+  await expect(coast).not.toContainText('That credit date is separate');
+  await expect(fjord).toContainText('June 1, 2090 through June 3, 2090');
+  await expect(fjord).toContainText('June 4, 2090');
+  await expect(fjord).toContainText('Bergen');
+  await expect(page.locator('[data-difference]')).toHaveCount(3);
+  await expect(north).not.toContainText('Pixels counts each civil day');
+  const rules = page.locator('.memory-rules');
+  await rules.locator('summary').click();
+  await expect(rules).toContainText('Pixels counts each civil day a trip spans.');
+  await expect(rules).toContainText('A missing city stays missing.');
+  await expect(page.locator('.memory-rules')).toHaveCount(1);
   const text = await page.locator('main').innerText();
+  expect(text).not.toMatch(/Source trip \d+/);
   expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+  await expect(north.getByRole('link', { name: 'Open Late north', exact: true })).toBeVisible();
+  await expect(north.getByRole('button', { name: 'Redate Late north', exact: true })).toBeHidden();
+  await expect(north.getByRole('button', { name: 'Delete Late north', exact: true })).toBeHidden();
 }
 
 async function expectReadable(page) {
@@ -98,17 +135,27 @@ async function expectReadable(page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const motion = await page.locator('.memory-card').first().evaluate((node) => getComputedStyle(node).animationName);
   expect(motion).toBe('none');
-  for (const name of ['Reload memories', 'Redate Late south', 'Delete Late south']) {
+  for (const name of ['Reload memories', 'Open Late south']) {
+    const control = name.startsWith('Open')
+      ? page.getByRole('link', { name, exact: true })
+      : page.getByRole('button', { name, exact: true });
+    const box = await control.boundingBox();
+    expect(box?.height ?? 0, name).toBeGreaterThanOrEqual(44);
+    expect(box?.width ?? 0, name).toBeGreaterThanOrEqual(44);
+  }
+  const manageBox = await manageSummary(page, 'Late south').boundingBox();
+  expect(manageBox?.height ?? 0, 'Manage Late south').toBeGreaterThanOrEqual(44);
+  expect(manageBox?.width ?? 0, 'Manage Late south').toBeGreaterThanOrEqual(44);
+  await revealManage(page, 'Late south');
+  for (const name of ['Redate Late south', 'Delete Late south']) {
     const box = await page.getByRole('button', { name, exact: true }).boundingBox();
     expect(box?.height ?? 0, name).toBeGreaterThanOrEqual(44);
     expect(box?.width ?? 0, name).toBeGreaterThanOrEqual(44);
   }
-  const open = await page.getByRole('link', { name: 'Open Late south', exact: true }).boundingBox();
-  expect(open?.height ?? 0).toBeGreaterThanOrEqual(44);
-  expect(open?.width ?? 0).toBeGreaterThanOrEqual(44);
 }
 
 async function redateSouth(page, { activate }) {
+  await revealManage(page, 'Late south', activate);
   const opener = page.getByRole('button', { name: 'Redate Late south', exact: true });
   await activate(opener);
   const dialog = page.getByRole('dialog');
@@ -125,9 +172,10 @@ async function redateSouth(page, { activate }) {
   await expect(dialog).toBeHidden();
   const south = card(page, 'Late south');
   await expect(south).toContainText('September 1, 2090 through September 4, 2090');
-  await expect(south).toContainText('Town credits this completed trip once on September 5, 2090');
-  await expect(south).toContainText('No saved trip overlaps this span.');
-  await expect(card(page, 'Late north')).toContainText('No saved trip overlaps this span.');
+  await expect(south).toContainText('September 5, 2090');
+  await expect(south).not.toContainText('That credit date is separate');
+  await expect(south.locator('dt', { hasText: 'Overlaps' })).toHaveCount(0);
+  await expect(card(page, 'Late north').locator('dt', { hasText: 'Overlaps' })).toHaveCount(0);
   await expect(south).toBeFocused();
   await expect(page.getByLabel('Private note')).toHaveCount(0);
 }
@@ -144,6 +192,10 @@ test.describe('VIEW keyboard day', () => {
     await expectHonestOverlaps(page);
     await expectReadable(page);
 
+    await revealManage(page, 'Late north', async (control) => {
+      await control.focus();
+      await page.keyboard.press('Enter');
+    });
     const opener = page.getByRole('button', { name: 'Redate Late north', exact: true });
     await opener.focus();
     await page.keyboard.press('Enter');
@@ -160,6 +212,10 @@ test.describe('VIEW keyboard day', () => {
       },
     });
 
+    await revealManage(page, 'Completed coast', async (control) => {
+      await control.focus();
+      await page.keyboard.press('Enter');
+    });
     const cancel = page.getByRole('button', { name: 'Cancel Completed coast', exact: true });
     await cancel.focus();
     await page.keyboard.press('Enter');
@@ -168,11 +224,16 @@ test.describe('VIEW keyboard day', () => {
     await confirm.getByRole('button', { name: 'Cancel trip', exact: true }).focus();
     await page.keyboard.press('Enter');
     const coast = card(page, 'Completed coast');
-    await expect(coast).toContainText('This trip is planned. Town does not credit a planned trip.');
+    await expect(coast).toContainText('No credit · planned');
     await expect(coast).toContainText('August 1, 2090 through August 6, 2090');
+    await expect(coast).not.toContainText('August 7, 2090');
     await expect(coast).toBeFocused();
     await expect(coast.getByRole('button', { name: 'Cancel Completed coast', exact: true })).toHaveCount(0);
 
+    await revealManage(page, 'Planned harbor', async (control) => {
+      await control.focus();
+      await page.keyboard.press('Enter');
+    });
     const remove = page.getByRole('button', { name: 'Delete Planned harbor', exact: true });
     await remove.focus();
     await page.keyboard.press('Enter');
@@ -205,6 +266,7 @@ test.describe('VIEW touch night', () => {
     await expectHonestOverlaps(page);
     await expectReadable(page);
     await redateSouth(page, { activate: async (control) => control.tap() });
+    await revealManage(page, 'Late north', async (control) => control.tap());
     const saveBox = await page.getByRole('button', { name: 'Redate Late north', exact: true }).boundingBox();
     expect(saveBox?.height ?? 0).toBeGreaterThanOrEqual(44);
   });
@@ -232,6 +294,7 @@ test('a late redate response keeps the newer draft and the previous card', async
     await route.fulfill({ response });
     fulfilled();
   });
+  await revealManage(page, 'Late south');
   await page.getByRole('button', { name: 'Redate Late south', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.locator('input[name="start"]').fill('2090-09-01');
@@ -282,6 +345,7 @@ test('a failed redate keeps the private note and the next save clears it', async
     }
     return route.continue();
   });
+  await revealManage(page, 'Late south');
   await page.getByRole('button', { name: 'Redate Late south', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.locator('input[name="start"]').fill('2090-09-01');
@@ -310,6 +374,7 @@ test('session expiry clears a private redate note without a discard prompt', asy
     status: 'done',
   });
   await openMemories(page);
+  await revealManage(page, 'Late south');
   await page.getByRole('button', { name: 'Redate Late south', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Private note').fill('pier light');
@@ -355,6 +420,7 @@ test('a stale memories response does not replace a newer list', async ({ page, r
   });
   await page.getByRole('button', { name: 'Reload memories', exact: true }).click();
   await ready;
+  await revealManage(page, 'Late south');
   await page.getByRole('button', { name: 'Redate Late south', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.locator('input[name="start"]').fill('2090-09-01');
@@ -372,4 +438,104 @@ test('a stale memories response does not replace a newer list', async ({ page, r
   }).toBe('kept');
   const saved = await (await request.get('/travel/api/trips/' + south.id)).json();
   expect(saved.end_date).toBe('2090-09-04');
+});
+
+async function expectArrival(page, title) {
+  const heading = page.getByRole('heading', { level: 2, name: title, exact: true });
+  const open = page.getByRole('link', { name: `Open ${title}`, exact: true });
+  await expect(heading).toBeVisible();
+  await expect(open).toBeVisible();
+  const metrics = await heading.evaluate((node) => {
+    const titleBox = node.getBoundingClientRect();
+    const link = node.closest('article')?.querySelector('a.ui-btn');
+    const openBox = link?.getBoundingClientRect();
+    return {
+      titleTop: titleBox.top,
+      titleBottom: titleBox.bottom,
+      openTop: openBox?.top ?? -1,
+      openBottom: openBox?.bottom ?? -1,
+      height: window.innerHeight,
+      width: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    };
+  });
+  expect(metrics.scrollWidth, `${metrics.width}px scroll`).toBeLessThanOrEqual(metrics.width + 1);
+  expect(metrics.titleTop).toBeGreaterThanOrEqual(0);
+  expect(metrics.titleBottom).toBeLessThanOrEqual(metrics.height);
+  expect(metrics.openTop).toBeGreaterThanOrEqual(0);
+  expect(metrics.openBottom).toBeLessThanOrEqual(metrics.height);
+  console.log(
+    `FIXUP-14 arrival ${metrics.width}x${metrics.height} titleTop=${Math.round(metrics.titleTop)} openBottom=${Math.round(metrics.openBottom)}`,
+  );
+}
+
+test('two past trips lead with the first open action', async ({ page, request }) => {
+  test.setTimeout(90_000);
+  const harbor = await createTrip(request, {
+    title: 'Leap harbor',
+    start_date: '2024-02-28',
+    end_date: '2024-03-05',
+    status: 'done',
+  });
+  await createTrip(request, {
+    title: 'Portland',
+    start_date: '2024-02-27',
+    end_date: '2024-03-02',
+    status: 'done',
+    stays: [{ city: 'Portland', arrive_on: '2024-02-27', leave_on: '2024-03-02' }],
+  });
+  await openMemories(page);
+  for (const view of [
+    { width: 390, height: 844, theme: 'dark' },
+    { width: 1280, height: 800, theme: 'light' },
+  ]) {
+    await page.setViewportSize({ width: view.width, height: view.height });
+    await chooseColorTheme(page, view.theme);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', view.theme);
+    await expectArrival(page, 'Leap harbor');
+    const first = card(page, 'Leap harbor');
+    await expect(first).toContainText('February 28, 2024 through March 5, 2024');
+    await expect(first).toContainText('7 days');
+    await expect(first).toContainText('No saved city');
+    await expect(first).toContainText('No credit · logged late');
+    await expect(first).toContainText('Portland');
+    await expect(first).not.toContainText('February 27, 2024 through March 2, 2024');
+    const reading = await first.innerText();
+    expect(reading).not.toContain(`Source trip ${harbor.id}`);
+    expect(reading.split('\n').map((line) => line.trim())).not.toContain(String(harbor.id));
+    await expect(first.getByRole('link', { name: 'Open Leap harbor', exact: true })).toHaveClass(/ui-btn--primary/);
+    await expect(first.getByRole('button', { name: 'Redate Leap harbor', exact: true })).toBeHidden();
+    const second = card(page, 'Portland');
+    await expect(second).toContainText('February 27, 2024 through March 2, 2024');
+    await expect(second).toContainText('Portland');
+    await expect(second).toContainText('Leap harbor');
+    await expect(second.locator('dd', { hasText: 'No saved city' })).toHaveCount(0);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('link', { name: 'Open Leap harbor', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/travel/trips/${harbor.id}$`));
+  await expect(page.getByRole('heading', { level: 1, name: 'Leap harbor', exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/travel\/memories/);
+  await expect(page.locator(`article[data-trip="${harbor.id}"]`)).toBeVisible();
+  await expect(card(page, 'Leap harbor')).toBeVisible();
+
+  await page.setViewportSize({ width: 320, height: 844 });
+  const narrowCard = page.locator('.memory-card').first();
+  await expect.poll(async () => narrowCard.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '32px';
+  });
+  await expect.poll(async () => narrowCard.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  const open = page.getByRole('link', { name: 'Open Leap harbor', exact: true });
+  await open.scrollIntoViewIfNeeded();
+  const box = await open.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const motion = await page.locator('.memory-card').first().evaluate((node) => getComputedStyle(node).animationName);
+  expect(motion).toBe('none');
 });

@@ -3,7 +3,13 @@ import test from 'node:test';
 import {
   acceptMemoryLoad,
   browserZone,
+  civilDay,
   clearMemoryDraft,
+  memoryCredit,
+  memoryDates,
+  memoryLoggedDay,
+  memoryOverlapNames,
+  memoryPlace,
   settleMemoryWrite,
 } from '../../../frontend/src/memories.mjs';
 
@@ -50,4 +56,39 @@ test('clearing a memory draft returns empty private fields', () => {
   first.start = '2090-09-01';
   const second = clearMemoryDraft();
   assert.deepEqual(second, { tripId: null, start: '', end: '', note: '' });
+});
+
+test('memory cards label span, place, and credit without repeating the rules', () => {
+  assert.equal(civilDay('2024-02-29'), 'February 29, 2024');
+  assert.equal(civilDay('2090-08-07'), 'August 7, 2090');
+  assert.equal(civilDay('not-a-day'), '');
+  const late = {
+    span_text: 'March 1, 2020 through March 10, 2020',
+    span_days: 10,
+    span_end: '2020-03-10',
+    destinations: ['Oslo'],
+    status: 'booked',
+    credit_date: null,
+    logged_on: '2026-11-27',
+    logged_text: 'Logged on November 27, 2026.',
+    overlaps: [{ title: 'Late south', span_text: 'March 8, 2020 through March 15, 2020' }],
+  };
+  assert.equal(memoryDates(late), 'March 1, 2020 through March 10, 2020 · 10 days');
+  assert.equal(memoryPlace(late), 'Oslo');
+  assert.equal(memoryPlace({ destinations: [] }), 'No saved city');
+  assert.equal(memoryPlace({ destinations: ['Lisbon', 'Bergen', 'Portland'] }), 'Lisbon, Bergen, and Portland');
+  assert.equal(memoryCredit(late), 'No credit · logged late');
+  assert.equal(memoryLoggedDay(late), 'November 27, 2026');
+  assert.equal(memoryOverlapNames(late), 'Late south');
+  assert.equal(memoryDates(late).includes('March 8, 2020'), false);
+  assert.equal(
+    memoryCredit({ status: 'done', credit_date: '2090-08-07', span_text: 'August 1, 2090 through August 6, 2090' }),
+    'August 7, 2090',
+  );
+  assert.equal(memoryCredit({ status: 'planning', credit_date: null }), 'No credit · planned');
+  assert.equal(memoryCredit({ status: 'done', credit_date: null, logged_on: null }), 'No credit · no logged time');
+  assert.equal(memoryCredit({ status: 'paused', credit_date: null, logged_on: '2090-01-01', span_end: '2090-01-02' }), 'No credit');
+  assert.equal(memoryLoggedDay({ status: 'planning', credit_date: null }), '');
+  assert.equal(memoryOverlapNames({ overlaps: [] }), '');
+  assert.equal(memoryDates({ span_text: 'August 1, 2090', span_days: 1 }), 'August 1, 2090 · 1 day');
 });
