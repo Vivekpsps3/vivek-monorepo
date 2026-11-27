@@ -19,7 +19,7 @@ export interface SceneChoice {
 }
 
 export interface ResidentScene {
-  readonly residentId: 'mara' | 'ada' | 'imani' | 'jun';
+  readonly residentId: 'mara' | 'ada' | 'imani' | 'jun' | 'wren' | 'sol';
   readonly conversationId: 'welcome' | 'how-it-works' | 'preference' | 'activity' | 'reflection';
   readonly paragraphs: readonly string[];
   readonly choices: readonly [SceneChoice, SceneChoice];
@@ -51,6 +51,13 @@ export interface JunMentionInput {
   readonly workout: string | null;
   readonly badge: string | null;
   readonly measurement: string | null;
+}
+
+/** Review and concept-note text are refused whole. This talk does not copy either one. */
+export interface CultureMentionInput {
+  readonly locked: boolean;
+  readonly review: string | null;
+  readonly conceptNote: string | null;
 }
 
 export const SAMPLE_CIVIC_LEDGER: MentionedObject = Object.freeze({
@@ -90,6 +97,34 @@ const PUBLIC_TERMINAL: MentionedObject = Object.freeze({
 const PUBLIC_FLOOR: MentionedObject = Object.freeze({
   label: GYM_PUBLIC_OBJECT,
   detail: 'A public floor. Records stay in Health.',
+  sample: false,
+});
+
+export const SAMPLE_ARCADE_SIGN: MentionedObject = Object.freeze({
+  label: 'Sample arcade sign',
+  detail: 'Labeled sample. Not a review or a concept note.',
+  sample: true,
+});
+
+export const MUSIC_BAR_OBJECT = 'Music bar';
+
+const PUBLIC_MUSIC: MentionedObject = Object.freeze({
+  label: MUSIC_BAR_OBJECT,
+  detail: 'A public room. Albums and games stay in Media.',
+  sample: false,
+});
+
+export const SAMPLE_RULES_CARD: MentionedObject = Object.freeze({
+  label: 'Sample rules card',
+  detail: 'Labeled sample. Not a review or a concept note.',
+  sample: true,
+});
+
+export const RULES_BOARD_OBJECT = 'Rules board';
+
+const PUBLIC_RULES: MentionedObject = Object.freeze({
+  label: RULES_BOARD_OBJECT,
+  detail: 'A public board. Reviews and concept notes are not copied here.',
   sample: false,
 });
 
@@ -227,6 +262,72 @@ const SCENES: readonly ResidentScene[] = [
     choice('return', 'The floor can stay a place to return to.', 'A place to return to.'),
     choice('wait', 'The floor can wait.', 'The floor can wait.'),
   ]),
+  scene('wren', 'welcome', [
+    'Wren keeps the music room and the arcade. The bar, the sign, and the play floor stay here when you are away.',
+    'This first meeting is not a review of what you heard or played.',
+  ], [
+    choice('bar', 'Start in the music room.', 'The music room, then.'),
+    choice('floor', 'Start on the play floor.', 'The play floor, then.'),
+  ]),
+  scene('wren', 'how-it-works', [
+    'Saved music stays in Media. A game stays with its play. This talk does not keep a second copy.',
+    'A labeled sample can stand in. It does not become a review or a concept note.',
+  ], [
+    choice('room', 'Explain the public room.', 'The room points at Media. It does not copy a note into this talk.'),
+    choice('sample', 'Leave the sample by the sign.', 'The sample stays labeled. It is not a score.'),
+  ]),
+  scene('wren', 'preference', [
+    'Wren asks what you like to linger with. The answer is a taste, not a grade of music or of play.',
+  ], [
+    choice('music', 'A quiet piece of music.', 'Quiet music.'),
+    choice('play', 'A short game on the floor.', 'A short game.'),
+  ]),
+  scene('wren', 'activity', [
+    'You can notice the sample sign, or leave the floor. Noticing does not save a score or copy a review.',
+  ], [
+    choice('sign', 'Look at the sample sign.', 'Sample arcade sign. Labeled sample. Not a review.'),
+    choice('leave', 'Leave the floor alone.', 'The floor stays as it is.'),
+  ]),
+  scene('wren', 'reflection', [
+    'Wren looks at the music room and the play floor, not at a private review.',
+    'A chapter can end without a score.',
+  ], [
+    choice('music', 'The room is for hearing a piece again.', 'Hearing a piece again.'),
+    choice('play', 'The floor is for playing again.', 'Playing again.'),
+  ]),
+  scene('sol', 'welcome', [
+    'Sol keeps the Hall and the study. The rules and the desk stay here when you are away.',
+    'This first meeting does not open a review or a concept note.',
+  ], [
+    choice('rules', 'Start with the rules.', 'The rules, then.'),
+    choice('study', 'Start with the study desk.', 'The desk, then.'),
+  ]),
+  scene('sol', 'how-it-works', [
+    'The Hall shows public rules. Learning stays with you. This talk does not copy a note from the study.',
+    'When a note is closed, the card on the desk is a labeled sample.',
+  ], [
+    choice('rules', 'Explain the public rules.', 'The rules are public. A review is not in this talk.'),
+    choice('sample', 'Use the labeled sample.', 'The sample is labeled. It is not a concept note.'),
+  ]),
+  scene('sol', 'preference', [
+    'Sol asks how you like to learn the rules of a place. The answer is a taste, not a grade.',
+  ], [
+    choice('rules', 'Read the rules in the open.', 'Rules in the open.'),
+    choice('study', 'Sit with one idea.', 'One idea, unnamed.'),
+  ]),
+  scene('sol', 'activity', [
+    'You can notice the rules, or leave them. Noticing does not copy a review or a concept note.',
+  ], [
+    choice('rules', 'Notice the public rules.', 'The public rules only.'),
+    choice('leave', 'Leave the notes alone.', 'No note from this talk.'),
+  ]),
+  scene('sol', 'reflection', [
+    'Sol looks at the Hall, not at a private review or a concept note.',
+    'A chapter can end without a score.',
+  ], [
+    choice('rules', 'The Hall is for reading a rule again.', 'Reading a rule again.'),
+    choice('learn', 'The study can wait.', 'The study can wait.'),
+  ]),
 ];
 
 const BY_KEY = new Map(SCENES.map(item => [key(item.residentId, item.conversationId), item]));
@@ -244,6 +345,12 @@ export function dialogueRankEffect(completed: boolean, conversationId: string, s
   if (completed) return 'Rank stays. No Stamps.';
   if (conversationId === 'welcome' && stamps === 2) return 'Rank rises by 1. 2 Stamps, once.';
   return 'Rank rises by 1. No Stamps.';
+}
+
+/** Before a chapter reflection, the talk does not mark it done. Afterward, a visit does not record it again. */
+export function chapterVisit(completed: boolean): string {
+  if (completed) return 'Already visited. This talk is not recorded again.';
+  return 'Not visited yet. This talk does not mark a chapter done.';
 }
 
 /**
@@ -279,6 +386,18 @@ export function junMention(input: JunMentionInput): MentionedObject {
   return PUBLIC_FLOOR;
 }
 
+/** A locked room, or any review or concept note, stays the labeled arcade sign. */
+export function wrenMention(input: CultureMentionInput): MentionedObject {
+  if (input.locked || cultureSecrets(input)) return SAMPLE_ARCADE_SIGN;
+  return PUBLIC_MUSIC;
+}
+
+/** A locked Hall, or any review or concept note, stays the labeled rules card. */
+export function solMention(input: CultureMentionInput): MentionedObject {
+  if (input.locked || cultureSecrets(input)) return SAMPLE_RULES_CARD;
+  return PUBLIC_RULES;
+}
+
 export function authoredLines(scene: ResidentScene, mention: MentionedObject | null): readonly string[] {
   return [
     ...scene.paragraphs,
@@ -302,4 +421,8 @@ function choice(id: string, label: string, reply: string): SceneChoice {
 
 function key(residentId: string, conversationId: string): string {
   return `${residentId}:${conversationId}`;
+}
+
+function cultureSecrets(input: CultureMentionInput): boolean {
+  return [input.review, input.conceptNote].some(secret => typeof secret === 'string' && secret.trim() !== '');
 }

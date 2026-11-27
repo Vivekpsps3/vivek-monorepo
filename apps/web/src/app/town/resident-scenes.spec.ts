@@ -1,8 +1,12 @@
 import { DEK_STORE, VAULT_PRESENCE } from '../../../../finance/frontend/src/public-api';
 import {
   GYM_PUBLIC_OBJECT,
+  MUSIC_BAR_OBJECT,
+  RULES_BOARD_OBJECT,
+  SAMPLE_ARCADE_SIGN,
   SAMPLE_CIVIC_LEDGER,
   SAMPLE_DEPARTURE_BOARD,
+  SAMPLE_RULES_CARD,
   SAMPLE_TRAINING_CARD,
   TERMINAL_PUBLIC_OBJECT,
   TREASURY_PUBLIC_OBJECT,
@@ -10,10 +14,13 @@ import {
   authoredLines,
   dialogueRankEffect,
   dialogueVaultOpen,
+  chapterVisit,
   imaniMention,
   junMention,
   residentScenes,
   sceneFor,
+  solMention,
+  wrenMention,
 } from './resident-scenes';
 
 const SECRETS = ['Northwind Checking', 'Spent 4321 on synthetic rent', 'Private goal harbor cottage'] as const;
@@ -40,8 +47,8 @@ describe('Mara and Ada scenes', () => {
         }
       }
     }
-    expect(sceneFor('wren', 'activity')).toBeNull();
-    expect(sceneFor('sol', 'reflection')).toBeNull();
+    expect(sceneFor('wren', 'activity')?.residentId).toBe('wren');
+    expect(sceneFor('sol', 'reflection')?.residentId).toBe('sol');
   });
 
   it('gives both replies the same rank effect', () => {
@@ -113,8 +120,8 @@ const OUTCOME = /you (took|went|traveled|flew)|marked taken|trip taken|workout l
 describe('Imani and Jun scenes', () => {
   const ids = ['welcome', 'how-it-works', 'preference', 'activity', 'reflection'];
 
-  it('authors ten conversations and does not author Wren or Sol', () => {
-    expect(residentScenes().length).toBe(20);
+  it('authors ten conversations for Imani and Jun', () => {
+    expect(residentScenes().length).toBe(30);
     for (const residentId of ['imani', 'jun']) {
       for (const conversationId of ids) {
         const scene = sceneFor(residentId, conversationId);
@@ -133,8 +140,6 @@ describe('Imani and Jun scenes', () => {
       const activity = sceneFor(residentId, 'activity');
       expect(activity?.choices.map(choice => choice.id)).toContain('leave');
     }
-    expect(sceneFor('wren', 'welcome')).toBeNull();
-    expect(sceneFor('sol', 'activity')).toBeNull();
   });
 
   it('keeps an empty or named trip on the sample board', () => {
@@ -177,5 +182,74 @@ describe('Imani and Jun scenes', () => {
       detail: 'A public floor. Records stay in Health.',
       sample: false,
     });
+  });
+});
+
+const REVIEW_NOTE = 'Harbor week note stays shut';
+const CONCEPT_NOTE = 'Concept note tide tables';
+const CULTURE_IDS = ['welcome', 'how-it-works', 'preference', 'activity', 'reflection'] as const;
+
+describe('Wren and Sol scenes', () => {
+  afterEach(() => {
+    localStorage.removeItem(VAULT_PRESENCE);
+    localStorage.removeItem(DEK_STORE);
+  });
+
+  it('authors ten conversations tied to music, play, learning, and rules', () => {
+    expect(residentScenes().filter(scene => scene.residentId === 'wren' || scene.residentId === 'sol').length).toBe(10);
+    const themes = residentScenes()
+      .filter(scene => scene.residentId === 'wren' || scene.residentId === 'sol')
+      .flatMap(scene => authoredLines(scene, null))
+      .join('\n');
+    expect(themes).toContain('music');
+    expect(themes).toContain('play');
+    expect(themes).toContain('learn');
+    expect(themes).toContain('rules');
+    for (const residentId of ['wren', 'sol'] as const) {
+      for (const conversationId of CULTURE_IDS) {
+        const scene = sceneFor(residentId, conversationId);
+        expect(scene?.choices.length).toBe(2);
+        expect(scene?.choices[0].reply).not.toBe(scene?.choices[1].reply);
+        const effect = dialogueRankEffect(false, conversationId, conversationId === 'welcome' ? 2 : 0);
+        expect(effect).toBe(conversationId === 'welcome' ? 'Rank rises by 1. 2 Stamps, once.' : 'Rank rises by 1. No Stamps.');
+        expect(dialogueRankEffect(true, conversationId, 2)).toBe('Rank stays. No Stamps.');
+        expect(dialogueRankEffect(false, conversationId, conversationId === 'welcome' ? 2 : 0)).toBe(effect);
+        for (const line of authoredLines(scene!, null)) {
+          expect(line).not.toMatch(PRAISE);
+          expect(line).not.toContain(REVIEW_NOTE);
+          expect(line).not.toContain(CONCEPT_NOTE);
+        }
+      }
+      expect(sceneFor(residentId, 'activity')?.choices.map(choice => choice.id)).toContain('leave');
+    }
+    expect(chapterVisit(false)).toBe('Not visited yet. This talk does not mark a chapter done.');
+    expect(chapterVisit(true)).toBe('Already visited. This talk is not recorded again.');
+    expect(chapterVisit(true)).toBe(chapterVisit(true));
+  });
+
+  it('keeps a review or a concept note off the arcade sign and the rules card', () => {
+    const named = { locked: false, review: REVIEW_NOTE, conceptNote: CONCEPT_NOTE };
+    expect(wrenMention(named)).toEqual(SAMPLE_ARCADE_SIGN);
+    expect(solMention(named)).toEqual(SAMPLE_RULES_CARD);
+    const wrenLines = authoredLines(sceneFor('wren', 'activity')!, wrenMention(named)).join('\n');
+    const solLines = authoredLines(sceneFor('sol', 'reflection')!, solMention({ locked: true, review: REVIEW_NOTE, conceptNote: null })).join('\n');
+    expect(wrenLines).not.toContain(REVIEW_NOTE);
+    expect(wrenLines).not.toContain(CONCEPT_NOTE);
+    expect(solLines).not.toContain(REVIEW_NOTE);
+    expect(solLines).not.toContain(CONCEPT_NOTE);
+    expect(wrenLines).toContain('Labeled sample. Not a review or a concept note.');
+    expect(wrenMention({ locked: true, review: null, conceptNote: null })).toEqual(SAMPLE_ARCADE_SIGN);
+    expect(solMention({ locked: false, review: '   ', conceptNote: '  ' })).toEqual({
+      label: RULES_BOARD_OBJECT,
+      detail: 'A public board. Reviews and concept notes are not copied here.',
+      sample: false,
+    });
+    const open = authoredLines(sceneFor('wren', 'how-it-works')!, wrenMention({
+      locked: false, review: null, conceptNote: null,
+    })).join('\n');
+    expect(open).toContain(MUSIC_BAR_OBJECT);
+    expect(open).toContain('A public room. Albums and games stay in Media.');
+    expect(open).not.toContain(REVIEW_NOTE);
+    expect(open).not.toContain(CONCEPT_NOTE);
   });
 });
