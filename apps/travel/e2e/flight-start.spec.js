@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../../../tests/e2e/fixtures';
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
+import { chooseTripStart } from './dates.mjs';
 
 const morning = {
   ident: 'UAL837',
@@ -37,6 +38,7 @@ function savedWrites(page) {
 }
 
 async function enterFlight(page, ident = 'UA 837', date = '2026-11-02') {
+  await chooseTripStart(page, 'flight');
   await page.getByLabel('Flight number').fill(ident);
   await page.getByLabel('Flight date').fill(date);
   const card = page.locator('.flight-preview');
@@ -60,8 +62,8 @@ test('a flight and date proposes the route and saves only after review', async (
   await expect(card).toContainText('Scheduled arrival: 2026-11-04 07:30 Asia/Tokyo');
   await expect(card).toContainText('Published timetable, not live status.');
   await expect(card).toContainText('Proposed. Not saved yet.');
-  await expect(page.getByLabel('Departure date')).toHaveValue('');
-  await expect(page.getByLabel('Return date')).toHaveValue('');
+  await expect(page.locator('input[name="start"]')).toHaveCount(0);
+  await expect(page.locator('input[name="end"]')).toHaveCount(0);
   expect(writes).toEqual([]);
 
   await page.getByRole('button', { name: 'Plan as a new trip', exact: true }).click();
@@ -140,6 +142,7 @@ test('ambiguous flights stay proposed until a choice, then the chosen route is t
   }));
   const writes = savedWrites(page);
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'flight');
   await page.getByLabel('Flight number').fill('UA 837');
   await page.getByLabel('Flight date').fill('2026-11-02');
   await expect(page.getByRole('status').filter({ hasText: 'Choose the matching flight.' })).toBeVisible();
@@ -214,11 +217,16 @@ test('a failed draft save keeps the reviewed flight and a retry stores it once',
   await page.getByRole('button', { name: 'Plan as a new trip', exact: true }).click();
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(page.locator('main .local-error')).toContainText('Travel is temporarily unavailable.');
-  await expect(page.getByLabel('Flight number')).toHaveValue('UA 837');
-  await expect(page.getByLabel('Flight date')).toHaveValue('2026-11-02');
   await expect(page.getByLabel('Departure date')).toHaveValue('2026-11-02');
   await expect(page.getByLabel('Return date')).toHaveValue('');
   await expect(page.getByText('flight · SFO → NRT')).toBeVisible();
+  await expect(page.locator('input[name="flightIdent"]')).toHaveCount(0);
+  await chooseTripStart(page, 'flight');
+  await expect(page.getByLabel('Flight number')).toHaveValue('UA 837');
+  await expect(page.getByLabel('Flight date')).toHaveValue('2026-11-02');
+  await expect(page.locator('.flight-preview')).toContainText('SFO → NRT');
+  await expect(page.locator('input[name="start"]')).toHaveCount(0);
+  await chooseTripStart(page, 'manual');
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(page.getByText('The return date is still unknown, and this draft has no PTO charge.')).toBeVisible();
   const drafts = await (await request.get('/travel/api/trip-drafts')).json();
@@ -248,6 +256,7 @@ test('a late lookup does not replace the flight on screen', async ({ page }) => 
     await route.fulfill({ json: { flights: [{ ...evening, ident_iata: 'UA838' }] } });
   });
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'flight');
   await page.getByLabel('Flight number').fill('UA 837');
   await page.getByLabel('Flight date').fill('2026-11-02');
   await started;
@@ -272,6 +281,7 @@ test('opening FlightAware settings drops a held lookup and keeps the typed fligh
   });
   try {
     await page.goto('/travel/trips/new');
+    await chooseTripStart(page, 'flight');
     await page.getByLabel('Flight number').fill('UA 837');
     await page.getByLabel('Flight date').fill('2026-11-02');
     await started;
@@ -340,8 +350,8 @@ for (const view of settingsViews) {
       await expect(page.getByLabel('Flight date')).toHaveValue('2026-11-02');
       await expect(card).toContainText('SFO → NRT');
       await expect(card).toContainText('2026-11-02 10:00 America/Los_Angeles');
-      await expect(page.getByLabel('Departure date')).toHaveValue('');
-      await expect(page.getByLabel('Return date')).toHaveValue('');
+      await expect(page.locator('input[name="start"]')).toHaveCount(0);
+      await expect(page.locator('input[name="end"]')).toHaveCount(0);
       const drafts = await (await request.get('/travel/api/trip-drafts')).json();
       expect(drafts.drafts).toEqual([]);
       const home = await (await request.get('/travel/api/home')).json();

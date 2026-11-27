@@ -57,6 +57,13 @@ export function tripHeader(page, title) {
   });
 }
 
+/** Open one Plan a trip form. The other two stay out of the document. */
+export async function chooseTripStart(page, mode) {
+  const label = mode === 'flight' ? 'Flight/date' : mode === 'calendar' ? 'Calendar booking' : 'Manual';
+  const choice = page.getByRole('radio', { name: label, exact: true });
+  if ((await choice.getAttribute('aria-checked')) !== 'true') await choice.click();
+}
+
 /** Fixed-date fixtures can move into the collapsed past-trip list over time. */
 export async function openTripFromList(page, title) {
   const heading = page.getByRole('heading', { name: title, exact: true, includeHidden: true });

@@ -1,11 +1,11 @@
 import {expect,test} from '../../../tests/e2e/fixtures';
 import AxeBuilder from '@axe-core/playwright';
-import {expectSectionHeading,openTripAdd,openTripFromList,ptoOption} from './dates.mjs';
+import {chooseTripStart,expectSectionHeading,openTripAdd,openTripFromList,ptoOption} from './dates.mjs';
 
 test.beforeEach(async({request})=>{expect((await request.post('/e2e/reset')).ok()).toBeTruthy();});
 
 test('split trip saves two named destinations, one title, and per-date PTO',async({page,request})=>{
- await page.setViewportSize({width:390,height:844});await page.goto('/travel/trips/new');
+ await page.setViewportSize({width:390,height:844});await page.goto('/travel/trips/new');await chooseTripStart(page,'manual');
  await page.getByLabel('Departure date').fill('2026-10-24');await page.getByLabel('Return date').fill('2026-10-30');
  await page.getByLabel('Destination city',{exact:false}).fill('Kyoto');
  await page.getByText('Add destination',{exact:true}).first().click();await page.getByLabel('Change city on date').fill('2026-10-27');
@@ -22,7 +22,7 @@ test('split trip saves two named destinations, one title, and per-date PTO',asyn
 });
 
 test('failed trip save retains cities and renamed title; retry saves',async({page})=>{
- await page.goto('/travel/trips/new');await page.getByLabel('Departure date').fill('2026-11-06');await page.getByLabel('Return date').fill('2026-11-09');await page.getByLabel('Destination city').fill('Lisbon');
+ await page.goto('/travel/trips/new');await chooseTripStart(page,'manual');await page.getByLabel('Departure date').fill('2026-11-06');await page.getByLabel('Return date').fill('2026-11-09');await page.getByLabel('Destination city').fill('Lisbon');
  await page.getByText('Rename trip',{exact:true}).click();await page.getByLabel('Trip name').fill('A long weekend');
  let fail=true;await page.route('**/travel/api/trips',route=>{if(fail){fail=false;return route.fulfill({status:502,json:{message:'Synthetic save outage',code:'unavailable'}});}return route.continue();});
  await page.getByRole('button',{name:'Save trip',exact:true}).click();await expect(page.locator('main [role=alert]')).toContainText('Synthetic save outage');

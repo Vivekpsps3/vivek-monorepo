@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { expectSectionHeading, openTripAdd, ptoOption } from './dates.mjs';
+import { chooseTripStart, expectSectionHeading, openTripAdd, ptoOption } from './dates.mjs';
 
 async function trip(request, extra = {}) {
   const response = await request.post('/travel/api/trips', { data: {
@@ -69,6 +69,7 @@ test('retrying parking preserves the Booked value that was chosen', async ({ pag
 
 test('native date controls support keyboard entry and preserve range through resize', async ({ page }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   const departure = page.getByLabel('Departure date');
   const returning = page.getByLabel('Return date');
   await departure.fill('2026-11-10');
@@ -154,6 +155,7 @@ test('delete cancellation preserves a trip, a failed delete stays in the dialog,
 
 test('successful trip retry clears its error and never creates a second trip', async ({ page, request }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-11-01');
   await page.getByLabel('Return date').fill('2026-11-02');
   await page.getByLabel('Destination city').fill('Kyoto');
@@ -171,6 +173,7 @@ test('successful trip retry clears its error and never creates a second trip', a
 
 test('an unnamed retained city blocks saving through resize and does not lose a renamed title', async ({ page }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-11-01');
   await page.getByLabel('Return date').fill('2026-11-03');
   await page.getByLabel('Destination city').fill('Kyoto');
@@ -190,6 +193,7 @@ test('an unnamed retained city blocks saving through resize and does not lose a 
 
 test('keyboard destination changes and shortened dates require deliberate handling', async ({ page }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-11-01');
   await page.getByLabel('Return date').fill('2026-11-05');
   await page.getByLabel('Destination city').fill('Kyoto');

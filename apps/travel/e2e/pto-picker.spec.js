@@ -1,6 +1,6 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
-import { formatDay, ptoOption } from './dates.mjs';
+import { chooseTripStart, formatDay, ptoOption } from './dates.mjs';
 
 const START = '2026-12-14';
 const MIDDLE = '2026-12-15';
@@ -34,6 +34,7 @@ async function chooseSame(page) {
 
 test('PICK1 a new trip chooses Full, Half, and None and sends that allocation', async ({ page }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill(START);
   await page.getByLabel('Return date').fill(END);
   await page.getByLabel('Destination city').fill('Lisbon');

@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { ptoOption, tripHeader } from './dates.mjs';
+import { chooseTripStart, ptoOption, tripHeader } from './dates.mjs';
 
 test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
@@ -7,6 +7,7 @@ test.beforeEach(async ({ request }) => {
 
 test('a Saturday to Sunday trip saves with weekends left off PTO', async ({ page }) => {
   await page.goto('/travel/trips/new');
+  await chooseTripStart(page, 'manual');
   await page.getByLabel('Departure date').fill('2026-11-07');
   await page.getByLabel('Return date').fill('2026-11-08');
   await page.getByLabel('Destination city').fill('Honolulu');

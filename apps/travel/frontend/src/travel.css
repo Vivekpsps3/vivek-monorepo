@@ -149,6 +149,19 @@
 .travel-page .travel-form label {
   margin-bottom: 1rem;
 }
+.travel-page .trip-start {
+  margin: 0 0 1rem;
+}
+.travel-page .trip-start .ui-segmented {
+  width: 100%;
+}
+.travel-page .trip-start .ui-segmented__option {
+  flex: 1 1 auto;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.2;
+  padding-block: 0.4rem;
+}
 .travel-page travel-flight-start,
 .travel-page travel-calendar-import {
   display: block;
