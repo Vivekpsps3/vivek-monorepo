@@ -227,14 +227,11 @@ const LIBRARY = "/media/library";
     @if (loading()) {
       <p role="status">Loading your library…</p>
     }
-    @if (collection === "music") {
-      <media-music-stage />
-    }
     @if (collection === "game") {
       <media-arcade-tables />
     }
     @if (data(); as library) {
-      <p class="muted">
+      <p class="muted library-count">
         @if (kind === "artist") {
           {{ library.total }} {{ library.total === 1 ? "artist" : "artists" }}
         } @else {
@@ -431,6 +428,9 @@ const LIBRARY = "/media/library";
           Next items
         </ui-button>
       </nav>
+    }
+    @if (collection === "music") {
+      <media-music-stage />
     }
   </main>`,
 })

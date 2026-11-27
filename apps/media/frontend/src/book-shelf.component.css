@@ -5,29 +5,40 @@
 
 .book-hall {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-2);
   min-width: 0;
 }
 
-.reading-lobby,
+.book-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .book-stacks,
 .reading-desk-room,
 .completion-keepsakes {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
   margin: 0;
   color: var(--text);
 }
 
-.reading-lobby,
 .book-stacks,
 .completion-keepsakes {
-  padding: var(--space-3);
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-block-end: 12px solid var(--wood);
   border-radius: var(--radius-lg) var(--radius-lg) 0.2rem 0.2rem;
   background: color-mix(in srgb, var(--brass) 8%, var(--surface-2));
+}
+
+.book-stacks ui-empty-state {
+  --space-8: 0px;
+  --space-4: var(--space-2);
 }
 
 .reading-desk-room {
@@ -38,9 +49,6 @@
   background: var(--card-bg);
 }
 
-.reading-lobby h2,
-.reading-lobby h3,
-.reading-lobby p,
 .book-stacks > h2,
 .reading-desk-room h2,
 .reading-desk-room p,
@@ -50,33 +58,11 @@
   overflow-wrap: anywhere;
 }
 
-.hall-boundary {
-  padding: var(--space-3);
-  border-inline-start: 4px solid var(--wood);
-  background: var(--card-bg);
-}
-
-.hall-objects {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.hall-object {
-  display: grid;
-  align-content: start;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--card-bg);
-}
-
 .book-signs {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  row-gap: var(--space-1);
+  column-gap: var(--space-2);
   margin: 0;
 }
 
@@ -108,7 +94,6 @@
 .book-signs a:focus-visible,
 .book-entry-link:focus-visible,
 .book-keepsake a:focus-visible,
-.reading-lobby h2:focus-visible,
 .book-stacks > h2:focus-visible,
 .reading-desk-room h2:focus-visible,
 .completion-keepsakes h2:focus-visible {
@@ -133,10 +118,10 @@
 
 .book-stack {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
   margin: 0;
-  padding: var(--space-3);
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-block-end: 8px solid var(--wood);
   border-radius: var(--radius-lg);
@@ -182,11 +167,41 @@
 .book-volume {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
-  padding: var(--space-3);
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--card-bg);
+}
+
+.book-lead {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+.book-hall[data-face="text"] .book-lead {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.book-lead .book-title,
+.book-lead ui-button {
+  grid-column: 2;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.book-hall[data-face="text"] .book-lead .book-title,
+.book-hall[data-face="text"] .book-lead ui-button {
+  grid-column: 1;
+}
+
+.book-lead ui-button {
+  justify-self: start;
 }
 
 .book-hall[data-face="text"] .book-volume {
@@ -197,12 +212,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  grid-row: 1 / span 2;
   box-sizing: border-box;
-  width: 6.5rem;
+  width: 4.5rem;
+  height: 6rem;
   max-width: 100%;
-  min-height: 7.5rem;
-  padding: var(--space-2);
+  min-height: 0;
+  padding: var(--space-1);
+  overflow: hidden;
+  position: relative;
   border: 1px solid var(--border);
   border-inline-start: 8px solid var(--brass);
   border-radius: 2px 8px 8px 2px;
@@ -212,12 +231,16 @@
 }
 
 .book-cover img {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: 4.5rem;
+  height: 100%;
   object-fit: cover;
 }
 
 .spine-title {
+  position: relative;
+  z-index: 1;
   font-size: var(--text-sm);
   font-weight: 700;
   line-height: 1.25;
@@ -341,9 +364,7 @@
 }
 
 @media (max-width: 700px) {
-  .book-volume,
-  .book-desk-progress,
-  .hall-objects {
+  .book-desk-progress {
     grid-template-columns: 1fr;
   }
 }

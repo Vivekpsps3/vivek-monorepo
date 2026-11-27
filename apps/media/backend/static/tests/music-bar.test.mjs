@@ -14,10 +14,12 @@ test("an external music link is http or https and is not a credential or script"
   assert.equal(externalMusicUrl("https://example.com/" + "a".repeat(2000)), null);
 });
 
-test("music summaries name the wall, racks, songbook, and separate stage entries", () => {
+test("music summaries name the saved grouping and leave the stage boundary to the bar", () => {
   assert.match(collectionSummary("artist"), /^Music\. Artists you have saved/);
-  assert.match(collectionSummary("artist"), /artist wall/);
-  assert.match(collectionSummary("artist"), /Harbor Rhythm/);
-  assert.match(collectionSummary("album"), /Album racks/);
-  assert.match(collectionSummary("track"), /songbook/);
+  assert.match(collectionSummary("artist"), /does not follow the artist/);
+  assert.doesNotMatch(collectionSummary("artist"), /Harbor Rhythm|does not play/);
+  assert.match(collectionSummary("album"), /rating stays on the album/);
+  assert.doesNotMatch(collectionSummary("album"), /does not play/);
+  assert.match(collectionSummary("track"), /^Music\. Saved songs/);
+  assert.doesNotMatch(collectionSummary("track"), /does not play/);
 });

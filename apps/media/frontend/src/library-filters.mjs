@@ -59,17 +59,17 @@ export function collectionKey(kind) {
 export function collectionSummary(kind) {
   switch (kind) {
     case "movie":
-      return "Movies. Films you want to watch, are watching, or have watched. A date is shown only when you recorded one. The Theater lobby, poster corridor, auditorium, and ticket desk open those saved films and do not play them.";
+      return "Movies. Films you want to watch, are watching, or have watched. A date is shown only when you recorded one. This theater does not play them.";
     case "tv":
-      return "Series. Shows and the episodes you are watching. Caught up and ended stay different facts. The episode lounge continues the next aired episode and does not play the series.";
+      return "Series. Shows and the episodes you are watching. Caught up and ended stay different facts. This lounge does not play them.";
     case "book":
-      return "Books. Current, read, and to-read shelves, as covers and spines or as a text list. Shelf signs choose a shelf. A spine shows the title and opens the book. The reading desk saves the same progress and note. A page or percent appears only when you record one. Undoing a completion retracts the derived keepsake and keeps the book and note.";
+      return "Books. Current, read, and to-read shelves. A page or percent appears only when you record one. This hall does not open the book text.";
     case "artist":
-      return "Music. Artists you have saved, with their albums and then their songs. Saving music does not follow the artist. The artist wall, album racks, and songbook use that grouping. Harbor Rhythm stays separate from a music link, and this bar does not play audio.";
+      return "Music. Artists you have saved, with their albums and then their songs. Saving music does not follow the artist.";
     case "album":
-      return "Music. Saved albums, without marking the artist followed. Album racks open those records, and a rating stays on the album.";
+      return "Music. Saved albums, without marking the artist followed. A rating stays on the album.";
     case "track":
-      return "Music. Saved songs, without saving the rest of an album. The songbook lists them and does not play them.";
+      return "Music. Saved songs, without saving the rest of an album.";
     case "game":
       return "Games. This cabinet is your Media library, not a Town minigame. Playing in Town does not add a box here. A box shows the state you saved, and hours or a percent only when you recorded them. Memory Shelves and Harbor Rhythm are play tables and do not add a box.";
     default:

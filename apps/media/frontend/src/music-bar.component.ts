@@ -87,13 +87,11 @@ export class MusicLinkDraft {
   styleUrl: "./music-bar.component.css",
   template: `<div class="music-stage" role="region" aria-labelledby="song-stage-heading">
     <h2 id="song-stage-heading">Song stage</h2>
-    <p class="music-boundary">
-      This bar lists saved music. It does not play it.
-    </p>
+    <p class="music-boundary">This bar does not play audio.</p>
     <div class="stage-objects">
       <div class="stage-object" data-stage="rhythm">
         <h3>Harbor Rhythm</h3>
-        <p>The original rhythm game. It is not a music link and it does not play saved songs.</p>
+        <p>The original rhythm game. It is not a saved song.</p>
         <ui-button
           variant="secondary"
           [ariaExpanded]="rhythmOpen"
@@ -104,16 +102,14 @@ export class MusicLinkDraft {
         @if (rhythmOpen) {
           <div id="harbor-rhythm" class="rhythm-panel">
             <h4 id="harbor-rhythm-heading" tabindex="-1">Harbor Rhythm</h4>
-            <p>
-              This entry stays here. It does not open the music link and it does not play audio.
-            </p>
+            <p>This entry stays here. It does not open the music link.</p>
             <ui-button variant="ghost" (click)="closeRhythm()">Close Harbor Rhythm</ui-button>
           </div>
         }
       </div>
       <form class="stage-object" data-stage="external" (ngSubmit)="openExternal()">
         <h3>External music</h3>
-        <p>Open a link you choose. This bar does not play that audio.</p>
+        <p>Open a link you choose.</p>
         <ui-field label="Music link" [error]="linkError">
           <input
             uiFieldControl
@@ -334,7 +330,7 @@ export class MusicStageComponent {
     } @else {
       <div class="songbook" role="region" aria-labelledby="songbook-heading">
         <h2 id="songbook-heading" tabindex="-1">Songbook</h2>
-        <p class="music-note">These are saved songs. This bar does not play them.</p>
+        <p class="music-note">These are saved songs.</p>
         @if (items().length) {
           <div class="media-grid" [attr.aria-busy]="refreshing()">
             @for (item of items(); track item.id) {

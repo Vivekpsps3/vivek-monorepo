@@ -14,7 +14,6 @@
   min-width: 0;
 }
 
-.lounge-lobby,
 .next-board,
 .seating-diagram {
   display: grid;
@@ -24,7 +23,6 @@
   color: var(--text);
 }
 
-.lounge-lobby,
 .next-board {
   padding: var(--space-3);
   border: 1px solid var(--border);
@@ -50,28 +48,12 @@
   overflow-wrap: anywhere;
 }
 
-.lounge-boundary {
-  padding: var(--space-3);
-  border-inline-start: 4px solid var(--wood);
-  background: var(--card-bg);
-}
-
-.lounge-objects {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.lounge-object {
-  display: grid;
-  align-content: start;
+.lounge-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--card-bg);
-  box-shadow: 4px 4px 0 color-mix(in srgb, var(--wood) 35%, transparent);
 }
 
 .lounge-calendar,
@@ -121,7 +103,6 @@
 }
 
 .board-actions media-next-episode,
-.lounge-object ui-button,
 .seating-diagram ui-button {
   display: flex;
 }
@@ -187,10 +168,4 @@
 .episode-lounge h2:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-}
-
-@media (max-width: 799px) {
-  .lounge-objects {
-    grid-template-columns: 1fr;
-  }
 }

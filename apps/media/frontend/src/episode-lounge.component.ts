@@ -42,33 +42,6 @@ interface OpenSeries {
   imports: [RouterLink, UiButtonComponent, UiEmptyStateComponent, NextEpisodeButtonComponent],
   styleUrl: "./episode-lounge.component.css",
   template: `<div class="episode-lounge">
-    <section class="lounge-lobby" aria-labelledby="episode-lounge-heading">
-      <h2 id="episode-lounge-heading">Episode lounge</h2>
-      <p class="lounge-boundary">This lounge lists your saved series. It does not play them.</p>
-      <div class="lounge-objects">
-        <div class="lounge-object">
-          <h3>Next-episode board</h3>
-          <p>The next aired episode uses the same watch and Undo as Now.</p>
-          <ui-button variant="secondary" (clicked)="focusRegion('next-episode-board-heading')"
-            >Go to next-episode board</ui-button
-          >
-        </div>
-        <div class="lounge-object">
-          <h3>Seating diagram</h3>
-          <p>Each seat is a saved episode. Future and unknown air dates stay unlabeled as ended.</p>
-          <ui-button variant="secondary" (clicked)="focusRegion('seating-diagram-heading')"
-            >Go to seating diagram</ui-button
-          >
-        </div>
-        <div class="lounge-object">
-          <h3>Release calendar</h3>
-          <p>Air dates stay on the saved calendar. A future date is not a completion.</p>
-          <a class="lounge-calendar" routerLink="/media/calendar">See where these dates sit</a>
-        </div>
-      </div>
-      <ui-button variant="ghost" href="/hub" label="Exit to Hub" />
-    </section>
-
     <section class="next-board" aria-labelledby="next-episode-board-heading">
       <h2 id="next-episode-board-heading" tabindex="-1">Next-episode board</h2>
       @if (items().length) {
@@ -137,7 +110,6 @@ interface OpenSeries {
           <p class="poster-fact">{{ shelf(item).fact }}</p>
           <p class="poster-lifecycle">{{ shelf(item).lifecycleLabel }}</p>
         }
-        <p class="lounge-boundary">This seating diagram does not play the series.</p>
         @if (!open.ready) {
           @if (open.error) {
             <p class="lounge-error" role="alert">{{ open.error }}</p>
@@ -180,6 +152,10 @@ interface OpenSeries {
         <p>Select a series to see its seats.</p>
       }
     </section>
+    <div class="lounge-footer">
+      <a class="lounge-calendar" routerLink="/media/calendar">See where these dates sit</a>
+      <ui-button variant="ghost" href="/hub" label="Exit to Hub" />
+    </div>
   </div>`,
 })
 export class EpisodeLoungeComponent {
@@ -274,10 +250,6 @@ export class EpisodeLoungeComponent {
 
   searchParams(): { kind: string } {
     return { kind: "tv" };
-  }
-
-  focusRegion(id: string): void {
-    this.host.nativeElement.querySelector<HTMLElement>(`#${id}`)?.focus({ preventScroll: false });
   }
 
   openFrom(item: MediaCard, event: Event): void {

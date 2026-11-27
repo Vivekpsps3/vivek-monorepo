@@ -44,6 +44,9 @@ async function openWall(page: Page) {
   await page.goto('/media/library?kind=artist&sort=title');
   await expect(page.getByRole('heading', { name: 'Artist wall', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Song stage', exact: true })).toBeVisible();
+  const wall = await page.getByRole('heading', { name: 'Artist wall', exact: true }).boundingBox();
+  const stage = await page.getByRole('heading', { name: 'Song stage', exact: true }).boundingBox();
+  expect(wall!.y).toBeLessThan(stage!.y);
 }
 
 function press(page: Page, pointer: 'touch' | 'keyboard', locator: ReturnType<Page['getByRole']>) {
@@ -93,7 +96,8 @@ for (const [width, height, theme, pointer] of [
     expect(Math.min((await external.boundingBox())!.height, (await external.boundingBox())!.width)).toBeGreaterThanOrEqual(44);
     await press(page, pointer, rhythm);
     await expect(page.locator('#harbor-rhythm-heading')).toBeFocused();
-    await expect(page.locator('#harbor-rhythm')).toContainText('does not play audio');
+    await expect(page.locator('.music-boundary')).toHaveText('This bar does not play audio.');
+    await expect(page.locator('#harbor-rhythm')).toContainText('does not open the music link');
     expect(await opened(page)).toEqual([]);
     await expect(page.locator('audio, video, iframe')).toHaveCount(0);
     const close = page.getByRole('button', { name: 'Close Harbor Rhythm', exact: true });

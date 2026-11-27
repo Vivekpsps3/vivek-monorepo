@@ -14,10 +14,10 @@
 .album-racks,
 .songbook {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
-  margin: 0 0 var(--space-4);
-  padding: var(--space-3);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-block-end: 12px solid var(--wood);
   border-radius: var(--radius-lg) var(--radius-lg) 0.2rem 0.2rem;
@@ -41,9 +41,15 @@
 
 .music-boundary,
 .music-note {
-  padding: var(--space-3);
+  padding: var(--space-2);
   border-inline-start: 4px solid var(--wood);
   background: var(--card-bg);
+}
+
+.artist-wall ui-empty-state,
+.album-racks ui-empty-state,
+.songbook ui-empty-state {
+  --space-8: var(--space-2);
 }
 
 .stage-objects {
@@ -92,7 +98,7 @@
 .artist-wall .media-grid,
 .album-racks .media-grid,
 .songbook .media-grid {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
   min-width: 0;
 }
 
@@ -100,20 +106,23 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  width: 100%;
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  width: 4.5rem;
+  height: 4.5rem;
   min-width: 44px;
-  min-height: 7.5rem;
-  aspect-ratio: 1;
+  min-height: 44px;
   margin: 0;
-  padding: var(--space-2);
+  padding: var(--space-1);
   border: 1px solid var(--border);
   border-block-end: 8px solid var(--wood);
-  border-radius: var(--radius-lg) var(--radius-lg) 0.2rem 0.2rem;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--chart-4) 18%, var(--card-bg));
   box-shadow: 4px 4px 0 color-mix(in srgb, var(--wood) 28%, transparent);
   color: var(--text);
   font: inherit;
   font-weight: 700;
+  font-size: var(--text-xs);
   line-height: 1.2;
   text-align: center;
   overflow: hidden;
@@ -130,8 +139,26 @@
 .record,
 .song-row {
   display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
   gap: var(--space-2);
+  align-items: center;
   min-width: 0;
+}
+
+.record,
+.song-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.artist-group > h2,
+.artist-group > p,
+.artist-group > ui-button {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.artist-group > .saved-children {
+  grid-column: 1 / -1;
 }
 
 .artist-group h2 {

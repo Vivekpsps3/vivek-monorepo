@@ -107,10 +107,10 @@ async function openCollection(page: Page, kind: 'movie' | 'tv') {
   await expect(page.locator('html')).toHaveAttribute('data-theme', /.+/);
   if (kind === 'movie') {
     await expect(page.locator('media-theater')).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Lobby' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Poster corridor' })).toBeVisible();
   } else {
     await expect(page.locator('media-episode-lounge')).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Episode lounge' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Next-episode board' })).toBeVisible();
   }
 }
 

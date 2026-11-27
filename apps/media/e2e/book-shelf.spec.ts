@@ -192,7 +192,7 @@ for (const [width, height, theme, pointer] of [
       await expect(glass.getByText('A synthetic margin about the glass house.', { exact: false })).toBeVisible();
       await expect(glass.locator('img')).toBeVisible();
       await expect(glass.locator('.spine-title')).toHaveText('Glass House');
-      await expect(page.getByRole('heading', { name: 'Reading hall', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Book spines', exact: true })).toBeVisible();
       await expect(page.getByRole('navigation', { name: 'Shelf signs' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Reading desk', exact: true })).toBeVisible();
 
