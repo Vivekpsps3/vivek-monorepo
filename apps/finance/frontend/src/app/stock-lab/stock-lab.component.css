@@ -10,6 +10,18 @@
   font-size: 0.875rem;
 }
 
+.stock-facts {
+  margin: var(--space-4) 0;
+}
+
+.stock-facts > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
 ui-card,
 ui-data-table {
   display: block;

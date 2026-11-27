@@ -43,6 +43,9 @@ export class PlanningQuickToolsComponent implements OnChanges, OnInit, OnDestroy
   @Input() annualCashflow = 0;
   @Input() spendingMode: 'recurring' | 'components' | 'manual' = 'recurring';
   @Input() spendingComponents: SpendingComponents = { fixed_annual: 0, variable_annual: 0, irregular_annual: 0 };
+  /** False when yearly spending was never recorded or entered. Zero is still a result. */
+  @Input() showRetirementResults = true;
+  @Input() retirementBasisNote = '';
 
   readonly projectedNote = PROJECTED_RESULT_NOTE;
   fire = { withdrawalRate: 0.04, extraAnnualExpenses: 0, includeRecurringExpenses: true };
