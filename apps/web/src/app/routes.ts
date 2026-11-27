@@ -26,6 +26,7 @@ export const routes: Routes = [
       { path: 'hall', title: 'Town · Hall', loadComponent: () => import('./town/hall-room.component').then(m => m.HallRoomComponent) },
       { path: 'quests', title: 'Town · Optional quests', loadComponent: () => import('./town/quests.component').then(m => m.QuestsComponent) },
       { path: 'residents', title: 'Town · Residents', loadComponent: () => import('./town/residents.component').then(m => m.ResidentsComponent) },
+      { path: 'discoveries', title: 'Town · Discoveries', loadComponent: () => import('./town/discoveries.component').then(m => m.DiscoveriesComponent) },
       { path: 'cosmetics', pathMatch: 'full', redirectTo: ({ queryParams }) => {
         const item = queryParams?.['item'];
         if (typeof item !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(item)) return '/town/home/living';

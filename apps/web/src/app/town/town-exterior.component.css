@@ -194,6 +194,16 @@ button.action { cursor: pointer; }
   --night-lawn: #586f6c;
 }
 .stage { position: absolute; inset: 0; transform-origin: 0 0; }
+.discovery { position: absolute; z-index: 6; }
+.discovery .spot {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent, var(--text));
+  box-shadow: inset 0 0 0 2px var(--text);
+}
 .scene { position: absolute; inset: 0; }
 .coast, .piece svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .piece { position: absolute; pointer-events: none; }

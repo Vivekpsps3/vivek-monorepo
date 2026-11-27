@@ -119,6 +119,22 @@ export interface DialogueWrite {
   conversation_id: string;
   expected_revision: number;
 }
+export interface DiscoveryView {
+  id: string;
+  name: string;
+  district: string;
+  hint: string;
+  reaction: string;
+  found: boolean;
+}
+export interface DiscoveryJournal {
+  revision: number;
+  discoveries: DiscoveryView[];
+}
+export interface DiscoveryWrite {
+  discovery_id: string;
+  expected_revision: number;
+}
 
 @Injectable({ providedIn: 'root' })
 export class TownApiService {
@@ -178,5 +194,11 @@ export class TownApiService {
   }
   completeConversation(body: DialogueWrite) {
     return this.http.post<DialogueDirectory>('/api/town/residents/conversations', body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
+  getDiscoveries() {
+    return this.http.get<DiscoveryJournal>('/api/town/discoveries', this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
+  recordDiscovery(body: DiscoveryWrite) {
+    return this.http.post<DiscoveryJournal>('/api/town/discoveries', body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
   }
 }

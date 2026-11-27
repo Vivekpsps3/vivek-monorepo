@@ -272,6 +272,7 @@ describe('Town page', () => {
     expect(el.querySelector('.town-destinations a[href="/town/hall"]')?.textContent).toContain('Visit the Hall');
     expect(el.querySelector('.town-destinations a[href="/town/quests"]')?.textContent).toContain('Optional quests');
     expect(el.querySelector('.town-destinations a[href="/town/residents"]')?.textContent).toContain('Residents');
+    expect(el.querySelector('.town-destinations a[href="/town/discoveries"]')?.textContent).toContain('Discoveries');
     expect(el.querySelector('a[href="/town/memory"]')?.textContent).toContain('Memory Shelves');
     const list = el.querySelector('[aria-label="Town buildings"]');
     expect(list?.textContent).toContain('Library');
