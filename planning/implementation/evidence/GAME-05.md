@@ -57,7 +57,7 @@ Commands ran from `/tmp/vivek-game-05` on tested SHA `d3ef3f4c2695d1ace4490f2d83
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending the pull request from `agent/game-05`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/638
 - Roadmap #134 append-only status-note URL: added after merge.
 - Merged/activation status: not merged yet.
 - Remaining external prerequisites or approved scope decisions: GAME-06, GAME-07, and GAME-08 still author the resident scenes. This leaf stores the five identities and one shared line per identity.
