@@ -32,6 +32,7 @@ import {
   SearchHit,
   Detail,
   Kind,
+  SourceState,
 } from "./media.models";
 import { PopularMoviesService } from "./popular-movies.service";
 import { popularFocus, safeArt } from "./popular.mjs";
@@ -42,11 +43,11 @@ import {
 } from "./add-validate.mjs";
 import {
   acceptCaptureResult,
-  addQuery,
-  captureParams,
   coverageText,
   kindLabel,
+  manualRouteParams,
   retryOpen,
+  searchReturnParams,
   selectedKind,
   type CoverageSource,
 } from "./capture.mjs";
@@ -88,15 +89,7 @@ import {
       >
       <ui-page-header title="Add manually" [concealTitle]="true" />
     } @else {
-      <ui-page-header title="Search Media" [concealTitle]="true">
-        <ui-button
-          uiPageActions
-          variant="ghost"
-          href="/media/add"
-          [queryParams]="manualLink()"
-          label="Add manually"
-        />
-      </ui-page-header>
+      <ui-page-header title="Search Media" [concealTitle]="true" />
     }
     <p class="muted" id="capture-type-status" role="status">{{ typeStatus() }}</p>
     @if (!manualEntry) {
@@ -105,6 +98,7 @@ import {
           ><input
             uiFieldControl
             type="search"
+            id="capture-query"
             name="query"
             [(ngModel)]="q"
             (ngModelChange)="typed.next()"
@@ -135,22 +129,144 @@ import {
           Search
         </ui-button>
       </form>
-    }
-    <section class="provider-coverage" aria-labelledby="provider-coverage-heading">
-      <h2 id="provider-coverage-heading">Provider coverage</h2>
-      @if (coverageLoading()) {
-        <p role="status">Checking which sources cover this type…</p>
+      @if (loading()) {
+        <p role="status">Searching sources…</p>
       }
-      @if (coverageError()) {
-        <p role="status">{{ coverageError() }}</p>
+      @if (error()) {
+        <div class="local-error" role="alert">
+          {{ error() }}
+          @if (captureRetryOpen(searchRetries())) {
+            <ui-button variant="ghost" (click)="search(true)">Retry search</ui-button>
+          } @else {
+            <p id="search-retry-limit" tabindex="-1">
+              Search retry limit reached. Add the title manually. This page will not
+              call the sources again for this search.
+            </p>
+          }
+        </div>
       }
-      <ul>
-        @for (source of coverage(); track $index) {
-          <li [attr.data-state]="source.state">{{ coverageLine(source) }}</li>
+      @if (result(); as response) {
+        @if (response.partial) {
+          <div class="local-error" role="status">
+            <strong>Search is incomplete.</strong> Some sources could not finish.
+            Available matches are still shown.
+            @if (captureRetryOpen(searchRetries())) {
+              <ui-button variant="ghost" (click)="search(true)">
+                Retry unavailable sources
+              </ui-button>
+            } @else {
+              <p id="search-partial-limit" tabindex="-1">
+                Search retry limit reached. Add the title manually. This page will not
+                call the sources again for this search.
+              </p>
+            }
+          </div>
         }
-      </ul>
-    </section>
-    @if (!manualEntry) {
+        <div class="search-results">
+          @for (
+            item of response.results;
+            track item.source + ":" + item.source_id
+          ) {
+            <article class="media-card">
+              <div class="media-art">
+                @if (item.artwork_url) {
+                  <img
+                    [src]="item.artwork_url"
+                    alt=""
+                    loading="lazy"
+                    (error)="item.artwork_url = null"
+                  />
+                } @else {
+                  <span>{{ item.title.slice(0, 2).toUpperCase() }}</span>
+                }
+              </div>
+              <div class="media-card-copy">
+                <ui-badge>
+                  {{ item.kind === "tv" ? "Series" : item.kind }}
+                  @if (item.year) {
+                    · {{ item.year }}
+                  }
+                </ui-badge>
+                <h2>{{ item.title }}</h2>
+                <p class="muted">
+                  {{ item.creator }} · {{ item.source }} #{{ item.source_id }}
+                </p>
+                @if (item.extra?.lifecycle) {
+                  <p>{{ item.extra?.lifecycle }}</p>
+                }
+                @if (item.metadata_pending) {
+                  <p>Metadata is still pending. Saved item is editable.</p>
+                }
+                @if (item.already_saved) {
+                  <ui-button
+                    variant="ghost"
+                    [href]="'/media/item/' + item.saved_id"
+                    [label]="
+                      'Open saved ' + (item.kind === 'artist' ? 'artist' : 'item')
+                    "
+                  />
+                } @else {
+                  <ui-button
+                    variant="ghost"
+                    [disabled]="saving() === item.source + item.source_id"
+                    (click)="save(item)"
+                  >
+                    {{
+                      saving() === item.source + item.source_id
+                        ? "Saving…"
+                        : item.kind === "artist"
+                          ? "Follow artist"
+                          : "Add to library"
+                    }}
+                  </ui-button>
+                }
+                @if (saveErrors()[item.source + item.source_id]) {
+                  <p role="alert">
+                    {{ saveErrors()[item.source + item.source_id] }}
+                  </p>
+                }
+              </div>
+            </article>
+          } @empty {
+            @if (!loading()) {
+              <ui-empty-state
+                [title]="
+                  response.partial
+                    ? 'Available sources returned no matches'
+                    : 'No matching titles'
+                "
+                [message]="
+                  response.partial
+                    ? 'Retry the unavailable sources, or use Add to enter this title.'
+                    : 'Try another spelling, a broader title, or another type. Use Add to enter it yourself.'
+                "
+              />
+            }
+          }
+        </div>
+        <p class="muted">
+          {{ response.total }} matches in this source window.
+          @if (response.total) {
+            Showing {{ response.offset + 1 }}–{{
+              response.offset + response.results.length
+            }}.
+          }
+        </p>
+        <div class="pagination">
+          @if (response.offset > 0) {
+            <ui-button variant="ghost" (click)="page(-20)">Previous</ui-button>
+          }
+          @if (response.has_more) {
+            <ui-button variant="ghost" (click)="page(20)">More results</ui-button>
+          }
+        </div>
+      }
+      @if (!q.trim() && popular.state() === "idle") {
+        <ui-empty-state
+          title="What are you curious about?"
+          message="Search movies, series, books, games, artists, albums, and songs."
+        />
+      }
       <section class="popular" aria-labelledby="popular-heading">
         <h2 id="popular-heading" tabindex="-1">Popular movies</h2>
         @if (popular.state() === "idle") {
@@ -251,176 +367,9 @@ import {
           </div>
         }
       </section>
-      @if (loading()) {
-        <p role="status">Searching sources…</p>
-      }
-      @if (error()) {
-        <div class="local-error" role="alert">
-          {{ error() }}
-          @if (captureRetryOpen(searchRetries())) {
-            <ui-button variant="ghost" (click)="search(true)">Retry search</ui-button>
-          } @else {
-            <p id="search-retry-limit" tabindex="-1">
-              Search retry limit reached. Add the title manually. This page will not
-              call the sources again for this search.
-            </p>
-          }
-        </div>
-      }
-      @if (result(); as response) {
-        @if (response.partial) {
-          <div class="local-error" role="status">
-            <strong>Search is incomplete.</strong> Some sources could not finish.
-            Available matches are still shown.
-            @if (captureRetryOpen(searchRetries())) {
-              <ui-button variant="ghost" (click)="search(true)">
-                Retry unavailable sources
-              </ui-button>
-            } @else {
-              <p id="search-partial-limit" tabindex="-1">
-                Search retry limit reached. Add the title manually. This page will not
-                call the sources again for this search.
-              </p>
-            }
-          </div>
-        }
-        <details class="source-details">
-          <summary>
-            Source coverage · {{ kind === "all" ? "all types" : kind }}
-          </summary>
-          @for (source of response.sources; track source.id) {
-            <p>
-              {{ source.id }} · {{ source.kinds.join(", ") }} ·
-              {{ source.coverage }} · {{ source.state }}
-              @if (source.reason) {
-                — {{ source.reason }}
-              }
-              @if (source.cached) {
-                · Cached
-              }
-            </p>
-          }
-        </details>
-        <p class="muted">
-          {{ response.total }} matches in this source window.
-          @if (response.total) {
-            Showing {{ response.offset + 1 }}–{{
-              response.offset + response.results.length
-            }}.
-          }
-        </p>
-        <div class="search-results">
-          @for (
-            item of response.results;
-            track item.source + ":" + item.source_id
-          ) {
-            <article class="media-card">
-              <div class="media-art">
-                @if (item.artwork_url) {
-                  <img
-                    [src]="item.artwork_url"
-                    alt=""
-                    loading="lazy"
-                    (error)="item.artwork_url = null"
-                  />
-                } @else {
-                  <span>{{ item.title.slice(0, 2).toUpperCase() }}</span>
-                }
-              </div>
-              <div class="media-card-copy">
-                <ui-badge>
-                  {{ item.kind === "tv" ? "Series" : item.kind }}
-                  @if (item.year) {
-                    · {{ item.year }}
-                  }
-                </ui-badge>
-                <h2>{{ item.title }}</h2>
-                <p class="muted">
-                  {{ item.creator }} · {{ item.source }} #{{ item.source_id }}
-                </p>
-                @if (item.extra?.lifecycle) {
-                  <p>{{ item.extra?.lifecycle }}</p>
-                }
-                @if (item.metadata_pending) {
-                  <p>Metadata is still pending. Saved item is editable.</p>
-                }
-                @if (item.already_saved) {
-                  <ui-button
-                    variant="ghost"
-                    [href]="'/media/item/' + item.saved_id"
-                    [label]="
-                      'Open saved ' + (item.kind === 'artist' ? 'artist' : 'item')
-                    "
-                  />
-                } @else {
-                  <ui-button
-                    variant="ghost"
-                    [disabled]="saving() === item.source + item.source_id"
-                    (click)="save(item)"
-                  >
-                    {{
-                      saving() === item.source + item.source_id
-                        ? "Saving…"
-                        : item.kind === "artist"
-                          ? "Follow artist"
-                          : "Add to library"
-                    }}
-                  </ui-button>
-                }
-                @if (saveErrors()[item.source + item.source_id]) {
-                  <p role="alert">
-                    {{ saveErrors()[item.source + item.source_id] }}
-                  </p>
-                }
-              </div>
-            </article>
-          } @empty {
-            @if (!loading()) {
-              <ui-empty-state
-                [title]="
-                  response.partial
-                    ? 'Available sources returned no matches'
-                    : 'No matching titles'
-                "
-                [message]="
-                  response.partial
-                    ? 'Retry the unavailable sources or add this title manually.'
-                    : 'Try another spelling, a broader title, or another type.'
-                "
-              >
-                <ui-button
-                  variant="primary"
-                  href="/media/add"
-                  [queryParams]="manualLink()"
-                  label="Add manually"
-                />
-              </ui-empty-state>
-            }
-          }
-        </div>
-        <div class="pagination">
-          @if (response.offset > 0) {
-            <ui-button variant="ghost" (click)="page(-20)">Previous</ui-button>
-          }
-          @if (response.has_more) {
-            <ui-button variant="ghost" (click)="page(20)">More results</ui-button>
-          }
-        </div>
-      }
-      @if (!q.trim() && popular.state() === "idle") {
-        <ui-empty-state
-          title="What are you curious about?"
-          message="Search movies, series, books, games, artists, albums, and songs."
-        />
-      }
     }
-    <section
-      class="capture-manual"
-      [attr.aria-labelledby]="manualEntry ? null : 'manual-heading'"
-    >
-      @if (!manualEntry) {
-        <h2 id="manual-heading">Add manually</h2>
-      }
+    @if (manualEntry) {
+    <section class="capture-manual">
       <ui-card
         ><form class="media-form" #form="ngForm" novalidate (ngSubmit)="saveManual()">
           <p class="muted required-legend">
@@ -519,6 +468,44 @@ import {
         </form></ui-card
       >
     </section>
+    }
+    <details class="source-details">
+      <summary>
+        {{
+          coverageError() && !querySources().length
+            ? "Provider coverage could not be loaded"
+            : "Provider coverage"
+        }}
+      </summary>
+      @if (coverageLoading()) {
+        <p role="status">Checking which sources cover this type…</p>
+      }
+      @if (querySources().length) {
+        <ul>
+          @for (source of querySources(); track $index) {
+            <li [attr.data-state]="source.state">
+              {{ source.id }} · {{ source.kinds.join(", ") }} ·
+              {{ source.coverage }} · {{ source.state }}
+              @if (source.reason) {
+                — {{ source.reason }}
+              }
+              @if (source.cached) {
+                · Cached
+              }
+            </li>
+          }
+        </ul>
+      } @else {
+        @if (coverageError()) {
+          <p role="status">{{ coverageError() }}</p>
+        }
+        <ul>
+          @for (source of coverage(); track $index) {
+            <li [attr.data-state]="source.state">{{ coverageLine(source) }}</li>
+          }
+        </ul>
+      }
+    </details>
   </main>`,
 })
 export class SearchComponent {
@@ -544,6 +531,10 @@ export class SearchComponent {
   year: number | null = null;
   review = "";
   private offset = 0;
+  private originQuery = "";
+  private originKind = "";
+  private originScroll = 0;
+  private pendingScroll: number | null = null;
   private trackedQ = "";
   private trackedKind = "";
   private saveEpoch = 0;
@@ -573,6 +564,21 @@ export class SearchComponent {
   private readonly popularAttempt = new Map<string, number>();
   private readonly saveInflight = new Set<string>();
   private focusTimer = 0;
+  private scrollTimer = 0;
+  private readonly captureManualClick = (event: Event): void => {
+    if (!(event instanceof MouseEvent) || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.defaultPrevented) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const link = target.closest("a");
+    if (!(link instanceof HTMLAnchorElement)) return;
+    if (new URL(link.href, window.location.origin).pathname !== "/media/add") return;
+    event.preventDefault();
+    event.stopPropagation();
+    void this.router.navigate(["/media/add"], {
+      queryParams: manualRouteParams(this.q, this.kind, window.scrollY),
+    });
+  };
   @ViewChild("optionalDetails")
   private optionalDetails?: ElementRef<HTMLDetailsElement>;
   constructor() {
@@ -583,6 +589,14 @@ export class SearchComponent {
     this.trackedKind = this.kind;
     this.offset = Number(initial.get("offset") || 0);
     this.title = this.manualEntry ? initial.get("title") || "" : "";
+    if (this.manualEntry) {
+      this.originQuery = initial.get("q") || "";
+      this.originKind = initial.get("fromKind") || this.kind;
+      const top = Number(initial.get("scroll") || 0);
+      this.originScroll = Number.isFinite(top) && top > 0 ? Math.round(top) : 0;
+    } else {
+      document.addEventListener("click", this.captureManualClick, true);
+    }
     let previous = this.popular.state();
     effect(() => {
       const state = this.popular.state();
@@ -591,7 +605,11 @@ export class SearchComponent {
       previous = state;
       if (target) this.focusSoon(target);
     });
-    this.destroy.onDestroy(() => window.clearTimeout(this.focusTimer));
+    this.destroy.onDestroy(() => {
+      document.removeEventListener("click", this.captureManualClick, true);
+      window.clearTimeout(this.focusTimer);
+      window.clearTimeout(this.scrollTimer);
+    });
     this.session.cleared$.pipe(takeUntilDestroyed()).subscribe(() => this.clearDraft());
     this.typed
       .pipe(debounceTime(350), takeUntilDestroyed())
@@ -624,9 +642,12 @@ export class SearchComponent {
       .subscribe((response) => {
         if (response) this.result.set(response);
         this.loading.set(false);
-        if (!retryOpen(this.searchRetries()) && (this.error() || response?.partial)) {
+        const limitFocused =
+          !retryOpen(this.searchRetries()) && !!(this.error() || response?.partial);
+        if (limitFocused) {
           this.focusSoon(this.error() ? "search-retry-limit" : "search-partial-limit");
         }
+        if (!this.manualEntry && this.pendingScroll !== null) this.restoreScrollSoon(!limitFocused);
       });
   }
   typeStatus(): string {
@@ -639,13 +660,11 @@ export class SearchComponent {
       ". Change type only with the Type field."
     );
   }
-  manualLink(): { title?: string; kind?: string } {
-    return addQuery(this.q, this.kind);
+  searchReturn(): { q?: string; kind?: string; scroll?: string } {
+    return searchReturnParams(this.originQuery, this.originKind, this.originScroll);
   }
-  searchReturn(): { kind?: string; q?: string } {
-    const params = captureParams(this.kind);
-    const query = this.q.trim();
-    return query ? { ...params, q: query } : params;
+  querySources(): SourceState[] {
+    return this.result()?.sources ?? [];
   }
   onKind(): void {
     this.revalidate();
@@ -665,6 +684,8 @@ export class SearchComponent {
     if (this.manualEntry) return;
     if (retry && !retryOpen(this.searchRetries())) return;
     if (retry) this.searchRetries.update((used) => used + 1);
+    this.pendingScroll = null;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
@@ -680,7 +701,7 @@ export class SearchComponent {
     this.router.navigate([], {
       relativeTo: this.route,
       queryParamsHandling: "merge",
-      queryParams: { offset: Math.max(0, this.offset + delta), retry: null },
+      queryParams: { offset: Math.max(0, this.offset + delta), retry: null, scroll: null },
     });
   }
   openPopular(): void {
@@ -857,6 +878,8 @@ export class SearchComponent {
       if (nextKind !== this.trackedKind) this.draftEpoch += 1;
       this.trackedQ = nextQ;
       this.trackedKind = nextKind;
+      // The field updates before navigation, so compare the committed query.
+      this.result.set(null);
     }
     if (nextQ !== this.q || nextKind !== this.kind) this.result.set(null);
     this.q = nextQ;
@@ -864,7 +887,27 @@ export class SearchComponent {
     this.offset = Number(params.get("offset") || 0);
     this.error.set("");
     this.loading.set(!this.manualEntry && nextQ.trim().length >= 2);
+    if (!this.manualEntry) this.noteReturnScroll(params);
     this.loadCoverage(nextKind);
+  }
+  private noteReturnScroll(params: ParamMap): void {
+    const top = Number(params.get("scroll") || 0);
+    this.pendingScroll = Number.isFinite(top) && top > 0 ? Math.round(top) : null;
+    if (this.pendingScroll !== null && this.q.trim().length < 2) this.restoreScrollSoon(true);
+  }
+  private restoreScrollSoon(focusQuery: boolean): void {
+    const top = this.pendingScroll;
+    if (top === null) return;
+    window.clearTimeout(this.scrollTimer);
+    this.scrollTimer = window.setTimeout(() => {
+      if (this.pendingScroll !== top) return;
+      if (focusQuery) {
+        const input = document.getElementById("capture-query");
+        if (input instanceof HTMLElement) input.focus({ preventScroll: true });
+      }
+      window.scrollTo({ top, left: 0, behavior: "instant" });
+      this.pendingScroll = null;
+    });
   }
   private loadCoverage(kind: string): void {
     if (kind === this.coverageKind) return;

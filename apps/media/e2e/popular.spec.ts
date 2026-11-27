@@ -62,7 +62,7 @@ test('popular waits for an explicit click and restores the same cards on back', 
   expect(srcs).toEqual(['https://image.tmdb.org/t/p/w500/p.jpg']);
   expect(movies).toHaveLength(1);
 
-  await page.locator('ui-page-header').getByRole('link', { name: 'Add manually', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Media sections', exact: true }).getByRole('link', { name: 'Add manually', exact: true }).click();
   await expect(page).toHaveURL(/\/media\/add/);
   await page.goBack();
   await expect(page).toHaveURL(/\/media\/search$/);
