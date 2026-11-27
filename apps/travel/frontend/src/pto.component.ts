@@ -7,6 +7,7 @@ import {
   inject,
   signal,
 } from "@angular/core";
+import { NgTemplateOutlet } from "@angular/common";
 import { HttpClient, HttpErrorResponse } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
@@ -122,6 +123,7 @@ type Busy = "" | "policy" | "entry" | "remove";
   standalone: true,
   imports: [
     FormsModule,
+    NgTemplateOutlet,
     RouterLink,
     UiButtonComponent,
     UiCardComponent,
@@ -150,398 +152,426 @@ type Busy = "" | "policy" | "entry" | "remove";
           <div class="pto-chart-skel" aria-hidden="true"></div>
         </div>
       } @else if (data(); as board) {
-        @if (showFirstRun(board)) {
-          <ui-card>
-            <h2>{{ firstRunTitle }}</h2>
-            <p>{{ firstRunBody }}</p>
-            <div class="button-row">
-              <ui-button variant="primary" (clicked)="openForm('sick', $event)">Set up Sick</ui-button>
-              <ui-button variant="ghost" (clicked)="dismissPrompt()">Not now</ui-button>
-            </div>
-          </ui-card>
-        }
         @if (ptoMissing(board)) {
-          <ui-state state="empty" thing="PTO" [emptyTitle]="emptyTitle" [emptyMessage]="emptyMessage" />
-        }
-        <div class="pto-top">
-          <div class="pto-tiles">
-            @for (name of configuredBuckets(board); track name) {
-              <article class="tile">
-                <p class="tile-kicker">
-                  <span aria-hidden="true">{{ name === "sick" ? "■" : "●" }}</span>
-                  {{ label(name) }}
-                </p>
-                <h2>Balance today</h2>
-                <p class="tile-balance">{{ balanceText(board, name) }}</p>
-                @if (board.buckets[name]?.at_cap) {
-                  <p>{{ capText(board.buckets[name]) }}</p>
-                }
-                <ui-button
-                  variant="ghost"
-                  [ariaLabel]="'Edit ' + label(name)"
-                  (clicked)="openForm(name, $event)"
-                  >Edit</ui-button
-                >
-              </article>
-            }
-          </div>
-          <section class="pto-chart-slot" [attr.aria-busy]="chartPhase() === 'loading' ? 'true' : null">
-            @if (chartPhase() === "loading") {
-              <div class="pto-chart-skel" aria-hidden="true"></div>
-            } @else if (chartPhase() === "error") {
-              <p class="local-error" role="alert">{{ chartError }}</p>
-              <ui-button variant="secondary" (clicked)="loadSeries()">Retry</ui-button>
-            } @else if (series(); as forecast) {
-              @if (forecast.pto || forecast.sick) {
-                <travel-pto-chart [series]="forecast" />
-              }
-            }
-          </section>
-        </div>
-        @if (overlaps(board).length) {
-          <section class="pto-overlaps" aria-labelledby="pto-overlaps-title">
-            <h2 id="pto-overlaps-title">Overlapping days</h2>
-            <ul>
-              @for (conflict of overlaps(board); track conflict.on_date) {
-                <li>
-                  <p class="pto-overlap" role="status">{{ overlapText(conflict) }}</p>
-                </li>
-              }
-            </ul>
-          </section>
-        }
-        <div class="pto-lower">
-          <section>
+          <section class="pto-setup" aria-labelledby="pto-setup-title">
             <ui-card>
-              <h2>Add time off</h2>
-              <form class="travel-form" novalidate (ngSubmit)="saveEntry()">
-                <div
-                  class="segments"
-                  role="radiogroup"
-                  aria-label="Counts against"
-                >
-                  @for (choice of entryChoices; track choice.value) {
-                    <label class="segment">
-                      <input
-                        type="radio"
-                        name="entry-bucket"
-                        [value]="choice.value"
-                        [(ngModel)]="entryBucket"
-                        (change)="touchEntryBucket()"
-                      />
-                      <span>{{ choice.label }}</span>
-                    </label>
-                  }
-                </div>
-                @if (entryBucket === "sick" && !board.buckets.sick?.configured) {
-                  <p class="muted" id="sick-hint">{{ sickHint }}</p>
-                }
-                <ui-field label="Name" [required]="true" [error]="entryFieldErrors()['label']">
-                  <input
-                    #entryName
-                    uiFieldControl
-                    name="entry-label"
-                    maxlength="200"
-                    [(ngModel)]="leave.label"
-                    (blur)="touchEntry()"
-                  />
-                </ui-field>
-                <div class="form-row">
-                  <ui-field label="First day" [required]="true" [error]="entryFieldErrors()['start_date']">
-                    <input
-                      #entryStart
-                      uiFieldControl
-                      type="date"
-                      name="entry-start"
-                      [(ngModel)]="leave.start_date"
-                      (blur)="touchEntry()"
-                    />
-                  </ui-field>
-                  <ui-field label="Last day" [required]="true" [error]="entryFieldErrors()['end_date']">
-                    <input
-                      #entryEnd
-                      uiFieldControl
-                      type="date"
-                      name="entry-end"
-                      [(ngModel)]="leave.end_date"
-                      (blur)="touchEntry()"
-                    />
-                  </ui-field>
-                </div>
-                <details>
-                  <summary>Optional day total</summary>
-                  <ui-field label="Days (blank uses weekdays)" [optional]="true">
-                    <input
-                      uiFieldControl
-                      inputmode="decimal"
-                      name="entry-days"
-                      [(ngModel)]="leave.days"
-                    />
-                  </ui-field>
-                </details>
-                <ui-field label="Notes" [optional]="true">
-                  <textarea uiFieldControl name="entry-notes" [(ngModel)]="leave.notes"></textarea>
-                </ui-field>
-                <ui-button variant="primary" type="submit" [disabled]="busy() === 'entry'">
-                  {{ busy() === "entry" ? "Saving…" : "Add" }}
-                </ui-button>
-              </form>
-            </ui-card>
-            <ui-card>
-              <h2>What if I take time off? · {{ label(entryBucket) }}</h2>
-              <ui-button variant="ghost" (clicked)="preview()" [disabled]="busy() === 'entry'">
-                Preview balance
-              </ui-button>
-              @if (visiblePreview(); as projection) {
-                <p class="save-status" role="status">
-                  @if (projection.balance_when_you_leave) {
-                    Before: {{ projection.balance_when_you_leave }} days · After:
-                    {{ projection.leftover_after }} days
-                  }
-                  @if (projection.note) {
-                    {{ projection.note }}
-                  }
-                </p>
+              <h2 id="pto-setup-title">{{ emptyTitle }}</h2>
+              <p>{{ emptyMessage }}</p>
+              @if (editing() === "pto") {
+                <ng-container [ngTemplateOutlet]="policyForm" />
               }
             </ui-card>
-            <ui-card>
-              <h2>Planned time away</h2>
-              @for (entry of board.entries; track entry.id) {
-                <article class="trip-row">
-                  <div>
-                    <p class="chip" [class.chip-sick]="entry.bucket === 'sick' && !entry.trip_id">
-                      <span aria-hidden="true">{{ entry.bucket === "sick" && !entry.trip_id ? "■" : "●" }}</span>
-                      {{ chip(entry) }}
-                    </p>
-                    <h3>
-                      @if (entry.trip_id) {
-                        <a [routerLink]="['/travel/trips', entry.trip_id]">{{ entry.label }}</a>
-                      } @else {
-                        {{ entry.label }}
-                      }
-                    </h3>
-                    <p>{{ showRange(entry.start_date, entry.end_date) }} · {{ entry.days }} days</p>
-                  </div>
-                  @if (!entry.trip_id) {
-                    <ui-button variant="ghost" size="sm" (clicked)="remove(entry.id)">Remove leave</ui-button>
+          </section>
+        } @else {
+          <div class="pto-lead">
+            <div class="pto-tiles">
+              @for (name of configuredBuckets(board); track name) {
+                <article class="tile">
+                  <p class="tile-kicker">
+                    <span aria-hidden="true">{{ name === "sick" ? "■" : "●" }}</span>
+                    {{ label(name) }}
+                  </p>
+                  <h2>Balance today</h2>
+                  <p class="tile-balance">{{ balanceText(board, name) }}</p>
+                  @if (board.buckets[name]?.at_cap) {
+                    <p>{{ capText(board.buckets[name]) }}</p>
                   }
+                  <ui-button
+                    variant="ghost"
+                    [ariaLabel]="'Edit ' + label(name)"
+                    (clicked)="openForm(name, $event)"
+                    >Edit</ui-button
+                  >
                 </article>
-              } @empty {
-                <p class="muted">No planned leave. Trips add their selected PTO dates here.</p>
               }
-            </ui-card>
-          </section>
-          <section>
-            @for (name of bothBuckets; track name) {
+            </div>
+            @if (editing(); as active) {
+              @if (board.buckets[active]?.configured) {
+                <section class="pto-editor" [attr.aria-labelledby]="'pto-editor-' + active">
+                  <ui-card>
+                    <h2 [id]="'pto-editor-' + active">{{ label(active) }} policy</h2>
+                    <ng-container [ngTemplateOutlet]="policyForm" />
+                  </ui-card>
+                </section>
+              }
+            }
+            <section class="pto-book" aria-labelledby="pto-add-title">
               <ui-card>
-                <h2>{{ label(name) }}</h2>
-                @if (board.buckets[name]?.configured) {
-                  <p>{{ balanceText(board, name) }}</p>
-                  @if (factsFor(board.buckets[name]); as facts) {
-                    <dl class="pto-facts">
-                      <dt>Carry</dt>
-                      <dd>{{ facts.carry }}</dd>
-                      <dt>Cap</dt>
-                      <dd>{{ facts.cap }}</dd>
-                      <dt>Policy year</dt>
-                      <dd>{{ facts.reset }}</dd>
-                      <dt>Accrual boundary</dt>
-                      <dd>{{ facts.boundary }}</dd>
-                    </dl>
-                  }
-                  <div class="button-row">
-                    <ui-button
-                      variant="ghost"
-                      [ariaLabel]="'Edit ' + label(name) + ' policy'"
-                      (clicked)="openForm(name, $event)"
-                      >Edit</ui-button
-                    >
-                    @if (name === "sick") {
-                      <ui-button variant="ghost" (clicked)="removeSick()">Remove Sick policy</ui-button>
+                <h2 id="pto-add-title">Add time off</h2>
+                <form class="travel-form" novalidate (ngSubmit)="saveEntry()">
+                  <div
+                    class="segments"
+                    role="radiogroup"
+                    aria-label="Counts against"
+                  >
+                    @for (choice of entryChoices; track choice.value) {
+                      <label class="segment">
+                        <input
+                          type="radio"
+                          name="entry-bucket"
+                          [value]="choice.value"
+                          [(ngModel)]="entryBucket"
+                          (change)="touchEntryBucket()"
+                        />
+                        <span>{{ choice.label }}</span>
+                      </label>
                     }
                   </div>
-                } @else if (name === "sick") {
-                  <button type="button" class="text-link" (click)="openForm('sick', $event)">
-                    {{ sickUnset }}
-                  </button>
-                }
-                @if (editing() === name) {
-                  <form class="travel-form" novalidate (ngSubmit)="savePolicy(name)">
-                    <ui-field
-                      label="Starting balance"
-                      [required]="true"
-                      [error]="fieldErrors()['start_balance_hours']"
-                      [hint]="hintFor(name, 'start_balance_hours')"
-                    >
-                      <span class="suffix">
-                        <input
-                          #startBalance
-                          uiFieldControl
-                          inputmode="decimal"
-                          name="start"
-                          [ngModel]="drafts[name].start_balance_hours"
-                          (ngModelChange)="editHour(name, 'start_balance_hours', $event)"
-                          (blur)="blurHour(name, 'start_balance_hours')"
-                        />
-                        <span aria-hidden="true">h</span>
-                      </span>
-                    </ui-field>
-                    <ui-field label="Balance as of" [required]="true" [error]="fieldErrors()['balance_as_of']">
+                  @if (entryBucket === "sick" && !board.buckets.sick?.configured) {
+                    <p class="muted" id="sick-hint">{{ sickHint }}</p>
+                  }
+                  <ui-field label="Name" [required]="true" [error]="entryFieldErrors()['label']">
+                    <input
+                      #entryName
+                      uiFieldControl
+                      name="entry-label"
+                      maxlength="200"
+                      [(ngModel)]="leave.label"
+                      (blur)="touchEntry()"
+                    />
+                  </ui-field>
+                  <div class="form-row">
+                    <ui-field label="First day" [required]="true" [error]="entryFieldErrors()['start_date']">
                       <input
+                        #entryStart
                         uiFieldControl
                         type="date"
-                        name="asof"
-                        [(ngModel)]="drafts[name].balance_as_of"
-                        (blur)="blurField(name, 'balance_as_of')"
+                        name="entry-start"
+                        [(ngModel)]="leave.start_date"
+                        (blur)="touchEntry()"
                       />
                     </ui-field>
-                    @if (correctionPreview()) {
-                      <p class="save-status" role="status">{{ correctionPreview() }}</p>
-                    }
-                    <ui-field
-                      label="You earn"
-                      [required]="true"
-                      [error]="fieldErrors()['accrual_hours']"
-                      [hint]="hintFor(name, 'accrual_hours')"
-                    >
-                      <span class="suffix">
-                        <input
-                          uiFieldControl
-                          inputmode="decimal"
-                          name="accrual"
-                          [ngModel]="drafts[name].accrual_hours"
-                          (ngModelChange)="editHour(name, 'accrual_hours', $event)"
-                          (blur)="blurHour(name, 'accrual_hours')"
-                        />
-                        <span aria-hidden="true">h</span>
-                      </span>
-                    </ui-field>
-                    <div
-                      class="segments"
-                      role="radiogroup"
-                      aria-label="How often"
-                      [attr.aria-invalid]="fieldErrors()['accrual_cadence'] ? 'true' : null"
-                      [attr.aria-describedby]="fieldErrors()['accrual_cadence'] ? 'cadence-error' : null"
-                    >
-                      @for (choice of cadences; track choice.value) {
-                        <label class="segment">
-                          <input
-                            type="radio"
-                            name="cadence"
-                            [value]="choice.value"
-                            [(ngModel)]="drafts[name].accrual_cadence"
-                            (change)="blurField(name, 'accrual_cadence')"
-                          />
-                          <span>{{ choice.label }}</span>
-                        </label>
-                      }
-                    </div>
-                    @if (fieldErrors()["accrual_cadence"]; as cadenceError) {
-                      <p id="cadence-error" class="field-error">{{ cadenceError }}</p>
-                    }
-                    <div
-                      class="segments"
-                      role="radiogroup"
-                      aria-label="Accrual schedule"
-                      [attr.aria-invalid]="fieldErrors()['accrual_mode'] ? 'true' : null"
-                      [attr.aria-describedby]="fieldErrors()['accrual_mode'] ? 'mode-error' : null"
-                    >
-                      @for (choice of accrualModes; track choice.value) {
-                        <label class="segment">
-                          <input
-                            type="radio"
-                            name="accrual-mode"
-                            [value]="choice.value"
-                            [(ngModel)]="drafts[name].accrual_mode"
-                            (change)="blurField(name, 'accrual_mode')"
-                          />
-                          <span>{{ choice.label }}</span>
-                        </label>
-                      }
-                    </div>
-                    @if (fieldErrors()["accrual_mode"]; as modeError) {
-                      <p id="mode-error" class="field-error">{{ modeError }}</p>
-                    }
-                    @if (drafts[name].accrual_mode === "scheduled") {
-                      <ui-field
-                        label="First posting date"
-                        [required]="true"
-                        [error]="fieldErrors()['accrual_anchor']"
-                      >
-                        <input
-                          uiFieldControl
-                          type="date"
-                          name="anchor"
-                          [(ngModel)]="drafts[name].accrual_anchor"
-                          (blur)="blurField(name, 'accrual_anchor')"
-                        />
-                      </ui-field>
-                    }
-                    <ui-field
-                      label="Cap"
-                      [error]="fieldErrors()['cap_hours']"
-                      [hint]="hintFor(name, 'cap_hours') || capBlurb"
-                    >
-                      <span class="suffix">
-                        <input
-                          uiFieldControl
-                          inputmode="decimal"
-                          name="cap"
-                          [ngModel]="drafts[name].cap_hours"
-                          (ngModelChange)="editHour(name, 'cap_hours', $event)"
-                          (blur)="blurHour(name, 'cap_hours')"
-                        />
-                        <span aria-hidden="true">h</span>
-                      </span>
-                    </ui-field>
-                    <ui-field label="Policy year starts" [error]="fieldErrors()['year_start']">
-                      <span class="year-pair">
-                        <select
-                          uiFieldControl
-                          name="year-month"
-                          [(ngModel)]="drafts[name].year_month"
-                          (blur)="blurField(name, 'year_start')"
-                        >
-                          @for (month of months; track month[0]) {
-                            <option [value]="month[0]">{{ month[1] }}</option>
-                          }
-                        </select>
-                        <select
-                          name="year-day"
-                          aria-label="Day"
-                          [(ngModel)]="drafts[name].year_day"
-                          (blur)="blurField(name, 'year_start')"
-                        >
-                          @for (day of days; track day) {
-                            <option [value]="day">{{ day }}</option>
-                          }
-                        </select>
-                      </span>
-                    </ui-field>
-                    <label class="check-row">
+                    <ui-field label="Last day" [required]="true" [error]="entryFieldErrors()['end_date']">
                       <input
-                        type="checkbox"
-                        name="carry-forward"
-                        [(ngModel)]="drafts[name].carry_forward"
-                        (change)="blurField(name, 'carry_forward')"
+                        #entryEnd
+                        uiFieldControl
+                        type="date"
+                        name="entry-end"
+                        [(ngModel)]="leave.end_date"
+                        (blur)="touchEntry()"
                       />
-                      Carry unused hours into the next policy year
-                    </label>
-                    @if (fieldErrors()["carry_forward"]; as carryError) {
-                      <p class="field-error">{{ carryError }}</p>
+                    </ui-field>
+                  </div>
+                  <details>
+                    <summary>Optional day total</summary>
+                    <ui-field label="Days (blank uses weekdays)" [optional]="true">
+                      <input
+                        uiFieldControl
+                        inputmode="decimal"
+                        name="entry-days"
+                        [(ngModel)]="leave.days"
+                      />
+                    </ui-field>
+                  </details>
+                  <ui-field label="Notes" [optional]="true">
+                    <textarea uiFieldControl name="entry-notes" [(ngModel)]="leave.notes"></textarea>
+                  </ui-field>
+                  <div class="button-row">
+                    <ui-button variant="primary" type="submit" [disabled]="busy() === 'entry'">
+                      {{ busy() === "entry" ? "Saving…" : "Add" }}
+                    </ui-button>
+                  </div>
+                </form>
+              </ui-card>
+              <ui-card>
+                <h2>What if I take time off? · {{ label(entryBucket) }}</h2>
+                <ui-button variant="ghost" (clicked)="preview()" [disabled]="busy() === 'entry'">
+                  Preview balance
+                </ui-button>
+                @if (visiblePreview(); as projection) {
+                  <p class="save-status" role="status">
+                    @if (projection.balance_when_you_leave) {
+                      Before: {{ projection.balance_when_you_leave }} days · After:
+                      {{ projection.leftover_after }} days
                     }
-                    <div class="button-row">
-                      <ui-button variant="primary" type="submit" [disabled]="busy() === 'policy'">
-                        {{ busy() === "policy" ? "Saving…" : "Save" }}
-                      </ui-button>
-                      <ui-button variant="ghost" type="button" (clicked)="cancel(name)">Cancel</ui-button>
-                    </div>
-                  </form>
+                    @if (projection.note) {
+                      {{ projection.note }}
+                    }
+                  </p>
+                }
+              </ui-card>
+            </section>
+          </div>
+          @if (overlaps(board).length) {
+            <section class="pto-overlaps" aria-labelledby="pto-overlaps-title">
+              <h2 id="pto-overlaps-title">Overlapping days</h2>
+              <ul>
+                @for (conflict of overlaps(board); track conflict.on_date) {
+                  <li>
+                    <p class="pto-overlap" role="status">{{ overlapText(conflict) }}</p>
+                  </li>
+                }
+              </ul>
+            </section>
+          }
+        }
+        <section class="pto-planned" aria-labelledby="pto-planned-title">
+          <ui-card>
+            <h2 id="pto-planned-title">Planned time away</h2>
+            @for (entry of board.entries; track entry.id) {
+              <article class="trip-row">
+                <div>
+                  <p class="chip" [class.chip-sick]="entry.bucket === 'sick' && !entry.trip_id">
+                    <span aria-hidden="true">{{ entry.bucket === "sick" && !entry.trip_id ? "■" : "●" }}</span>
+                    {{ chip(entry) }}
+                  </p>
+                  <h3>
+                    @if (entry.trip_id) {
+                      <a [routerLink]="['/travel/trips', entry.trip_id]">{{ entry.label }}</a>
+                    } @else {
+                      {{ entry.label }}
+                    }
+                  </h3>
+                  <p>{{ showRange(entry.start_date, entry.end_date) }} · {{ entry.days }} days</p>
+                </div>
+                @if (!entry.trip_id) {
+                  <ui-button variant="ghost" size="sm" (clicked)="remove(entry.id)">Remove leave</ui-button>
+                }
+              </article>
+            } @empty {
+              <p class="muted">No planned leave. Trips add their selected PTO dates here.</p>
+            }
+          </ui-card>
+        </section>
+        @if (!ptoMissing(board)) {
+          <section class="pto-forecast" aria-labelledby="pto-forecast-title">
+            <h2 id="pto-forecast-title">Balance forecast</h2>
+            <div class="pto-chart-slot" [attr.aria-busy]="chartPhase() === 'loading' ? 'true' : null">
+              @if (chartPhase() === "loading") {
+                <div class="pto-chart-skel" aria-hidden="true"></div>
+              } @else if (chartPhase() === "error") {
+                <p class="local-error" role="alert">{{ chartError }}</p>
+                <ui-button variant="secondary" (clicked)="loadSeries()">Retry</ui-button>
+              } @else if (series(); as forecast) {
+                @if (forecast.pto || forecast.sick) {
+                  <travel-pto-chart [series]="forecast" />
+                }
+              }
+            </div>
+          </section>
+        }
+        @if (!board.buckets.sick?.configured) {
+          <section class="pto-sick" aria-labelledby="pto-sick-title">
+            <ui-card>
+              @if (showFirstRun(board)) {
+                <h2 id="pto-sick-title">{{ firstRunTitle }}</h2>
+                <p>{{ firstRunBody }}</p>
+                <div class="button-row">
+                  <ui-button variant="secondary" (clicked)="openForm('sick', $event)">Set up Sick</ui-button>
+                  <ui-button variant="ghost" (clicked)="dismissPrompt()">Not now</ui-button>
+                </div>
+              } @else {
+                <h2 id="pto-sick-title" class="visually-hidden">Sick</h2>
+                <button type="button" class="text-link" (click)="openForm('sick', $event)">
+                  {{ sickUnset }}
+                </button>
+              }
+              @if (editing() === "sick") {
+                <ng-container [ngTemplateOutlet]="policyForm" />
+              }
+            </ui-card>
+          </section>
+        }
+        @if (configuredBuckets(board).length) {
+          <section class="pto-policy" aria-labelledby="pto-policy-title">
+            <h2 id="pto-policy-title">Policy</h2>
+            @for (name of configuredBuckets(board); track name) {
+              <ui-card>
+                <h3>{{ label(name) }}</h3>
+                @if (factsFor(board.buckets[name]); as facts) {
+                  <dl class="pto-facts">
+                    <dt>Carry</dt>
+                    <dd>{{ facts.carry }}</dd>
+                    <dt>Cap</dt>
+                    <dd>{{ facts.cap }}</dd>
+                    <dt>Policy year</dt>
+                    <dd>{{ facts.reset }}</dd>
+                    <dt>Accrual boundary</dt>
+                    <dd>{{ facts.boundary }}</dd>
+                  </dl>
+                }
+                @if (name === "sick") {
+                  <ui-button variant="ghost" (clicked)="removeSick()">Remove Sick policy</ui-button>
                 }
               </ui-card>
             }
           </section>
-        </div>
+        }
+        <ng-template #policyForm>
+          @if (editing(); as name) {
+            <form class="travel-form" novalidate (ngSubmit)="savePolicy(name)">
+              <ui-field
+                label="Starting balance"
+                [required]="true"
+                [error]="fieldErrors()['start_balance_hours']"
+                [hint]="hintFor(name, 'start_balance_hours')"
+              >
+                <span class="suffix">
+                  <input
+                    #startBalance
+                    uiFieldControl
+                    inputmode="decimal"
+                    name="start"
+                    [ngModel]="drafts[name].start_balance_hours"
+                    (ngModelChange)="editHour(name, 'start_balance_hours', $event)"
+                    (blur)="blurHour(name, 'start_balance_hours')"
+                  />
+                  <span aria-hidden="true">h</span>
+                </span>
+              </ui-field>
+              <ui-field label="Balance as of" [required]="true" [error]="fieldErrors()['balance_as_of']">
+                <input
+                  uiFieldControl
+                  type="date"
+                  name="asof"
+                  [(ngModel)]="drafts[name].balance_as_of"
+                  (blur)="blurField(name, 'balance_as_of')"
+                />
+              </ui-field>
+              @if (correctionPreview()) {
+                <p class="save-status" role="status">{{ correctionPreview() }}</p>
+              }
+              <ui-field
+                label="You earn"
+                [required]="true"
+                [error]="fieldErrors()['accrual_hours']"
+                [hint]="hintFor(name, 'accrual_hours')"
+              >
+                <span class="suffix">
+                  <input
+                    uiFieldControl
+                    inputmode="decimal"
+                    name="accrual"
+                    [ngModel]="drafts[name].accrual_hours"
+                    (ngModelChange)="editHour(name, 'accrual_hours', $event)"
+                    (blur)="blurHour(name, 'accrual_hours')"
+                  />
+                  <span aria-hidden="true">h</span>
+                </span>
+              </ui-field>
+              <div
+                class="segments"
+                role="radiogroup"
+                aria-label="How often"
+                [attr.aria-invalid]="fieldErrors()['accrual_cadence'] ? 'true' : null"
+                [attr.aria-describedby]="fieldErrors()['accrual_cadence'] ? 'cadence-error' : null"
+              >
+                @for (choice of cadences; track choice.value) {
+                  <label class="segment">
+                    <input
+                      type="radio"
+                      name="cadence"
+                      [value]="choice.value"
+                      [(ngModel)]="drafts[name].accrual_cadence"
+                      (change)="blurField(name, 'accrual_cadence')"
+                    />
+                    <span>{{ choice.label }}</span>
+                  </label>
+                }
+              </div>
+              @if (fieldErrors()["accrual_cadence"]; as cadenceError) {
+                <p id="cadence-error" class="field-error">{{ cadenceError }}</p>
+              }
+              <div
+                class="segments"
+                role="radiogroup"
+                aria-label="Accrual schedule"
+                [attr.aria-invalid]="fieldErrors()['accrual_mode'] ? 'true' : null"
+                [attr.aria-describedby]="fieldErrors()['accrual_mode'] ? 'mode-error' : null"
+              >
+                @for (choice of accrualModes; track choice.value) {
+                  <label class="segment">
+                    <input
+                      type="radio"
+                      name="accrual-mode"
+                      [value]="choice.value"
+                      [(ngModel)]="drafts[name].accrual_mode"
+                      (change)="blurField(name, 'accrual_mode')"
+                    />
+                    <span>{{ choice.label }}</span>
+                  </label>
+                }
+              </div>
+              @if (fieldErrors()["accrual_mode"]; as modeError) {
+                <p id="mode-error" class="field-error">{{ modeError }}</p>
+              }
+              @if (drafts[name].accrual_mode === "scheduled") {
+                <ui-field
+                  label="First posting date"
+                  [required]="true"
+                  [error]="fieldErrors()['accrual_anchor']"
+                >
+                  <input
+                    uiFieldControl
+                    type="date"
+                    name="anchor"
+                    [(ngModel)]="drafts[name].accrual_anchor"
+                    (blur)="blurField(name, 'accrual_anchor')"
+                  />
+                </ui-field>
+              }
+              <ui-field
+                label="Cap"
+                [error]="fieldErrors()['cap_hours']"
+                [hint]="hintFor(name, 'cap_hours') || capBlurb"
+              >
+                <span class="suffix">
+                  <input
+                    uiFieldControl
+                    inputmode="decimal"
+                    name="cap"
+                    [ngModel]="drafts[name].cap_hours"
+                    (ngModelChange)="editHour(name, 'cap_hours', $event)"
+                    (blur)="blurHour(name, 'cap_hours')"
+                  />
+                  <span aria-hidden="true">h</span>
+                </span>
+              </ui-field>
+              <ui-field label="Policy year starts" [error]="fieldErrors()['year_start']">
+                <span class="year-pair">
+                  <select
+                    uiFieldControl
+                    name="year-month"
+                    [(ngModel)]="drafts[name].year_month"
+                    (blur)="blurField(name, 'year_start')"
+                  >
+                    @for (month of months; track month[0]) {
+                      <option [value]="month[0]">{{ month[1] }}</option>
+                    }
+                  </select>
+                  <select
+                    name="year-day"
+                    aria-label="Day"
+                    [(ngModel)]="drafts[name].year_day"
+                    (blur)="blurField(name, 'year_start')"
+                  >
+                    @for (day of days; track day) {
+                      <option [value]="day">{{ day }}</option>
+                    }
+                  </select>
+                </span>
+              </ui-field>
+              <label class="check-row">
+                <input
+                  type="checkbox"
+                  name="carry-forward"
+                  [(ngModel)]="drafts[name].carry_forward"
+                  (change)="blurField(name, 'carry_forward')"
+                />
+                Carry unused hours into the next policy year
+              </label>
+              @if (fieldErrors()["carry_forward"]; as carryError) {
+                <p class="field-error">{{ carryError }}</p>
+              }
+              <div class="button-row">
+                <ui-button variant="primary" type="submit" [disabled]="busy() === 'policy'">
+                  {{ busy() === "policy" ? "Saving…" : "Save" }}
+                </ui-button>
+                <ui-button variant="ghost" type="button" (clicked)="cancel(name)">Cancel</ui-button>
+              </div>
+            </form>
+          }
+        </ng-template>
       }
     }
   </main>`,
@@ -567,8 +597,13 @@ type Busy = "" | "policy" | "entry" | "remove";
         min-height: 44px;
         margin: 0.25rem 0 0.75rem;
       }
-      .pto-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-      .tile, .pto-lower ui-card { min-width: 0; }
+      .pto-lead { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+      .pto-tiles { display: grid; grid-template-columns: 1fr; gap: 0.75rem; min-width: 0; }
+      .pto-tiles:has(> :nth-child(2)) { grid-template-columns: 1fr 1fr; }
+      .pto-book { display: grid; gap: 0.75rem; min-width: 0; }
+      .pto-setup, .pto-editor, .pto-planned, .pto-forecast, .pto-sick, .pto-policy { min-width: 0; }
+      .pto-planned, .pto-forecast, .pto-sick, .pto-policy { margin-top: 0.75rem; }
+      .tile, .pto-book ui-card, .pto-editor ui-card { min-width: 0; }
       .tile-kicker, .chip { display: inline-flex; align-items: center; gap: 0.35rem; }
       .tile-balance { font-size: 1.25rem; }
       .chip {
@@ -625,9 +660,16 @@ type Busy = "" | "policy" | "entry" | "remove";
       .pto-overlaps li { margin: 0.35rem 0 0; }
       .pto-chart-skel { height: 220px; border-radius: var(--radius-md); background: var(--surface-sunken, var(--surface)); }
       @media (min-width: 1280px) {
-        .pto-top { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 1rem; align-items: start; }
-        .pto-tiles { grid-template-columns: 1fr; }
-        .pto-lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+        .pto-lead {
+          display: grid;
+          grid-template-columns: 320px minmax(0, 1fr);
+          gap: 1rem;
+          align-items: start;
+        }
+        .pto-tiles { grid-column: 1; grid-row: 1; grid-template-columns: 1fr; }
+        .pto-book { grid-column: 2; grid-row: 1; }
+        /* Full width so the five cadence choices stay on one row. */
+        .pto-editor { grid-column: 1 / -1; grid-row: 2; }
         .segment { flex: 1 1 0; }
         .pto-chart-skel { height: 300px; }
       }
@@ -690,6 +732,7 @@ export class PtoComponent {
   private sessionActive = true;
   private policyAttempt: { bucket: BucketName; body: object; draft: string } | null = null;
   private entryAttempt: object | null = null;
+  private focusTimer = 0;
   @ViewChild("startBalance") private startBalance?: ElementRef<HTMLInputElement>;
   @ViewChild("entryName") private entryName?: ElementRef<HTMLInputElement>;
   @ViewChild("entryStart") private entryStart?: ElementRef<HTMLInputElement>;
@@ -728,7 +771,10 @@ export class PtoComponent {
     const today = localTodayIso();
     this.drafts = { pto: blankDraft(today), sick: blankDraft(today) };
     this.savedDrafts = { pto: blankDraft(today), sick: blankDraft(today) };
-    this.destroy.onDestroy(() => this.seriesSub?.unsubscribe());
+    this.destroy.onDestroy(() => {
+      this.seriesSub?.unsubscribe();
+      window.clearTimeout(this.focusTimer);
+    });
     merge(
       this.session.cleared$,
       this.session.user$.pipe(filter((user) => user?.id !== this.ownerId)),
@@ -838,7 +884,7 @@ export class PtoComponent {
     this.returnFocus = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
     this.fieldErrors.set({});
     this.notes.set({});
-    setTimeout(() => this.startBalance?.nativeElement.focus());
+    this.focusStart();
   }
 
   editHour(name: BucketName, field: "start_balance_hours" | "accrual_hours" | "cap_hours", value: string): void {
@@ -914,7 +960,7 @@ export class PtoComponent {
     this.clearCorrection();
     const keepEmptyPto = name === "pto" && !this.configured("pto") && !this.openedByPointer;
     if (keepEmptyPto) {
-      setTimeout(() => this.startBalance?.nativeElement.focus());
+      this.focusStart();
       return;
     }
     this.editing.set(this.configured("pto") ? null : "pto");
@@ -1179,8 +1225,10 @@ export class PtoComponent {
     }
     this.data.set(board);
     this.phase.set("ready");
+    const openSetup = !this.editing() && !board.buckets?.pto?.configured;
     if (!this.editing()) this.editing.set(board.buckets?.pto?.configured ? null : "pto");
     this.dropStalePreview();
+    if (openSetup) this.focusStart();
   }
 
   private clearLeave(): void {
@@ -1274,6 +1322,7 @@ export class PtoComponent {
   }
 
   private clearPrivate(): void {
+    window.clearTimeout(this.focusTimer);
     this.sessionActive = false;
     this.seriesEpoch += 1;
     this.correctionEpoch += 1;
@@ -1363,6 +1412,14 @@ export class PtoComponent {
       this.forecast.set(null);
       this.forecastFor.set("");
     }
+  }
+
+  private focusStart(): void {
+    window.clearTimeout(this.focusTimer);
+    this.focusTimer = window.setTimeout(() => {
+      if (!this.sessionActive) return;
+      this.startBalance?.nativeElement.focus();
+    });
   }
 
   private focusPolicy(field: string): void {
