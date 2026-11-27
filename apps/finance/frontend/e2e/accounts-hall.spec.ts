@@ -55,17 +55,34 @@ for (const [width, theme] of [[390, 'light'], [390, 'dark'], [1280, 'light'], [1
     await info.attach(`hall-${width}-${theme}`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
 
     const drawer = page.locator('[data-drawer="asset:11"]');
+    const edit = page.getByRole('button', { name: 'Edit', exact: true });
     if (width === 390) await drawer.tap();
     else {
       await drawer.focus();
+      await page.keyboard.press('Enter');
+    }
+    const detail = page.locator('[data-account-detail]');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(detail).toContainText('Statement');
+    await expect(detail).toContainText('Published balance');
+    await expect(page.locator('[data-drawer="debt:21"]')).toContainText('Hidden');
+    await expect(page.locator('[data-hall-amount]')).toContainText(moneyText('$1,200.00'));
+    const drawerBox = await drawer.boundingBox();
+    const detailBox = await detail.boundingBox();
+    expect(detailBox!.y).toBeGreaterThanOrEqual(drawerBox!.y);
+    expect(detailBox!.y - (drawerBox!.y + drawerBox!.height)).toBeLessThan(32);
+    expect(Math.abs(detailBox!.x - drawerBox!.x)).toBeLessThan(8);
+    expect(vault.mutations).toHaveLength(0);
+    if (width === 390) await edit.tap();
+    else {
+      await page.keyboard.press('Tab');
+      await expect(edit).toBeFocused();
       await page.keyboard.press('Enter');
     }
     const dialog = page.getByRole('dialog', { name: 'Edit asset' });
     await expect(dialog.getByRole('textbox', { name: 'Name' })).toHaveValue('Harbor checking');
     await expect(dialog.getByRole('textbox', { name: 'Name' })).toBeFocused();
     await expect(dialog.getByRole('textbox', { name: 'Value' })).toHaveValue('1200');
-    await expect(page.locator('[data-drawer="debt:21"]')).toContainText('Hidden');
-    await expect(page.locator('[data-hall-amount]')).toContainText(moneyText('$1,200.00'));
     const amount = dialog.getByRole('textbox', { name: 'Value' });
     await amount.fill('-20');
     await dialog.getByRole('button', { name: 'Save asset' }).click();
@@ -76,7 +93,7 @@ for (const [width, theme] of [[390, 'light'], [390, 'dark'], [1280, 'light'], [1
     await info.attach(`hall-correction-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
-    await expect(drawer).toBeFocused();
+    await expect(edit).toBeFocused();
     expect(vault.mutations).toHaveLength(0);
   });
 }
@@ -93,6 +110,8 @@ test('editing one drawer updates the hall and the accounts list once, then lock 
   await vault.open('/have?t=hall');
   const drawer = page.locator('[data-drawer="asset:11"]');
   await drawer.click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Edit asset' });
   await expect(page.locator('[data-hall-total]')).toContainText(moneyText('$1,250.00'));
   await page.locator('[data-hall-amount]').evaluate(element => {
@@ -113,6 +132,11 @@ test('editing one drawer updates the hall and the accounts list once, then lock 
   await dialog.getByRole('textbox', { name: 'Value' }).fill('1399.25');
   await dialog.getByRole('button', { name: 'Save asset' }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeFocused();
   await expect(page.locator('[data-hall-amount]')).toContainText(moneyText('$1,399.25'));
   await expect(page.locator('[data-hall-total]')).toContainText(moneyText('$1,449.25'));
   await expect(page.locator('[data-drawer="debt:21"]')).toContainText('Hidden');
@@ -139,6 +163,7 @@ test('editing one drawer updates the hall and the accounts list once, then lock 
   await expect(page.locator('[data-hall-amount]')).toContainText(moneyText('$1,399.25'));
   await page.getByRole('button', { name: 'Lock balances', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('[data-drawer="asset:11"]')).toBeFocused();
   await expect(page.locator('app-accounts-hall')).not.toContainText('$');
   await expect(page.locator('[data-hall-amount]')).toHaveCount(0);
 
@@ -167,6 +192,7 @@ test('a drawer save that finishes after lock cannot restore its draft or digits'
   await vault.open('/have?t=hall');
   await vault.open('/', second);
   await page.locator('[data-drawer="asset:11"]').click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const editor = page.getByRole('dialog', { name: 'Edit asset' });
   await editor.getByRole('textbox', { name: 'Name' }).fill('Unpublished coastal draft');
   await editor.getByRole('textbox', { name: 'Value' }).fill('1399.25');
@@ -192,6 +218,7 @@ test('a drawer save that finishes after lock cannot restore its draft or digits'
   await page.getByRole('link', { name: 'Accounts hall', exact: true }).click();
   await expect(page.locator('app-accounts-hall')).not.toContainText('$');
   await page.locator('[data-drawer="asset:11"]').click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Edit asset' }).getByRole('textbox', { name: 'Name' })).toHaveValue(checking.name);
   expect(vault.data('assets')[0]).toMatchObject(checking);
 });

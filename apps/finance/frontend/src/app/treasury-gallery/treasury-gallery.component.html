@@ -19,73 +19,6 @@
   }
 
   <div class="room-layout">
-    <aside class="inspector" aria-label="Gallery inspector">
-      <h2>Inspector</h2>
-      @if (projection().inspectorPosition; as position) {
-        <button
-          type="button"
-          class="inspector-line"
-          data-inspector-position
-          [attr.data-position]="position.id"
-          [attr.aria-current]="position.opened ? 'true' : null"
-          (click)="openPosition(position.id)"
-        >
-          <span class="line-title">{{ position.label }}</span>
-          <span class="line-meta">{{ position.account }} · {{ position.quoteLabel }}</span>
-          @if (position.opened) {
-            <span class="line-meta">Shares {{ position.shares }}</span>
-            @if (position.basis === 'unknown') {
-              <span class="line-meta">Cost basis unknown</span>
-            } @else {
-              <span class="line-meta">Cost basis {{ position.purchasePrice | money }}</span>
-            }
-            @let bought = position.purchaseDate | appDate;
-            @let posted = position.positionDate | appDate;
-            @let quoted = position.quoteDate | appDate;
-            <span class="line-meta">Bought {{ bought === 'No date' ? 'on an unknown date' : bought }} · Position {{ posted === 'No date' ? 'has no date' : posted }} · Quote {{ quoted === 'No date' ? 'has no date' : quoted }}</span>
-            <span class="line-meta">{{ position.value === null ? 'Value unavailable' : (position.value | money) }}</span>
-            <span class="line-meta">Gain</span>
-            <span data-gallery-gain>{{ position.gain === null ? 'Unavailable' : (position.gain | money) }}</span>
-          } @else {
-            <span>Hidden</span>
-          }
-        </button>
-      } @else {
-        <p data-inspector-position>No position yet.</p>
-      }
-
-      @if (projection().ledgerOutsideFilter) {
-        <p>The selected entry is outside this filter.</p>
-      }
-      @if (projection().positionMissing) {
-        <p>That position is not in the published holdings.</p>
-      }
-      @if (projection().inspectorLedger; as line) {
-        <button
-          type="button"
-          class="inspector-line"
-          data-inspector-ledger
-          [attr.data-ledger]="line.id"
-          [attr.aria-current]="line.opened ? 'true' : null"
-          (click)="openLedger(line.id)"
-        >
-          <span class="line-title">{{ line.description }}</span>
-          @let posted = line.date | appDate;
-          <span class="line-meta">{{ line.useful ? posted : 'No date' }} · {{ line.category }}</span>
-          @if (line.account) {
-            <span class="line-meta">{{ line.account }}</span>
-          }
-          @if (line.opened && line.amount !== null) {
-            <span class="money" data-ledger-amount>{{ line.amount | money }}</span>
-          } @else {
-            <span>Hidden</span>
-          }
-        </button>
-      } @else {
-        <p data-inspector-ledger>No ledger line in this filter.</p>
-      }
-    </aside>
-
     <section class="readout" aria-labelledby="gallery-readout">
       <h2 id="gallery-readout">Portfolio</h2>
       <p>Portfolio value adds published position values. This room does not keep another ledger or price a quote.</p>
@@ -115,6 +48,9 @@
 
   <section class="plaques" aria-labelledby="gallery-plaques">
     <h2 id="gallery-plaques">Holdings plaques</h2>
+    @if (projection().positionMissing) {
+      <p>That position is not in the published holdings.</p>
+    }
     <ul class="plaque-list">
       @for (plaque of projection().plaques; track plaque.id) {
         <li>
@@ -124,6 +60,7 @@
             [class.opened]="plaque.opened"
             [attr.data-plaque]="plaque.id"
             [attr.aria-current]="plaque.opened ? 'true' : null"
+            [attr.aria-expanded]="plaque.opened ? 'true' : 'false'"
             (click)="openPosition(plaque.id)"
           >
             <span class="line-title">{{ plaque.label }}</span>
@@ -136,6 +73,27 @@
               <span>Hidden</span>
             }
           </button>
+          @if (plaque.opened) {
+            <div class="record" role="group" data-inspector-position [attr.data-position]="plaque.id" [attr.aria-label]="'Details for ' + plaque.label">
+              <span class="line-title">{{ plaque.label }}</span>
+              <span class="line-meta">{{ plaque.account }} · {{ plaque.quoteLabel }}</span>
+              <span class="line-meta">Shares {{ plaque.shares }}</span>
+              @if (plaque.basis === 'unknown') {
+                <span class="line-meta">Cost basis unknown</span>
+              } @else {
+                <span class="line-meta">Cost basis {{ plaque.purchasePrice | money }}</span>
+              }
+              @let bought = plaque.purchaseDate | appDate;
+              @let posted = plaque.positionDate | appDate;
+              @let quoted = plaque.quoteDate | appDate;
+              <span class="line-meta">Bought {{ bought === 'No date' ? 'on an unknown date' : bought }} · Position {{ posted === 'No date' ? 'has no date' : posted }} · Quote {{ quoted === 'No date' ? 'has no date' : quoted }}</span>
+              <span class="line-meta">{{ plaque.value === null ? 'Value unavailable' : (plaque.value | money) }}</span>
+              <span class="line-meta">Gain <span data-gallery-gain>{{ plaque.gain === null ? 'Unavailable' : (plaque.gain | money) }}</span></span>
+              <div class="record-actions">
+                <ui-button variant="secondary" href="/finance/have" [queryParams]="{ t: 'holdings' }" label="Open in Holdings" />
+              </div>
+            </div>
+          }
         </li>
       } @empty {
         @if (!loading() && !loadFailed()) {
@@ -148,11 +106,22 @@
   <section class="desk" aria-labelledby="gallery-desk">
     <h2 id="gallery-desk">Cashflow desk</h2>
     <p>The same Activity filters decide which dated entries are on the desk.</p>
-    <div class="filters" role="group" aria-label="Filters">
+    @if (projection().ledgerOutsideFilter) {
+      <p>The selected entry is outside this filter.</p>
+    }
+    @if (filterSummary(); as summary) {
+      <p data-filter-summary>{{ summary }}</p>
+    }
+    <div class="desk-actions">
       <label>
         Search transactions
         <input type="search" [value]="filters().searchTerm" (input)="setSearch(inputValue($event))" />
       </label>
+      <ui-button variant="ghost" href="/finance/spending" [queryParams]="activityQuery()" label="Open in Activity" />
+    </div>
+    <details class="activity-filters">
+      <summary>Activity filters</summary>
+    <div class="filters" role="group" aria-label="Filters">
       <label>
         Type
         <select [value]="activityView()" (change)="setView(inputValue($event))">
@@ -223,6 +192,7 @@
       </label>
       <ui-button variant="ghost" (clicked)="clearFilters()">Clear filters</ui-button>
     </div>
+    </details>
 
     <ul class="ledger-list" aria-label="Filtered ledger">
       @for (line of projection().lines; track line.id) {
@@ -233,6 +203,7 @@
             [class.opened]="line.opened"
             [attr.data-ledger-line]="line.id"
             [attr.aria-current]="line.opened ? 'true' : null"
+            [attr.aria-expanded]="line.opened ? 'true' : 'false'"
             (click)="openLedger(line.id)"
           >
             <span class="line-title">{{ line.description }}</span>
@@ -244,6 +215,22 @@
               <span>Hidden</span>
             }
           </button>
+          @if (line.opened) {
+            <div class="record" role="group" data-inspector-ledger [attr.data-ledger]="line.id" [attr.aria-label]="'Details for ' + line.description">
+              <span class="line-title">{{ line.description }}</span>
+              @let postedDetail = line.date | appDate;
+              <span class="line-meta">{{ line.useful ? postedDetail : 'No date' }} · {{ line.category }}</span>
+              @if (line.account) {
+                <span class="line-meta">{{ line.account }}</span>
+              }
+              @if (line.amount !== null) {
+                <span class="money" data-ledger-amount>{{ line.amount | money }}</span>
+              }
+              <div class="record-actions">
+                <ui-button variant="secondary" href="/finance/spending" [queryParams]="ledgerActivityQuery(line.id)" label="Edit in Activity" />
+              </div>
+            </div>
+          }
         </li>
       } @empty {
         @if (!loading() && !loadFailed()) {

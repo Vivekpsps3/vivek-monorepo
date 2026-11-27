@@ -7,7 +7,7 @@
 .room-layout,
 .plaques,
 .desk,
-.inspector,
+.record,
 .readout {
   min-width: 0;
 }
@@ -17,7 +17,6 @@
   gap: var(--space-3);
 }
 
-.inspector,
 .readout,
 .plaques,
 .desk {
@@ -27,29 +26,21 @@
   background: var(--bg-elevated);
 }
 
-.inspector {
-  border-top: 3px solid var(--brass);
-}
-
-.inspector h2,
 .readout h2,
 .plaques h2,
 .desk h2,
-.inspector p,
 .readout p,
 .desk > p,
 .empty-note {
   margin: 0;
 }
 
-.inspector h2,
 .readout h2,
 .plaques h2,
 .desk h2 {
   margin-bottom: var(--space-2);
 }
 
-.inspector-line,
 .plaque,
 .ledger-line {
   appearance: none;
@@ -70,9 +61,48 @@
 }
 
 .plaque.opened,
-.ledger-line.opened,
-.inspector-line[aria-current='true'] {
+.ledger-line.opened {
   border-color: var(--accent);
+}
+
+.record {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border-inline-start: 3px solid var(--brass);
+}
+
+.record-actions,
+.desk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.desk-actions {
+  margin-top: var(--space-3);
+}
+
+.desk-actions label {
+  display: grid;
+  gap: var(--space-1);
+  flex: 1 1 12rem;
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.activity-filters {
+  margin-top: var(--space-3);
+}
+
+.activity-filters summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
 }
 
 .line-title,
@@ -98,6 +128,11 @@
   list-style: none;
 }
 
+.plaque-list > li,
+.ledger-list > li {
+  min-width: 0;
+}
+
 .filters {
   display: grid;
   gap: var(--space-3);
@@ -112,6 +147,7 @@
   font-size: var(--text-sm);
 }
 
+.desk-actions input,
 .filters input,
 .filters select {
   min-height: 44px;
@@ -126,9 +162,10 @@
   font: inherit;
 }
 
-.inspector-line:focus-visible,
 .plaque:focus-visible,
 .ledger-line:focus-visible,
+.activity-filters summary:focus-visible,
+.desk-actions input:focus-visible,
 .filters input:focus-visible,
 .filters select:focus-visible {
   outline: 2px solid var(--accent);
@@ -158,11 +195,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .inspector-line,
   .plaque,
   .ledger-line,
   .readout,
-  .inspector {
+  .record {
     transition: none;
   }
 }

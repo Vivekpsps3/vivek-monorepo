@@ -2,7 +2,10 @@ import type { Holding, Transaction } from '../models/transaction.model';
 import { galleryGain as publishedGain, projectTreasuryGallery as publishedGallery } from '../../public-api';
 import {
   emptyGalleryFilters,
+  galleryActivityQuery,
+  galleryFilterSummary,
   galleryGain,
+  galleryHasAdvancedFilters,
   projectTreasuryGallery,
   readGalleryQuery,
   writeGalleryQuery,
@@ -79,15 +82,13 @@ describe('treasury gallery projection', () => {
     expect(publishedGain).toBe(galleryGain);
   });
 
-  it('keeps the first useful position and dated line in the inspector and hides every digit', () => {
+  it('lists holdings and dated lines without inventing a selected record', () => {
     const locked = view({ holdings: [unnamed, harbor, tide], transactions: [undated, cafe, books, stipend] });
     expect(locked.plaques.map(plaque => plaque.label)).toEqual(['Unnamed position', 'HARBOR', 'TIDE']);
-    expect(locked.inspectorPosition?.id).toBe(2);
-    expect(locked.inspectorPosition?.shares).toBeNull();
-    expect(locked.inspectorPosition?.value).toBeNull();
-    expect(locked.inspectorPosition?.gain).toBeNull();
-    expect(locked.inspectorLedger?.id).toBe(42);
-    expect(locked.inspectorLedger?.amount).toBeNull();
+    expect(locked.inspectorPosition).toBeNull();
+    expect(locked.inspectorLedger).toBeNull();
+    expect(locked.plaques.every(plaque => plaque.value == null && plaque.shares == null)).toBeTrue();
+    expect(locked.lines.every(line => line.amount == null && !line.opened)).toBeTrue();
     expect(locked.lines.map(line => line.id)).toEqual([43, 42, 41, 44]);
     expect(locked.readout.value).toBeNull();
     expect(locked.readout.gain).toBeNull();
@@ -149,10 +150,10 @@ describe('treasury gallery projection', () => {
       openedLedgerId: 41,
     });
     expect(outside.lines.map(line => line.id)).toEqual([42]);
-    expect(outside.inspectorLedger?.id).toBe(42);
-    expect(outside.inspectorLedger?.amount).toBeNull();
+    expect(outside.lines[0].opened).toBeFalse();
+    expect(outside.inspectorLedger).toBeNull();
     expect(outside.ledgerOutsideFilter).toBeTrue();
-    expect(JSON.stringify(outside.inspectorLedger)).not.toContain('Boardwalk');
+    expect(JSON.stringify(outside.lines)).not.toContain('Boardwalk');
 
     const trip = view({
       transactions: rows,
@@ -168,13 +169,20 @@ describe('treasury gallery projection', () => {
     expect(account.lines.map(line => line.id)).toEqual([41]);
   });
 
-  it('sorts the desk with the Activity order and skips an undated row for the inspector', () => {
+  it('sorts the desk with the Activity order and does not select an undated row on its own', () => {
     const oldest = view({
       transactions: [books, cafe, undated],
       sort: { column: 'date', direction: 'asc' },
     });
     expect(oldest.lines.map(line => line.id)).toEqual([41, 42, 43]);
-    expect(oldest.inspectorLedger?.id).toBe(41);
+    expect(oldest.inspectorLedger).toBeNull();
+    const opened = view({
+      transactions: [books, cafe, undated],
+      sort: { column: 'date', direction: 'asc' },
+      openedLedgerId: 41,
+    });
+    expect(opened.inspectorLedger?.id).toBe(41);
+    expect(view({ transactions: [undated] }).inspectorLedger).toBeNull();
   });
 
   it('drops a locked vault to an empty projection with no ticker text', () => {
@@ -222,5 +230,21 @@ describe('treasury gallery projection', () => {
     expect(read.ledgerId).toBe(41);
     expect(readGalleryQuery(() => 'nope').positionId).toBeNull();
     expect(readGalleryQuery(() => null).sort).toEqual({ column: 'date', direction: 'desc' });
+    const activity = galleryActivityQuery(filters);
+    expect(activity['edit']).toBeUndefined();
+    expect(activity['position']).toBeUndefined();
+    expect(activity['t']).toBeUndefined();
+    expect(activity['v']).toBe('spending');
+    expect(activity['from']).toBe('2026-08-15');
+    expect(activity['month']).toBeNull();
+    expect(galleryActivityQuery(emptyGalleryFilters())['month']).toBe('all');
+    expect(galleryHasAdvancedFilters(filters, { column: 'date', direction: 'desc' })).toBeTrue();
+    expect(galleryHasAdvancedFilters(emptyGalleryFilters(), { column: 'date', direction: 'desc' })).toBeFalse();
+    expect(galleryFilterSummary(filters, {
+      categories: [{ value: 'groceries', label: 'Groceries' }],
+      merchants: [],
+      accounts: [{ value: 'checking', label: 'Checking' }],
+      trips: [],
+    })).toBe('Spending · Groceries · Checking · No trip · 2026-08-15–2026-08-15');
   });
 });
