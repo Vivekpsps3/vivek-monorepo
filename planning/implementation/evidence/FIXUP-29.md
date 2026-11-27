@@ -50,7 +50,7 @@ Focused dialog Karma was used while iterating. A partial `--include` run misses 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened from `agent/fixup-29`. The body is only `Closes #617`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/652. The body is only `Closes #617`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: none. Shared dialog and scene layout were not edited, so 320px and 200% text were not added as a new stress. GAME-04 chapter files stay on main and are not part of this change.
