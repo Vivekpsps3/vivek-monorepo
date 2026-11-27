@@ -63,7 +63,7 @@ export function collectionSummary(kind) {
     case "tv":
       return "Series. Shows and the episodes you are watching. Caught up and ended stay different facts. This lounge does not play them.";
     case "book":
-      return "Books. Current, read, and to-read shelves, as covers and spines or as a text list. A page or percent appears only when you record one. This hall does not open the book text.";
+      return "Books. Current, read, and to-read shelves. A page or percent appears only when you record one. This hall does not open the book text.";
     case "artist":
       return "Music. Artists you have saved, with their albums and then their songs. Saving music does not follow the artist.";
     case "album":
