@@ -1420,7 +1420,7 @@ describe('Health room shell', () => {
     typeInto(el, '#health-workout-load', '100');
     typeInto(el, '#health-workout-reps', '5');
     fixture.detectChanges();
-    button(el, 'Save').click();
+    button(el, 'Finish session').click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -1574,8 +1574,7 @@ describe('Health room shell', () => {
     expect(el.querySelectorAll('[data-entered-set]')).toHaveSize(1);
     expect(el.querySelector<HTMLInputElement>('#health-workout-load')?.value).toBe('');
     expect(el.querySelector<HTMLInputElement>('#health-workout-reps')?.value).toBe('');
-    choose(el, '#health-workout-state', 'draft');
-    fixture.detectChanges();
+    expect(el.querySelector('#health-workout-state')).toBeNull();
     button(el, 'Save').click();
     fixture.detectChanges();
     await fixture.whenStable();
@@ -1753,7 +1752,10 @@ describe('Health room shell', () => {
     let rows = enteredRows(el);
     expect(rows).toHaveSize(3);
     expect(rows[2].textContent).toContain('1 reps');
-    expect(rowAction(rows[0], 'Earlier').disabled).toBeTrue();
+    expect(rows[0].textContent).not.toContain('Earlier');
+    rowAction(rows[2], 'Edit').click();
+    fixture.detectChanges();
+    rows = enteredRows(el);
     expect(rowAction(rows[2], 'Later').disabled).toBeTrue();
     expect(rowAction(rows[2], 'Earlier').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     rowAction(rows[2], 'Earlier').click();
@@ -1773,6 +1775,9 @@ describe('Health room shell', () => {
     expect(el.textContent).not.toContain('1 reps');
     expect(rows[0].textContent).toContain(`Stored as ${liftKg.toFixed(2)} kg · 5 reps`);
     expect(rows[1].textContent).toContain(`Stored as ${workKg.toFixed(2)} kg · 3 reps`);
+    rowAction(rows[1], 'Edit').click();
+    fixture.detectChanges();
+    rows = enteredRows(el);
     const role = rows[1].querySelector('select');
     if (!(role instanceof HTMLSelectElement)) throw new Error('missing role');
     role.value = 'drop';
@@ -1825,7 +1830,7 @@ describe('Health room shell', () => {
     fixture.detectChanges();
 
     fake.failUpsert = true;
-    button(el, 'Save').click();
+    button(el, 'Finish session').click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -2053,7 +2058,8 @@ describe('Health room shell', () => {
     fixture.detectChanges();
     expect(el.querySelector('#health-workout-title')?.textContent).toContain('Start session');
     expect(el.querySelector<HTMLInputElement>('#health-workout-measured-on')?.value).toBe(today);
-    expect(el.querySelector<HTMLSelectElement>('#health-workout-state')?.value).toBe('draft');
+    expect(el.querySelector('#health-workout-state')).toBeNull();
+    expect(el.querySelector('form')?.getAttribute('data-session-state')).toBe('draft');
     const routineRecord = decode(storedRow(clientId(routine)).ciphertext) as { exercises: Array<{ sets: Array<{ id: string }> }> };
     const planned = enteredRows(el);
     expect(planned).toHaveSize(1);
@@ -2063,10 +2069,8 @@ describe('Health room shell', () => {
     const plannedId = planned[0].getAttribute('data-entered-set');
     if (!plannedId) throw new Error('missing planned set');
     expect(plannedId).not.toBe(routineRecord.exercises[0].sets[0].id);
-    choose(el, '#health-workout-state', 'completed');
-    fixture.detectChanges();
-    expect(button(el, 'Save').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
-    button(el, 'Save').click();
+    expect(button(el, 'Finish session').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    button(el, 'Finish session').click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -2094,6 +2098,8 @@ describe('Health room shell', () => {
     expect(el.querySelector('#health-workout-title')?.textContent).toContain('Edit routine');
     expect(el.querySelector('#health-workout-routine-name')?.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     typeInto(el, '#health-workout-routine-name', 'Synthetic plan edited');
+    rowAction(enteredRows(el)[0], 'Edit').click();
+    fixture.detectChanges();
     rowAction(enteredRows(el)[0], 'Remove').click();
     fixture.detectChanges();
     typeInto(el, '#health-workout-load', '20');
@@ -2142,7 +2148,8 @@ describe('Health room shell', () => {
     again.click();
     fixture.detectChanges();
     expect(el.querySelector('#health-workout-title')?.textContent).toContain('Start session');
-    expect(el.querySelector<HTMLSelectElement>('#health-workout-state')?.value).toBe('draft');
+    expect(el.querySelector('#health-workout-state')).toBeNull();
+    expect(el.querySelector('form')?.getAttribute('data-session-state')).toBe('draft');
     const copyId = enteredRows(el)[0]?.getAttribute('data-entered-set');
     expect(copyId).toBeTruthy();
     expect(copyId).not.toBe(decoded.exercises[0].sets[0].id);
@@ -2995,7 +3002,7 @@ describe('Health room shell', () => {
     typeInto(el, '#health-workout-reps', '9');
     fixture.detectChanges();
     fake.holdUpsert = true;
-    button(el, 'Complete session').click();
+    button(el, 'Finish session').click();
     fixture.detectChanges();
     await until(() => fake.upsertRelease.length === 1);
     fake.holdList = true;
@@ -3720,8 +3727,7 @@ describe('Health room shell', () => {
       fake.failUpsert = true;
       button(el, 'Add set').click();
       fixture.detectChanges();
-      choose(el, '#health-workout-state', 'draft');
-      fixture.detectChanges();
+      expect(el.querySelector('#health-workout-state')).toBeNull();
       restButton(el, 'health-rest-start').click();
       fixture.detectChanges();
       button(el, 'Save').click();
