@@ -1,6 +1,6 @@
-import { Component, DestroyRef, inject, signal } from "@angular/core";
+import { Component, DestroyRef, ElementRef, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { ActivatedRoute, Router, RouterLink } from "@angular/router";
+import { ActivatedRoute, NavigationStart, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { Subject, catchError, finalize, map, merge, of, switchMap } from "rxjs";
 import { showDay } from "./display";
@@ -13,6 +13,7 @@ import {
   localMonth,
 } from "./saved-calendar.service";
 import {
+  ReturnContext,
   SESSION_CONTEXT,
   UiButtonComponent,
   UiCardComponent,
@@ -81,7 +82,9 @@ import {
                   @if (event.entry_id) {
                     <a
                       class="release-link"
+                      [attr.data-calendar-focus]="event.entry_id"
                       [routerLink]="['/media/item', event.entry_id]"
+                      [state]="linkState()"
                       >{{ event.title }}</a
                     >
                   } @else {
@@ -111,7 +114,9 @@ import {
                 @if (event.entry_id) {
                   <a
                     class="release-link"
+                    [attr.data-calendar-focus]="event.entry_id"
                     [routerLink]="['/media/item', event.entry_id]"
+                    [state]="linkState()"
                     >{{ event.title }}</a
                   >
                 } @else {
@@ -133,7 +138,10 @@ export class CalendarComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly session = inject(SESSION_CONTEXT);
+  private readonly returns = inject(ReturnContext);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly destroy = inject(DestroyRef);
+  private restoredView = this.returns.view("/media/calendar");
   private readonly retry$ = new Subject<boolean>();
   private ownerId = this.session.currentUser?.id ?? null;
   private flight = 0;
@@ -143,6 +151,15 @@ export class CalendarComponent {
   readonly refreshing = signal(false);
 
   constructor() {
+    this.router.events.pipe(takeUntilDestroyed()).subscribe((event) => {
+      if (
+        event instanceof NavigationStart &&
+        event.navigationTrigger === "imperative"
+      ) {
+        const item = /^\/media\/item\/(\d+)(?:[/?#]|$)/.exec(event.url)?.[1] ?? null;
+        if (item && !this.restoredView) this.returns.saveView("/media/calendar", item);
+      }
+    });
     this.session.cleared$.pipe(takeUntilDestroyed()).subscribe(() => {
       this.flight += 1;
       this.data.set(null);
@@ -175,8 +192,27 @@ export class CalendarComponent {
         takeUntilDestroyed(),
       )
       .subscribe((month) => {
-        if (month) this.data.set(month);
+        if (!month) return;
+        this.data.set(month);
+        this.restoreFocus();
       });
+  }
+
+  linkState(): Record<string, unknown> {
+    const month = this.month || localMonth();
+    return this.returns.link(`/media/calendar?month=${month}`);
+  }
+
+  private restoreFocus(): void {
+    const view = this.restoredView;
+    if (!view?.focus) return;
+    this.restoredView = null;
+    const focus = view.focus;
+    requestAnimationFrame(() => {
+      this.host.nativeElement
+        .querySelector<HTMLElement>(`[data-calendar-focus="${focus}"]`)
+        ?.focus();
+    });
   }
 
   refresh(): void {

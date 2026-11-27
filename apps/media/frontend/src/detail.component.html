@@ -21,10 +21,11 @@
   }
   @if (item(); as entry) {
     <ui-page-header
-      backLabel="← Library"
-      [backLink]="fallbackLibrary(entry.kind)"
-      backSource="/media/library"
+      [backLabel]="returnLabel()"
+      [backLink]="returnHref(entry.kind)"
+      [backSource]="returnSource()"
       [title]="entry.title"
+      [subtitle]="resumeFact(entry)"
     >
       <ul class="meta-chips" aria-label="Item details">
         @for (chip of chips(entry); track $index) {
@@ -61,6 +62,23 @@
           </span>
         }
       </div>
+      @if (resume(entry); as next) {
+        <div uiPageActions class="series-resume">
+          @if (next.mode === "watch" || next.mode === "wait") {
+            <media-next-episode
+              [entryId]="entry.id"
+              [episodeId]="next.mode === 'watch' ? next.episodeId : null"
+              [season]="next.season"
+              [episode]="next.episode"
+              [showTitle]="entry.title"
+              (done)="onResumeDone($event)"
+              (failed)="onResumeFailed($event)"
+            />
+          } @else if (next.status) {
+            <p class="next-episode-wait">{{ next.status }}</p>
+          }
+        </div>
+      }
     </ui-page-header>
     @if (message()) {
       <p role="status" class="save-status">{{ message() }}</p>
@@ -78,6 +96,12 @@
         </ui-button>
       </ui-card>
     }
+    @if (entry.kind === "tv" && !seriesEditing) {
+      <ui-button variant="ghost" (clicked)="openSeriesEdit()"
+        >Edit rating and note</ui-button
+      >
+    }
+    @if (entry.kind !== "tv" || seriesEditing) {
     <ui-card
       ><form class="media-editor" (ngSubmit)="save()">
         <h2>{{ heading(entry.kind) }}</h2>
@@ -227,6 +251,7 @@
         </div>
       </form></ui-card
     >
+    }
     @if (entry.show; as show) {
       <ui-card>
         <h2>Episode progress</h2>
@@ -250,20 +275,6 @@
                 : "Waiting for the next episode or season"
             }}
           </p>
-        }
-        @if (show.next_episode; as next) {
-          <p>
-            Next: {{ code(next.season_number, next.episode_number) }} ·
-            {{ next.title || "Untitled episode" }}
-            · {{ episodeWhen(next) }}
-          </p>
-          <ui-button
-            class="next-mark"
-            variant="ghost"
-            [disabled]="busy()"
-            (click)="markNext(next)"
-            >Mark next watched</ui-button
-          >
         }
         <label class="check-label"
           ><input type="checkbox" [(ngModel)]="includeSpecials" /> Include aired
