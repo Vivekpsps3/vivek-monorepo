@@ -54,7 +54,9 @@ async function record(page: Page, discoveries: ReturnType<Page['locator']>, name
   await activate(page, discoveries.getByRole('button', { name: `Activate ${name}`, exact: true }), touch);
   await expect(discoveries.getByRole('heading', { name: `Activate ${name}?` })).toBeFocused();
   await activate(page, discoveries.getByRole('button', { name: 'Confirm discovery', exact: true }), touch);
-  await expect(discoveries.getByText('Found once.')).toBeFocused();
+  const notice = discoveries.locator('#discovery-notice');
+  await expect(notice).toHaveText('Found once.');
+  await expect(notice).toBeFocused();
 }
 
 test.describe('Town discoveries', () => {
@@ -116,7 +118,7 @@ test.describe('Town discoveries', () => {
       await record(page, discoveries, 'Ferry bell', touch);
       await expect(discoveries.locator('[data-discovery="ferry-bell"]')).toHaveAttribute('data-found', 'true');
       await expect(discoveries.locator('main')).toHaveAttribute('data-revision', '1');
-      await expect(discoveries.getByText('No trip is created.')).toBeVisible();
+      await expect(discoveries.locator('[data-discovery="ferry-bell"]')).toContainText('No trip is created.');
 
       const replayBody = page.waitForRequest(request => request.method() === 'POST' && request.url().includes('/api/town/discoveries'));
       await activate(page, discoveries.getByRole('button', { name: 'Read Ferry bell again', exact: true }), touch);
@@ -124,7 +126,8 @@ test.describe('Town discoveries', () => {
       await activate(page, discoveries.getByRole('button', { name: 'Confirm discovery', exact: true }), touch);
       const posted = (await replayBody).postDataJSON() as { discovery_id: string; expected_revision: number };
       expect(posted).toEqual({ discovery_id: 'ferry-bell', expected_revision: 1 });
-      await expect(discoveries.getByText('Already in the journal.')).toBeFocused();
+      await expect(discoveries.locator('#discovery-notice')).toHaveText('Already in the journal.');
+      await expect(discoveries.locator('#discovery-notice')).toBeFocused();
       await expect(discoveries.locator('main')).toHaveAttribute('data-revision', '1');
 
       await record(page, discoveries, 'Rooftop telescope', touch);
@@ -132,7 +135,7 @@ test.describe('Town discoveries', () => {
       await expect(discoveries.locator('main')).toHaveAttribute('data-revision', '3');
       await expect(discoveries.locator('[data-discovery="rooftop-telescope"]')).toHaveAttribute('data-found', 'true');
       await expect(discoveries.locator('[data-discovery="gym-chalkboard"]')).toHaveAttribute('data-found', 'true');
-      await expect(discoveries.getByText('No workout is recorded.')).toBeVisible();
+      await expect(discoveries.locator('[data-discovery="gym-chalkboard"]')).toContainText('No workout is recorded.');
       await page.reload();
       await expect(discoveries.locator('main')).toHaveAttribute('data-revision', '3');
       await expect(discoveries.locator('[data-discovery="ferry-bell"]')).toHaveAttribute('data-found', 'true');
@@ -164,8 +167,9 @@ test.describe('Town discoveries', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/town');
-    const picker = page.locator('details').filter({ has: page.getByRole('list', { name: 'Town discoveries' }) });
-    await picker.locator('summary').click();
+    const summary = page.locator('app-town-exterior summary').filter({ hasText: 'Discoveries' });
+    await summary.focus();
+    await page.keyboard.press('Enter');
     const link = page.getByRole('list', { name: 'Town discoveries' }).getByRole('link', { name: /^Ferry bell/ });
     await expect(link).toBeVisible();
     const box = await link.boundingBox();
@@ -201,7 +205,7 @@ test.describe('Town discoveries', () => {
     }
     await activate(page, discoveries.getByRole('button', { name: 'Read Ferry bell again', exact: true }), false);
     await activate(page, discoveries.getByRole('button', { name: 'Confirm discovery', exact: true }), false);
-    await expect(discoveries.getByText('Already in the journal.')).toBeVisible();
+    await expect(discoveries.locator('#discovery-notice')).toHaveText('Already in the journal.');
     await expect(discoveries.locator('main')).toHaveAttribute('data-revision', '12');
     const journal = await (await page.request.get('/api/town/discoveries')).json();
     expect(journal.revision).toBe(12);
