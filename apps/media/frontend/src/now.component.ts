@@ -6,11 +6,12 @@ import {
   signal,
 } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
-import { RouterLink } from "@angular/router";
+import { NavigationStart, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { finalize } from "rxjs";
 import { formatDay } from "@vivek/browser";
 import {
+  ReturnContext,
   SESSION_CONTEXT,
   UiButtonComponent,
   UiCardComponent,
@@ -120,6 +121,7 @@ interface NextLine {
               @for (item of summary.currently; track item.id) {
                 <media-card
                   [item]="item"
+                  [source]="nowState()"
                   [layout]="item.kind === 'movie' || item.kind === 'tv' ? 'poster' : 'row'"
                 >
                   @if (showNext(item)) {
@@ -155,7 +157,10 @@ interface NextLine {
               @for (episode of leftoverEpisodes(summary); track episode.entry_id) {
                 <article class="episode-row">
                   <div>
-                    <a [routerLink]="['/media/item', episode.entry_id]"
+                    <a
+                      [attr.data-media-item]="episode.entry_id"
+                      [routerLink]="['/media/item', episode.entry_id]"
+                      [state]="nowState()"
                       ><strong>{{ episode.show_title }}</strong></a
                     >
                     @if (nextLine(episode); as line) {
@@ -192,7 +197,7 @@ interface NextLine {
               <h2>Favorites</h2>
               <div class="media-grid">
                 @for (item of favoriteItems; track item.id) {
-                  <media-card [item]="item" />
+                  <media-card [item]="item" [source]="nowState()" />
                 }
               </div>
             </section>
@@ -224,7 +229,9 @@ interface NextLine {
                     @if (event.entry_id) {
                       <a
                         class="release-link"
+                        [attr.data-media-item]="event.entry_id"
                         [routerLink]="['/media/item', event.entry_id]"
+                        [state]="nowState()"
                         >{{ event.title }}</a
                       >
                     } @else {
@@ -240,7 +247,9 @@ interface NextLine {
                 @if (event.entry_id) {
                   <a
                     class="release-link"
+                    [attr.data-media-item]="event.entry_id"
                     [routerLink]="['/media/item', event.entry_id]"
+                    [state]="nowState()"
                     >{{ event.title }}</a
                   >
                 } @else {
@@ -270,9 +279,12 @@ interface NextLine {
             @for (review of summary.recent_reviews; track review.id) {
               <article>
                 <h3>
-                  <a [routerLink]="['/media/item', review.id]">{{
-                    review.title
-                  }}</a>
+                  <a
+                    [attr.data-media-item]="review.id"
+                    [routerLink]="['/media/item', review.id]"
+                    [state]="nowState()"
+                    >{{ review.title }}</a
+                  >
                 </h3>
                 <p>{{ review.review_excerpt }}</p>
               </article>
@@ -291,8 +303,11 @@ export class NowComponent {
   private readonly http = inject(HttpClient);
   private readonly destroy = inject(DestroyRef);
   private readonly host = inject(ElementRef);
+  private readonly router = inject(Router);
+  private readonly returns = inject(ReturnContext);
   private readonly session = inject(SESSION_CONTEXT);
   private readonly saved = inject(SavedCalendar);
+  private restoredView = this.returns.view("/media");
   private summaryEpoch = 0;
   private releaseFlight = 0;
   private ownerId = this.session.currentUser?.id ?? null;
@@ -308,6 +323,15 @@ export class NowComponent {
   readonly refreshing = signal(false);
 
   constructor() {
+    this.router.events.pipe(takeUntilDestroyed()).subscribe((event) => {
+      if (
+        event instanceof NavigationStart &&
+        event.navigationTrigger === "imperative"
+      ) {
+        const item = /^\/media\/item\/(\d+)(?:[/?#]|$)/.exec(event.url)?.[1] ?? null;
+        if (item && !this.restoredView) this.returns.saveView("/media", item);
+      }
+    });
     inject(NextEpisodeUndoService).restored$
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe(() => {
@@ -427,6 +451,22 @@ export class NowComponent {
           if (this.releaseMonth === month) this.releasesError.set(errorCopy(error));
         },
       });
+  }
+
+  protected nowState(): Record<string, unknown> {
+    return this.returns.link("/media");
+  }
+
+  private restoreFocus(): void {
+    const view = this.restoredView;
+    if (!view?.focus) return;
+    this.restoredView = null;
+    const focus = view.focus;
+    requestAnimationFrame(() => {
+      (this.host.nativeElement as HTMLElement)
+        .querySelector<HTMLElement>(`a[data-media-item="${focus}"]`)
+        ?.focus();
+    });
   }
 
   protected unconfigured(calendar: CalendarMonth): string {
@@ -565,6 +605,7 @@ export class NowComponent {
   private publishSummary(summary: Summary, epoch: number, owner: number | null, loud: boolean): void {
     if (!this.owns(epoch, owner)) return;
     this.data.set(summary);
+    this.restoreFocus();
     if (!summary.counts.library) {
       this.releases.set(null);
       return;
