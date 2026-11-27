@@ -8,8 +8,10 @@ import {
   captureParams,
   coverageText,
   kindLabel,
+  manualRouteParams,
   retryOpen,
   sameProviderIdentity,
+  searchReturnParams,
   selectedKind,
 } from "../../../frontend/src/capture.mjs";
 
@@ -29,6 +31,23 @@ test("selected type is carried and all-types is not a manual default", () => {
     kind: "book",
   });
   assert.deepEqual(addQuery("  ", "all"), {});
+  assert.deepEqual(manualRouteParams("Paper Harbor", "book", 640), {
+    q: "Paper Harbor",
+    kind: "book",
+    title: "Paper Harbor",
+    fromKind: "book",
+    scroll: "640",
+  });
+  assert.deepEqual(manualRouteParams("  ", "all", 0), { kind: "all", fromKind: "all" });
+  assert.deepEqual(searchReturnParams("Paper Harbor", "book", 640.4), {
+    q: "Paper Harbor",
+    kind: "book",
+    scroll: "640",
+  });
+  assert.deepEqual(searchReturnParams("Paper Harbor", "all", 0), {
+    q: "Paper Harbor",
+    kind: "all",
+  });
   assert.equal(kindLabel("tv"), "Series");
   assert.equal(CAPTURE_KINDS.includes("book"), true);
 });

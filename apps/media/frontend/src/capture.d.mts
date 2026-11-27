@@ -4,6 +4,16 @@ export declare function kindLabel(kind: string): string;
 export declare function selectedKind(value: string | null, manual: boolean): string;
 export declare function captureParams(kind: string): { kind?: string };
 export declare function addQuery(title: string, kind: string): { title?: string; kind?: string };
+export declare function searchReturnParams(
+  query: string,
+  kind: string,
+  scroll: number,
+): { q?: string; kind?: string; scroll?: string };
+export declare function manualRouteParams(
+  query: string,
+  kind: string,
+  scroll: number,
+): { q?: string; kind?: string; scroll?: string; title?: string; fromKind?: string };
 export declare function retryOpen(used: number, limit?: number): boolean;
 export declare function acceptCaptureResult(
   epoch: number,

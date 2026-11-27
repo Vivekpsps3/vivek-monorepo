@@ -47,6 +47,29 @@ export function addQuery(title, kind) {
   return params;
 }
 
+/**
+ * Explicit Search return. The original query and kind stay even when the manual
+ * title was edited. Scroll is the search page position, not the add form.
+ */
+export function searchReturnParams(query, kind, scroll) {
+  const params = {};
+  const q = typeof query === "string" ? query.trim() : "";
+  if (q) params.q = q;
+  if (kind === "all" || CAPTURE_KINDS.includes(kind)) params.kind = kind;
+  const top = Number(scroll);
+  if (Number.isFinite(top) && top >= 1) params.scroll = String(Math.round(top));
+  return params;
+}
+
+/** Add manually carries the search query as the prefilled title and the return coordinates. */
+export function manualRouteParams(query, kind, scroll) {
+  const params = searchReturnParams(query, kind, scroll);
+  const title = typeof query === "string" ? query.trim() : "";
+  if (title) params.title = title;
+  if (kind === "all" || CAPTURE_KINDS.includes(kind)) params.fromKind = kind;
+  return params;
+}
+
 export function retryOpen(used, limit = CAPTURE_RETRY_LIMIT) {
   return Number.isInteger(used) && used >= 0 && used < limit;
 }

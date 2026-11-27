@@ -97,7 +97,7 @@ for (const width of [390, 768, 1280]) for (const theme of ['light', 'dark'] as c
     } }));
     await page.goto('/media/search?q=The%20Gentlemen&kind=all');
     await expect(page.getByRole('heading', { name: 'The Gentlemen', exact: true })).toHaveCount(2);
-    await page.getByText('Source coverage · all types', { exact: true }).click();
+    await page.getByText('Provider coverage', { exact: true }).click();
     await shot('search-partial');
     await page.goto('/media/library?sort=title');
     await openFilters(page);
