@@ -1,7 +1,9 @@
 """Optional chapter journal. One recorded game action per step.
 
 A repeat of the stored action returns the current journal and does not bump
-the revision. This module does not grant Stamps, Town XP, or life records.
+the revision. Finishing the third step grants 10 Stamps once through the stamp
+ledger and keeps the named postcard or seal. Samples award no XP and create no
+life records. Nothing here expires.
 """
 
 from __future__ import annotations
@@ -17,7 +19,8 @@ from sqlalchemy.orm import Session
 
 from apps.server.errors import APIError
 from apps.server.town.models import QuestJournal, QuestStep
-from apps.server.town.quest_catalog import QUESTS, quest_by_id, step_by_id
+from apps.server.town.quest_catalog import QUESTS, chapter_grant_key, quest_by_id, step_by_id
+from apps.server.town.stamps import grant_stamps
 
 _CHECK = "Check the highlighted fields."
 _ACTION = "That step already records a different action."
@@ -104,6 +107,13 @@ def _journal(db: Session, user_id: int) -> dict[str, Any]:
                 "detail": quest.detail,
                 "completed": completed,
                 "total": len(quest.steps),
+                "reward_stamps": quest.reward_stamps,
+                "keepsake": {
+                    "id": quest.keepsake_id,
+                    "name": quest.keepsake_name,
+                    "kind": quest.keepsake_kind,
+                    "kept": completed == len(quest.steps),
+                },
                 "steps": steps,
             }
         )
@@ -139,6 +149,20 @@ def _insert(
     )
 
 
+def _grant_chapter(db: Session, user_id: int, quest_id: str, now: datetime) -> None:
+    # The ledger key is the once-only reward. A lost step rolls the grant back.
+    grant_stamps(
+        db,
+        user_id,
+        {
+            "grant_key": chapter_grant_key(quest_id),
+            "amount": 10,
+            "consumer": "quest",
+        },
+        now,
+    )
+
+
 def _write(
     db: Session,
     user_id: int,
@@ -147,7 +171,11 @@ def _write(
     action_id: str,
     expected: int,
     now: datetime,
+    *,
+    completing: bool,
 ) -> tuple[dict[str, Any], bool]:
+    if completing:
+        _grant_chapter(db, user_id, quest_id, now)
     if expected == 0:
         db.add(QuestJournal(user_id=user_id, revision=1, updated_at=now))
         _insert(db, user_id, quest_id, step_id, action_id, now)
@@ -168,6 +196,7 @@ def _write(
         ),
     )
     if result.rowcount != 1:
+        db.rollback()
         raise _conflict(_revision(db, user_id))
     _insert(db, user_id, quest_id, step_id, action_id, now)
     try:
@@ -201,4 +230,14 @@ def record_step(
     current = _revision(db, user_id)
     if current != parsed.expected_revision:
         raise _conflict(current)
-    return _write(db, user_id, quest.id, step.id, parsed.action_id, current, now)
+    completing = step.id == quest.steps[-1].id
+    return _write(
+        db,
+        user_id,
+        quest.id,
+        step.id,
+        parsed.action_id,
+        current,
+        now,
+        completing=completing,
+    )

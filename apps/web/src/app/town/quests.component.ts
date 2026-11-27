@@ -147,11 +147,12 @@ export class QuestsComponent {
     }).pipe(takeUntilDestroyed(this.destroy)).subscribe({
       next: journal => {
         if (generation !== this.generation) return;
+        const notice = this.rewardNotice(this.journal(), journal);
         this.busy.set(false);
         this.journal.set(journal);
         this.confirmation.set(null);
         this.error.set('');
-        this.notice.set('Recorded once.');
+        this.notice.set(notice);
         this.focus('#quest-notice');
       },
       error: (failure: unknown) => {
@@ -192,6 +193,15 @@ export class QuestsComponent {
         this.focus('#quest-load-error');
       },
     });
+  }
+
+  private rewardNotice(before: QuestJournal | null, journal: QuestJournal): string {
+    const finished = journal.quests.find(quest => {
+      const prior = before?.quests.find(item => item.id === quest.id);
+      return quest.keepsake.kept && prior?.keepsake.kept !== true;
+    });
+    if (!finished) return 'Recorded once.';
+    return `Recorded once. ${finished.keepsake.name}. ${finished.reward_stamps} Stamps, once.`;
   }
 
   private sourceState(source: SourceKind): SourceState {

@@ -1,4 +1,4 @@
-"""Optional quests: one game action per step, no life reward, no second grant."""
+"""Optional quests: one game action per step. A finished chapter grants 10 once."""
 
 from __future__ import annotations
 
@@ -38,8 +38,9 @@ from apps.server.town.models import (
     StampWallet,
     TownBase,
 )
-from apps.server.town.quest_catalog import triple_check_sql
+from apps.server.town.quest_catalog import QUESTS, chapter_grant_key, triple_check_sql
 from apps.server.town.quests import read_journal, record_step
+from apps.server.town.stamps import read_wallet
 
 PARENT = "site_town_layouts_v1"
 HEAD = "site_town_discoveries_v1"
@@ -444,6 +445,282 @@ def test_delete_user_account_removes_only_that_owners_quests(tmp_path: Path) -> 
     finally:
         db.close()
         opened.engine.dispose()
+
+
+def _finish(db, user_id: int, *, sample: bool) -> dict:
+    journal = read_journal(db, user_id)
+    assert all(
+        quest["reward_stamps"] == 10 and quest["keepsake"]["kept"] is False
+        for quest in journal["quests"]
+    )
+    for quest in QUESTS:
+        for step in quest.steps:
+            action = step.sample_action_id if sample and step.sample_action_id else step.action_id
+            journal, created = record_step(
+                db,
+                user_id,
+                {
+                    "quest_id": quest.id,
+                    "step_id": step.id,
+                    "action_id": action,
+                    "expected_revision": journal["revision"],
+                },
+                WHEN,
+            )
+            assert created is True
+        view = next(item for item in journal["quests"] if item["id"] == quest.id)
+        assert view["completed"] == 3
+        assert view["keepsake"] == {
+            "id": quest.keepsake_id,
+            "name": quest.keepsake_name,
+            "kind": quest.keepsake_kind,
+            "kept": True,
+        }
+        db.commit()
+    return journal
+
+
+def test_each_chapter_rewards_empty_and_populated_accounts_once(tmp_path: Path) -> None:
+    database = _file_db(tmp_path)
+    db = _session(database)
+    try:
+        empty = _finish(db, 1, sample=True)
+        populated = _finish(db, 2, sample=False)
+        assert empty["revision"] == 18
+        assert populated["revision"] == 18
+        assert read_wallet(db, 1)["balance"] == 60
+        assert read_wallet(db, 2)["balance"] == 60
+        for user_id in (1, 2):
+            receipts = read_wallet(db, user_id)["receipts"]
+            assert {
+                (row["grant_key"], row["amount"], row["consumer"], row["kind"]) for row in receipts
+            } == {(chapter_grant_key(quest.id), 10, "quest", "grant") for quest in QUESTS}
+        replay, again = record_step(
+            db,
+            1,
+            {
+                "quest_id": "your-own-little-world",
+                "step_id": "inspect-saved",
+                "action_id": "your-own-little-world:inspect-saved:sample",
+                "expected_revision": 0,
+            },
+            WHEN,
+        )
+        assert again is False
+        assert replay["revision"] == 18
+        assert read_wallet(db, 1)["balance"] == 60
+        assert _count(db, StampReceipt, 1) == 6
+        partial = read_journal(db, 3)
+        for step_id, action_id in (
+            ("enter-home", "make-a-home:enter-home"),
+            ("place-starter", "make-a-home:place-starter"),
+        ):
+            partial, created = record_step(
+                db,
+                3,
+                {
+                    "quest_id": "make-a-home",
+                    "step_id": step_id,
+                    "action_id": action_id,
+                    "expected_revision": partial["revision"],
+                },
+                WHEN,
+            )
+            assert created is True
+        db.commit()
+        stale = _reject(
+            db,
+            {
+                "quest_id": "make-a-home",
+                "step_id": "save-layout",
+                "action_id": "make-a-home:save-layout",
+                "expected_revision": partial["revision"] - 1,
+            },
+            user_id=3,
+        )
+        assert stale.status_code == 409 and stale.code == "quest_conflict"
+        assert read_wallet(db, 3)["balance"] == 0
+        assert _count(db, QuestStep, 3) == 2
+        unfinished = next(
+            quest for quest in read_journal(db, 3)["quests"] if quest["id"] == "make-a-home"
+        )
+        assert unfinished["keepsake"]["kept"] is False
+        samples = {
+            action
+            for _quest, _step, action in db.execute(
+                select(QuestStep.quest_id, QuestStep.step_id, QuestStep.action_id).where(
+                    QuestStep.user_id == 1
+                )
+            )
+        }
+        assert "find-your-shelves:inspect-saved:sample" in samples
+        assert "across-the-harbor:inspect-saved:sample" in samples
+        assert "your-own-little-world:inspect-saved:sample" in samples
+        saved = {
+            action
+            for _quest, _step, action in db.execute(
+                select(QuestStep.quest_id, QuestStep.step_id, QuestStep.action_id).where(
+                    QuestStep.user_id == 2
+                )
+            )
+        }
+        assert "find-your-shelves:inspect-saved" in saved
+        assert not any(action.endswith(":sample") for action in saved)
+        found: set[str] = set()
+        _keys(read_journal(db, 1), found)
+        assert _FORBIDDEN.isdisjoint(found)
+        assert "expired" not in found
+        assert _count(db, HabitCheckin) == 0
+    finally:
+        db.close()
+        database.engine.dispose()
+
+
+def test_long_absence_keeps_the_chapter_reward(tmp_path: Path) -> None:
+    database = _file_db(tmp_path)
+    db = _session(database)
+    try:
+        _finish(db, 1, sample=True)
+        db.execute(
+            text("UPDATE town_quest_steps SET created_at = :then WHERE user_id = 1"),
+            {"then": datetime(2019, 1, 1, tzinfo=UTC)},
+        )
+        db.commit()
+        later = datetime(2031, 4, 2, tzinfo=UTC)
+        journal = read_journal(db, 1)
+        assert all(quest["keepsake"]["kept"] is True for quest in journal["quests"])
+        assert read_wallet(db, 1)["balance"] == 60
+        opened, created = record_step(
+            db,
+            2,
+            {
+                "quest_id": "make-a-home",
+                "step_id": "enter-home",
+                "action_id": "make-a-home:enter-home",
+                "expected_revision": 0,
+            },
+            later,
+        )
+        assert created is True
+        assert opened["quests"][0]["keepsake"]["kept"] is False
+        home = next(
+            quest for quest in read_journal(db, 1)["quests"] if quest["id"] == "make-a-home"
+        )
+        assert home["keepsake"]["kept"] is True
+        assert read_wallet(db, 1)["balance"] == 60
+        assert read_wallet(db, 2)["balance"] == 0
+    finally:
+        db.close()
+        database.engine.dispose()
+
+
+def test_http_chapter_reward_survives_replay_and_absence(tmp_path, monkeypatch) -> None:
+    _quiet(monkeypatch)
+    application, database = _app(tmp_path)
+    TownBase.metadata.create_all(database.engine)
+    _user(database, 1, "tok", "csrf-token")
+    _user(database, 2, "tok2", "csrf-2")
+    clock = {"now": WHEN}
+    application.dependency_overrides[get_town_clock] = lambda: clock["now"]
+    with TestClient(application) as client:
+        before = _call(
+            client, "get", "/api/town", token="tok", params={"tz": "America/Los_Angeles"}
+        )
+        xp = before.json()["town"]["xp"]
+        revision = 0
+        for step_id, action_id in (
+            ("enter-home", "make-a-home:enter-home"),
+            ("place-starter", "make-a-home:place-starter"),
+            ("save-layout", "make-a-home:save-layout"),
+        ):
+            response = _call(
+                client,
+                "post",
+                "/api/town/quests/steps",
+                token="tok",
+                csrf="csrf-token",
+                json={
+                    "quest_id": "make-a-home",
+                    "step_id": step_id,
+                    "action_id": action_id,
+                    "expected_revision": revision,
+                },
+            )
+            assert response.status_code == 201, response.text
+            revision = response.json()["revision"]
+        home = next(quest for quest in response.json()["quests"] if quest["id"] == "make-a-home")
+        assert home["keepsake"]["kept"] is True
+        assert home["keepsake"]["name"] == "paper-house postcard"
+        replay = _call(
+            client,
+            "post",
+            "/api/town/quests/steps",
+            token="tok",
+            csrf="csrf-token",
+            json={
+                "quest_id": "make-a-home",
+                "step_id": "save-layout",
+                "action_id": "make-a-home:save-layout",
+                "expected_revision": 0,
+            },
+        )
+        assert replay.status_code == 200
+        assert replay.json()["revision"] == revision
+        wallet = _call(client, "get", "/api/town/stamps", token="tok")
+        assert wallet.json()["balance"] == 10
+        assert wallet.json()["receipts"][0]["grant_key"] == "quest:make-a-home"
+        assert wallet.json()["receipts"][0]["amount"] == 10
+        hidden = _call(client, "get", "/api/town/stamps", token="tok2")
+        assert hidden.json()["balance"] == 0
+        lost = _call(
+            client,
+            "post",
+            "/api/town/quests/steps",
+            token="tok2",
+            csrf="csrf-2",
+            json={
+                "quest_id": "light-the-square",
+                "step_id": "place-lantern",
+                "action_id": "light-the-square:place-lantern",
+                "expected_revision": 0,
+            },
+        )
+        assert lost.status_code == 409 and lost.json()["code"] == "quest_step"
+        assert _call(client, "get", "/api/town/stamps", token="tok2").json()["balance"] == 0
+        seen = database.sessionmaker()
+        seen.execute(
+            text("UPDATE town_quest_steps SET created_at = :then WHERE user_id = 1"),
+            {"then": datetime(2019, 1, 1, tzinfo=UTC)},
+        )
+        seen.commit()
+        seen.close()
+        clock["now"] = datetime(2031, 4, 2, tzinfo=UTC)
+        aged = _call(client, "get", "/api/town/quests", token="tok")
+        assert aged.json()["revision"] == revision
+        assert next(
+            quest["keepsake"]["kept"]
+            for quest in aged.json()["quests"]
+            if quest["id"] == "make-a-home"
+        )
+        assert _call(client, "get", "/api/town/stamps", token="tok").json()["balance"] == 10
+        nxt = _call(
+            client,
+            "post",
+            "/api/town/quests/steps",
+            token="tok",
+            csrf="csrf-token",
+            json={
+                "quest_id": "a-place-to-play",
+                "step_id": "visit-arcade",
+                "action_id": "a-place-to-play:visit-arcade",
+                "expected_revision": revision,
+            },
+        )
+        assert nxt.status_code == 201, nxt.text
+        assert _call(client, "get", "/api/town/stamps", token="tok").json()["balance"] == 10
+        after = _call(client, "get", "/api/town", token="tok", params={"tz": "America/Los_Angeles"})
+        assert after.json()["town"]["xp"] == xp
+    database.engine.dispose()
 
 
 def test_pinned_read_uses_the_signed_in_owner(tmp_path, monkeypatch) -> None:
