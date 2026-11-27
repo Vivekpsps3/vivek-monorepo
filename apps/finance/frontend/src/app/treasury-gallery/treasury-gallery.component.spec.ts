@@ -68,22 +68,29 @@ describe('TreasuryGalleryComponent', () => {
     expect(host.textContent).toContain('HARBOR');
     expect(host.textContent).toContain('Hidden');
     expect(host.textContent).not.toContain('$');
-    expect(host.querySelector('[data-inspector-position]')?.getAttribute('data-position')).toBe('2');
-    expect(host.querySelector('[data-inspector-ledger]')?.getAttribute('data-ledger')).toBe('42');
+    expect(host.querySelector('[data-inspector-position]')).toBeNull();
+    expect(host.querySelector('[data-inspector-ledger]')).toBeNull();
+    expect(host.querySelector('aside')).toBeNull();
 
+    const scrolled = spyOn(Element.prototype, 'scrollIntoView');
     (host.querySelector('[data-plaque="3"]') as HTMLButtonElement).click();
     fixture.detectChanges();
+    const plaque = host.querySelector('[data-plaque="3"]');
     const inspector = host.querySelector('[data-inspector-position]');
+    expect(inspector?.parentElement).toBe(plaque?.parentElement);
     expect(inspector?.getAttribute('data-position')).toBe('3');
     expect(inspector?.textContent).toContain('TIDE');
     expect(inspector?.textContent).toContain('Shares 2');
     expect(inspector?.textContent).toContain('Mar 2');
     expect(inspector?.textContent).not.toContain('249.12');
+    expect(inspector?.textContent).not.toContain('Lighthouse');
     expect(host.querySelector('[data-gallery-gain]')?.textContent?.trim()).toBe('Unavailable');
     expect(host.querySelector('[data-plaque="2"]')?.textContent).toContain('Hidden');
     expect(host.querySelector('[data-plaque="2"]')?.textContent).not.toContain('$');
     expect(host.textContent).toContain('does not keep another ledger');
     expect(host.textContent).toContain('not counted as a gain');
+    expect(host.textContent).toContain('Open in Holdings');
+    expect(scrolled).not.toHaveBeenCalled();
   });
 
   it('opens the dated ledger line inside the active filter and keeps a failed reload draft', () => {
@@ -99,13 +106,20 @@ describe('TreasuryGalleryComponent', () => {
     expect(host.querySelector('[data-ledger-line="41"]')).not.toBeNull();
     expect(host.textContent).not.toContain('Lighthouse Books');
 
-    (host.querySelector('[data-ledger-line="41"]') as HTMLButtonElement).click();
+    const line = host.querySelector('[data-ledger-line="41"]') as HTMLButtonElement;
+    const scrolled = spyOn(Element.prototype, 'scrollIntoView');
+    line.click();
     fixture.detectChanges();
     const ledger = host.querySelector('[data-inspector-ledger]');
+    expect(ledger?.parentElement).toBe(line.parentElement);
     expect(ledger?.getAttribute('data-ledger')).toBe('41');
     expect(ledger?.textContent).toContain('Boardwalk Cafe');
     expect(ledger?.textContent).toContain('Groceries');
+    expect(ledger?.textContent).not.toContain('HARBOR');
     expect(host.querySelector('[data-ledger-amount]')?.textContent).toContain('18.40');
+    expect(ledger?.querySelector('a')?.getAttribute('href')).toContain('edit=41');
+    expect(ledger?.querySelector('a')?.getAttribute('href')).toContain('from=2026-08-15');
+    expect(scrolled).not.toHaveBeenCalled();
 
     const search = host.querySelector('input[type="search"]') as HTMLInputElement;
     search.value = 'boardwalk';

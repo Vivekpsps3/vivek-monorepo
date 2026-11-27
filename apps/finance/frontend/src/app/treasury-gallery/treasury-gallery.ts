@@ -163,6 +163,61 @@ export function readGalleryQuery(read: (name: string) => string | null): {
   };
 }
 
+/** Activity understands these names. Gallery-only position and ledger focus stay on this room. */
+export function galleryActivityQuery(filters: GalleryFilters): Record<string, string | null> {
+  const view = filters.typeFilter === 'income' ? 'income' : filters.typeFilter === 'expense' ? 'spending' : null;
+  const dated = Boolean(filters.fromDate || filters.throughDate || filters.selectedCalendarDate);
+  return {
+    q: filters.searchTerm.trim() || null,
+    v: view,
+    month: filters.summaryMonth || (dated ? null : 'all'),
+    from: filters.fromDate || null,
+    through: filters.throughDate || null,
+    date: filters.selectedCalendarDate,
+    account: filters.accountFilter || null,
+    category: filters.categoryFilter || null,
+    merchant: filters.merchantFilter || null,
+    trip: filters.tripFilter || null,
+    receipt: filters.receiptFilter || null,
+  };
+}
+
+export function galleryHasAdvancedFilters(filters: GalleryFilters, sort: GallerySort): boolean {
+  return sort.column !== 'date'
+    || sort.direction !== 'desc'
+    || filters.typeFilter !== 'all'
+    || Boolean(
+      filters.summaryMonth
+      || filters.fromDate
+      || filters.throughDate
+      || filters.selectedCalendarDate
+      || filters.accountFilter
+      || filters.categoryFilter
+      || filters.merchantFilter
+      || filters.receiptFilter
+      || filters.tripFilter,
+    );
+}
+
+export function galleryFilterSummary(filters: GalleryFilters, choices: GalleryFilterChoices): string {
+  const named = (rows: readonly GalleryChoice[], value: string) => rows.find(row => row.value === value)?.label || value;
+  const parts: string[] = [];
+  if (filters.typeFilter === 'expense') parts.push('Spending');
+  else if (filters.typeFilter === 'income') parts.push('Income');
+  if (filters.categoryFilter) parts.push(named(choices.categories, filters.categoryFilter));
+  if (filters.accountFilter) {
+    parts.push(filters.accountFilter === UNASSIGNED_ACCOUNT_FILTER ? 'Unassigned account' : named(choices.accounts, filters.accountFilter));
+  }
+  if (filters.merchantFilter) parts.push(named(choices.merchants, filters.merchantFilter));
+  if (filters.tripFilter === 'none') parts.push('No trip');
+  else if (filters.tripFilter) parts.push(named(choices.trips, filters.tripFilter));
+  if (filters.selectedCalendarDate) parts.push(filters.selectedCalendarDate);
+  else if (filters.fromDate || filters.throughDate) parts.push([filters.fromDate, filters.throughDate].filter(Boolean).join('–'));
+  if (filters.summaryMonth) parts.push(filters.summaryMonth);
+  if (filters.receiptFilter) parts.push(`Receipt ${filters.receiptFilter}`);
+  return parts.join(' · ');
+}
+
 export function writeGalleryQuery(state: {
   filters: GalleryFilters;
   sort: GallerySort;
@@ -256,8 +311,8 @@ export function projectTreasuryGallery(input: {
     plaques,
     lines,
     readout,
-    inspectorPosition: openedPosition ?? plaques.find(plaque => plaque.useful) ?? null,
-    inspectorLedger: openedLine ?? lines.find(line => line.useful) ?? null,
+    inspectorPosition: openedPosition,
+    inspectorLedger: openedLine,
     ledgerOutsideFilter: input.openedLedgerId != null
       && openedLine == null
       && input.transactions.some(row => row.id === input.openedLedgerId),
