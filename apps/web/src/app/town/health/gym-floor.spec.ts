@@ -1,7 +1,6 @@
-import { GYM_PIECES, gymFaded, gymFloorDetail, gymFloorId, gymFrames, gymHit, type GymFloorId, type GymGate } from './gym-floor';
+import { GYM_PIECES, gymFaded, gymFloorDetail, gymFloorId, gymFrames, gymHit, type GymFloorId } from './gym-floor';
 
 describe('Gym floor geometry', () => {
-  const gates: GymGate[] = ['locked', 'setup', 'unavailable', 'ready'];
   const ids: Array<GymFloorId | null> = [null, 'desk', 'station', 'bench'];
 
   it('picks the front object and fades whatever covers the selection', () => {
@@ -18,11 +17,9 @@ describe('Gym floor geometry', () => {
     expect(GYM_PIECES).toHaveSize(3);
   });
 
-  it('keeps locked, empty, and unavailable copy free of digits', () => {
-    for (const gate of gates) {
-      for (const id of ids) {
-        expect(gymFloorDetail(id, gate)).not.toMatch(/\d/);
-      }
+  it('keeps object descriptions free of digits', () => {
+    for (const id of ids) {
+      expect(gymFloorDetail(id)).not.toMatch(/\d/);
     }
     expect(gymFloorId('station')).toBe('station');
     expect(gymFloorId('trophy')).toBeNull();

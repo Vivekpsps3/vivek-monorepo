@@ -5,9 +5,8 @@ The [Town server](../../../../server/town/) owns habit/XP/calendar rules;
 results. Habit streak weeks and Finance budget-kept weeks differ; treasury
 integration must preserve that.
 
-[Health store](health/health-store.service.ts) owns browser-local Health records
-through Finance's public vault API. Clinic and Gym mount
-[the health room](health/health-room.component.ts).
+[Health store](health/health-store.service.ts) owns browser-local records through Finance's vault API.
+[Health rooms](health/health-room.component.ts) put vault and record actions first.
 Check owner and generation before publishing plaintext. Preserve corrupt rows,
 revision conflicts, and drafts. Never send private Health values in Town payloads.
 Cross-domain Town views receive approved stages and counts only.

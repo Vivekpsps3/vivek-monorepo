@@ -1,6 +1,7 @@
 <div class="room-layout">
   <div class="composition">
-    <div #viewport class="viewport" role="group" aria-labelledby="clinic-room-hint"
+    <div #viewport class="viewport" [inert]="gate() !== 'ready'" [attr.aria-hidden]="gate() !== 'ready' ? 'true' : null"
+      [attr.role]="gate() === 'ready' ? 'group' : null" [attr.aria-labelledby]="gate() === 'ready' ? 'clinic-room-hint' : null"
       [style.aspect-ratio]="room.width + ' / ' + room.height"
       (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
       (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
@@ -19,28 +20,32 @@
         </div>
       </div>
     </div>
-    <p id="clinic-room-hint" class="scene-hint">Drag to look around. Choose reception, a vital station, the lab folders, or the checkup book. Dragging does not open it.</p>
-    <div class="camera-controls" role="group" aria-label="Clinic view">
-      <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
-      <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
-      <button type="button" class="action" (click)="resetView()">Reset view</button>
-    </div>
-    <ul class="clinic-objects" aria-label="Clinic places">
-      @for (frame of frames; track frame.id) {
-        <li>
-          <button type="button" class="action" [attr.data-clinic-object]="frame.id"
-            [attr.aria-current]="selected() === frame.id ? 'true' : null"
-            (click)="choose(frame.id)">{{ frame.label }}</button>
-        </li>
-      }
-    </ul>
-  </div>
-  <aside class="inspector" [class.sheet]="sheet()" aria-label="Clinic station details">
-    @if (sheet()) {
-      <button type="button" class="action" (click)="choose(null)">Close details</button>
+    @if (gate() === 'ready') {
+      <p id="clinic-room-hint" class="scene-hint">Drag to look around. Choose reception, a vital station, the lab folders, or the checkup book. Dragging does not open it.</p>
+      <div class="camera-controls" role="group" aria-label="Clinic view">
+        <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
+        <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
+        <button type="button" class="action" (click)="resetView()">Reset view</button>
+      </div>
+      <ul class="clinic-objects" aria-label="Clinic places">
+        @for (frame of frames; track frame.id) {
+          <li>
+            <button type="button" class="action" [attr.data-clinic-object]="frame.id"
+              [attr.aria-current]="selected() === frame.id ? 'true' : null"
+              (click)="choose(frame.id)">{{ frame.label }}</button>
+          </li>
+        }
+      </ul>
     }
-    <h2 id="clinic-object-title" tabindex="-1">{{ heading() }}</h2>
-    <p>{{ detail() }}</p>
-    <ng-content />
-  </aside>
+  </div>
+  @if (gate() === 'ready') {
+    <aside class="inspector" [class.sheet]="sheet()" aria-label="Clinic station details">
+      @if (sheet()) {
+        <button type="button" class="action" (click)="choose(null)">Close details</button>
+      }
+      <h2 id="clinic-object-title" tabindex="-1">{{ heading() }}</h2>
+      <p>{{ detail() }}</p>
+      <ng-content />
+    </aside>
+  }
 </div>

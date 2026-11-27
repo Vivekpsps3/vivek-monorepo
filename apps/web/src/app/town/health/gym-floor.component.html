@@ -1,6 +1,7 @@
 <div class="room-layout">
   <div class="composition">
-    <div #viewport class="viewport" role="group" aria-labelledby="gym-floor-hint"
+    <div #viewport class="viewport" [inert]="gate() !== 'ready'" [attr.aria-hidden]="gate() !== 'ready' ? 'true' : null"
+      [attr.role]="gate() === 'ready' ? 'group' : null" [attr.aria-labelledby]="gate() === 'ready' ? 'gym-floor-hint' : null"
       [style.aspect-ratio]="room.width + ' / ' + room.height"
       (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
       (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
@@ -19,28 +20,32 @@
         </div>
       </div>
     </div>
-    <p id="gym-floor-hint" class="scene-hint">Drag to look around. Choose a station, the bench, or the desk. Dragging does not open it.</p>
-    <div class="camera-controls" role="group" aria-label="Scene view">
-      <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
-      <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
-      <button type="button" class="action" (click)="resetView()">Reset view</button>
-    </div>
-    <ul class="objects" aria-label="Gym floor">
-      @for (frame of frames; track frame.id) {
-        <li>
-          <button type="button" class="action" [attr.data-gym-object]="frame.id"
-            [attr.aria-current]="selected() === frame.id ? 'true' : null"
-            (click)="choose(frame.id)">{{ frame.label }}</button>
-        </li>
-      }
-    </ul>
-  </div>
-  <aside class="inspector" [class.sheet]="sheet()" aria-label="Gym floor details">
-    @if (sheet()) {
-      <button type="button" class="action" (click)="choose(null)">Close details</button>
+    @if (gate() === 'ready') {
+      <p id="gym-floor-hint" class="scene-hint">Drag to look around. Choose a station, the bench, or the desk. Dragging does not open it.</p>
+      <div class="camera-controls" role="group" aria-label="Scene view">
+        <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
+        <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
+        <button type="button" class="action" (click)="resetView()">Reset view</button>
+      </div>
+      <ul class="objects" aria-label="Gym floor">
+        @for (frame of frames; track frame.id) {
+          <li>
+            <button type="button" class="action" [attr.data-gym-object]="frame.id"
+              [attr.aria-current]="selected() === frame.id ? 'true' : null"
+              (click)="choose(frame.id)">{{ frame.label }}</button>
+          </li>
+        }
+      </ul>
     }
-    <h2 id="gym-floor-object-title" tabindex="-1">{{ heading() }}</h2>
-    <p>{{ detail() }}</p>
-    <ng-content />
-  </aside>
+  </div>
+  @if (gate() === 'ready') {
+    <aside class="inspector" [class.sheet]="sheet()" aria-label="Gym floor details">
+      @if (sheet()) {
+        <button type="button" class="action" (click)="choose(null)">Close details</button>
+      }
+      <h2 id="gym-floor-object-title" tabindex="-1">{{ heading() }}</h2>
+      <p>{{ detail() }}</p>
+      <ng-content />
+    </aside>
+  }
 </div>

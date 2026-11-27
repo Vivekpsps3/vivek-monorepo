@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import {
   REST_CAMERA,
   SCENE_SCALES,
@@ -8,7 +8,6 @@ import {
   zoomToward,
   type SceneCamera,
 } from '../library-room.scene';
-import type { GymGate } from './gym-floor';
 import {
   GYM_UP_ROOM,
   gymUpDetail,
@@ -34,12 +33,11 @@ interface UpGesture {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '(document:keydown.escape)': 'onEscape()',
-    '[attr.data-gym-up]': 'gate()',
+    'data-gym-up': 'ready',
   },
 })
 export class GymMezzanineComponent {
   readonly selected = input<GymUpId | null>(null);
-  readonly gate = input<GymGate>('ready');
   readonly chosen = output<GymUpId | null>();
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -48,13 +46,12 @@ export class GymMezzanineComponent {
   private readonly camera = signal<SceneCamera>(REST_CAMERA);
   private gesture: UpGesture | null = null;
   private focusPending = false;
-  private seenGate: GymGate | null = null;
   private alive = true;
 
   protected readonly frames = gymUpFrames();
   protected readonly room = GYM_UP_ROOM;
   protected readonly heading = computed(() => gymUpHeading(this.selected()));
-  protected readonly detail = computed(() => gymUpDetail(this.selected(), this.gate()));
+  protected readonly detail = computed(() => gymUpDetail(this.selected()));
   protected readonly faded = computed(() => gymUpFaded(this.selected()));
   protected readonly sheet = computed(() => this.narrow() && this.selected() !== null);
   protected readonly cameraTransform = computed(() => {
@@ -74,11 +71,6 @@ export class GymMezzanineComponent {
     destroyRef.onDestroy(() => {
       this.alive = false;
       this.gesture = null;
-    });
-    effect(() => {
-      const gate = this.gate();
-      if (this.seenGate !== null && this.seenGate !== gate) this.cancelPointer();
-      this.seenGate = gate;
     });
     afterRenderEffect(() => {
       this.selected();

@@ -54,7 +54,7 @@ export class GymFloorComponent {
   protected readonly frames = gymFrames();
   protected readonly room = GYM_ROOM;
   protected readonly heading = computed(() => gymFloorHeading(this.selected()));
-  protected readonly detail = computed(() => gymFloorDetail(this.selected(), this.gate()));
+  protected readonly detail = computed(() => gymFloorDetail(this.selected()));
   protected readonly faded = computed(() => gymFaded(this.selected()));
   protected readonly sheet = computed(() => this.narrow() && this.selected() !== null);
   protected readonly cameraTransform = computed(() => {

@@ -10,6 +10,7 @@
 }
 
 .room-nav,
+.room-sections,
 .units,
 .dialog-actions {
   display: flex;
@@ -23,6 +24,31 @@
 .notice,
 .entries {
   margin-block: var(--space-3);
+}
+
+.gate,
+.room-actions {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+
+.gate p {
+  margin: 0 0 var(--space-2);
+}
+
+.room-sections {
+  margin-block-start: var(--space-2);
+}
+
+.room-section {
+  scroll-margin-block-start: calc(var(--header-h) + var(--space-3));
+}
+
+.room-section:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .form-error {
@@ -266,7 +292,6 @@
   background: var(--surface-soft);
 }
 
-.gate p,
 .ready p {
   margin-block: var(--space-2);
 }

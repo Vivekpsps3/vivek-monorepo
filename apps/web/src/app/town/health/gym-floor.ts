@@ -52,31 +52,11 @@ export const GYM_PIECES: readonly GymPiece[] = [
   piece('station', 3, 400, 210, 200, 120, 'Exercise station'),
 ];
 
-const DETAILS: Record<GymGate, Record<GymFloorId | 'room', string>> = {
-  locked: {
-    room: 'Choose the routine desk, an exercise station, or the session bench. Unlock to log a workout.',
-    desk: 'The routine desk starts a saved plan. Routines stay hidden until Finance is unlocked.',
-    station: 'The exercise station records sets. Digits stay hidden until Finance is unlocked.',
-    bench: 'The session bench finishes the workout. Only an encrypted draft can remain.',
-  },
-  setup: {
-    room: 'Set up Finance before this floor can log a workout.',
-    desk: 'The routine desk is here. Set up Finance to start a plan.',
-    station: 'The exercise station is here. Set up Finance to record sets.',
-    bench: 'The session bench is here. Set up Finance to finish a workout.',
-  },
-  unavailable: {
-    room: 'This floor is here, and workouts are unavailable right now.',
-    desk: 'The routine desk is here. Workouts are unavailable right now.',
-    station: 'The exercise station is here. Workouts are unavailable right now.',
-    bench: 'The session bench is here. Workouts are unavailable right now.',
-  },
-  ready: {
-    room: 'Start a routine at the desk, record sets at a station, and finish on the bench.',
-    desk: 'Start a saved routine here. Add routine below still opens the same dialog.',
-    station: 'Record sets on the open session. Add session below still opens the same dialog.',
-    bench: 'Finish the open session here. That writes one session.',
-  },
+const DETAILS: Record<GymFloorId | 'room', string> = {
+  room: 'Start a routine at the desk, record sets at a station, and finish on the bench.',
+  desk: 'Start a workout from a saved routine.',
+  station: 'Record sets on the open workout.',
+  bench: 'Finish the open session here. That writes one session.',
 };
 
 export function gymFloorId(value: string | null): GymFloorId | null {
@@ -87,8 +67,8 @@ export function gymFloorHeading(id: GymFloorId | null): string {
   return GYM_PIECES.find(item => item.asset.id === id)?.label ?? 'Gym floor';
 }
 
-export function gymFloorDetail(id: GymFloorId | null, gate: GymGate): string {
-  return DETAILS[gate][id ?? 'room'];
+export function gymFloorDetail(id: GymFloorId | null): string {
+  return DETAILS[id ?? 'room'];
 }
 
 export function gymFrames(): readonly GymFrame[] {

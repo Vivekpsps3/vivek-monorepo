@@ -140,6 +140,212 @@ function noMeasurementDigits(text: string): void {
   expect(text).not.toMatch(/\d/);
 }
 
+
+async function firstScreen(locator: Locator): Promise<void> {
+  await expect(locator).toBeVisible();
+  const bounds = await locator.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    return {
+      fullHeight: (node as HTMLElement).offsetHeight,
+      fits: rect.top >= 0 && rect.bottom <= window.innerHeight
+        && rect.left >= 0 && rect.right <= window.innerWidth,
+    };
+  });
+  expect(bounds.fullHeight).toBeGreaterThanOrEqual(44);
+  expect(bounds.fits).toBe(true);
+}
+
+async function neutralPreview(room: Locator): Promise<void> {
+  const scene = room.locator('#health-scene');
+  await expect(scene).toBeVisible();
+  await expect(scene.locator('.viewport[inert]')).toHaveCount(1);
+  await expect(scene.getByRole('button')).toHaveCount(0);
+  await expect(room.locator('main > .gate[role="status"]')).toHaveCount(1);
+  await expect(room.locator('.notice, [data-health-series], [data-progress-key], [data-trophy]')).toHaveCount(0);
+  await expect(room.locator('input, textarea, [data-gym-up]')).toHaveCount(0);
+  noMeasurementDigits(await room.innerText());
+}
+
+for (const [width, height, theme] of [[390, 844, 'light'], [390, 844, 'dark'], [1280, 800, 'light'], [1280, 800, 'dark']] as const) {
+  test.describe(`Health first screen ${width} ${theme}`, () => {
+    const touch = width === 390;
+    test.use({ viewport: { width, height }, hasTouch: touch });
+    test.beforeEach(async ({ page, request }) => {
+      expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
+      await page.clock.setFixedTime(new Date('2026-10-29T19:00:00Z'));
+      await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: theme });
+      await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+    });
+
+    test('shows the correct gate and preserves room coordinates for two synthetic owners', async ({ page }, info) => {
+      await syntheticVault(page, SEED);
+      await page.route('**/api/town**', route => route.continue());
+      const room = page.locator('app-health-room');
+      const gym = '/town/gym?entry=' + LIFT_ID + '&object=desk&up=cabinet';
+      await page.goto('/town');
+      const wellness = page.getByRole('button', { name: 'Wellness', exact: true });
+      await activate(page, wellness, touch);
+      await activate(page, page.getByRole('list', { name: 'Town buildings' })
+        .getByRole('link', { name: /^Clinic/ }), touch);
+      await expect(page).toHaveURL(/\/town\/clinic$/);
+      await expect(room).toHaveAttribute('data-health-state', 'locked');
+      await firstScreen(room.getByRole('link', { name: 'Unlock' }));
+      await neutralPreview(room);
+      await info.attach('clinic-locked-after', { body: await page.screenshot(), contentType: 'image/png' });
+
+      let statusCalls = 0;
+      await page.route('**/api/vault/status', async route => {
+        statusCalls += 1;
+        if (statusCalls === 1) await route.fulfill({ status: 503, json: { detail: 'Fixture unavailable' } });
+        else await route.fallback();
+      });
+      await page.goto(gym);
+      await expect(room).toHaveAttribute('data-health-state', 'unavailable');
+      await neutralPreview(room);
+      const retry = room.getByRole('button', { name: 'Retry' });
+      await firstScreen(retry);
+      await activate(page, retry, touch);
+      await expect(page).toHaveURL(url => url.pathname + url.search === gym);
+      await expect(room).toHaveAttribute('data-health-state', 'locked');
+      const unlock = room.getByRole('link', { name: 'Unlock' });
+      await firstScreen(unlock);
+      await neutralPreview(room);
+      await activate(page, unlock, touch);
+      await expect(page).toHaveURL(url => url.pathname === '/finance/vault/unlock' && url.searchParams.get('next') === gym);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(page).toHaveURL(url => url.pathname + url.search === gym);
+      await expect(room).toHaveAttribute('data-health-state', 'ready');
+      await expect(room.getByRole('list', { name: 'Gym floor' }).getByRole('button', { name: 'Routine desk' }))
+        .toHaveAttribute('aria-current', 'true');
+      await expect(room.locator('#gym-up-object-title')).toHaveText('Record cabinet');
+      await expect(room).toContainText('Squat');
+
+      await page.route('**/api/auth/me', route => route.fulfill({
+        json: { user: { id: 988, username: 'member', display_name: 'Synthetic member', role: 'user', is_active: true } },
+      }));
+      await page.route('**/api/vault/status', route => route.fulfill({ json: { exists: false } }));
+      await page.reload();
+      await expect(room).toHaveAttribute('data-health-state', 'setup');
+      await neutralPreview(room);
+      const setup = room.getByRole('link', { name: 'Set up Finance' });
+      await firstScreen(setup);
+      await info.attach('gym-other-owner-setup-after', { body: await page.screenshot(), contentType: 'image/png' });
+      await activate(page, setup, touch);
+      await expect(page).toHaveURL(url => url.pathname === '/finance/vault/setup' && url.searchParams.get('next') === gym);
+    });
+
+    test('opens the canonical editors before scrolling and keeps scene and records in reach', async ({ page }, info) => {
+      const vault = await syntheticVault(page, { health_prs: SEED.health_prs });
+      const room = page.locator('app-health-room');
+      await page.goto('/town/clinic');
+      await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+      await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await expect(room).toHaveAttribute('data-health-state', 'ready');
+      const add = room.getByRole('button', { name: 'Add weight', exact: true });
+      await firstScreen(add);
+      await info.attach('clinic-ready-after', { body: await page.screenshot(), contentType: 'image/png' });
+      await activate(page, add, touch);
+      const weight = page.getByRole('dialog', { name: 'Add weight', exact: true });
+      await expect(weight.locator('#health-measured-on')).toBeFocused();
+      await weight.locator('#health-weight').fill('155');
+      await activate(page, weight.getByRole('button', { name: 'Cancel' }), touch);
+      await expect(add).toBeFocused();
+
+      await activate(page, room.getByRole('button', { name: 'Explore room' }), touch);
+      await expect(room.locator('#health-scene')).toBeFocused();
+      await activate(page, room.getByRole('list', { name: 'Clinic places' }).getByRole('button', { name: 'Weight station' }), touch);
+      const station = room.getByRole('button', { name: 'Record weight' });
+      await activate(page, station, touch);
+      await expect(weight.locator('#health-weight')).toHaveValue('155');
+      await activate(page, weight.getByRole('button', { name: 'Cancel' }), touch);
+      await expect(station).toBeFocused();
+      await activate(page, room.getByRole('button', { name: 'Clinic records' }), touch);
+      await expect(room.getByRole('region', { name: 'Clinic records' })).toBeFocused();
+
+      await activate(page, room.getByRole('link', { name: 'Gym' }), touch);
+      await expect(room).toHaveAttribute('data-health-room', 'gym');
+      await expect(room).toHaveAttribute('data-health-state', 'ready');
+      const start = room.getByRole('button', { name: 'Start workout', exact: true });
+      await firstScreen(start);
+      await info.attach('gym-ready-after', { body: await page.screenshot(), contentType: 'image/png' });
+      await activate(page, start, touch);
+      const editor = page.getByRole('dialog', { name: 'Add session', exact: true });
+      await editor.locator('#health-workout-name').fill('Synthetic first screen');
+      await editor.locator('#health-workout-load').fill('30');
+      await editor.locator('#health-workout-reps').fill('5');
+      await activate(page, editor.getByRole('button', { name: 'Add set' }), touch);
+      const set = editor.locator('[data-entered-set]');
+      const setId = await set.getAttribute('data-entered-set');
+      expect(setId).toMatch(/^wst_/);
+      await editor.locator('#health-workout-state').selectOption('draft');
+      vault.failNextWrites();
+      const save = editor.getByRole('button', { name: 'Save', exact: true });
+      await activate(page, save, touch);
+      await expect(editor.getByRole('alert')).toContainText('Could not save this workout');
+      await expect(set).toHaveAttribute('data-entered-set', setId!);
+      await activate(page, editor.getByRole('button', { name: 'Cancel' }), touch);
+      const resume = room.getByRole('button', { name: 'Resume workout', exact: true });
+      await expect(resume).toBeFocused();
+      await firstScreen(resume);
+      await activate(page, resume, touch);
+      await expect(set).toHaveAttribute('data-entered-set', setId!);
+      await activate(page, save, touch);
+      await expect(editor).toHaveCount(0);
+      await expect(resume).toBeFocused();
+      const stored = (await collectionCipher(page)).health_workouts;
+      expect(stored).toHaveLength(1);
+
+      await activate(page, room.getByRole('button', { name: 'Workouts', exact: true }), touch);
+      await expect(room.getByRole('heading', { name: 'Workouts' })).toBeFocused();
+      await expect(room.getByRole('button', { name: 'New session' })).toBeVisible();
+      await activate(page, room.getByRole('button', { name: 'Records and trophies' }), touch);
+      await expect(room.locator('#health-cabinet-title')).toBeFocused();
+      await activate(page, room.getByRole('button', { name: 'Progress', exact: true }), touch);
+      await expect(room.locator('#health-progress-title')).toBeFocused();
+      await activate(page, room.getByRole('list', { name: 'Gym floor' }).getByRole('button', { name: 'Exercise station' }), touch);
+      const record = room.getByRole('button', { name: 'Record sets' });
+      await activate(page, record, touch);
+      const resumed = page.getByRole('dialog', { name: 'Resume session' });
+      await expect(resumed.locator('[data-entered-set]')).toHaveAttribute('data-entered-set', setId!);
+      await activate(page, resumed.getByRole('button', { name: 'Cancel' }), touch);
+      await expect(record).toBeFocused();
+      expect((await collectionCipher(page)).health_workouts).toEqual(stored);
+    });
+  });
+}
+
+test.describe('Health first screen with enlarged text', () => {
+  test.use({ viewport: { width: 320, height: 844 }, hasTouch: true });
+
+  test('keeps setup and ready actions in bounds at 200% text', async ({ page, request }, info) => {
+    expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
+    await page.addInitScript(() => {
+      document.addEventListener('DOMContentLoaded', () => document.documentElement.style.fontSize = '200%');
+    });
+    const room = page.locator('app-health-room');
+    await page.goto('/town/clinic');
+    await expect(room).toHaveAttribute('data-health-state', 'setup');
+    await expect.poll(() => page.locator('html').evaluate(node => getComputedStyle(node).fontSize)).toBe('32px');
+    await firstScreen(room.getByRole('link', { name: 'Set up Finance' }));
+    await neutralPreview(room);
+
+    await syntheticVault(page, SEED);
+    await page.goto('/town/gym');
+    await expect(room).toHaveAttribute('data-health-state', 'locked');
+    const unlock = room.getByRole('link', { name: 'Unlock' });
+    await firstScreen(unlock);
+    await unlock.tap();
+    await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+    await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+    await expect(room).toHaveAttribute('data-health-state', 'ready');
+    await firstScreen(room.getByRole('button', { name: 'Start workout' }));
+    expect(await page.locator('html').evaluate(node => node.scrollWidth)).toBeLessThanOrEqual(320);
+    await info.attach('gym-enlarged-after', { body: await page.screenshot(), contentType: 'image/png' });
+  });
+});
+
 for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] as const) {
   test.describe(`health entry at ${width} ${theme}`, () => {
     test.describe.configure({ timeout: 180_000 });
@@ -341,22 +547,13 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
         ],
         health_prs: SEED.health_prs,
       });
-      await page.goto(CLINIC);
       const room = page.locator('app-health-room');
-      await expect(room).toHaveAttribute('data-health-state', 'locked');
-      await expect(room.locator('app-clinic-room')).toHaveAttribute('data-clinic-room', 'locked');
-      const stations = ['Reception', 'Weight station', 'Heart rate station', 'Blood pressure station', 'Lab folders', 'Checkup book', 'Sleep station'];
-      for (const name of stations) {
-        const choice = room.locator('.clinic-objects').getByRole('button', { name, exact: true });
-        await target(choice);
-        await activate(page, choice, touch);
-        await expect(room.locator('#clinic-object-title')).toContainText(name);
-        const locked = await room.evaluate(node => ({
-          text: (node as HTMLElement).innerText,
-          inputs: [...node.querySelectorAll('input, textarea')].map(item => (item as HTMLInputElement).value),
-        }));
-        noMeasurementDigits(locked.text);
-        expect(locked.inputs.join('')).not.toMatch(/\d/);
+      const stations = ['reception', 'weight', 'rhr', 'bp', 'labs', 'checkups', 'sleep'];
+      for (const station of stations) {
+        await page.goto(CLINIC + '&object=' + station);
+        await expect(room).toHaveAttribute('data-health-state', 'locked');
+        await expect(room.locator('app-clinic-room')).toHaveAttribute('data-clinic-room', 'locked');
+        await neutralPreview(room);
         await expect(room.locator('[data-clinic-history]')).toHaveCount(0);
       }
       await expect(page).toHaveURL(url => url.searchParams.get('object') === 'sleep');
@@ -366,6 +563,8 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
       await page.getByRole('button', { name: 'Unlock', exact: true }).click();
       await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+      await expect(page).toHaveURL(url => url.pathname + url.search === CLINIC + '&object=sleep');
+      await expect(room.locator('#clinic-object-title')).toHaveText('Sleep station');
       const choose = async (name: string, objectId: string) => {
         const choice = room.locator('.clinic-objects').getByRole('button', { name, exact: true });
         await target(choice);
@@ -997,7 +1196,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(room).toContainText('220.5 lb');
       await expect(room).toContainText('No workouts yet.');
       const before = await collectionCipher(page);
-      const add = room.getByRole('button', { name: 'Add session' });
+      const add = room.locator('#health-add-session button');
       await target(add);
       await activate(page, add, touch);
       const dialog = page.getByRole('dialog', { name: 'Add session' });
@@ -1119,7 +1318,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       expect(cipherOnly(restored.health_prs)).toEqual(cipherOnly(cipherOf(backup, 'health_prs')));
       expect(cipherOnly(restored.health_workouts)).toEqual(cipherOnly(cipherOf(backup, 'health_workouts')));
 
-      await activate(page, room.getByRole('button', { name: 'Add session' }), touch);
+      await activate(page, room.locator('#health-add-session button'), touch);
       const again = page.getByRole('dialog', { name: 'Add session' });
       await again.locator('#health-workout-name').fill('Synthetic press');
       await again.locator('#health-workout-load').fill('40');
@@ -1162,7 +1361,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await page.getByRole('button', { name: 'Unlock', exact: true }).click();
       await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
 
-      await activate(page, room.getByRole('button', { name: 'Add session' }), touch);
+      await activate(page, room.locator('#health-add-session button'), touch);
       const dialog = page.getByRole('dialog', { name: 'Add session' });
       await expect(dialog.locator('#health-workout-measured-on')).toBeFocused();
       const addSet = dialog.getByRole('button', { name: 'Add set' });
@@ -1213,7 +1412,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
       await expect(room.locator('[data-workout-state="draft"]')).toHaveAttribute('data-set-count', '1');
       await expect(room.locator('[data-entered-set]')).toHaveCount(0);
-      const resume = room.getByRole('button', { name: /Resume/ });
+      const resume = room.getByRole('button', { name: /^Resume Draft session/ });
       await target(resume);
       await activate(page, resume, touch);
       const resumed = page.getByRole('dialog', { name: 'Resume session' });
@@ -1247,7 +1446,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
         await pageB.getByRole('button', { name: 'Unlock', exact: true }).click();
         await expect(roomB).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
       }
-      await activate(pageB, roomB.getByRole('button', { name: /Resume/ }), touch);
+      await activate(pageB, roomB.getByRole('button', { name: /^Resume Draft session/ }), touch);
       const other = pageB.getByRole('dialog', { name: 'Resume session' });
       await expect(other.locator('[data-entered-set]')).toHaveCount(1);
       await expect(other.locator('#health-workout-measured-on')).toHaveValue(measured);
@@ -1316,7 +1515,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(reloadedRow).toHaveAttribute('data-set-count', '2');
       await expect(reloadedRow).toContainText('Draft session');
       await expect(reloadedRow).not.toContainText(`${losing} lb`);
-      await activate(pageB, roomB.getByRole('button', { name: /Resume/ }), touch);
+      await activate(pageB, roomB.getByRole('button', { name: /^Resume Draft session/ }), touch);
       const reloaded = pageB.getByRole('dialog', { name: 'Resume session' });
       await expect(reloaded.locator('[data-entered-set]')).toHaveCount(2);
       await expect(reloaded).toContainText(`${first} lb`);
@@ -1387,7 +1586,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(room).toContainText('Squat');
       const before = await collectionCipher(page);
 
-      await activate(page, room.getByRole('button', { name: 'Add session' }), touch);
+      await activate(page, room.locator('#health-add-session button'), touch);
       const dialog = page.getByRole('dialog', { name: 'Add session' });
       await expect(dialog.locator('#health-workout-measured-on')).toBeFocused();
       await fillControl(page, dialog, '#health-workout-name', 'Synthetic press', touch);
@@ -1751,7 +1950,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       else await page.keyboard.press('Escape');
       await expect(archivedView).toHaveCount(0);
 
-      await activate(page, room.getByRole('button', { name: 'Add session' }), touch);
+      await activate(page, room.getByRole('button', { name: 'New session' }), touch);
       const fresh = page.getByRole('dialog', { name: 'Add session' });
       await expect(fresh.locator('#health-workout-definition')).toHaveCount(0);
       const roomFits = await room.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
@@ -2056,7 +2255,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark'], 
       await activate(page, exercise.getByRole('button', { name: 'Cancel' }), touch);
       await expect(exercise).toHaveCount(0);
 
-      await activate(page, room.getByRole('button', { name: 'Add session' }), touch);
+      await activate(page, room.locator('#health-add-session button'), touch);
       const dialog = page.getByRole('dialog', { name: 'Add session' });
       const rest = dialog.locator('.rest');
       await expect(rest).toHaveAttribute('data-rest-phase', 'idle');
@@ -2117,7 +2316,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark'], 
       await expect(draftRow).toContainText('Synthetic press');
       await expect(draftRow).toHaveAttribute('data-set-count', '1');
 
-      const resume = room.getByRole('button', { name: /Resume/ });
+      const resume = room.getByRole('button', { name: /^Resume Draft session/ });
       await activate(page, resume, touch);
       const resumed = page.getByRole('dialog', { name: 'Resume session' });
       await expect(resumed.locator('[data-rest-phase]')).toHaveAttribute('data-rest-phase', 'idle');
@@ -2157,7 +2356,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark'], 
       await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
       await page.getByRole('button', { name: 'Unlock', exact: true }).click();
       await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
-      await activate(page, room.getByRole('button', { name: /Resume/ }), touch);
+      await activate(page, room.getByRole('button', { name: /^Resume Draft session/ }), touch);
       const again = page.getByRole('dialog', { name: 'Resume session' });
       await expect(again.locator('#health-workout-name')).toHaveValue('Synthetic press');
       await expect(again.locator('#health-workout-note')).toHaveValue('Synthetic kept');
@@ -2222,7 +2421,7 @@ test.describe('workout rest timer sound', () => {
     await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
     await page.getByRole('button', { name: 'Unlock', exact: true }).click();
     await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
-    await activate(page, room.getByRole('button', { name: 'Add session' }), false);
+    await activate(page, room.locator('#health-add-session button'), false);
     const dialog = page.getByRole('dialog', { name: 'Add session' });
     await focusControl(page, '#health-workout-name');
     await page.keyboard.type('Synthetic press');
@@ -2243,7 +2442,7 @@ test.describe('workout rest timer sound', () => {
     const left = await audio();
     expect(left.started).toBe(ticking.started);
     expect(left.closed).toBeGreaterThanOrEqual(before.closed + 1);
-    await activate(page, room.getByRole('button', { name: 'Add session' }), false);
+    await activate(page, room.locator('#health-add-session button'), false);
     const again = page.getByRole('dialog', { name: 'Add session' });
     await expect(again.locator('#health-workout-name')).toHaveValue('Synthetic press');
     await expect(again.locator('[data-rest-phase]')).toHaveAttribute('data-rest-phase', 'idle');
@@ -2391,32 +2590,24 @@ async function openClinicArchive(page: Page, touch: boolean): Promise<void> {
       },
     ],
   });
-  await page.goto('/town/clinic');
   const room = page.locator('app-health-room');
-  await expect(room).toHaveAttribute('data-health-state', 'locked');
-  const chooseLocked = async (name: string) => {
-    const choice = room.locator('.clinic-objects').getByRole('button', { name, exact: true });
-    await target(choice);
-    await activate(page, choice, touch);
-    await expect(room.locator('#clinic-object-title')).toContainText(name);
-    const locked = await room.evaluate(node => ({
-      text: (node as HTMLElement).innerText,
-      fields: [...node.querySelectorAll('input, textarea')].map(item => (item as HTMLInputElement).value).join(''),
-    }));
-    noMeasurementDigits(locked.text);
-    expect(locked.text).not.toContain(marker);
-    expect(locked.text).not.toContain(other);
-    expect(locked.text).not.toContain(olderNote);
-    expect(locked.fields).not.toContain('Ω');
+  for (const object of ['labs', 'checkups']) {
+    await page.goto('/town/clinic?object=' + object);
+    await expect(room).toHaveAttribute('data-health-state', 'locked');
+    await neutralPreview(room);
+    const locked = await room.innerText();
+    expect(locked).not.toContain(marker);
+    expect(locked).not.toContain(other);
+    expect(locked).not.toContain(olderNote);
     await expect(room.locator('[data-clinic-table]')).toHaveCount(0);
-  };
-  await chooseLocked('Lab folders');
-  await chooseLocked('Checkup book');
+  }
 
   await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
   await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
   await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+  await expect(page).toHaveURL(/\/town\/clinic\?object=checkups$/);
+  await expect(room.locator('#clinic-object-title')).toHaveText('Checkup book');
   const folders = room.locator('.clinic-objects').getByRole('button', { name: 'Lab folders', exact: true });
   await target(folders);
   await activate(page, folders, touch);

@@ -7,10 +7,8 @@ import {
   gymUpId,
   type GymUpId,
 } from './gym-mezzanine';
-import type { GymGate } from './gym-floor';
 
 describe('Gym upstairs geometry', () => {
-  const gates: GymGate[] = ['locked', 'setup', 'unavailable', 'ready'];
   const ids: Array<GymUpId | null> = [null, 'wall', 'cabinet'];
 
   it('picks the cabinet over the wall and fades what covers the wall', () => {
@@ -25,11 +23,9 @@ describe('Gym upstairs geometry', () => {
     expect(GYM_UP_PIECES).toHaveSize(2);
   });
 
-  it('keeps locked, empty, and unavailable copy free of digits', () => {
-    for (const gate of gates) {
-      for (const id of ids) {
-        expect(gymUpDetail(id, gate)).not.toMatch(/\d/);
-      }
+  it('keeps object descriptions free of digits', () => {
+    for (const id of ids) {
+      expect(gymUpDetail(id)).not.toMatch(/\d/);
     }
     expect(gymUpId('wall')).toBe('wall');
     expect(gymUpId('desk')).toBeNull();

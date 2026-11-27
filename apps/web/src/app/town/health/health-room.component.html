@@ -5,114 +5,9 @@
     <ui-button href="/town/gym" label="Gym" [variant]="room() === 'gym' ? 'primary' : 'secondary'" [pressed]="room() === 'gym'" />
   </nav>
 
-  @if (phase() === 'loading') {
-    <div role="status" aria-label="Loading {{ title() }}">
-      <ui-skeleton variant="lines" [lines]="3" />
-    </div>
-  } @else {
-    @if (room() === 'gym') {
-      <app-gym-floor [selected]="floorObject()" [gate]="floorGate()" (chosen)="selectFloor($event)">
-        @if (phase() === 'ready') {
-          @switch (floorObject()) {
-            @case ('desk') {
-              @if (activeRoutineName(); as name) {
-                <p>{{ name }}</p>
-                <ui-button id="health-floor-routine" (clicked)="useRoutineDesk()">Use this routine</ui-button>
-              } @else {
-                <p>Add a routine below to start one here.</p>
-              }
-            }
-            @case ('station') {
-              <ui-button id="health-floor-record" (clicked)="recordAtStation()">Record sets</ui-button>
-            }
-            @case ('bench') {
-              @if (floorCanFinish()) {
-                <ui-button id="health-floor-finish" [busy]="workoutBusy()" [disabled]="workoutBusy()" (clicked)="finishAtBench()">Finish workout</ui-button>
-              } @else {
-                <p>Nothing to finish yet.</p>
-              }
-            }
-          }
-          @if (workoutFormError() && !workoutDialogOpen()) {
-            <p class="form-error" id="health-floor-error" role="alert" tabindex="-1">{{ workoutFormError() }}</p>
-          }
-        }
-      </app-gym-floor>
-      <app-gym-mezzanine [selected]="upObject()" [gate]="floorGate()" (chosen)="selectUp($event)">
-        @if (phase() === 'ready' && upObject() === 'wall') {
-          <ui-button id="health-up-wall" (clicked)="focusWall()">Show the chart</ui-button>
-        }
-        @if (phase() === 'ready' && upObject() === 'cabinet') {
-          <ui-button id="health-up-cabinet" (clicked)="focusCabinet()">Show the cabinet</ui-button>
-        }
-      </app-gym-mezzanine>
-    }
-    @if (room() === 'clinic') {
-      <app-clinic-room [selected]="clinicObject()" [gate]="floorGate()" (chosen)="selectClinic($event)">
-        @if (phase() === 'ready' && clinicObject() === 'reception') {
-          @for (kind of vitalStations; track kind) {
-            @if (vitalPage(kind); as page) {
-              <p class="station-fact" [attr.data-clinic-reception]="kind">
-                <span>{{ page.title }}</span>
-                <span>Latest {{ page.latestLabel }}</span>
-                <span>Measured on {{ page.latestMeasuredOn }}</span>
-              </p>
-            } @else {
-              <p class="station-fact" [attr.data-clinic-reception]="kind">{{ vitalTitle(kind) }}. No reading yet.</p>
-            }
-          }
-        } @else if (phase() === 'ready' && selectedVitalId(); as kind) {
-          <p class="station-fact" [attr.data-clinic-unit]="kind">{{ stationUnit(kind) }}</p>
-          @if (selectedVital(); as page) {
-            <p class="station-fact" [attr.data-clinic-date]="kind">Measured on {{ page.latestMeasuredOn }}</p>
-            <div [attr.data-clinic-history]="kind">
-              <ng-container *ngTemplateOutlet="vitalArticle; context: { $implicit: page }" />
-            </div>
-          } @else {
-            <p class="station-fact" [attr.data-clinic-empty]="kind">No {{ vitalNoun(kind) }} yet.</p>
-            <ui-button [attr.id]="'health-station-record-' + kind" (clicked)="openCreate(kind)">Record {{ vitalNoun(kind) }}</ui-button>
-          }
-        } @else if (phase() === 'ready' && clinicObject() === 'labs') {
-          @if (labPage(); as lab) {
-            @if (selectedLabFolder(); as folder) {
-              <ui-button variant="secondary" id="health-lab-back" (clicked)="closeLab()">All lab folders</ui-button>
-              <article class="series" data-health-series="lab" [attr.data-health-shown]="lab.shown" [attr.data-health-total]="lab.total">
-                <ng-container *ngTemplateOutlet="labFolder; context: { $implicit: folder }" />
-              </article>
-              @if (lab.more) {
-                <ui-button variant="secondary" id="health-more-lab" (clicked)="showMore('lab')">Show more {{ lab.noun }}</ui-button>
-              }
-            } @else {
-              <ul class="clinic-folders" aria-label="Lab folders">
-                @for (folder of lab.visibleFolders; track folder.id) {
-                  <li>
-                    <ui-button variant="secondary" [attr.id]="'health-open-' + folder.id" [attr.data-clinic-folder]="folder.id" (clicked)="openLab(folder.title)">{{ folder.title }}</ui-button>
-                  </li>
-                }
-              </ul>
-              @if (lab.more) {
-                <ui-button variant="secondary" id="health-more-lab" (clicked)="showMore('lab')">Show more {{ lab.noun }}</ui-button>
-              }
-            }
-          } @else {
-            <p class="station-fact" data-clinic-empty="labs">No lab results yet.</p>
-            <ui-button id="health-station-record-lab" (clicked)="openCreate('lab')">Record a lab result</ui-button>
-          }
-        } @else if (phase() === 'ready' && clinicObject() === 'checkups') {
-          @if (checkupPage(); as checkup) {
-            <article class="series" data-health-series="checkup" [attr.data-health-shown]="checkup.shown" [attr.data-health-total]="checkup.total">
-              <ng-container *ngTemplateOutlet="checkupBody; context: { $implicit: checkup }" />
-            </article>
-          } @else {
-            <p class="station-fact" data-clinic-empty="checkups">No checkups yet.</p>
-            <ui-button id="health-station-record-checkup" (clicked)="openCreate('checkup')">Record a checkup</ui-button>
-          }
-        }
-      </app-clinic-room>
-    }
-    @if (phase() === 'locked') {
+  @if (phase() === 'locked') {
     <div class="gate" role="status">
-      <p>Finance is locked. Unlock to see measurements.</p>
+      <p>Finance is locked. Unlock to open {{ title() }}.</p>
       <a class="btn btn-primary" routerLink="/finance/vault/unlock" [queryParams]="returnQuery()" [state]="unlockReturn()">Unlock</a>
     </div>
   } @else if (phase() === 'setup') {
@@ -125,8 +20,141 @@
       <p>{{ title() }} is unavailable right now.</p>
       <ui-button variant="secondary" (clicked)="retry()">Retry</ui-button>
     </div>
+  } @else if (phase() === 'ready') {
+    <div class="room-actions">
+      @if (room() === 'clinic') {
+        <ui-button id="health-add-weight" (clicked)="openCreate('weight')">Add weight</ui-button>
+      } @else {
+        <ui-button id="health-add-session" [disabled]="workoutBusy()" (clicked)="openCurrentWorkout()">{{ canResumeWorkout() ? 'Resume workout' : 'Start workout' }}</ui-button>
+      }
+      <nav class="room-sections" aria-label="On this page">
+        <ui-button variant="secondary" (clicked)="focusSection('health-scene')">Explore room</ui-button>
+        @if (room() === 'clinic') {
+          <ui-button variant="secondary" (clicked)="focusSection('health-clinic-records')">Clinic records</ui-button>
+        } @else {
+          <ui-button variant="secondary" (clicked)="focusSection('health-workouts-title')">Workouts</ui-button>
+          <ui-button variant="secondary" (clicked)="focusSection('health-progress-title')">Progress</ui-button>
+          <ui-button variant="secondary" (clicked)="focusCabinet()">Records and trophies</ui-button>
+        }
+      </nav>
+    </div>
   } @else {
-    <div class="ready">
+    <div role="status" aria-label="Loading {{ title() }}">
+      <ui-skeleton variant="lines" [lines]="3" />
+    </div>
+  }
+
+  @if (phase() !== 'loading') {
+    <section id="health-scene" class="room-section" tabindex="-1" [attr.aria-label]="title() + ' scene'">
+      @if (room() === 'gym') {
+        <app-gym-floor [selected]="phase() === 'ready' ? floorObject() : null" [gate]="floorGate()" (chosen)="selectFloor($event)">
+          @if (phase() === 'ready') {
+            @switch (floorObject()) {
+              @case ('desk') {
+                @if (activeRoutineName(); as name) {
+                  <p>{{ name }}</p>
+                  <ui-button id="health-floor-routine" (clicked)="useRoutineDesk()">Use this routine</ui-button>
+                } @else {
+                  <p>Add a routine below to start one here.</p>
+                }
+              }
+              @case ('station') {
+                <ui-button id="health-floor-record" (clicked)="recordAtStation()">Record sets</ui-button>
+              }
+              @case ('bench') {
+                @if (floorCanFinish()) {
+                  <ui-button id="health-floor-finish" [busy]="workoutBusy()" [disabled]="workoutBusy()" (clicked)="finishAtBench()">Finish workout</ui-button>
+                } @else {
+                  <p>Nothing to finish yet.</p>
+                }
+              }
+            }
+            @if (workoutFormError() && !workoutDialogOpen()) {
+              <p class="form-error" id="health-floor-error" role="alert" tabindex="-1">{{ workoutFormError() }}</p>
+            }
+          }
+        </app-gym-floor>
+        @if (phase() === 'ready') {
+          <app-gym-mezzanine [selected]="upObject()" (chosen)="selectUp($event)">
+            @if (upObject() === 'wall') {
+              <ui-button id="health-up-wall" (clicked)="focusWall()">Show the chart</ui-button>
+            }
+            @if (upObject() === 'cabinet') {
+              <ui-button id="health-up-cabinet" (clicked)="focusCabinet()">Show the cabinet</ui-button>
+            }
+          </app-gym-mezzanine>
+        }
+      }
+      @if (room() === 'clinic') {
+        <app-clinic-room [selected]="phase() === 'ready' ? clinicObject() : null" [gate]="floorGate()" (chosen)="selectClinic($event)">
+          @if (phase() === 'ready' && clinicObject() === 'reception') {
+            @for (kind of vitalStations; track kind) {
+              @if (vitalPage(kind); as page) {
+                <p class="station-fact" [attr.data-clinic-reception]="kind">
+                  <span>{{ page.title }}</span>
+                  <span>Latest {{ page.latestLabel }}</span>
+                  <span>Measured on {{ page.latestMeasuredOn }}</span>
+                </p>
+              } @else {
+                <p class="station-fact" [attr.data-clinic-reception]="kind">{{ vitalTitle(kind) }}. No reading yet.</p>
+              }
+            }
+          } @else if (phase() === 'ready' && selectedVitalId(); as kind) {
+            <p class="station-fact" [attr.data-clinic-unit]="kind">{{ stationUnit(kind) }}</p>
+            @if (selectedVital(); as page) {
+              <p class="station-fact" [attr.data-clinic-date]="kind">Measured on {{ page.latestMeasuredOn }}</p>
+              <div [attr.data-clinic-history]="kind">
+                <ng-container *ngTemplateOutlet="vitalArticle; context: { $implicit: page }" />
+              </div>
+            } @else {
+              <p class="station-fact" [attr.data-clinic-empty]="kind">No {{ vitalNoun(kind) }} yet.</p>
+              <ui-button [attr.id]="'health-station-record-' + kind" (clicked)="openCreate(kind)">Record {{ vitalNoun(kind) }}</ui-button>
+            }
+          } @else if (phase() === 'ready' && clinicObject() === 'labs') {
+            @if (labPage(); as lab) {
+              @if (selectedLabFolder(); as folder) {
+                <ui-button variant="secondary" id="health-lab-back" (clicked)="closeLab()">All lab folders</ui-button>
+                <article class="series" data-health-series="lab" [attr.data-health-shown]="lab.shown" [attr.data-health-total]="lab.total">
+                  <ng-container *ngTemplateOutlet="labFolder; context: { $implicit: folder }" />
+                </article>
+                @if (lab.more) {
+                  <ui-button variant="secondary" id="health-more-lab" (clicked)="showMore('lab')">Show more {{ lab.noun }}</ui-button>
+                }
+              } @else {
+                <ul class="clinic-folders" aria-label="Lab folders">
+                  @for (folder of lab.visibleFolders; track folder.id) {
+                    <li>
+                      <ui-button variant="secondary" [attr.id]="'health-open-' + folder.id" [attr.data-clinic-folder]="folder.id" (clicked)="openLab(folder.title)">{{ folder.title }}</ui-button>
+                    </li>
+                  }
+                </ul>
+                @if (lab.more) {
+                  <ui-button variant="secondary" id="health-more-lab" (clicked)="showMore('lab')">Show more {{ lab.noun }}</ui-button>
+                }
+              }
+            } @else {
+              <p class="station-fact" data-clinic-empty="labs">No lab results yet.</p>
+              <ui-button id="health-station-record-lab" (clicked)="openCreate('lab')">Record a lab result</ui-button>
+            }
+          } @else if (phase() === 'ready' && clinicObject() === 'checkups') {
+            @if (checkupPage(); as checkup) {
+              <article class="series" data-health-series="checkup" [attr.data-health-shown]="checkup.shown" [attr.data-health-total]="checkup.total">
+                <ng-container *ngTemplateOutlet="checkupBody; context: { $implicit: checkup }" />
+              </article>
+            } @else {
+              <p class="station-fact" data-clinic-empty="checkups">No checkups yet.</p>
+              <ui-button id="health-station-record-checkup" (clicked)="openCreate('checkup')">Record a checkup</ui-button>
+            }
+          }
+        </app-clinic-room>
+      }
+    </section>
+  }
+
+  @if (phase() === 'ready') {
+    <div class="ready room-section" [attr.id]="room() === 'clinic' ? 'health-clinic-records' : null"
+      [attr.role]="room() === 'clinic' ? 'region' : null" [attr.aria-label]="room() === 'clinic' ? 'Clinic records' : null"
+      [attr.tabindex]="room() === 'clinic' ? -1 : null">
       <div class="units">
         <ui-segmented label="Weight unit" [options]="weightOptions" [value]="units().weight" (valueChange)="setWeight($event)" />
         @if (room() === 'gym') {
@@ -141,7 +169,7 @@
       }
       @if (room() === 'gym') {
         <section class="progress" aria-labelledby="health-progress-title" data-progress-wall>
-          <h2 id="health-progress-title" tabindex="-1">Progress wall</h2>
+          <h2 class="room-section" id="health-progress-title" tabindex="-1">Progress wall</h2>
           @if (progress().empty) {
             <p>No progress yet.</p>
           } @else {
@@ -230,7 +258,7 @@
           }
         </section>
         <section class="record-cabinet" aria-labelledby="health-cabinet-title" data-record-cabinet>
-          <h2 id="health-cabinet-title" tabindex="-1">Record cabinet</h2>
+          <h2 class="room-section" id="health-cabinet-title" tabindex="-1">Record cabinet</h2>
           <section class="records" aria-labelledby="health-records-title">
             <h3 id="health-records-title">Personal records</h3>
             @if (rows().length === 0) {
@@ -331,7 +359,7 @@
           <ui-button id="health-add-other" (clicked)="openPr('other')">Add record</ui-button>
         </div>
         <section class="workouts" aria-labelledby="health-workouts-title">
-          <h2 id="health-workouts-title">Workouts</h2>
+          <h2 class="room-section" id="health-workouts-title" tabindex="-1">Workouts</h2>
           @if (workoutRows().length === 0) {
             <p>No workouts yet.</p>
           } @else {
@@ -368,12 +396,13 @@
           <div class="add-actions">
             <ui-button id="health-add-exercise" (clicked)="openWorkout('exercise')">Add exercise</ui-button>
             <ui-button id="health-add-routine" (clicked)="openWorkout('routine')">Add routine</ui-button>
-            <ui-button id="health-add-session" (clicked)="openWorkout('session')">Add session</ui-button>
+            @if (canStartAnotherWorkout()) {
+              <ui-button id="health-new-session" variant="secondary" (clicked)="openWorkout('session')">New session</ui-button>
+            }
           </div>
         </section>
       }
     </div>
-  }
   }
 </main>
 <ng-template #labFolder let-folder>

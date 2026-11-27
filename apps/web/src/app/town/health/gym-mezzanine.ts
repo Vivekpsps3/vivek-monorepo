@@ -6,7 +6,6 @@ import {
   type SceneBounds,
   type ScenePlacement,
 } from '../library-room.scene';
-import type { GymGate } from './gym-floor';
 
 /** Selectable upstairs objects. The session floor stays downstairs. */
 export const GYM_UP_IDS = ['wall', 'cabinet'] as const;
@@ -51,27 +50,10 @@ export const GYM_UP_PIECES: readonly GymUpPiece[] = [
   piece('cabinet', 2, 300, 150, 260, 160, 'Record cabinet'),
 ];
 
-const DETAILS: Record<GymGate, Record<GymUpId | 'room', string>> = {
-  locked: {
-    room: 'Choose the progress wall or the record cabinet. Unlock to see a workout.',
-    wall: 'The progress wall charts one exercise. Digits stay hidden until Finance is unlocked.',
-    cabinet: 'The record cabinet holds personal records and trophies. Digits stay hidden until Finance is unlocked.',
-  },
-  setup: {
-    room: 'Set up Finance before this upstairs can open.',
-    wall: 'The progress wall is here. Set up Finance to chart an exercise.',
-    cabinet: 'The record cabinet is here. Set up Finance to open it.',
-  },
-  unavailable: {
-    room: 'This upstairs is here, and progress is unavailable right now.',
-    wall: 'The progress wall is here. Progress is unavailable right now.',
-    cabinet: 'The record cabinet is here. Progress is unavailable right now.',
-  },
-  ready: {
-    room: 'The progress wall charts an exercise. The record cabinet keeps records, trophies, and game medals apart.',
-    wall: 'Choose an exercise and a date range. The chart and the table show the same points.',
-    cabinet: 'Personal records stay editable here. Health trophies and game medals stay visually separate.',
-  },
+const DETAILS: Record<GymUpId | 'room', string> = {
+  room: 'The progress wall charts an exercise. The record cabinet keeps records, trophies, and game medals apart.',
+  wall: 'Choose an exercise and a date range. The chart and the table show the same points.',
+  cabinet: 'Personal records stay editable here. Health trophies and game medals stay visually separate.',
 };
 
 export function gymUpId(value: string | null): GymUpId | null {
@@ -82,8 +64,8 @@ export function gymUpHeading(id: GymUpId | null): string {
   return GYM_UP_PIECES.find(item => item.asset.id === id)?.label ?? 'Gym upstairs';
 }
 
-export function gymUpDetail(id: GymUpId | null, gate: GymGate): string {
-  return DETAILS[gate][id ?? 'room'];
+export function gymUpDetail(id: GymUpId | null): string {
+  return DETAILS[id ?? 'room'];
 }
 
 export function gymUpFrames(): readonly GymUpFrame[] {

@@ -72,8 +72,8 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/town/cosmetics': townFurniture,
   '/town/workshop': { ...townFurniture, item: value => /^[a-z0-9][a-z0-9:_-]{0,63}$/.test(value) },
   '/town/review': { week: isIsoMondayDate },
-  '/town/clinic': { entry: isHealthEntryId },
-  '/town/gym': { entry: isHealthEntryId },
+  '/town/clinic': { entry: isHealthEntryId, object: ['reception', 'weight', 'rhr', 'bp', 'sleep', 'labs', 'checkups'] },
+  '/town/gym': { entry: isHealthEntryId, object: ['desk', 'station', 'bench'], up: ['wall', 'cabinet'] },
   '/town/world': { day: isReturnDate, week: isReturnDate },
   '/pixels': { year: value => /^(?!0+$)\d{1,4}$/.test(value), day: isReturnDate },
   '/pixels/day': {

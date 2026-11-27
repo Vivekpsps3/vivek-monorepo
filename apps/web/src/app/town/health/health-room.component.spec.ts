@@ -434,7 +434,7 @@ describe('Health room shell', () => {
     expect(locked.pathname).toBe('/finance/vault/unlock');
     expect(locked.searchParams.get('next')).toBe(`/town/clinic?entry=${WEIGHT_ID}`);
 
-    route.query.next(convertToParamMap({ entry: LIFT_ID }));
+    route.query.next(convertToParamMap({ entry: LIFT_ID, object: 'desk', up: 'cabinet' }));
     route.routeData.next({ healthRoom: 'gym' });
     const fixture = TestBed.createComponent(HealthRoomComponent);
     fixture.detectChanges();
@@ -449,7 +449,7 @@ describe('Health room shell', () => {
     expect(gym.querySelector('[data-award="badge"]')).toBeNull();
     expect(gym.querySelector('[data-award="medal"]')).toBeNull();
     const setup = new URL(href(gym, 'Unlock'), 'http://localhost');
-    expect(setup.searchParams.get('next')).toBe(`/town/gym?entry=${LIFT_ID}`);
+    expect(setup.searchParams.get('next')).toBe(`/town/gym?entry=${LIFT_ID}&object=desk&up=cabinet`);
   });
 
   it('links setup back to the same room when no vault exists', async () => {
@@ -1414,7 +1414,7 @@ describe('Health room shell', () => {
     fixture.detectChanges();
     expect(el.textContent).toContain('Routine · Synthetic plan · 1 exercise');
 
-    button(el, 'Add session').click();
+    el.querySelector<HTMLButtonElement>('#health-add-session button')!.click();
     fixture.detectChanges();
     typeInto(el, '#health-workout-name', 'Synthetic press');
     typeInto(el, '#health-workout-load', '100');
@@ -1463,7 +1463,7 @@ describe('Health room shell', () => {
     const pr = fake.rows.find(item => item.client_id === LIFT_ID);
     if (!pr) throw new Error('missing personal record');
     const prCipher = pr.ciphertext_b64;
-    button(el, 'Add session').click();
+    el.querySelector<HTMLButtonElement>('#health-add-session button')!.click();
     fixture.detectChanges();
     typeInto(el, '#health-workout-name', 'WORKOUT_DRAFT_MARKER');
     fixture.detectChanges();
@@ -1473,7 +1473,7 @@ describe('Health room shell', () => {
     await new Promise(resolve => setTimeout(resolve));
     expect(el.querySelector('#health-workout-name')).toBeNull();
     expect(document.activeElement).toBe(el.querySelector('#health-add-session button'));
-    button(el, 'Add session').click();
+    el.querySelector<HTMLButtonElement>('#health-add-session button')!.click();
     fixture.detectChanges();
     expect(el.querySelector<HTMLInputElement>('#health-workout-name')?.value).toBe('WORKOUT_DRAFT_MARKER');
     typeInto(el, '#health-workout-name', '');
@@ -1524,7 +1524,7 @@ describe('Health room shell', () => {
     const pr = fake.rows.find(item => item.client_id === LIFT_ID);
     if (!pr) throw new Error('missing personal record');
     const prCipher = pr.ciphertext_b64;
-    button(el, 'Add session').click();
+    el.querySelector<HTMLButtonElement>('#health-add-session button')!.click();
     fixture.detectChanges();
     typeInto(el, '#health-workout-name', 'WORKOUT_DRAFT_MARKER');
     typeInto(el, '#health-workout-load', '40');
@@ -1560,7 +1560,7 @@ describe('Health room shell', () => {
     route.query.next(convertToParamMap({}));
     const { fixture, el } = await show();
     const today = localTodayIso();
-    button(el, 'Add session').click();
+    el.querySelector<HTMLButtonElement>('#health-add-session button')!.click();
     fixture.detectChanges();
     expect(button(el, 'Add set').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     typeInto(el, '#health-workout-name', 'Synthetic press');
@@ -1583,7 +1583,6 @@ describe('Health room shell', () => {
     const row = el.querySelector('[data-workout-state="draft"]');
     expect(row?.getAttribute('data-set-count')).toBe('1');
     expect(el.textContent).toContain(`Draft session · Synthetic press · ${today}`);
-    expect(button(el, 'Resume').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     const stored = fake.rows.find(item => item.collection === 'health_workouts');
     if (!stored) throw new Error('missing session');
     const decoded = decode(stored.ciphertext_b64) as {
@@ -1601,7 +1600,10 @@ describe('Health room shell', () => {
     const cipher = stored.ciphertext_b64;
     const revision = stored.revision;
 
-    button(el, 'Resume').click();
+    const resume = el.querySelector<HTMLButtonElement>(`#health-resume-${stored.client_id} button`)!;
+    expect(resume.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    resume.focus();
+    resume.click();
     fixture.detectChanges();
     expect(el.querySelector('#health-workout-title')?.textContent).toContain('Resume session');
     expect(el.querySelector('[data-entered-set]')?.getAttribute('data-entered-set')).toBe(setId);
@@ -1615,7 +1617,7 @@ describe('Health room shell', () => {
     await new Promise(resolve => setTimeout(resolve));
     expect(document.activeElement).toBe(el.querySelector(`#health-resume-${stored.client_id} button`));
 
-    button(el, 'Resume').click();
+    resume.click();
     fixture.detectChanges();
     fake.failUpsert = true;
     typeInto(el, '#health-workout-note', 'Synthetic kept');
@@ -1726,7 +1728,7 @@ describe('Health room shell', () => {
     const workKg = lbToKg(80);
     const metres = Number(milesToMetres(1).toFixed(2));
 
-    button(el, 'Add session').click();
+    el.querySelector<HTMLButtonElement>('#health-add-session button')!.click();
     fixture.detectChanges();
     expect(el.querySelector<HTMLInputElement>('#health-workout-measured-on')?.value).toBe(today);
     typeInto(el, '#health-workout-name', 'Synthetic press');
@@ -2222,7 +2224,7 @@ describe('Health room shell', () => {
     button(el, 'Cancel').click();
     fixture.detectChanges();
 
-    button(el, 'Add session').click();
+    button(el, 'New session').click();
     fixture.detectChanges();
     expect(el.querySelector('#health-workout-definition')).toBeNull();
     button(el, 'Cancel').click();
@@ -2900,7 +2902,7 @@ describe('Health room shell', () => {
     expect(el.getAttribute('data-health-state')).toBe('locked');
     expect(el.querySelector('#health-workout-load')).toBeNull();
     expect(el.querySelector('[data-gym-floor="locked"]')).not.toBeNull();
-    expect(el.textContent).toContain('Finance is locked. Unlock to see measurements.');
+    expect(el.textContent).toContain('Finance is locked. Unlock to open Gym.');
     expect(visible(el)).not.toContain('77');
     expect(visible(el)).not.toContain('Synthetic press');
     expect(visible(el)).not.toMatch(/\d/);
@@ -3177,20 +3179,16 @@ describe('Health room shell', () => {
     const gym = locked.nativeElement as HTMLElement;
     expect(gym.getAttribute('data-health-state')).toBe('locked');
     expect(gym.querySelector('[data-gym-floor="locked"]')).not.toBeNull();
-    expect(gym.querySelector('[data-gym-up="locked"]')).not.toBeNull();
+    expect(gym.querySelector('app-gym-mezzanine')).toBeNull();
     expect(gym.querySelector('app-clinic-room')).toBeNull();
     expect(gym.querySelector('[data-progress-chart]')).toBeNull();
     expect(gym.querySelector('[data-record-cabinet]')).toBeNull();
-    expect(gym.querySelector('#gym-floor-object-title')?.textContent).toContain('Routine desk');
-    expect(gym.textContent).toContain('Finance is locked. Unlock to see measurements.');
+    expect(gym.querySelector('#gym-floor-object-title')).toBeNull();
+    expect(gym.querySelector('app-gym-floor .viewport')?.hasAttribute('inert')).toBeTrue();
+    expect(gym.textContent).toContain('Finance is locked. Unlock to open Gym.');
     expect(href(gym, 'Unlock')).toContain('/finance/vault/unlock');
-    floorButton(gym, 'station').click();
-    locked.detectChanges();
-    expect(gym.querySelector('#gym-floor-object-title')?.textContent).toContain('Exercise station');
-    expect(gym.textContent).toContain('Digits stay hidden until Finance is unlocked.');
     expect(visible(gym)).not.toMatch(/\d/);
     expect(gym.querySelector('#health-floor-record')).toBeNull();
-    expect(floorButton(gym, 'bench').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     locked.destroy();
 
     route.routeData.next({ healthRoom: 'clinic' });
@@ -3203,33 +3201,17 @@ describe('Health room shell', () => {
     expect(clinicEl.querySelector('app-gym-mezzanine')).toBeNull();
     expect(clinicEl.querySelector('app-clinic-room')).not.toBeNull();
     expect(clinicEl.querySelector('[data-clinic-room="locked"]')).not.toBeNull();
-    expect(clinicEl.querySelector('#clinic-object-title')?.textContent).toContain('Clinic');
+    expect(clinicEl.querySelector('#clinic-object-title')).toBeNull();
+    expect(clinicEl.querySelector('app-clinic-room .viewport')?.hasAttribute('inert')).toBeTrue();
+    expect(clinicEl.textContent).toContain('Finance is locked. Unlock to open Clinic.');
     expect(clinicEl.textContent).not.toContain('Routine desk');
     expect(clinicEl.textContent).not.toContain('Progress wall');
     expect(visible(clinicEl)).not.toMatch(/\d/);
-    clinicButton(clinicEl, 'sleep').click();
-    clinic.detectChanges();
-    expect(clinicEl.querySelector('#clinic-object-title')?.textContent).toContain('Sleep station');
-    expect(clinicEl.textContent).toContain('Digits stay hidden until Finance is unlocked.');
     expect(clinicEl.querySelector('[data-clinic-date]')).toBeNull();
     expect(clinicEl.querySelector('[data-clinic-history]')).toBeNull();
-    expect(visible(clinicEl)).not.toMatch(/\d/);
-    clinicButton(clinicEl, 'labs').click();
-    clinic.detectChanges();
-    expect(clinicEl.querySelector('#clinic-object-title')?.textContent).toContain('Lab folders');
-    expect(clinicEl.textContent).toContain('Digits stay hidden until Finance is unlocked.');
     expect(clinicEl.querySelector('[data-clinic-folder]')).toBeNull();
     expect(clinicEl.querySelector('[data-clinic-table]')).toBeNull();
-    expect(visible(clinicEl)).not.toMatch(/\d/);
-    clinicButton(clinicEl, 'checkups').click();
-    clinic.detectChanges();
-    expect(clinicEl.querySelector('#clinic-object-title')?.textContent).toContain('Checkup book');
-    expect(clinicEl.textContent).toContain('Digits stay hidden until Finance is unlocked.');
     expect(clinicEl.querySelector('[data-clinic-checkup]')).toBeNull();
-    expect(visible(clinicEl)).not.toMatch(/\d/);
-    expect(clinicButton(clinicEl, 'weight').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
-    expect(clinicButton(clinicEl, 'labs').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
-    expect(clinicButton(clinicEl, 'checkups').getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     clinic.destroy();
 
     gate.exists = false;
@@ -3270,7 +3252,7 @@ describe('Health room shell', () => {
     expect(el.querySelector('#health-workout-title')?.textContent).toContain('Add session');
     button(el, 'Cancel').click();
     fixture.detectChanges();
-    button(el, 'Add session').click();
+    el.querySelector<HTMLButtonElement>('#health-add-session button')!.click();
     fixture.detectChanges();
     expect(el.querySelector('#health-workout-title')?.textContent).toContain('Add session');
     button(el, 'Cancel').click();
@@ -3704,7 +3686,7 @@ describe('Health room shell', () => {
       button(el, 'Cancel').click();
       fixture.detectChanges();
 
-      button(el, 'Add session').click();
+      el.querySelector<HTMLButtonElement>('#health-add-session button')!.click();
       fixture.detectChanges();
       expect(el.querySelector('[data-rest-phase]')?.getAttribute('data-rest-phase')).toBe('idle');
       expect(el.querySelector('#health-rest-clock')?.textContent?.trim()).toBe('0:00');

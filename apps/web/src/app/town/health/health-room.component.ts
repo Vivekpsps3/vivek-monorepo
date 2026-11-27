@@ -300,7 +300,6 @@ export class HealthRoomComponent implements OnInit {
   private readonly returnFocusKind = signal<HealthClinicKind | null>(null);
   protected readonly emptyDraft = EMPTY_HEALTH_DRAFT;
   protected readonly clinicAdds: readonly { kind: HealthClinicKind; label: string; id: string }[] = [
-    { kind: 'weight', label: 'Add weight', id: 'health-add-weight' },
     { kind: 'rhr', label: 'Add resting heart rate', id: 'health-add-rhr' },
     { kind: 'bp', label: 'Add blood pressure', id: 'health-add-bp' },
     { kind: 'sleep', label: 'Add sleep', id: 'health-add-sleep' },
@@ -441,6 +440,12 @@ export class HealthRoomComponent implements OnInit {
     const entry = this.workouts().find(item => item.value.kind === 'routine' && !item.value.archived);
     return entry?.value.kind === 'routine' ? entry.value.name : '';
   });
+  protected readonly canResumeWorkout = computed(() =>
+    this.workoutDraft()?.kind === 'session' || !!this.latestDraftSession());
+  protected readonly canStartAnotherWorkout = computed(() => {
+    const held = this.workoutDraft();
+    return held?.kind === 'session' ? !!held.clientId : !!this.latestDraftSession();
+  });
   protected readonly floorCanFinish = computed(() => {
     const held = this.workoutDraft();
     if (held) return held.kind === 'session';
@@ -557,7 +562,16 @@ export class HealthRoomComponent implements OnInit {
   private roomPath(): string {
     const entry = this.entryId();
     const path = this.room() === 'clinic' ? '/town/clinic' : '/town/gym';
-    return entry ? `${path}?entry=${entry}` : path;
+    const target = this.router.createUrlTree([path], {
+      queryParams: {
+        entry,
+        object: this.room() === 'clinic'
+          ? clinicObjectId(this.params().get('object'))
+          : gymFloorId(this.params().get('object')),
+        up: this.room() === 'gym' ? gymUpId(this.params().get('up')) : null,
+      },
+    });
+    return this.router.serializeUrl(target);
   }
 
   protected returnQuery(): { next?: string } {
@@ -615,9 +629,9 @@ export class HealthRoomComponent implements OnInit {
     return `health-progress-${action}-${slug || 'series'}`;
   }
 
-  protected openWorkout(kind: WorkoutKind): void {
+  protected openWorkout(kind: WorkoutKind, focusId = `health-add-${kind}`): void {
     this.workoutFormError.set('');
-    this.returnWorkoutFocus.set(`health-add-${kind}`);
+    this.returnWorkoutFocus.set(focusId);
     const draft = this.workoutDraft();
     if (!draft || draft.kind !== kind || draft.clientId !== '') {
       this.workoutDraft.set(emptyWorkoutDraft(kind, this.today()));
@@ -693,8 +707,12 @@ export class HealthRoomComponent implements OnInit {
     target?.focus();
   }
 
+  protected focusSection(id: string): void {
+    document.getElementById(id)?.focus();
+  }
+
   protected focusCabinet(): void {
-    document.getElementById('health-cabinet-title')?.focus();
+    this.focusSection('health-cabinet-title');
   }
 
   /** The object id is the durable gym URL. Zoom stays on this floor. */
@@ -793,27 +811,28 @@ export class HealthRoomComponent implements OnInit {
   protected recordAtStation(): void {
     if (this.phase() !== 'ready' || this.workoutBusy()) return;
     this.selectFloor('station');
-    this.openCurrentWorkout();
+    this.openCurrentWorkout('health-floor-record');
   }
 
-  private openCurrentWorkout(): void {
+  protected openCurrentWorkout(focusId = 'health-add-session'): void {
+    if (this.phase() !== 'ready' || this.workoutBusy()) return;
     const held = this.workoutDraft();
     if (held?.kind === 'session') {
       if (held.clientId === '') {
+        this.returnWorkoutFocus.set(focusId);
         this.rememberFocusAnchor();
         this.workoutDialogOpen.set(true);
         return;
       }
-      if (held.state === 'draft') this.resumeWorkout(held.clientId);
-      else this.editWorkout(held.clientId);
+      this.openSavedSession(held.clientId, focusId, held.state === 'draft' ? 'draft' : 'completed');
       return;
     }
     const saved = this.latestDraftSession();
     if (saved) {
-      this.resumeWorkout(saved.clientId);
+      this.openSavedSession(saved.clientId, focusId, 'draft');
       return;
     }
-    this.openWorkout('session');
+    this.openWorkout('session', focusId);
   }
 
   protected finishAtBench(): void {
@@ -1369,41 +1388,35 @@ export class HealthRoomComponent implements OnInit {
     const generation = this.generation;
     const signal = this.openRead();
     if (!this.current(generation) || signal.aborted) return;
-    if (!financeVaultPresent()) {
-      this.phase.set('loading');
-      this.entries.set([]);
-      const exists = await this.vaultExists();
-      if (!this.current(generation) || signal.aborted) return;
-      if (exists === true) {
-        this.phase.set('locked');
-        return;
-      }
-      this.phase.set(exists === false && this.ownerId() ? 'setup' : 'unavailable');
-      return;
-    }
     this.phase.set('loading');
     this.entries.set([]);
     this.unreadable.set(0);
-    let result;
-    try {
-      result = await this.store.load({ signal });
-    } catch {
-      if (this.current(generation) && !signal.aborted) this.phase.set('unavailable');
-      return;
-    }
-    if (!this.current(generation) || signal.aborted) return;
-    if (!financeVaultPresent() || result.state === 'locked') {
+    if (financeVaultPresent()) {
+      let result;
+      try {
+        result = await this.store.load({ signal });
+      } catch {
+        if (this.current(generation) && !signal.aborted) this.phase.set('unavailable');
+        return;
+      }
+      if (!this.current(generation) || signal.aborted) return;
+      if (financeVaultPresent() && result.state !== 'locked') {
+        if (result.state === 'ready') {
+          this.unreadable.set(result.unreadable);
+          this.publish();
+        }
+        this.phase.set(result.state);
+        return;
+      }
       this.dropPrivate();
+    }
+    const exists = await this.vaultExists();
+    if (!this.current(generation) || signal.aborted) return;
+    if (exists === true) {
       this.phase.set('locked');
       return;
     }
-    if (result.state !== 'ready') {
-      this.phase.set('unavailable');
-      return;
-    }
-    this.unreadable.set(result.unreadable);
-    this.publish();
-    this.phase.set('ready');
+    this.phase.set(exists === false && this.ownerId() ? 'setup' : 'unavailable');
   }
 
   private publish(): void {
