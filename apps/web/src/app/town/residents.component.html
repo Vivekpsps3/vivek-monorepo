@@ -65,6 +65,9 @@
           <p [attr.data-mention-sample]="object.sample" [attr.data-mention-label]="object.label">{{ object.label }}</p>
           <p>{{ object.detail }}</p>
         }
+        @if (chapterLine(); as visit) {
+          <p data-chapter-visit>{{ visit }}</p>
+        }
         <p data-rank-effect>{{ rankEffect() }}</p>
         <div class="choices" role="group" aria-labelledby="dialogue-choices">
           <p id="dialogue-choices">Choose a reply</p>

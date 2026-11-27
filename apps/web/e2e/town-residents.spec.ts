@@ -602,4 +602,272 @@ test.describe('Resident dialogue', () => {
       expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
     });
   }
+
+  const wrenScenes = [
+    ['Welcome', 'Wren keeps the music room and the arcade. The bar, the sign, and the play floor stay here when you are away.', 'Rank rises by 1. 2 Stamps, once.'],
+    ['How this place works', 'Saved music stays in Media. A game stays with its play. This talk does not keep a second copy.', 'Rank rises by 1. No Stamps.'],
+    ['A preference', 'Wren asks what you like to linger with. The answer is a taste, not a grade of music or of play.', 'Rank rises by 1. No Stamps.'],
+    ['A short activity', 'You can notice the sample sign, or leave the floor. Noticing does not save a score or copy a review.', 'Rank rises by 1. No Stamps.'],
+    ['A reflection', 'Wren looks at the music room and the play floor, not at a private review.', 'Rank rises by 1. No Stamps.'],
+  ] as const;
+  const solScenes = [
+    ['Welcome', 'Sol keeps the Hall and the study. The rules and the desk stay here when you are away.', 'Rank rises by 1. 2 Stamps, once.'],
+    ['How this place works', 'The Hall shows public rules. Learning stays with you. This talk does not copy a note from the study.', 'Rank rises by 1. No Stamps.'],
+    ['A preference', 'Sol asks how you like to learn the rules of a place. The answer is a taste, not a grade.', 'Rank rises by 1. No Stamps.'],
+    ['A short activity', 'You can notice the rules, or leave them. Noticing does not copy a review or a concept note.', 'Rank rises by 1. No Stamps.'],
+    ['A reflection', 'Sol looks at the Hall, not at a private review or a concept note.', 'Rank rises by 1. No Stamps.'],
+  ] as const;
+  const reviewNote = 'Harbor week note stays shut';
+  const conceptNote = 'Concept note tide tables';
+
+  function conversationId(title: string): string {
+    if (title === 'Welcome') return 'welcome';
+    if (title === 'How this place works') return 'how-it-works';
+    if (title === 'A preference') return 'preference';
+    if (title === 'A short activity') return 'activity';
+    return 'reflection';
+  }
+
+  test('reads Wren and Sol before and after a chapter without copying a note', async ({ page }) => {
+    const writes: string[] = [];
+    page.on('request', request => {
+      if (request.method() === 'GET' || request.method() === 'HEAD' || request.method() === 'OPTIONS') return;
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith('/media/') || path.startsWith('/api/world') || path.startsWith('/api/vault') || path.includes('/health')) {
+        writes.push(`${request.method()} ${path}`);
+      }
+    });
+    await page.addInitScript(({ review, concept }) => {
+      localStorage.setItem('town.scene.v1.1', JSON.stringify({ season: 'automatic', sound: false }));
+      localStorage.setItem('synthetic-review', review);
+      localStorage.setItem('synthetic-concept', concept);
+      const contexts: unknown[] = [];
+      (window as unknown as { __audioContexts: unknown[] }).__audioContexts = contexts;
+      class SilentAudio {
+        constructor() { contexts.push(this); }
+      }
+      window.AudioContext = SilentAudio as unknown as typeof AudioContext;
+    }, { review: reviewNote, concept: conceptNote });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.goto('/town/residents?resident=wren');
+    const residents = page.locator('app-town-residents');
+    const before = await balance(page);
+    await activate(page, residents.getByRole('button', { name: 'Talk about A reflection', exact: true }), false);
+    await expect(residents.locator('[data-chapter-visit]')).toHaveText('Not visited yet. This talk does not mark a chapter done.');
+    await expect(residents.locator('[data-mention-label]')).toHaveText('Sample arcade sign');
+    await expect(residents.locator('[data-rank-effect]')).toHaveText('Rank rises by 1. No Stamps.');
+    await expect(residents.getByText(reviewNote)).toHaveCount(0);
+    await expect(residents.getByText(conceptNote)).toHaveCount(0);
+    await activate(page, residents.getByRole('button', { name: 'Cancel', exact: true }), false);
+    await expect(residents.locator('article[data-resident="wren"]')).toHaveAttribute('data-rank', '0');
+
+    let rank = 0;
+    for (const [title, line, effect] of wrenScenes) {
+      await activate(page, residents.getByRole('button', { name: `Talk about ${title}`, exact: true }), false);
+      await expect(residents.getByText(line, { exact: true }).first()).toBeVisible();
+      await expect(residents.locator('[data-mention-label]')).toHaveText('Sample arcade sign');
+      await expect(residents.locator('[data-mention-sample]')).toHaveAttribute('data-mention-sample', 'true');
+      const id = conversationId(title);
+      await expect(residents.locator('[data-resident-scene]')).toHaveAttribute('data-resident-scene', `wren:${id}`);
+      if (title === 'A reflection') {
+        await expect(residents.locator('[data-chapter-visit]')).toHaveText('Not visited yet. This talk does not mark a chapter done.');
+      } else {
+        await expect(residents.locator('[data-chapter-visit]')).toHaveCount(0);
+      }
+      const choices = residents.locator('[data-dialogue-choice]');
+      await expect(choices).toHaveCount(2);
+      await expect(residents.getByRole('button', { name: 'Finish talk', exact: true })).toBeDisabled();
+      if (title === 'A short activity') await activate(page, residents.getByRole('button', { name: 'Leave the floor alone.', exact: true }), false);
+      else await activate(page, choices.nth(rank % 2), false);
+      await expect(residents.locator('[data-rank-effect]')).toHaveText(effect);
+      const posted = page.waitForRequest(request => request.method() === 'POST' && request.url().includes('/api/town/residents/conversations'));
+      await activate(page, residents.getByRole('button', { name: 'Finish talk', exact: true }), false);
+      const body = (await posted).postDataJSON() as Record<string, unknown>;
+      expect(Object.keys(body).sort()).toEqual(['conversation_id', 'expected_revision', 'resident_id']);
+      expect(body['resident_id']).toBe('wren');
+      expect(body['conversation_id']).toBe(id);
+      expect(JSON.stringify(body)).not.toContain(reviewNote);
+      expect(JSON.stringify(body)).not.toContain(conceptNote);
+      rank += 1;
+      await expect(residents.locator('article[data-resident="wren"]')).toHaveAttribute('data-rank', String(rank));
+      await expect(residents.locator('#dialogue-notice')).not.toContainText(reviewNote);
+      await expect(residents.locator('#dialogue-notice')).not.toContainText(conceptNote);
+    }
+    expect(await balance(page)).toBe(before + 2);
+    await activate(page, residents.getByRole('button', { name: 'Replay A reflection', exact: true }), false);
+    await expect(residents.locator('[data-chapter-visit]')).toHaveText('Already visited. This talk is not recorded again.');
+    await expect(residents.locator('[data-rank-effect]')).toHaveText('Rank stays. No Stamps.');
+    await activate(page, residents.getByRole('button', { name: 'The floor is for playing again.', exact: true }), false);
+    await activate(page, residents.getByRole('button', { name: 'Finish talk', exact: true }), false);
+    await expect(residents.getByText('Rank stays at 5.')).toBeVisible();
+    await expect(residents.locator('article[data-resident="wren"]')).toHaveAttribute('data-rank', '5');
+    expect(await balance(page)).toBe(before + 2);
+
+    await page.goto('/town/residents?resident=sol');
+    await residents.getByRole('button', { name: 'Talk about Welcome', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await residents.locator('[data-dialogue-choice]').first().focus();
+    await page.keyboard.press('Enter');
+    await residents.locator('#dialogue-note').fill('Synthetic session note');
+    await page.evaluate(() => window.dispatchEvent(new StorageEvent('storage', { key: 'finance-vault-lock', newValue: '1' })));
+    await expect(residents.getByRole('heading', { name: 'Finish Welcome with Sol?' })).toHaveCount(0);
+    await expect(residents.locator('#dialogue-note')).toHaveCount(0);
+    await expect(residents.locator('[data-selected-reply]')).toHaveCount(0);
+    await expect(residents.locator('article[data-resident="sol"]')).toHaveAttribute('data-rank', '0');
+
+    rank = 0;
+    for (const [title, line, effect] of solScenes) {
+      await activate(page, residents.getByRole('button', { name: `Talk about ${title}`, exact: true }), false);
+      await expect(residents.getByText(line, { exact: true }).first()).toBeVisible();
+      await expect(residents.locator('[data-mention-label]')).toHaveText('Sample rules card');
+      await expect(residents.getByText('Labeled sample. Not a review or a concept note.')).toBeVisible();
+      await expect(residents.getByText(reviewNote)).toHaveCount(0);
+      await expect(residents.getByText(conceptNote)).toHaveCount(0);
+      if (title === 'A reflection') {
+        await expect(residents.locator('[data-chapter-visit]')).toHaveText('Not visited yet. This talk does not mark a chapter done.');
+      }
+      const choices = residents.locator('[data-dialogue-choice]');
+      if (title === 'A short activity') await activate(page, residents.getByRole('button', { name: 'Leave the notes alone.', exact: true }), false);
+      else await activate(page, choices.nth((rank + 1) % 2), false);
+      await expect(residents.locator('[data-rank-effect]')).toHaveText(effect);
+      const posted = page.waitForRequest(request => request.method() === 'POST' && request.url().includes('/api/town/residents/conversations'));
+      await activate(page, residents.getByRole('button', { name: 'Finish talk', exact: true }), false);
+      const body = (await posted).postDataJSON() as Record<string, unknown>;
+      expect(body['resident_id']).toBe('sol');
+      expect(body['conversation_id']).toBe(conversationId(title));
+      expect(JSON.stringify(body)).not.toContain(reviewNote);
+      expect(JSON.stringify(body)).not.toContain(conceptNote);
+      rank += 1;
+      await expect(residents.locator('article[data-resident="sol"]')).toHaveAttribute('data-rank', String(rank));
+    }
+    expect(await balance(page)).toBe(before + 4);
+    expect(writes).toEqual([]);
+    expect(await page.evaluate(() => (window as unknown as { __audioContexts: unknown[] }).__audioContexts.length)).toBe(0);
+    await expect(residents.getByText(/great job|well done|amazing|proud of you|excellent/i)).toHaveCount(0);
+    await expect(residents.locator('#dialogue-notice')).not.toContainText(reviewNote);
+    await expect(residents.locator('#dialogue-notice')).not.toContainText(conceptNote);
+
+    const created = await page.request.post('/api/world/concepts', {
+      data: { name: 'Tide table', note: conceptNote, tz: 'America/Los_Angeles' },
+    });
+    expect(created.ok()).toBeTruthy();
+    const concept = (await created.json()) as { id: number; note: string };
+    expect(concept.note).toBe(conceptNote);
+    const writesAfterTalks = writes.length;
+    const conceptUrl = `/api/world/concepts?archived=0`;
+    const beforeConcept = await (await page.request.get(conceptUrl)).text();
+    await page.goto('/town/residents?resident=sol');
+    await activate(page, residents.getByRole('button', { name: 'Replay A reflection', exact: true }), false);
+    await expect(residents.locator('[data-chapter-visit]')).toHaveText('Already visited. This talk is not recorded again.');
+    await expect(residents.locator('[data-rank-effect]')).toHaveText('Rank stays. No Stamps.');
+    await expect(residents.getByText(conceptNote)).toHaveCount(0);
+    await expect(residents.getByText('Tide table')).toHaveCount(0);
+    await expect(residents.getByText(reviewNote)).toHaveCount(0);
+    await activate(page, residents.getByRole('button', { name: 'The study can wait.', exact: true }), false);
+    await activate(page, residents.getByRole('button', { name: 'Finish talk', exact: true }), false);
+    await expect(residents.getByText('Rank stays at 5.')).toBeVisible();
+    await expect(residents.getByText(conceptNote)).toHaveCount(0);
+    expect(await (await page.request.get(conceptUrl)).text()).toBe(beforeConcept);
+    expect(await balance(page)).toBe(before + 4);
+    expect(writes.slice(writesAfterTalks).filter(item => item !== 'POST /api/world/concepts')).toEqual([]);
+
+    await page.goto('/town/residents?resident=wren');
+    await expect(residents.getByRole('button', { name: 'Replay A short activity', exact: true })).toBeVisible();
+    await page.evaluate(() => localStorage.setItem('finance-vault-present', '1'));
+    await activate(page, residents.getByRole('button', { name: 'Replay A short activity', exact: true }), false);
+    await expect(residents.locator('[data-mention-label]')).toHaveText('Music bar');
+    await expect(residents.locator('[data-mention-sample]')).toHaveAttribute('data-mention-sample', 'false');
+    await expect(residents.getByText('A public room. Albums and games stay in Media.')).toBeVisible();
+    await expect(residents.getByText(reviewNote)).toHaveCount(0);
+    await expect(residents.getByText(conceptNote)).toHaveCount(0);
+    await expect(residents.locator('[data-rank-effect]')).toHaveText('Rank stays. No Stamps.');
+    await activate(page, residents.getByRole('button', { name: 'Look at the sample sign.', exact: true }), false);
+    await activate(page, residents.getByRole('button', { name: 'Finish talk', exact: true }), false);
+    await expect(residents.getByText('Rank stays at 5.')).toBeVisible();
+    // A marked vault with no key is cleared after this load. Drop the mark first.
+    await page.evaluate(() => localStorage.removeItem('finance-vault-present'));
+    await page.goto('/town/residents?resident=sol');
+    await expect(residents.getByRole('button', { name: 'Replay A short activity', exact: true })).toBeVisible();
+    await page.evaluate(() => localStorage.setItem('finance-vault-present', '1'));
+    await activate(page, residents.getByRole('button', { name: 'Replay A short activity', exact: true }), false);
+    await expect(residents.locator('[data-mention-label]')).toHaveText('Rules board');
+    await expect(residents.getByText('A public board. Reviews and concept notes are not copied here.')).toBeVisible();
+    await expect(residents.getByText(reviewNote)).toHaveCount(0);
+    await expect(residents.getByText(conceptNote)).toHaveCount(0);
+    await expect(residents.getByText('Tide table')).toHaveCount(0);
+    await activate(page, residents.getByRole('button', { name: 'Notice the public rules.', exact: true }), false);
+    await activate(page, residents.getByRole('button', { name: 'Finish talk', exact: true }), false);
+    await expect(residents.getByText('Rank stays at 5.')).toBeVisible();
+    expect(await (await page.request.get(conceptUrl)).text()).toBe(beforeConcept);
+    expect(await balance(page)).toBe(before + 4);
+    expect(writes.slice(writesAfterTalks).filter(item => item !== 'POST /api/world/concepts' && item !== 'GET /api/world/concepts')).toEqual([]);
+  });
+
+  for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const) {
+    test(`${width} ${theme} corrects a Wren reply and a Sol reply`, async ({ page }, info) => {
+      const touch = width === 390;
+      await page.addInitScript(chosen => {
+        localStorage.setItem('suite-theme', chosen);
+        localStorage.setItem('town.scene.v1.1', JSON.stringify({ season: 'automatic', sound: false }));
+      }, theme);
+      await page.setViewportSize({ width, height: touch ? 844 : 800 });
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await page.goto('/town/residents?resident=wren');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      const residents = page.locator('app-town-residents');
+      const talk = residents.getByRole('button', { name: 'Talk about A preference', exact: true });
+      await activate(page, talk, touch);
+      await expect(residents.getByRole('heading', { name: 'Finish A preference with Wren?' })).toBeFocused();
+      await expect(residents.locator('[data-mention-label]')).toHaveText('Sample arcade sign');
+      const choices = residents.locator('[data-dialogue-choice]');
+      await expect(choices).toHaveCount(2);
+      for (const choice of await choices.all()) {
+        const box = await choice.boundingBox();
+        expect(box?.width).toBeGreaterThanOrEqual(44);
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+      }
+      await activate(page, choices.first(), touch);
+      await info.attach(`wren-preference-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      await activate(page, residents.getByRole('button', { name: 'Cancel', exact: true }), touch);
+      await expect(talk).toBeFocused();
+      await expect(residents.locator('#dialogue-note')).toHaveCount(0);
+      await activate(page, talk, touch);
+      await activate(page, choices.nth(1), touch);
+      await activate(page, residents.getByRole('button', { name: 'Finish talk', exact: true }), touch);
+      await expect(residents.getByText('Rank is 1. No extra Stamps.')).toBeFocused();
+      await expect(residents.locator('article[data-resident="wren"]')).toHaveAttribute('data-rank', '1');
+      const close = residents.getByRole('button', { name: 'Close', exact: true });
+      await activate(page, close, touch);
+      await expect(residents.locator('#inspect-wren')).toBeFocused();
+      await page.goBack();
+      await expect(page).toHaveURL(/resident=wren/);
+
+      await page.goto('/town/residents?resident=sol');
+      const hallTalk = residents.getByRole('button', { name: 'Talk about A short activity', exact: true });
+      await activate(page, hallTalk, touch);
+      await expect(residents.getByRole('heading', { name: 'Finish A short activity with Sol?' })).toBeFocused();
+      await expect(residents.locator('[data-mention-label]')).toHaveText('Sample rules card');
+      const hallChoices = residents.locator('[data-dialogue-choice]');
+      await expect(hallChoices).toHaveCount(2);
+      for (const choice of await hallChoices.all()) {
+        const box = await choice.boundingBox();
+        expect(box?.width).toBeGreaterThanOrEqual(44);
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+      }
+      await activate(page, hallChoices.first(), touch);
+      await info.attach(`sol-activity-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      await activate(page, residents.getByRole('button', { name: 'Cancel', exact: true }), touch);
+      await expect(hallTalk).toBeFocused();
+      await activate(page, hallTalk, touch);
+      await activate(page, residents.getByRole('button', { name: 'Leave the notes alone.', exact: true }), touch);
+      await activate(page, residents.getByRole('button', { name: 'Finish talk', exact: true }), touch);
+      await expect(residents.getByText('Rank is 1. No extra Stamps.')).toBeFocused();
+      await expect(residents.locator('article[data-resident="sol"]')).toHaveAttribute('data-rank', '1');
+      expect(await residents.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+      const scan = await new AxeBuilder({ page }).include('app-town-residents').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+    });
+  }
 });
