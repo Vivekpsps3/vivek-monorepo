@@ -6,7 +6,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { SessionService } from '../platform/session.service';
 import { QuestsComponent } from './quests.component';
-import { TownApiService, type QuestJournal, type QuestStepView } from './town.api';
+import { TownApiService, type QuestJournal, type QuestKeepsake, type QuestStepView } from './town.api';
 
 function step(patch: Partial<QuestStepView> & Pick<QuestStepView, 'id' | 'label' | 'action_id'>): QuestStepView {
   return {
@@ -19,6 +19,10 @@ function step(patch: Partial<QuestStepView> & Pick<QuestStepView, 'id' | 'label'
   };
 }
 
+function keepsake(id: string, name: string, kind: QuestKeepsake['kind'], kept = false): QuestKeepsake {
+  return { id, name, kind, kept };
+}
+
 function shelves(recorded = false): QuestJournal {
   return {
     revision: recorded ? 1 : 0,
@@ -28,6 +32,8 @@ function shelves(recorded = false): QuestJournal {
       detail: 'Optional. No deadline.',
       completed: recorded ? 1 : 0,
       total: 3,
+      reward_stamps: 10,
+      keepsake: keepsake('library-seal', 'library seal', 'seal'),
       steps: [
         step({
           id: 'meet-librarian',
@@ -50,16 +56,28 @@ function shelves(recorded = false): QuestJournal {
   };
 }
 
-function home(revision: number, title = 'Make a home'): QuestJournal {
+function home(revision: number, title = 'Make a home', kept = false): QuestJournal {
   return {
     revision,
     quests: [{
       id: 'make-a-home',
       title,
       detail: 'Optional. No deadline.',
-      completed: 0,
+      completed: kept ? 1 : 0,
       total: 1,
-      steps: [step({ id: 'enter-home', label: 'Enter Home', action_id: 'make-a-home:enter-home' })],
+      reward_stamps: 10,
+      keepsake: keepsake(
+        'paper-house-postcard',
+        title === 'STALE' ? 'stale postcard' : 'paper-house postcard',
+        'postcard',
+        kept || title === 'STALE',
+      ),
+      steps: [step({
+        id: 'enter-home',
+        label: 'Enter Home',
+        action_id: 'make-a-home:enter-home',
+        recorded_action: kept || title === 'STALE' ? 'make-a-home:enter-home' : null,
+      })],
     }],
   };
 }
@@ -166,6 +184,8 @@ describe('Optional quests', () => {
     expect(el.textContent).toContain('Second owner');
     expect(el.querySelector('main')?.getAttribute('data-revision')).toBe('2');
     expect(el.textContent).not.toContain('STALE');
+    expect(el.textContent).not.toContain('stale postcard');
+    expect(el.querySelector('[data-keepsake]')).toBeNull();
     expect(el.textContent).not.toContain('Record Enter Home?');
   });
 
@@ -206,6 +226,24 @@ describe('Optional quests', () => {
     expect(el.textContent).toContain('Record Inspect a saved item');
     expect(el.textContent).not.toContain('Sample book');
     expect(el.textContent).not.toContain('Use Sample shelf item');
+  });
+
+  it('keeps the reward off the page until the saved journal includes it', async () => {
+    const { harness, el, click } = await open(home(0));
+    expect(el.textContent).toContain('10 Stamps and the paper-house postcard, once.');
+    expect(el.querySelector('[data-keepsake]')).toBeNull();
+    click('Record Enter Home');
+    click('Confirm step');
+    writes[0].error({ status: 503 });
+    harness.detectChanges();
+    expect(el.textContent).toContain('Record Enter Home?');
+    expect(el.querySelector('[data-keepsake]')).toBeNull();
+    click('Retry step');
+    writes[1].next(home(1, 'Make a home', true));
+    harness.detectChanges();
+    expect(el.querySelector('[data-keepsake="paper-house-postcard"]')?.textContent).toContain('paper-house postcard');
+    expect(el.textContent).toContain('Recorded once. paper-house postcard. 10 Stamps, once.');
+    expect(el.textContent).not.toContain('Record Enter Home?');
   });
 
   it('offers the labeled sample when the library is locked', async () => {

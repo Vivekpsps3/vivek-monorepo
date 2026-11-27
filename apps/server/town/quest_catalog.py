@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Literal
 
 SourceName = Literal["library", "travel", "memory"]
+KeepsakeKind = Literal["postcard", "seal", "pennant", "print"]
+CHAPTER_STAMPS = 10
 
 
 class QuestStepSpec:
@@ -34,11 +36,23 @@ class QuestStepSpec:
 
 
 class QuestSpec:
-    def __init__(self, quest_id: str, title: str, steps: tuple[QuestStepSpec, ...]) -> None:
+    def __init__(
+        self,
+        quest_id: str,
+        title: str,
+        steps: tuple[QuestStepSpec, ...],
+        keepsake_id: str,
+        keepsake_name: str,
+        keepsake_kind: KeepsakeKind,
+    ) -> None:
         self.id = quest_id
         self.title = title
         self.detail = "Optional. No deadline."
         self.steps = steps
+        self.reward_stamps = CHAPTER_STAMPS
+        self.keepsake_id = keepsake_id
+        self.keepsake_name = keepsake_name
+        self.keepsake_kind = keepsake_kind
 
 
 def _step(
@@ -73,6 +87,9 @@ QUESTS: tuple[QuestSpec, ...] = (
             _step("make-a-home", "place-starter", "Place a starter item"),
             _step("make-a-home", "save-layout", "Save the layout"),
         ),
+        "paper-house-postcard",
+        "paper-house postcard",
+        "postcard",
     ),
     QuestSpec(
         "find-your-shelves",
@@ -89,6 +106,9 @@ QUESTS: tuple[QuestSpec, ...] = (
             ),
             _step("find-your-shelves", "choose-display", "Choose a shelf display"),
         ),
+        "library-seal",
+        "library seal",
+        "seal",
     ),
     QuestSpec(
         "across-the-harbor",
@@ -105,6 +125,9 @@ QUESTS: tuple[QuestSpec, ...] = (
             ),
             _step("across-the-harbor", "ring-bell", "Ring the model ferry bell"),
         ),
+        "harbor-postcard",
+        "harbor postcard",
+        "postcard",
     ),
     QuestSpec(
         "a-place-to-play",
@@ -114,6 +137,9 @@ QUESTS: tuple[QuestSpec, ...] = (
             _step("a-place-to-play", "finish-game", "Finish either game"),
             _step("a-place-to-play", "inspect-score", "Inspect its score"),
         ),
+        "arcade-pennant",
+        "arcade pennant",
+        "pennant",
     ),
     QuestSpec(
         "light-the-square",
@@ -123,6 +149,9 @@ QUESTS: tuple[QuestSpec, ...] = (
             _step("light-the-square", "inspect-rules", "Inspect the rules board"),
             _step("light-the-square", "place-lantern", "Place a lantern"),
         ),
+        "brass-civic-seal",
+        "brass civic seal",
+        "seal",
     ),
     QuestSpec(
         "your-own-little-world",
@@ -139,8 +168,16 @@ QUESTS: tuple[QuestSpec, ...] = (
                 sample_detail="Labeled sample. Not your memories.",
             ),
         ),
+        "night-sky-print",
+        "night-sky print",
+        "print",
     ),
 )
+
+
+def chapter_grant_key(quest_id: str) -> str:
+    return f"quest:{quest_id}"
+
 
 _BY_QUEST = {quest.id: quest for quest in QUESTS}
 

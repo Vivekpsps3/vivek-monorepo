@@ -4,6 +4,7 @@ header, .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12p
 header { justify-content: space-between; margin-bottom: 16px; }
 h1, h2, p { margin: 0; overflow-wrap: anywhere; }
 article { display: grid; gap: 8px; margin-top: 20px; }
+.keepsake { box-sizing: border-box; max-width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 ol { display: grid; gap: 12px; margin: 0; padding-left: 1.25rem; }
 li { display: grid; gap: 8px; justify-items: start; min-width: 0; }
 button, a.action {
