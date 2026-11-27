@@ -54,8 +54,20 @@ test('DET1 fallback, dates, pressed targets and drafts survive mark-next, failur
   const chips = page.locator('.meta-chips');
   await expect(chips).toContainText('Series');
   await expect(chips).toContainText('Watching');
-  await expect(page.getByRole('textbox', { name: 'Tags', exact: true })).toBeVisible();
-  await expect(page.getByRole('radiogroup', { name: 'Rating', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mark next watched', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Progress', { exact: true })).toBeHidden();
+  const nextMark = page.getByRole('button', { name: 'Watched S1E1', exact: true });
+  await expect(nextMark).toBeVisible();
+  await expect(page.getByText(/Next: S1E1 · Pilot/)).toBeVisible();
+  const nextBox = await nextMark.boundingBox();
+  expect(nextBox).toBeTruthy();
+  expect(nextBox!.height).toBeGreaterThanOrEqual(44);
+  expect(nextBox!.width).toBeGreaterThanOrEqual(44);
+  const progressHeading = page.getByRole('heading', { name: 'Episode progress', exact: true });
+  const progressBox = await progressHeading.boundingBox();
+  expect(progressBox).toBeTruthy();
+  expect(nextBox!.y).toBeLessThan(progressBox!.y);
+  expect(nextBox!.y + nextBox!.height).toBeLessThanOrEqual(844);
 
   const box = await art.boundingBox();
   expect(box).toBeTruthy();
@@ -90,11 +102,9 @@ test('DET1 fallback, dates, pressed targets and drafts survive mark-next, failur
   expect(removeBox).toBeTruthy();
   expect(removeBox!.height).toBeGreaterThanOrEqual(44);
 
-  const nextMark = page.getByRole('button', { name: 'Mark next watched', exact: true });
-  const nextBox = await nextMark.boundingBox();
-  expect(nextBox).toBeTruthy();
-  expect(nextBox!.height).toBeGreaterThanOrEqual(44);
-
+  await page.getByRole('button', { name: 'Edit rating and note', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Tags', exact: true })).toBeVisible();
+  await expect(page.getByRole('radiogroup', { name: 'Rating', exact: true })).toBeVisible();
   await expect(page.getByLabel('Progress', { exact: true })).toBeVisible();
   await expect(page.getByText('Anticipation', { exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: 'Anticipated', exact: true })).toBeHidden();
