@@ -48,7 +48,7 @@ from apps.server.town.models import (
 from apps.server.town.stamps import grant_stamps, purchase_stamps, read_wallet, refund_stamps
 
 PARENT = "site_town_stamps_v1"
-HEAD = "site_town_quests_v1"
+HEAD = "site_town_dialogue_v1"
 WHEN = datetime(2026, 11, 2, 16, 0, tzinfo=UTC)
 _CHECK = "Check the highlighted fields."
 _LOCKED = "That item is not unlocked."

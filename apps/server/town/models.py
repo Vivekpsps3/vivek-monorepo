@@ -1,4 +1,4 @@
-"""Town habits, check-ins, cadence rows, cosmetic room layouts, and quest steps.
+"""Town habits, check-ins, cadence rows, cosmetic room layouts, quests, and dialogue.
 
 TownBase is its own registry, separate from Finance, Travel, and Media.
 Owner foreign keys to users.id are attached by apps.server.schema.OWNER_TABLES.
@@ -27,8 +27,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 # raises APIError 422 name_too_long with field_errors.name set; it is not truncated.
 from apps.server.town.engine import name_key as make_name_key
 from apps.server.town.quest_catalog import triple_check_sql
+from apps.server.town.resident_catalog import conversation_check_sql, resident_check_sql
 
 __all__ = [
+    "DialogueCompletion",
+    "DialogueJournal",
     "Habit",
     "HabitCadence",
     "HabitCheckin",
@@ -260,4 +263,39 @@ class QuestStep(TownBase):
     quest_id: Mapped[str] = mapped_column(String(40), nullable=False)
     step_id: Mapped[str] = mapped_column(String(40), nullable=False)
     action_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class DialogueJournal(TownBase):
+    """One revision for every resident conversation. Absence of a row means revision 0."""
+
+    __tablename__ = "town_dialogue_journals"
+    __table_args__ = (CheckConstraint("revision >= 1", name="ck_town_dialogue_journals_revision"),)
+
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class DialogueCompletion(TownBase):
+    """One finished conversation identity per owner and resident. Rank is the count."""
+
+    __tablename__ = "town_dialogue_completions"
+    __table_args__ = (
+        Index("ix_town_dialogue_completions_user_id", "user_id"),
+        Index(
+            "uq_town_dialogue_completion",
+            "user_id",
+            "resident_id",
+            "conversation_id",
+            unique=True,
+        ),
+        CheckConstraint(resident_check_sql(), name="ck_town_dialogue_completions_resident"),
+        CheckConstraint(conversation_check_sql(), name="ck_town_dialogue_completions_conversation"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    resident_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    conversation_id: Mapped[str] = mapped_column(String(40), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -86,6 +86,21 @@ describe('TownApiService', () => {
     ]);
     post.flush({ revision: 1, quests: [] });
   });
+  it('posts a conversation identity without a note or life metric', () => {
+    api.getResidents().subscribe();
+    const read = http.expectOne(request => request.url === '/api/town/residents');
+    expect(read.request.method).toBe('GET');
+    read.flush({ revision: 0, hour: 0, residents: [] });
+    const body = { resident_id: 'mara', conversation_id: 'welcome', expected_revision: 0 };
+    api.completeConversation(body).subscribe();
+    const post = http.expectOne(request => request.url === '/api/town/residents/conversations');
+    expect(post.request.method).toBe('POST');
+    expect(post.request.body).toEqual(body);
+    expect(Object.keys(post.request.body as object).sort()).toEqual([
+      'conversation_id', 'expected_revision', 'resident_id',
+    ]);
+    post.flush({ revision: 1, hour: 0, residents: [] });
+  });
   it('preserves authentication errors for the expired state', () => {
     const error = jasmine.createSpy('error');
     api.getTown().subscribe({ error });

@@ -6,8 +6,8 @@ engine/session lifecycle; [identity](identity/) owns auth/session/credentials.
 owns hash-only capabilities and owner-scoped management. URL query tokens must be
 redacted, including exception messages. Reauthorize conditional reads after revocation.
 Town, Pixels and search are server projections. Day facts and keepsakes project existing
-rows and leave score counts unchanged. Stamp wallets start at zero and store game receipts only. A quest action is stored once, minting nothing. Finance, Travel and Media rules
-remain in their own app directories.
+rows and leave score counts unchanged. Stamp receipts start at zero and are game-only. Quests are stored once. Welcome grants 2 Stamps once. Ranks do not decay. Domain rules
+stay in their app directories.
 
 Keep dependency direction explicit: shared transport must not
 import app business rules.

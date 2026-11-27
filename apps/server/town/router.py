@@ -3,6 +3,7 @@
 import re
 from datetime import date, datetime
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
@@ -17,12 +18,14 @@ from apps.server.identity.session import get_current_user
 from apps.server.path_ids import MAX_PATH_ID
 from apps.server.town import writes
 from apps.server.town.clock import get_town_clock, resolve_tz
+from apps.server.town.dialogue import complete_conversation, read_directory
 from apps.server.town.keepsakes import read_keepsakes
 from apps.server.town.layouts import ROOMS, parse_body, read_layout, save_layout
 from apps.server.town.quests import read_journal, record_step
 from apps.server.town.schemas import (
     CheckinDays,
     CheckinResult,
+    DialogueDirectoryView,
     Habit,
     HabitList,
     HubTownSummary,
@@ -295,6 +298,37 @@ async def post_quest_step(
     view, created = await run_in_threadpool(record_step, db, user.id, payload, now)
     response.status_code = 201 if created else 200
     return QuestJournalView.model_validate(view)
+
+
+def _hour(tz: str | None, now: datetime) -> int:
+    return now.astimezone(ZoneInfo(resolve_tz(tz))).hour
+
+
+@router.get("/residents", response_model=DialogueDirectoryView)
+def get_residents(
+    tz: str | None = None,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+    now: datetime = Depends(get_town_clock),
+) -> DialogueDirectoryView:
+    return DialogueDirectoryView.model_validate(read_directory(db, principal.id, _hour(tz, now)))
+
+
+@router.post("/residents/conversations", response_model=DialogueDirectoryView)
+async def post_resident_conversation(
+    request: Request,
+    response: Response,
+    tz: str | None = None,
+    db: Session = Depends(get_db, scope="function"),
+    user: User = Depends(get_current_user),
+    now: datetime = Depends(get_town_clock),
+) -> DialogueDirectoryView:
+    payload = await writes.json_object(request)
+    view, created = await run_in_threadpool(
+        complete_conversation, db, user.id, payload, now, _hour(tz, now)
+    )
+    response.status_code = 201 if created else 200
+    return DialogueDirectoryView.model_validate(view)
 
 
 @router.get("/layouts/{room_id}", response_model=RoomLayoutView, response_model_exclude_unset=True)

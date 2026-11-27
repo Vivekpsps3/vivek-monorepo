@@ -177,6 +177,8 @@ def main():
                     "habit_checkins",
                     "habit_cadences",
                     "habits",
+                    "town_dialogue_journals",
+                    "town_dialogue_completions",
                     "town_quest_journals",
                     "town_quest_steps",
                     "town_room_layouts",

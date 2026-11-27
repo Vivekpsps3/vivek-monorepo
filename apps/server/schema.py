@@ -36,6 +36,8 @@ OWNER_TABLES = {
     "town_room_layouts",
     "town_quest_journals",
     "town_quest_steps",
+    "town_dialogue_journals",
+    "town_dialogue_completions",
     "world_concepts",
 }
 

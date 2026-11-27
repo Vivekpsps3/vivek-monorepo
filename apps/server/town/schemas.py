@@ -341,3 +341,27 @@ class QuestView(_Shape):
 class QuestJournalView(_Shape):
     revision: int
     quests: list[QuestView]
+
+
+class DialogueConversationView(_Shape):
+    id: str
+    title: str
+    line: str
+    stamps: int
+    completed: bool
+
+
+class DialogueResidentView(_Shape):
+    id: str
+    name: str
+    place: str
+    purpose: str
+    present: bool
+    rank: int
+    conversations: list[DialogueConversationView]
+
+
+class DialogueDirectoryView(_Shape):
+    revision: int
+    hour: int
+    residents: list[DialogueResidentView]
