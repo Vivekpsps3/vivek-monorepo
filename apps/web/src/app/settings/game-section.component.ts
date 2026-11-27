@@ -8,7 +8,8 @@ import { UiButtonComponent, UiCardComponent } from '@vivek/ui';
     <h1>Game</h1>
     <ui-card>
       <h2>Town and World</h2>
-      <p>Scene motion follows your device’s reduced motion preference.</p>
+      <p>Scene motion follows your device’s reduced motion preference. Harbor Rhythm keeps an untimed sequence for that preference.</p>
+      <ui-button variant="secondary" href="/town/rhythm" label="Harbor Rhythm" />
       <ui-button variant="secondary" href="/settings/appearance" label="Color theme" />
       <ui-button variant="ghost" href="/town" label="Open Town" />
     </ui-card>

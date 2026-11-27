@@ -103,7 +103,7 @@ test('the town allowlist selects habit journeys and profile settings', () => {
   for (const name of [
     'pixels-year.spec.ts', 'pixels-detail.spec.ts', 'pixels-life.spec.ts', 'pixels-day.spec.ts', 'pixels-settings.spec.ts',
     'hub-pixels.spec.ts', 'world.spec.ts',
-    'town.spec.ts', 'town-checkin.spec.ts', 'town-dialogs.spec.ts', 'town-date-visit.spec.ts', 'town-habits.spec.ts', 'town-hall.spec.ts', 'town-home.spec.ts', 'town-keepsakes.spec.ts', 'town-media-boundary.spec.ts', 'town-memory.spec.ts', 'town-review.spec.ts', 'town-scene.spec.ts', 'town-stamps.spec.ts', 'town-quests.spec.ts', 'town-residents.spec.ts', 'town-discoveries.spec.ts', 'cosmetic-catalog.spec.ts',
+    'town.spec.ts', 'town-checkin.spec.ts', 'town-dialogs.spec.ts', 'town-date-visit.spec.ts', 'town-habits.spec.ts', 'town-hall.spec.ts', 'town-home.spec.ts', 'town-keepsakes.spec.ts', 'town-media-boundary.spec.ts', 'town-memory.spec.ts', 'town-rhythm.spec.ts', 'town-review.spec.ts', 'town-scene.spec.ts', 'town-stamps.spec.ts', 'town-quests.spec.ts', 'town-residents.spec.ts', 'town-discoveries.spec.ts', 'cosmetic-catalog.spec.ts',
     'health-entry.spec.ts',
   ]) {
     assert.equal(selects(town, name), true, name);

@@ -1,0 +1,63 @@
+<app-town-place [crumbs]="crumbs" />
+<main
+  class="rhythm"
+  [attr.data-phase]="phase()"
+  [attr.data-mode]="mode()"
+  [attr.data-motion]="reduced() ? 'reduce' : 'ok'"
+  [attr.data-sound]="soundOn() ? 'on' : 'off'"
+  [attr.data-elapsed]="elapsed()"
+  [attr.data-clock]="clock()"
+>
+  <h1>Harbor Rhythm</h1>
+  <p>Lantern Tide is an original four-lane pattern. It is not a recording.</p>
+  <p>The timed chart lasts 30 seconds. The untimed sequence uses the same lanes and no clock.</p>
+  <p>This play does not award Stamps or save a life record.</p>
+  <p>{{ soundCopy() }}</p>
+  <label class="sound-choice">
+    <input type="checkbox" [checked]="soundOn()" (change)="setSound($event)" />
+    Original tones
+  </label>
+  @if (soundError(); as error) {
+    <p role="alert">{{ error }}</p>
+  }
+  <p id="rhythm-keys">1, 2, 3, and 4 play the lanes. Arrow keys move. P plays, pauses, or resumes. R restarts. Q quits.</p>
+  <p id="rhythm-status" role="status">{{ status() }}</p>
+  @if (board(); as board) {
+    <div class="cabinet">
+      <div class="lanes" role="group" aria-label="Lanes" aria-describedby="rhythm-keys">
+        @for (lane of lanes; track lane; let index = $index) {
+          <div class="lane-well">
+            @for (marker of markers(index); track marker.index) {
+              <span class="note" aria-hidden="true" [style.bottom.%]="marker.bottom"></span>
+            }
+            <button
+              type="button"
+              class="lane"
+              [attr.data-lane]="index"
+              [attr.data-due]="due() === index ? 'true' : 'false'"
+              [disabled]="board.phase !== 'playing'"
+              [attr.aria-label]="label(index)"
+              (click)="hit(index)"
+              (keydown)="onLaneKey($event, index)"
+            >{{ lane }}</button>
+          </div>
+        }
+      </div>
+    </div>
+    <div class="actions">
+      @if (board.phase === 'playing') {
+        <ui-button variant="secondary" (clicked)="pause()">Pause</ui-button>
+      }
+      @if (board.phase === 'paused') {
+        <ui-button variant="secondary" (clicked)="resume()">Resume</ui-button>
+      }
+      <ui-button variant="secondary" (clicked)="restart()">Restart</ui-button>
+      <ui-button variant="ghost" (clicked)="quit()">Quit</ui-button>
+    </div>
+  } @else {
+    <div class="actions">
+      <ui-button variant="primary" (clicked)="play('timed')">Play 30-second chart</ui-button>
+      <ui-button variant="secondary" (clicked)="play('untimed')">Play untimed sequence</ui-button>
+    </div>
+  }
+</main>
