@@ -9,7 +9,6 @@
   min-width: 0;
 }
 
-.theater-lobby,
 .poster-corridor,
 .movie-auditorium,
 .ticket-desk {
@@ -20,7 +19,6 @@
   color: var(--text);
 }
 
-.theater-lobby,
 .poster-corridor,
 .movie-auditorium {
   padding: var(--space-3);
@@ -50,30 +48,6 @@
 .theater p {
   margin: 0;
   overflow-wrap: anywhere;
-}
-
-.theater-boundary {
-  padding: var(--space-3);
-  border-inline-start: 4px solid var(--wood);
-  background: var(--card-bg);
-}
-
-.lobby-objects {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.lobby-object {
-  display: grid;
-  align-content: start;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--card-bg);
-  box-shadow: 4px 4px 0 color-mix(in srgb, var(--wood) 35%, transparent);
 }
 
 .screening-board {
@@ -115,17 +89,18 @@
 
 .poster-row {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
   gap: var(--space-3);
   min-width: 0;
 }
 
 .theater-poster {
   display: grid;
-  align-content: start;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  align-items: start;
   gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-3);
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--card-bg);
@@ -137,9 +112,11 @@
   align-items: flex-end;
   justify-content: center;
   box-sizing: border-box;
+  width: 4.5rem;
   aspect-ratio: 2 / 3;
-  min-height: 7.5rem;
-  padding: var(--space-2);
+  min-height: 0;
+  padding: var(--space-1);
+  overflow: hidden;
   border: 1px solid var(--border);
   border-block-end: 8px solid var(--brass);
   background: color-mix(in srgb, var(--navy, var(--text)) 12%, var(--surface-2));
@@ -183,16 +160,9 @@
 }
 
 .ticket-desk ui-button,
-.lobby-object ui-button,
 .poster-copy ui-button,
 .movie-auditorium ui-button {
   display: flex;
-}
-
-@media (max-width: 799px) {
-  .lobby-objects {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

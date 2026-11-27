@@ -73,35 +73,17 @@ interface Desk {
   ],
   styleUrl: "./book-shelf.component.css",
   template: `<div class="book-hall" [attr.data-face]="face()">
-    <section class="reading-lobby" aria-labelledby="reading-hall-heading">
-      <h2 id="reading-hall-heading" tabindex="-1">Reading hall</h2>
-      <p class="hall-boundary">This hall lists your saved books. It does not open the text or play audio.</p>
-      <div class="hall-objects">
-        <div class="hall-object">
-          <h3>Shelf signs</h3>
-          <p>Choose Current, Read, or To read.</p>
-          <nav class="book-signs" aria-label="Shelf signs">
-            @for (sign of signs; track sign.status) {
-              <a
-                [routerLink]="['/media/library']"
-                [queryParams]="signParams(sign.status)"
-                [attr.aria-current]="status() === sign.status ? 'page' : null"
-                >{{ sign.label }}</a
-              >
-            }
-          </nav>
-        </div>
-        <div class="hall-object">
-          <h3>Spines</h3>
-          <p>Each spine shows the title and opens that book.</p>
-          <ui-button variant="secondary" (click)="focusRegion('book-stacks-heading')">Go to book spines</ui-button>
-        </div>
-        <div class="hall-object">
-          <h3>Desk</h3>
-          <p>Update progress loads the saved progress and note and saves them on the book entry.</p>
-          <ui-button variant="secondary" (click)="focusDesk()">Go to reading desk</ui-button>
-        </div>
-      </div>
+    <div class="book-tools">
+      <nav class="book-signs" aria-label="Shelf signs">
+        @for (sign of signs; track sign.status) {
+          <a
+            [routerLink]="['/media/library']"
+            [queryParams]="signParams(sign.status)"
+            [attr.aria-current]="status() === sign.status ? 'page' : null"
+            >{{ sign.label }}</a
+          >
+        }
+      </nav>
       <nav class="book-signs" aria-label="Book presentation">
         <a
           [routerLink]="['/media/library']"
@@ -116,8 +98,7 @@ interface Desk {
           >Text</a
         >
       </nav>
-      <ui-button variant="ghost" href="/hub" label="Exit to Hub" />
-    </section>
+    </div>
     <section class="book-stacks" aria-labelledby="book-stacks-heading">
       <h2 id="book-stacks-heading" tabindex="-1">Book spines</h2>
       @if (items().length) {
@@ -169,7 +150,7 @@ interface Desk {
     </section>
     <section class="reading-desk-room" aria-labelledby="reading-desk-heading">
       <h2 id="reading-desk-heading" tabindex="-1">Reading desk</h2>
-      <p>Update progress opens the desk on that book. Save progress writes the book entry, which has the same progress and note.</p>
+      <p>Update progress saves the same progress and note on that book.</p>
     </section>
     <section class="completion-keepsakes" aria-labelledby="completion-keepsakes-heading">
       <h2 id="completion-keepsakes-heading" tabindex="-1">Completion keepsakes</h2>
@@ -227,6 +208,7 @@ interface Desk {
         <p>Completion keepsakes are unavailable.</p>
       }
     </section>
+    <ui-button variant="ghost" href="/hub" label="Exit to Hub" />
     <ng-template #volume let-item="item" let-grouped="grouped" let-inSeries="inSeries">
       <article
         class="book-volume"
@@ -235,16 +217,45 @@ interface Desk {
         [attr.data-author]="author(item).linked ? 'linked' : 'unlinked'"
         [attr.aria-busy]="busy(item.id) ? 'true' : null"
       >
-        <div class="book-body">
+        <div class="book-lead">
+          @if (face() === "spine") {
+            <span class="book-cover" aria-hidden="true">
+              @if (covered(item)) {
+                <img [src]="item.artwork_url" alt="" (error)="markBroken(item.id)" />
+              }
+              <span class="spine-title">{{ item.title }}</span>
+            </span>
+          }
           @if (grouped) {
             <h4 class="book-title">
-              <ng-container *ngTemplateOutlet="spineLink; context: { item: item }" />
+              <a
+                [attr.data-media-item]="item.id"
+                [routerLink]="['/media/item', item.id]"
+                [state]="linkState()"
+                >{{ item.title }}</a
+              >
             </h4>
           } @else {
             <h3 class="book-title">
-              <ng-container *ngTemplateOutlet="spineLink; context: { item: item }" />
+              <a
+                [attr.data-media-item]="item.id"
+                [routerLink]="['/media/item', item.id]"
+                [state]="linkState()"
+                >{{ item.title }}</a
+              >
             </h3>
           }
+          <ui-button
+            variant="primary"
+            [ariaLabel]="'Update progress for ' + item.title"
+            [ariaExpanded]="desk?.entryId === item.id"
+            [ariaControls]="desk?.entryId === item.id ? 'book-desk-' + item.id : undefined"
+            [disabled]="busy(item.id) && desk?.entryId !== item.id"
+            (click)="openFrom(item, $event)"
+            >Update progress</ui-button
+          >
+        </div>
+        <div class="book-body">
           <p class="book-author">{{ author(item).text }}</p>
           @if (!inSeries && seriesName(item); as series) {
             <p class="book-series">{{ series }}</p>
@@ -281,15 +292,6 @@ interface Desk {
               >{{ action.label }}</ui-button
             >
           }
-          <ui-button
-            variant="primary"
-            [ariaLabel]="'Update progress for ' + item.title"
-            [ariaExpanded]="desk?.entryId === item.id"
-            [ariaControls]="desk?.entryId === item.id ? 'book-desk-' + item.id : undefined"
-            [disabled]="busy(item.id) && desk?.entryId !== item.id"
-            (click)="openFrom(item, $event)"
-            >Update progress</ui-button
-          >
         </div>
         @if (desk; as open) {
           @if (open.entryId === item.id) {
@@ -379,24 +381,6 @@ interface Desk {
         }
       </article>
     </ng-template>
-    <ng-template #spineLink let-item="item">
-      <a
-        [attr.data-media-item]="item.id"
-        [routerLink]="['/media/item', item.id]"
-        [state]="linkState()"
-      >
-        @if (face() === "spine") {
-          <span class="book-cover">
-            @if (covered(item)) {
-              <img [src]="item.artwork_url" alt="" (error)="markBroken(item.id)" />
-            }
-            <span class="spine-title">{{ item.title }}</span>
-          </span>
-        } @else {
-          {{ item.title }}
-        }
-      </a>
-    </ng-template>
   </div>`,
 })
 export class BookShelfComponent {
@@ -478,19 +462,6 @@ export class BookShelfComponent {
 
   searchParams(): { kind: string } {
     return { kind: "book" };
-  }
-
-  focusRegion(id: string): void {
-    this.host.nativeElement.querySelector<HTMLElement>(`#${id}`)?.focus({ preventScroll: false });
-  }
-
-  focusDesk(): void {
-    const field = this.host.nativeElement.querySelector<HTMLElement>(".book-desk input");
-    if (field) {
-      field.focus({ preventScroll: false });
-      return;
-    }
-    this.focusRegion("reading-desk-heading");
   }
 
   dayLabel(value: string): string {

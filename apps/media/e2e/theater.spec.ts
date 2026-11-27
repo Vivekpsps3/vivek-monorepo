@@ -68,11 +68,10 @@ for (const [width, height, theme, pointer] of [
 
       await page.goto('/media/library?kind=movie&sort=title');
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-      await expect(page.getByRole('region', { name: 'Lobby' })).toBeVisible();
       await expect(page.getByRole('region', { name: 'Poster corridor' })).toBeVisible();
       await expect(page.getByRole('region', { name: 'Movie auditorium' })).toBeVisible();
       await expect(page.getByRole('region', { name: 'Ticket desk' })).toBeVisible();
-      await expect(page.getByText('This theater lists your saved films. It does not play them.')).toBeVisible();
+      await expect(page.getByText('This theater does not play them.')).toHaveCount(1);
       await expect(page.locator('video')).toHaveCount(0);
       await expect(page.getByRole('button', { name: /play/i })).toHaveCount(0);
       await expect(page.getByRole('link', { name: 'Exit to Hub' })).toHaveAttribute('href', '/hub');
@@ -93,15 +92,11 @@ for (const [width, height, theme, pointer] of [
       await expect(page.locator('.theater-poster')).toHaveCount(3);
       await expect(page.locator('media-card')).toHaveCount(0);
 
-      const corridor = page.getByRole('button', { name: 'Go to poster corridor' });
       const plannedScreen = page.getByRole('link', { name: 'Planned', exact: true });
       const openDated = dated.getByRole('button', { name: 'Open screening for Velvet Screening' });
-      await expectTarget(corridor);
       await expectTarget(plannedScreen);
       await expectTarget(openDated);
       await expectTarget(page.getByRole('link', { name: 'Exit to Hub' }));
-      await activate(corridor, pointer);
-      await expect(page.locator('#poster-corridor-heading')).toBeFocused();
 
       await activate(plannedScreen, pointer);
       await expect(page).toHaveURL(/status=want/);
@@ -119,7 +114,7 @@ for (const [width, height, theme, pointer] of [
       await expect(auditorium.locator('.poster-fact')).toHaveText('Watched');
       await expect(auditorium.locator('.recorded-date')).toContainText('Mar');
       await expect(auditorium.locator('.recorded-date')).toContainText('2024');
-      await expect(auditorium).toContainText('This screening does not play the film.');
+      await expect(auditorium).not.toContainText('does not play');
       const note = page.getByRole('textbox', { name: 'Note for Velvet Screening' });
       const rating = page.getByRole('combobox', { name: 'Rating for Velvet Screening' });
       const watchedOn = page.getByLabel('Watched on');
@@ -251,13 +246,13 @@ test('a library error is not an empty lobby, and a film error can be retried', a
   await expect(page.locator('.local-error')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry library' })).toBeVisible();
   await expect(page.getByText('No movies saved yet', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Lobby' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Poster corridor' })).toHaveCount(0);
   await page.unroute('**/media/api/library**');
   await page.getByRole('button', { name: 'Retry library' }).click();
-  await expect(page.getByRole('region', { name: 'Lobby' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Poster corridor' })).toBeVisible();
   await expect(page.getByText('No movies saved yet', { exact: true })).toBeVisible();
   await expect(page.getByText('A planned film stays planned', { exact: false })).toBeVisible();
-  await expect(page.getByText('This theater lists your saved films. It does not play them.')).toBeVisible();
+  await expect(page.getByText('This theater does not play them.')).toHaveCount(1);
   const emptyTheater = page.locator('media-theater');
   await expect(emptyTheater.getByRole('link', { name: 'All items', exact: true })).toBeVisible();
   await expect(emptyTheater.getByRole('link', { name: 'Search Media', exact: true })).toBeVisible();
@@ -298,7 +293,7 @@ test('a library error is not an empty lobby, and a film error can be retried', a
   await expect(page).toHaveURL(/\/hub$/);
   await page.goBack();
   await expect(page).toHaveURL(/kind=movie/);
-  await expect(page.getByRole('region', { name: 'Lobby' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Poster corridor' })).toBeVisible();
   await expect(poster(page, 'Quiet Projector')).toBeVisible();
 });
 

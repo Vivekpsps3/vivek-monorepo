@@ -69,42 +69,16 @@ const SCREENS = [
   ],
   styleUrl: "./theater.component.css",
   template: `<div class="theater">
-    <section class="theater-lobby" aria-labelledby="theater-lobby-heading">
-      <h2 id="theater-lobby-heading">Lobby</h2>
-      <p class="theater-boundary">
-        This theater lists your saved films. It does not play them.
-      </p>
-      <div class="lobby-objects">
-        <div class="lobby-object">
-          <h3>Screening board</h3>
-          <nav class="screening-board" aria-label="Screening board">
-            @for (screen of screens; track screen.status) {
-              <a
-                [routerLink]="['/media/library']"
-                [queryParams]="screenParams(screen.status)"
-                [attr.aria-current]="status() === screen.status ? 'page' : null"
-                >{{ screen.label }}</a
-              >
-            }
-          </nav>
-        </div>
-        <div class="lobby-object">
-          <h3>Poster corridor</h3>
-          <p>Saved films hang here. A poster opens that film.</p>
-          <ui-button variant="secondary" (click)="focusRegion('poster-corridor-heading')"
-            >Go to poster corridor</ui-button
-          >
-        </div>
-        <div class="lobby-object">
-          <h3>Ticket desk</h3>
-          <p>A ticket keeps the rating, note, and watch date you recorded.</p>
-          <ui-button variant="secondary" (click)="focusRegion('ticket-desk-heading')"
-            >Go to ticket desk</ui-button
-          >
-        </div>
-      </div>
-      <ui-button variant="ghost" href="/hub" label="Exit to Hub" />
-    </section>
+    <nav class="screening-board" aria-label="Screening board">
+      @for (screen of screens; track screen.status) {
+        <a
+          [routerLink]="['/media/library']"
+          [queryParams]="screenParams(screen.status)"
+          [attr.aria-current]="status() === screen.status ? 'page' : null"
+          >{{ screen.label }}</a
+        >
+      }
+    </nav>
 
     <section class="poster-corridor" aria-labelledby="poster-corridor-heading">
       <h2 id="poster-corridor-heading" tabindex="-1">Poster corridor</h2>
@@ -172,7 +146,6 @@ const SCREENS = [
         } @else {
           <p class="recorded-date">No viewing date recorded</p>
         }
-        <p class="theater-boundary">This screening does not play the film.</p>
         @if (!open.ready) {
           @if (open.error) {
             <p class="theater-error" role="alert">{{ open.error }}</p>
@@ -260,6 +233,7 @@ const SCREENS = [
         <p>Select a poster to edit its rating, note, and watch date.</p>
       }
     </section>
+    <ui-button variant="ghost" href="/hub" label="Exit to Hub" />
   </div>`,
 })
 export class TheaterComponent {
@@ -357,12 +331,6 @@ export class TheaterComponent {
 
   markBroken(id: number): void {
     this.broken.update((current) => new Set(current).add(id));
-  }
-
-  focusRegion(id: string): void {
-    this.host.nativeElement
-      .querySelector<HTMLElement>(`#${id}`)
-      ?.focus({ preventScroll: false });
   }
 
   openFrom(item: MediaCard, event: Event): void {
