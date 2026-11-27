@@ -15,25 +15,32 @@
       </label>
     </div>
     <p class="projection-note">{{ projectedNote }}</p>
-    <section class="tool-results-grid">
-      <div>
-        <span>Annual spending basis</span>
-        <strong>{{ formatMoney(fireAnnualSpending()) }}</strong>
-      </div>
-      <div>
-        <span>FI target</span>
-        <strong>{{ formatMoney(fireNumber()) }}</strong>
-      </div>
-      <div>
-        <span>Portfolio gap</span>
-        <strong>{{ formatMoney(fireGap()) }}</strong>
-      </div>
-      <div>
-        <span>Years at current cashflow</span>
-        <strong>{{ yearsToFire() ?? 'Not reachable' }}</strong>
-        <small>{{ fireEstimateDescription() }}</small>
-      </div>
-    </section>
+    @if (showRetirementResults) {
+      @if (retirementBasisNote) {
+        <p class="mc-help">{{ retirementBasisNote }}</p>
+      }
+      <section class="tool-results-grid" aria-label="Retirement estimate">
+        <div>
+          <span>Annual spending basis</span>
+          <strong>{{ formatMoney(fireAnnualSpending()) }}</strong>
+        </div>
+        <div>
+          <span>FI target</span>
+          <strong>{{ formatMoney(fireNumber()) }}</strong>
+        </div>
+        <div>
+          <span>Portfolio gap</span>
+          <strong>{{ formatMoney(fireGap()) }}</strong>
+        </div>
+        <div>
+          <span>Years at current cashflow</span>
+          <strong>{{ yearsToFire() ?? 'Not reachable' }}</strong>
+          <small>{{ fireEstimateDescription() }}</small>
+        </div>
+      </section>
+    } @else {
+      <p class="mc-help" role="status">Yearly spending is not recorded, so there is no retirement target yet.</p>
+    }
   </ui-card>
 }
 @if (activeTool === 'savings-goal') {

@@ -4,6 +4,7 @@ import { of,Subject,throwError } from 'rxjs';
 import { PlanningWorkflow } from './planning-workflow';
 import { DEFAULT_MC_ASSUMPTIONS,PlanningProfile } from '../models/planning.model';
 import { lastThreeCompletedMonths } from '../utils/planning-spending.util';
+import { clearPlanningDrafts } from './planning-session';
 import { PlanningComponent } from './planning.component';
 
 function createComponent() {
@@ -40,6 +41,73 @@ function suggestionContext(component: PlanningComponent, withCoverage: boolean):
     coverage: [{ account_display: 'Checking', account_key: 'checking-a', start_date: period.start, end_date: period.end, confirmed: true }],
   } as any] : [];
 }
+
+describe('PlanningComponent spending baseline', () => {
+  afterEach(() => clearPlanningDrafts());
+
+  function withCounts(component: PlanningComponent, bills: number, spending: number): void {
+    component.inputs = {
+      active_bill_count: bills,
+      active_subscription_count: 0,
+      recurring_annual_spending: spending,
+      implied_annual_spending: spending,
+    } as PlanningComponent['inputs'];
+    component.spendingMode = 'recurring';
+    component.assumptions.annual_spending = null;
+    component.assumptions.spending_components = { fixed_annual: spending, variable_annual: 0, irregular_annual: 0 };
+  }
+
+  it('does not treat missing bills as an entered zero', () => {
+    const { component } = createComponent();
+    withCounts(component, 0, 0);
+    expect(component.spendingBaseline).toBe('missing');
+    expect(component.retirementResultsReady).toBeFalse();
+    expect(component.spendingLeadsTool).toBeFalse();
+    component.activeTool = 'retirement-target';
+    expect(component.spendingLeadsTool).toBeTrue();
+  });
+
+  it('keeps a recorded zero and a known amount', () => {
+    const { component } = createComponent();
+    withCounts(component, 1, 0);
+    expect(component.spendingBaseline).toBe('explicit-zero');
+    expect(component.retirementBasisNote).toContain('total $0');
+    withCounts(component, 2, 24000);
+    expect(component.spendingBaseline).toBe('known');
+    expect(component.retirementResultsReady).toBeTrue();
+  });
+
+  it('leaves manual spending empty when the recurring baseline is missing', () => {
+    const { component } = createComponent();
+    withCounts(component, 0, 0);
+    component.onSpendingModeChange('manual');
+    expect(component.assumptions.annual_spending).toBeNull();
+    expect(component.spendingBaseline).toBe('missing');
+    component.onAnnualSpendingInput(0);
+    expect(component.spendingBaseline).toBe('explicit-zero');
+    expect(component.retirementBasisNote).toContain('you entered');
+    component.onAnnualSpendingInput(40000);
+    expect(component.spendingBaseline).toBe('known');
+  });
+
+  it('copies a known recurring amount into manual spending', () => {
+    const { component } = createComponent();
+    withCounts(component, 1, 12000);
+    component.onSpendingModeChange('manual');
+    expect(component.assumptions.annual_spending).toBe(12000);
+    expect(component.spendingBaseline).toBe('known');
+  });
+
+  it('waits for a category edit before treating component zeros as a plan', () => {
+    const { component } = createComponent();
+    withCounts(component, 0, 0);
+    component.onSpendingModeChange('components');
+    expect(component.spendingBaseline).toBe('missing');
+    component.setSpendingComponent('variable_annual', 0);
+    expect(component.spendingBaseline).toBe('explicit-zero');
+    expect(component.retirementBasisNote).toContain('categories you entered');
+  });
+});
 
 describe('PlanningComponent spending acceptance', () => {
   it('keeps legacy annual events in both cases and scopes new events to baseline or scenario', () => {

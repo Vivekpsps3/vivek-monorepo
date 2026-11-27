@@ -130,8 +130,17 @@ ui-button {
   border-top: 1px solid var(--border-subtle);
 }
 
+.planning-readiness {
+  margin: 0 0 var(--space-3);
+}
+
+.planning-disclosure {
+  margin: var(--space-4) 0;
+}
+
 .planning-evidence-details > summary,
 .planning-advanced-controls > summary,
+.planning-disclosure > summary,
 .spending-suggestion-details > summary {
   display: flex;
   align-items: center;

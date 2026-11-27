@@ -33,6 +33,16 @@ export interface SimulationDraft {
   annualSpending: number | null;
 }
 
+/** Same-session spending basis. Null annual spending is unset; zero is entered. */
+export interface SpendingSelection {
+  spendingMode: 'recurring' | 'components' | 'manual';
+  annualSpending: number | null;
+  componentsChosen: boolean;
+  fixedAnnual: number;
+  variableAnnual: number;
+  irregularAnnual: number;
+}
+
 export interface ProjectionDraft {
   annualGrowthRate: number;
   withdrawalRate: number;
@@ -164,6 +174,30 @@ function debtDraft(value: unknown): DebtDraft | null {
   return { name, balance, apr, minimumPayment, extraPayment, liabilityId };
 }
 
+function spendingSelection(value: unknown): SpendingSelection | null {
+  const row = record(value);
+  if (!row) return null;
+  const mode = row['spendingMode'];
+  const spendingMode = mode === 'recurring' || mode === 'components' || mode === 'manual' ? mode : null;
+  const annual = row['annualSpending'];
+  const annualSpending = annual == null ? null : finite(annual, 0, 1e12);
+  const fixedAnnual = finite(row['fixedAnnual'], 0, 1e12);
+  const variableAnnual = finite(row['variableAnnual'], 0, 1e12);
+  const irregularAnnual = finite(row['irregularAnnual'], 0, 1e12);
+  if (
+    spendingMode == null || fixedAnnual == null || variableAnnual == null || irregularAnnual == null
+    || (annual != null && annualSpending == null)
+  ) return null;
+  return {
+    spendingMode,
+    annualSpending,
+    componentsChosen: row['componentsChosen'] === true,
+    fixedAnnual,
+    variableAnnual,
+    irregularAnnual,
+  };
+}
+
 function simulationDraft(value: unknown): SimulationDraft | null {
   const row = record(value);
   if (!row) return null;
@@ -257,6 +291,14 @@ export function readSimulationDraft(): SimulationDraft | null {
 
 export function writeSimulationDraft(value: unknown): void {
   writeSection('simulation', simulationDraft(value));
+}
+
+export function readSpendingSelection(): SpendingSelection | null {
+  return spendingSelection(readStore()['spending']);
+}
+
+export function writeSpendingSelection(value: unknown): void {
+  writeSection('spending', spendingSelection(value));
 }
 
 export function readProjectionDraft(): ProjectionDraft | null {

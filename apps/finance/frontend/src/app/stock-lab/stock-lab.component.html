@@ -2,25 +2,8 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="'Stock research'" />
-  @if (!embedded) {
-    <app-planning-tool-index [compact]="true" />
-  }
   <p class="projection-note">{{ projectedNote }}</p>
   @if (error) { <p class="stock-error" role="alert">{{ error }}</p> }
-
-  <ui-card [title]="'Facts and guesses'">
-
-    <ul class="evidence-list">
-      @for (card of evidenceCards; track card.label) {
-        <li>
-          <div>
-            <strong>{{ evidenceKindLabel(card.kind) }} · {{ card.label }}</strong>
-            <p>{{ card.detail }}</p>
-          </div>
-        </li>
-      }
-    </ul>
-  </ui-card>
 
   <ui-card [title]="'Command center'">
     <div class="stock-controls-grid">
@@ -39,6 +22,26 @@
       }
     </div>
   </ui-card>
+
+  @if (!embedded) {
+    <app-planning-tool-index [compact]="true" />
+  }
+
+  <details class="stock-facts">
+    <summary>Facts and guesses</summary>
+    <ui-card [title]="'Facts and guesses'">
+      <ul class="evidence-list">
+        @for (card of evidenceCards; track card.label) {
+          <li>
+            <div>
+              <strong>{{ evidenceKindLabel(card.kind) }} · {{ card.label }}</strong>
+              <p>{{ card.detail }}</p>
+            </div>
+          </li>
+        }
+      </ul>
+    </ui-card>
+  </details>
 
   <section class="comparison-strip" aria-label="Ticker comparison">
     @if (loading) { <ui-skeleton height="120px" /> }
