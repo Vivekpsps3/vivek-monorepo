@@ -49,7 +49,7 @@ Commands ran from `/tmp/vivek-game-06` on the sources in tested SHA `20a5262f1fe
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this record.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/640
 - Roadmap #134 append-only status-note URL: added after merge.
 - Merged/activation status: not merged yet.
 - Remaining external prerequisites or approved scope decisions: GAME-07 and GAME-08 still author the other residents. Parent issues stay open.
