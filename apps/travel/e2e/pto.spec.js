@@ -58,7 +58,14 @@ for (const width of [390, 1280]) {
       release();
       await expect(page.getByText('Set up PTO', { exact: true })).toBeVisible();
       await expect(page.getByText("Tell Travel your balance and how fast you earn time off, and it will project what's left after each trip.")).toBeVisible();
-      await expect(page.getByLabel('Starting balance')).toBeVisible();
+      const start = page.getByLabel('Starting balance');
+      await expect(start).toBeVisible();
+      await expect(start).toBeFocused();
+      await expect(page.getByRole('heading', { name: 'Add time off', exact: true })).toHaveCount(0);
+      const box = await start.boundingBox();
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height).toBeLessThanOrEqual(width === 390 ? 844 : 800);
+      expect(await page.evaluate(() => window.scrollY)).toBeLessThan(8);
       await page.unroute('**/travel/api/pto');
       await page.route('**/travel/api/pto', route => route.request().method() === 'GET' && route.request().url().endsWith('/travel/api/pto')
         ? route.fulfill({ status: 500, json: { message: 'PTO unavailable' } })
@@ -187,8 +194,11 @@ for (const width of [390, 1280]) {
     test('first-run card dismisses and reports a failed dismiss', async ({ page }) => {
       await putBucket(page.request);
       await page.goto('/travel/pto');
-      await expect(page.getByRole('heading', { name: 'Track sick time too', exact: true })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Sick: not set up · Set up', exact: true })).toBeVisible();
+      const addHeading = page.getByRole('heading', { name: 'Add time off', exact: true });
+      const sickHeading = page.getByRole('heading', { name: 'Track sick time too', exact: true });
+      await expect(sickHeading).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Sick: not set up · Set up', exact: true })).toHaveCount(0);
+      expect((await sickHeading.boundingBox()).y).toBeGreaterThan((await addHeading.boundingBox()).y);
       await page.route('**/travel/api/settings/pto', route => route.request().method() === 'PUT'
         ? route.fulfill({ status: 502, json: { message: 'down' } })
         : route.continue());
@@ -200,6 +210,8 @@ for (const width of [390, 1280]) {
       await page.reload();
       await expect(page.getByRole('heading', { name: 'Track sick time too', exact: true })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Sick: not set up · Set up', exact: true })).toBeVisible();
+      expect((await page.getByRole('button', { name: 'Sick: not set up · Set up', exact: true }).boundingBox()).y)
+        .toBeGreaterThan((await page.getByRole('heading', { name: 'Add time off', exact: true }).boundingBox()).y);
     });
 
     test('keyboard order, arrow keys, 44px targets, and the cadence wrap', async ({ page, request }) => {
@@ -207,9 +219,8 @@ for (const width of [390, 1280]) {
       await page.goto('/travel/pto');
       await page.locator('.skip-link').focus();
       const seen = [];
-      // Chart markers are focusable so each balance can be read. The app
-      // switcher and those points sit before the form, so the scan has to
-      // walk past them to reach Last day, Add, and the policy buttons.
+      // Forecast markers are focusable. They sit after Add time off, so the
+      // scan walks through the booking fields before Sick.
       for (let step = 0; step < 80; step += 1) {
         seen.push(await page.evaluate(() => {
           const el = document.activeElement;
@@ -224,16 +235,14 @@ for (const width of [390, 1280]) {
       const at = token => seen.indexOf(token);
       const order = [
         'a:Skip to content',
-        'button:Set up Sick',
-        'button:Not now',
         'button:Edit PTO',
         'radio:PTO',
         'text:Name',
         'date:First day',
         'date:Last day',
         'button:Add',
-        'button:Edit PTO policy',
-        'button:Sick: not set up · Set up',
+        'button:Set up Sick',
+        'button:Not now',
       ].map(at);
       expect(order, seen.join(' | ')).not.toContain(-1);
       for (let index = 1; index < order.length; index += 1) expect(order[index]).toBeGreaterThan(order[index - 1]);
@@ -269,7 +278,7 @@ for (const width of [390, 1280]) {
     test('hours in a workday save and change the days figure only', async ({ page, request }) => {
       await putBucket(request, 'pto', { start_balance_hours: '100', accrual_hours: '0' });
       await page.goto('/travel/pto');
-      await expect(page.locator('.tile-balance, .pto-lower').getByText('12.5 days · 100 h', { exact: true })).toHaveCount(2);
+      await expect(page.locator('.tile-balance').getByText('12.5 days · 100 h', { exact: true })).toHaveCount(1);
       await page.goto('/travel/settings');
       const hours = page.getByLabel('Hours in a workday');
       await expect(hours).toHaveValue('8');
@@ -294,7 +303,7 @@ for (const width of [390, 1280]) {
         if (request.method() === 'GET' && new URL(request.url()).pathname.endsWith('/pto/series')) seriesAfterReturn += 1;
       });
       await link.click();
-      await expect(page.locator('.tile-balance, .pto-lower').getByText('13.33 days · 100 h', { exact: true })).toHaveCount(2);
+      await expect(page.locator('.tile-balance').getByText('13.33 days · 100 h', { exact: true })).toHaveCount(1);
       await expect(page.locator('travel-pto-chart')).toHaveCount(1);
       expect(seriesAfterReturn).toBe(1);
       expect((await (await request.get('/travel/api/pto')).json()).buckets.pto.start_balance_hours).toBe('100');
@@ -314,8 +323,10 @@ for (const width of [390, 1280]) {
       expect(Math.round(box.height)).toBe(width === 390 ? 220 : 300);
       if (width === 1280) {
         const tiles = await page.locator('.pto-tiles').boundingBox();
+        const add = await page.getByRole('heading', { name: 'Add time off', exact: true }).boundingBox();
         expect(Math.abs(tiles.width - 320)).toBeLessThan(2);
-        expect(box.x).toBeGreaterThan(tiles.x + tiles.width - 1);
+        expect(add.x).toBeGreaterThan(tiles.x + tiles.width - 1);
+        expect(box.y).toBeGreaterThan(tiles.y + tiles.height - 1);
       }
       expect(seriesHits).toHaveLength(1);
       await expect(page.locator('table caption')).toHaveText('Balance by month');

@@ -215,6 +215,38 @@ describe("PtoComponent (TPTO2A/2B)", () => {
     expect(text).toContain(`${formatDay("2026-12-14")} counts 2 PTO days across North trip, South trip.`);
   });
 
+  it("leads with setup when PTO is missing and hides the booking form", () => {
+    const { fixture } = setup(payload({ buckets: { pto: null, sick: null } }));
+    const root = fixture.nativeElement as HTMLElement;
+    const text = root.textContent || "";
+    const setupAt = text.indexOf("Set up PTO");
+    const sickAt = text.indexOf("Set up Sick");
+    expect(setupAt).toBeGreaterThanOrEqual(0);
+    expect(sickAt).toBeGreaterThan(setupAt);
+    expect(text).not.toContain("Add time off");
+    expect(root.querySelector("input[name='start']")).not.toBeNull();
+    expect(root.querySelector("input[name='entry-label']")).toBeNull();
+    expect(root.querySelector("button.ui-btn--primary")?.textContent).toContain("Save");
+  });
+
+  it("puts the balance and add form ahead of sick and keeps one policy edit", () => {
+    const { fixture } = setup();
+    const root = fixture.nativeElement as HTMLElement;
+    const text = root.textContent || "";
+    const balanceAt = text.indexOf("Balance today");
+    const addAt = text.indexOf("Add time off");
+    const sickAt = text.indexOf("Set up Sick");
+    expect(balanceAt).toBeGreaterThanOrEqual(0);
+    expect(addAt).toBeGreaterThan(balanceAt);
+    expect(sickAt).toBeGreaterThan(addAt);
+    expect(text).not.toContain("Edit PTO policy");
+    const edits = [...root.querySelectorAll("button")].filter(
+      (button) => button.getAttribute("aria-label") === "Edit PTO",
+    );
+    expect(edits.length).toBe(1);
+    expect(text).toContain("Unused hours carry into the next policy year.");
+  });
+
   it("keeps an edited policy when the save fails", () => {
     const { component } = setup();
     component.editHour("pto", "start_balance_hours", "40");
