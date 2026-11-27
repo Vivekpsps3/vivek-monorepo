@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { monthCells, weekdayHeads } from '../../../frontend/src/composer-model.mjs';
-import { clearItineraryDraft, projectItinerary, restoredLocalDate, settleItineraryWrite } from '../../../frontend/src/calendar-model.mjs';
+import { clearItineraryDraft, itineraryDayOpen, projectItinerary, restoredLocalDate, settleItineraryWrite } from '../../../frontend/src/calendar-model.mjs';
 import { rotateWeekLabels, weekStartsOn } from '../../../../../packages/browser/runtime/week.mjs';
 
 test('the live trip composer follows the shared week setting', () => {
@@ -168,6 +168,16 @@ test('a chosen midnight leg stays on that day without a clock, and a reversed st
   assert.deepEqual(projected.outOfRange.map((entry) => entry.date), ['2026-10-23', '2026-10-27']);
   assert.deepEqual(projected.outOfRange.map((entry) => entry.part), ['check-out', 'check-in']);
   assert.equal(projected.outOfRange[1].primary, true);
+});
+
+test('lodging alone does not open a day, and the selected day does', () => {
+  const lodging = { onDate: '2026-11-18', entries: [], unscheduled: [], lodging: [{ key: 'stay:1' }] };
+  const agenda = { onDate: '2026-11-23', entries: [{ key: 'plan:1' }], unscheduled: [], lodging: [{ key: 'stay:1' }] };
+  assert.equal(itineraryDayOpen(lodging, ''), false);
+  assert.equal(itineraryDayOpen(lodging, '2026-11-23'), false);
+  assert.equal(itineraryDayOpen(lodging, '2026-11-18'), true);
+  assert.equal(itineraryDayOpen(agenda, ''), true);
+  assert.equal(itineraryDayOpen(null, '2026-11-23'), false);
 });
 
 test('a late or other-owner itinerary response does not apply, and invalidation clears private text', () => {
