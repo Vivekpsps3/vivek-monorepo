@@ -92,6 +92,7 @@ test('Undo refreshes an open Detail without losing its unsaved note', async ({ p
   await mediaCard(page).getByRole('button', { name: /Watched S1E1/ }).click();
   await mediaCard(page).getByRole('link', { name: 'Detail undo show', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Detail undo show', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit rating and note', exact: true }).click();
   const note = page.getByLabel('Note (optional)', { exact: true });
   await note.fill('Keep this unsaved note');
   await page.locator('summary').filter({ hasText: 'Season 1' }).click();

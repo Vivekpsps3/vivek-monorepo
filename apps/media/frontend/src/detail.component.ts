@@ -43,7 +43,6 @@ import {
   aboutSummary,
   artRatio,
   dateOnly,
-  episodeCode,
   episodeDateLine,
   experienceTitle,
   kindIcon,
@@ -58,9 +57,11 @@ import {
   statusFieldLabel,
 } from "./detail-meta.mjs";
 import { MediaCardComponent } from "./media-card.component";
-import { nextEpisodeError } from "./next-episode.mjs";
+import { NextEpisodeButtonComponent } from "./next-episode-button.component";
+import { episodeLabel } from "./next-episode.mjs";
 import { NextEpisodeUndoService } from "./next-episode-undo.service";
-import { NextEpisodeService } from "./next-episode.service";
+import { NextResult } from "./next-episode.service";
+import { continuationFromShow } from "./theater.mjs";
 import { collectionHref } from "./library-filters.mjs";
 
 /** One explicit save. Undo keeps fields the person changed after it started. */
@@ -73,6 +74,16 @@ interface SaveFlight {
   /** Set once the server has accepted this save, so Undo can compensate. */
   landed: boolean;
   revertEpoch: number | null;
+}
+
+/** The continuation already on the saved show, plus the one action it implies. */
+interface ResumeAction {
+  fact: string;
+  status: string;
+  episodeId: number | null;
+  season: number;
+  episode: number;
+  mode: "watch" | "wait" | "ended" | "empty" | "unavailable";
 }
 import { halfNote, ratingOptions, segmentValue } from "./rating-model.mjs";
 import {
@@ -100,6 +111,7 @@ import { addTag, normaliseTags, removeTag } from "./tag-model.mjs";
     UiPageHeaderComponent,
     UiSegmentedComponent,
     MediaCardComponent,
+    NextEpisodeButtonComponent,
   ],
   templateUrl: "./detail.component.html",
 })
@@ -109,13 +121,11 @@ export class DetailComponent {
   readonly chips = metaChips;
   readonly letter = placeholderLetter;
   readonly dayOnly = dateOnly;
-  readonly code = episodeCode;
   readonly choices = statusChoices;
   readonly stateField = statusFieldLabel;
   readonly heading = experienceTitle;
   readonly about = aboutSummary;
   readonly primaryProgress = progressPrimary;
-  readonly fallbackLibrary = collectionHref;
   readonly showMore = showsGenericProgress;
   readonly anticipatedFor = showsAnticipated;
   readonly moreLabel = moreSummary;
@@ -132,7 +142,6 @@ export class DetailComponent {
   private readonly confirm = inject(ConfirmService);
   private readonly drafts = inject(MediaDrafts);
   private readonly undo = inject(NextEpisodeUndoService);
-  private readonly nextEpisodes = inject(NextEpisodeService);
   private loadingRequest?: Subscription;
   private photoRequest?: Subscription;
   private linkRequest?: Subscription;
@@ -187,6 +196,8 @@ export class DetailComponent {
   viewedOn = "";
   episode = { season_number: 1, episode_number: 1, title: "", air_date: "" };
   moreOpen = false;
+  /** Series metadata stays closed until the person asks to edit it, or a draft is already open. */
+  seriesEditing = false;
   @ViewChild("tagInput") private tagInput?: ElementRef<HTMLInputElement>;
   @ViewChild("relatedSentinel")
   private relatedSentinel?: ElementRef<HTMLElement>;
@@ -247,6 +258,90 @@ export class DetailComponent {
   libraryReturn(): Record<string, unknown> {
     return this.source.link("/media/library");
   }
+  /** Calendar and Now keep their own return. A direct link still falls back to the collection. */
+  returnSource(): string {
+    const origin = this.source.origin();
+    if (origin?.startsWith("/media/calendar") || origin === "/media") return origin;
+    return "/media/library";
+  }
+  returnLabel(): string {
+    const source = this.returnSource();
+    if (source.startsWith("/media/calendar")) return "← Calendar";
+    if (source === "/media") return "← Now";
+    return "← Library";
+  }
+  returnHref(kind: string): string {
+    const source = this.returnSource();
+    if (source.startsWith("/media/calendar") || source === "/media") return source;
+    return collectionHref(kind);
+  }
+  resume(entry: Detail): ResumeAction | null {
+    if (entry.kind !== "tv") return null;
+    const show = entry.show;
+    if (!show) return this.emptyResume("No episode detail", "empty");
+    const continuation = continuationFromShow(show) as {
+      episode_id?: number;
+      season?: number;
+      episode?: number;
+      title?: string | null;
+      air_date?: string | null;
+      state?: string;
+    } | null;
+    const ended =
+      entry.lifecycle?.state === "ended" || entry.lifecycle?.state === "canceled";
+    if (continuation?.state === "next" && continuation.episode_id != null) {
+      return {
+        fact: this.continuationLine(continuation),
+        status: "",
+        episodeId: continuation.episode_id,
+        season: continuation.season ?? 0,
+        episode: continuation.episode ?? 0,
+        mode: "watch",
+      };
+    }
+    if (continuation?.state === "upcoming") {
+      return {
+        fact: this.continuationLine(continuation),
+        status: "",
+        episodeId: null,
+        season: continuation.season ?? 0,
+        episode: continuation.episode ?? 0,
+        mode: "wait",
+      };
+    }
+    if (show.caught_up) {
+      return {
+        fact: "Caught up",
+        status: ended ? "All known aired episodes watched" : "",
+        episodeId: null,
+        season: 0,
+        episode: 0,
+        mode: ended ? "ended" : "wait",
+      };
+    }
+    if (entry.catalog?.extra?.["metadata_pending"] === true) {
+      return this.emptyResume("Episode source unavailable", "unavailable");
+    }
+    return this.emptyResume("No episode detail", "empty");
+  }
+  resumeFact(entry: Detail): string {
+    return this.resume(entry)?.fact ?? "";
+  }
+  openSeriesEdit(): void {
+    this.seriesEditing = true;
+    setTimeout(() => this.focusNote());
+  }
+  onResumeDone(result: NextResult & { entry?: Detail }): void {
+    const current = this.item();
+    if (!current || !this.ownsSession) return;
+    if (result.entry?.id === current.id) this.keepDrafts(result.entry);
+    else this.refreshEpisodeProgress(current.id);
+    this.focusResume();
+  }
+  onResumeFailed(event: { reload: boolean }): void {
+    const current = this.item();
+    if (event.reload && current) this.refreshEpisodeProgress(current.id);
+  }
   load(id: number, force = false): void {
     // A second param emission for the item already on screen used to cancel
     // the form and drop a save that had just been edited.
@@ -274,6 +369,7 @@ export class DetailComponent {
     this.childOpen = false;
     this.episodeOpen = false;
     this.undoToken = "";
+    this.seriesEditing = false;
     this.broken.set(false);
     this.busy.set(false);
     this.error.set("");
@@ -297,6 +393,7 @@ export class DetailComponent {
             if (draft.base === d.updated_at) {
               Object.assign(this, draft.fields);
               this.moreOpen = needsMoreOpen(d.kind, this.fields());
+              if (d.kind === "tv" && this.dirty) this.seriesEditing = true;
             } else this.recovery.set(draft);
           }
         },
@@ -346,6 +443,7 @@ export class DetailComponent {
       this.tagError = "";
       this.recovery.set(null);
       this.rememberDraft();
+      if (this.item()?.kind === "tv") this.seriesEditing = true;
     }
   }
   discardRecovery(): void {
@@ -473,6 +571,36 @@ export class DetailComponent {
       this.showDay(episode.air_date),
       episode.watched_on ? this.showDay(episode.watched_on) : "",
     );
+  }
+  private emptyResume(status: string, mode: "empty" | "unavailable"): ResumeAction {
+    return { fact: "", status, episodeId: null, season: 0, episode: 0, mode };
+  }
+  /** Same sentence Now shows. The episode choice still comes from continuationFromShow. */
+  private continuationLine(row: {
+    season?: number;
+    episode?: number;
+    title?: string | null;
+    air_date?: string | null;
+    state?: string;
+  }): string {
+    const label = episodeLabel(row.season ?? 0, row.episode ?? 0);
+    if (row.state === "upcoming") {
+      return row.air_date
+        ? `Next: ${label} · airs ${this.showDay(row.air_date)}`
+        : `Next: ${label} · air date not announced`;
+    }
+    let line = `Next: ${label}`;
+    if (row.title) line += ` · ${row.title}`;
+    if (row.air_date) line += ` · ${this.showDay(row.air_date)}`;
+    return line;
+  }
+  private focusResume(): void {
+    setTimeout(() => {
+      const button = document
+        .querySelector(".series-resume")
+        ?.querySelector<HTMLElement>("button, a");
+      (button ?? document.querySelector<HTMLElement>(".ui-page-header__title"))?.focus();
+    });
   }
   syncMore(event: Event): void {
     const details = event.target;
@@ -862,45 +990,6 @@ export class DetailComponent {
       const button = host?.querySelector("button, a");
       (button instanceof HTMLElement ? button : host)?.focus();
     });
-  }
-  markNext(episode: Episode): void {
-    const current = this.item();
-    if (!current || this.busy()) return;
-    const generation = this.generation;
-    const entryId = current.id;
-    const epoch = ++this.progressEpoch;
-    this.busy.set(true);
-    this.error.set("");
-    this.message.set("");
-    this.mutation?.unsubscribe();
-    this.mutation = this.nextEpisodes
-      .markNext(entryId, episode.id)
-      .pipe(takeUntilDestroyed(this.destroy))
-      .subscribe({
-        next: (result) => {
-          if (generation !== this.generation || !this.ownsSession) return;
-          if (epoch !== this.progressEpoch) {
-            this.busy.set(false);
-            this.rememberDraft();
-            return;
-          }
-          this.keepDrafts(result.entry);
-          this.busy.set(false);
-          this.undo.offer(entryId, result);
-        },
-        error: (error: { status?: number; error?: { detail?: unknown } }) => {
-          if (generation !== this.generation || !this.ownsSession) return;
-          if (epoch !== this.progressEpoch) {
-            this.busy.set(false);
-            return;
-          }
-          const mapped = nextEpisodeError(error?.status ?? 0, error?.error?.detail);
-          this.error.set(mapped.message);
-          this.busy.set(false);
-          this.rememberDraft();
-          if (mapped.reload) this.refreshEpisodeProgress(entryId);
-        },
-      });
   }
   mark(episode: Episode): void {
     this.action("/episodes/" + episode.id + "/watched", {

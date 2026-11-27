@@ -82,6 +82,7 @@ for (const width of [390, 768, 1280]) for (const theme of ['light', 'dark'] as c
     await expect(page.getByRole('button', { name: 'Mark caught up', exact: true })).toBeEnabled();
     await page.route('**/media/api/entries/' + show.id, route => route.request().method() === 'PATCH'
       ? route.fulfill({ status: 502, json: { message: 'Temporary save outage. Your changes remain here.' } }) : route.continue());
+    await page.getByRole('button', { name: 'Edit rating and note', exact: true }).click();
     await page.getByLabel('Note').fill('A retained note through a provider outage.');
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.locator('main [role=alert]')).toBeVisible();
