@@ -47,8 +47,8 @@ Commands ran from `/tmp/vivek-game-08` on the sources in tested SHA `ee3a700fd9f
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this note.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/644
 - Roadmap #134 append-only status-note URL: added after merge.
 - Merged/activation status: not merged yet.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Parent issues stay open.
-- Next actor: open the pull request, wait for green checks, then merge. Do not deploy.
+- Next actor: wait for green checks, then merge. Do not deploy.
