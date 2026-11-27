@@ -5,6 +5,14 @@ import { distinctUntilChanged, map } from 'rxjs/operators';
 import { bindLockNotices, bindLockSnapshots } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
 import {
+  TREASURY_PUBLIC_OBJECT,
+  adaMention,
+  dialogueRankEffect,
+  dialogueVaultOpen,
+  sceneFor,
+  type MentionedObject,
+} from './resident-scenes';
+import {
   TownApiService,
   type DialogueConversation,
   type DialogueDirectory,
@@ -18,6 +26,7 @@ interface TalkChoice {
   readonly title: string;
   readonly name: string;
   readonly completed: boolean;
+  readonly stamps: number;
 }
 
 @Component({
@@ -46,6 +55,12 @@ export class ResidentsComponent {
   protected readonly error = signal('');
   protected readonly confirmation = signal<TalkChoice | null>(null);
   protected readonly note = signal('');
+  protected readonly selectedChoiceId = signal('');
+  protected readonly activeScene = computed(() => {
+    const choice = this.confirmation();
+    if (!choice) return null;
+    return sceneFor(choice.residentId, choice.conversationId);
+  });
   protected readonly selected = computed(() => {
     const id = this.selectedId();
     const directory = this.directory();
@@ -85,6 +100,7 @@ export class ResidentsComponent {
     if (!current || this.busy() || this.confirmation()) return;
     this.error.set('');
     this.notice.set('');
+    this.selectedChoiceId.set('');
     this.confirmation.set({
       residentId: resident.id,
       conversationId: conversation.id,
@@ -92,8 +108,44 @@ export class ResidentsComponent {
       title: conversation.title,
       name: resident.name,
       completed: conversation.completed,
+      stamps: conversation.stamps,
     });
     this.focus('#dialogue-confirmation');
+  }
+
+  protected opening(resident: DialogueResident, conversation: DialogueConversation): string {
+    return sceneFor(resident.id, conversation.id)?.paragraphs[0] ?? conversation.line;
+  }
+
+  protected rankEffect(): string {
+    const choice = this.confirmation();
+    if (!choice) return '';
+    return dialogueRankEffect(choice.completed, choice.conversationId, choice.stamps);
+  }
+
+  protected mention(): MentionedObject | null {
+    const choice = this.confirmation();
+    if (!choice || choice.residentId !== 'ada') return null;
+    const open = dialogueVaultOpen(this.owner);
+    return adaMention({
+      locked: !open,
+      publicLabel: open ? TREASURY_PUBLIC_OBJECT : null,
+      account: null,
+      spending: null,
+      goal: null,
+    });
+  }
+
+  protected choose(id: string): void {
+    const scene = this.activeScene();
+    if (!scene || this.busy() || !scene.choices.some(choice => choice.id === id)) return;
+    this.selectedChoiceId.set(id);
+  }
+
+  protected selectedReply(): string {
+    const scene = this.activeScene();
+    const id = this.selectedChoiceId();
+    return scene?.choices.find(choice => choice.id === id)?.reply ?? '';
   }
 
   protected remember(event: Event): void {
@@ -104,8 +156,7 @@ export class ResidentsComponent {
   protected cancel(): void {
     if (this.busy()) return;
     const choice = this.confirmation();
-    this.confirmation.set(null);
-    this.note.set('');
+    this.clearDraft();
     this.error.set('');
     if (choice) this.focus(`#talk-${choice.residentId}-${choice.conversationId}`);
   }
@@ -113,6 +164,7 @@ export class ResidentsComponent {
   protected confirm(): void {
     const choice = this.confirmation();
     if (!choice || this.busy() || this.owner === null) return;
+    if (this.activeScene() && !this.selectedChoiceId()) return;
     const generation = this.generation;
     const completed = choice.completed;
     this.busy.set(true);
@@ -125,8 +177,7 @@ export class ResidentsComponent {
         if (generation !== this.generation) return;
         this.busy.set(false);
         this.directory.set(directory);
-        this.confirmation.set(null);
-        this.note.set('');
+        this.clearDraft();
         this.error.set('');
         const resident = directory.residents.find(item => item.id === choice.residentId);
         const rank = resident?.rank ?? 0;
@@ -141,8 +192,7 @@ export class ResidentsComponent {
         const status = failureStatus(failure);
         const code = failureCode(failure);
         if (status === 409 || code === 'dialogue_conflict') {
-          this.confirmation.set(null);
-          this.note.set('');
+          this.clearDraft();
           this.error.set('This conversation changed. The current ranks are shown.');
           this.load();
           this.focus('#dialogue-error');
@@ -174,8 +224,7 @@ export class ResidentsComponent {
       error: () => {
         if (generation !== this.generation) return;
         this.directory.set(null);
-        this.confirmation.set(null);
-        this.note.set('');
+        this.clearDraft();
         this.loadError.set(true);
         this.loading.set(false);
         this.focus('#resident-load-error');
@@ -193,10 +242,15 @@ export class ResidentsComponent {
     this.loading.set(false);
     this.busy.set(false);
     this.loadError.set(false);
-    this.confirmation.set(null);
-    this.note.set('');
+    this.clearDraft();
     this.notice.set('');
     this.error.set('');
+  }
+
+  private clearDraft(): void {
+    this.confirmation.set(null);
+    this.note.set('');
+    this.selectedChoiceId.set('');
   }
 
   private focus(selector: string): void {
