@@ -785,6 +785,8 @@ test.describe('Resident dialogue', () => {
     await activate(page, residents.getByRole('button', { name: 'Look at the sample sign.', exact: true }), false);
     await activate(page, residents.getByRole('button', { name: 'Finish talk', exact: true }), false);
     await expect(residents.getByText('Rank stays at 5.')).toBeVisible();
+    // A marked vault with no key is cleared after this load. Drop the mark first.
+    await page.evaluate(() => localStorage.removeItem('finance-vault-present'));
     await page.goto('/town/residents?resident=sol');
     await expect(residents.getByRole('button', { name: 'Replay A short activity', exact: true })).toBeVisible();
     await page.evaluate(() => localStorage.setItem('finance-vault-present', '1'));

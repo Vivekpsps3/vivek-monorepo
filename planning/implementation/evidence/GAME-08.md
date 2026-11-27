@@ -44,6 +44,9 @@ Commands ran from `/tmp/vivek-game-08` on the sources in tested SHA `ee3a700fd9f
 | `make build-frontends` | PASS. Release `294c1a5553db30686cbe1957fdba3e4999b9d9f2ed3c2f150e0325a95c4e0318`. Existing initial-bundle warning is 731.13 kB against 650 kB. |
 | `npx playwright test --config apps/web/e2e/playwright.config.ts` | PASS. 302 Town, Health, World, and Pixels cases, including the ten conversations and the view loop. An earlier run failed one unrelated case, `world.spec.ts` “Town error at 1280 dark”, which showed the Pixels heading. That case was not changed here. The full run above then passed. |
 | `npx playwright test --project=suite` | PASS. 75 cross-app cases. |
+| `npx playwright test --config apps/web/e2e/playwright.config.ts apps/web/e2e/town-residents.spec.ts -g "without copying a note"` | PASS. 1 case, after the Sol reload fix below. |
+
+CI run `46043672594` on `1d47a381` failed Playwright. The Sol reload inherited `finance-vault-present` from the Wren step. Boot then cleared that mark because no vault key exists, so the label stayed “Sample rules card”. The spec now removes the mark before that load and sets it again once Replay is visible. The same run also failed Travel `terminal-hall.spec.js` desktop, which stayed on `/travel` instead of `/travel/terminal`. The phone case passed. That file was not edited.
 
 ## Handoff
 
