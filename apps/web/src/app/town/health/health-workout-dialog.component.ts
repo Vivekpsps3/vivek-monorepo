@@ -32,13 +32,16 @@ import {
   openCanonicalPreview,
   removeDraftSet,
   retagDraftSet,
+  reviseDraftSet,
   routineTitleError,
+  setEntryFields,
   setTypeLabel,
   workoutFieldId,
   workoutFieldMessage,
   workoutFromDraft,
   validateWorkoutRecord,
   type ExerciseType,
+  type SetEntryFields,
   type SetType,
   type WorkoutDefinitionChoice,
   type WorkoutDraft,
@@ -76,6 +79,10 @@ export class HealthWorkoutDialogComponent {
   readonly closed = output<void>();
   readonly errors = signal<FieldErrors>({});
   protected readonly local = signal<WorkoutDraft>(emptyWorkoutDraft('exercise', ''));
+  protected readonly editingSetId = signal<string | null>(null);
+  protected readonly editBuffer = signal<SetEntryFields | null>(null);
+  protected readonly editError = signal('');
+  private readonly pendingFocus = signal<string | null>(null);
   protected readonly types = EXERCISE_TYPES;
   protected readonly setTypes = SET_TYPES;
   protected readonly typeLabel = exerciseTypeLabel;
@@ -102,6 +109,14 @@ export class HealthWorkoutDialogComponent {
       this.local.set(this.draft());
     });
     effect(() => {
+      const editing = this.editingSetId();
+      if (editing && !this.containsSet(this.draft(), editing)) {
+        this.editingSetId.set(null);
+        this.editBuffer.set(null);
+        this.editError.set('');
+      }
+    });
+    effect(() => {
       const draft = this.local();
       const owner = this.open() && draft.kind === 'session' ? `session:${draft.clientId}` : '';
       if (owner === this.restOwner) return;
@@ -113,9 +128,19 @@ export class HealthWorkoutDialogComponent {
         this.formErrorSeen = '';
         return;
       }
+      const pending = this.pendingFocus();
+      if (pending) {
+        const node = document.getElementById(pending);
+        if (node instanceof HTMLElement) {
+          this.focusElement(node);
+          this.pendingFocus.set(null);
+        }
+        return;
+      }
       const field = firstWorkoutField(this.errors(), this.local().kind);
       if (field) {
-        document.getElementById(workoutFieldId(field))?.focus();
+        const node = document.getElementById(workoutFieldId(field));
+        if (node instanceof HTMLElement) this.focusElement(node);
         return;
       }
       const message = this.formError();
@@ -265,8 +290,28 @@ export class HealthWorkoutDialogComponent {
   }
 
   protected loadLabel(): string {
+    return this.lineLoadLabel(this.local().exerciseType);
+  }
+
+  protected lineUsesLoad(type: ExerciseType): boolean {
+    return type === 'load-reps' || type === 'assisted-reps';
+  }
+
+  protected lineUsesReps(type: ExerciseType): boolean {
+    return type === 'load-reps' || type === 'assisted-reps' || type === 'bodyweight-reps';
+  }
+
+  protected lineUsesTime(type: ExerciseType): boolean {
+    return type === 'time-distance' || type === 'time-only';
+  }
+
+  protected lineUsesDistance(type: ExerciseType): boolean {
+    return type === 'time-distance';
+  }
+
+  protected lineLoadLabel(type: ExerciseType): string {
     const unit = this.units().weight;
-    return this.local().exerciseType === 'assisted-reps' ? `Assistance (${unit})` : `Load (${unit})`;
+    return type === 'assisted-reps' ? `Assistance (${unit})` : `Load (${unit})`;
   }
 
   protected onName(event: Event): void {
@@ -312,11 +357,6 @@ export class HealthWorkoutDialogComponent {
     if ((SET_TYPES as readonly string[]).includes(value)) this.patch({ setType: value as SetType });
   }
 
-  protected onState(event: Event): void {
-    const value = this.text(event);
-    if (value === 'draft' || value === 'completed') this.patch({ state: value });
-  }
-
   protected onLoad(event: Event): void {
     this.patch({ load: this.text(event) });
   }
@@ -339,7 +379,46 @@ export class HealthWorkoutDialogComponent {
 
   protected onAddSet(): void {
     if (this.busy()) return;
-    this.applyFloor(commitEnteredSet(this.local(), this.units(), this.today()));
+    const result = commitEnteredSet(this.local(), this.units(), this.today());
+    this.errors.set(result.fieldErrors);
+    if (Object.keys(result.fieldErrors).length > 0) {
+      const field = firstWorkoutField(result.fieldErrors, this.local().kind);
+      if (field) this.pendingFocus.set(workoutFieldId(field));
+      return;
+    }
+    this.publish(result.draft);
+    this.pendingFocus.set(this.nextComposerField());
+  }
+
+  protected onToggleEdit(set: WorkoutDraftSet, exerciseType: ExerciseType): void {
+    if (this.busy()) return;
+    if (this.editingSetId() === set.id) {
+      this.editingSetId.set(null);
+      this.editBuffer.set(null);
+      this.editError.set('');
+      this.pendingFocus.set(`health-set-edit-${set.id}`);
+      return;
+    }
+    this.editingSetId.set(set.id);
+    this.editBuffer.set(setEntryFields(set, this.units()));
+    this.editError.set('');
+    this.pendingFocus.set(this.editFieldId(set.id, exerciseType));
+  }
+
+  protected onRevise(setId: string, field: keyof SetEntryFields, event: Event): void {
+    const current = this.editBuffer();
+    if (!current || this.editingSetId() !== setId || this.busy()) return;
+    const next = { ...current, [field]: this.text(event) };
+    this.editBuffer.set(next);
+    const result = reviseDraftSet(this.local(), setId, next, this.units(), this.today());
+    if (Object.keys(result.fieldErrors).length > 0) {
+      const code = result.fieldErrors[field === 'load' ? 'kg' : field === 'distance' ? 'metres' : field]
+        ?? Object.values(result.fieldErrors)[0];
+      this.editError.set(workoutFieldMessage(code));
+      return;
+    }
+    this.editError.set('');
+    if (result.draft !== this.local()) this.publish(result.draft);
   }
 
   protected onAddExercise(): void {
@@ -388,11 +467,22 @@ export class HealthWorkoutDialogComponent {
     this.publish(markSetCounted(this.local(), setId, target.checked));
   }
 
-  /** Finish the open session. The bench stays inert while this dialog is up. */
+  /** Finish the open session. A failed check leaves the draft unfinished. */
   protected onFinish(): void {
     if (this.busy() || this.local().kind !== 'session') return;
-    this.patch({ state: 'completed' });
-    this.onSubmit(new Event('submit', { cancelable: true }));
+    const draft: WorkoutDraft = { ...this.local(), state: 'completed' };
+    const result = validateWorkoutRecord(
+      workoutFromDraft(draft, this.today(), this.units()),
+      this.customExerciseCount(),
+      this.today(),
+    );
+    this.errors.set(result.fieldErrors);
+    if (Object.keys(result.fieldErrors).length > 0) {
+      this.draftChange.emit(this.local());
+      return;
+    }
+    this.publish(draft);
+    this.save.emit(result.value);
   }
 
   protected onSubmit(event: Event): void {
@@ -414,6 +504,10 @@ export class HealthWorkoutDialogComponent {
 
   protected onClosed(): void {
     this.errors.set({});
+    this.editingSetId.set(null);
+    this.editBuffer.set(null);
+    this.editError.set('');
+    this.pendingFocus.set(null);
     this.closed.emit();
   }
 
@@ -430,12 +524,44 @@ export class HealthWorkoutDialogComponent {
   }
 
   private focusField(primary: string, fallback = ''): void {
+    this.pendingFocus.set(primary);
     queueMicrotask(() => {
       const preferred = document.getElementById(primary)?.querySelector('button') ?? document.getElementById(primary);
       const alternate = fallback ? document.getElementById(fallback)?.querySelector('button') ?? document.getElementById(fallback) : null;
       const target = preferred instanceof HTMLButtonElement && preferred.disabled ? alternate : preferred;
-      if (target instanceof HTMLElement) target.focus();
+      if (target instanceof HTMLElement) this.focusElement(target);
+      if (this.pendingFocus() === primary) this.pendingFocus.set(null);
     });
+  }
+
+  private focusElement(node: HTMLElement): void {
+    const inner = node.querySelector('button');
+    const target = node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement
+      ? node
+      : inner instanceof HTMLElement ? inner : node;
+    if (target instanceof HTMLButtonElement && target.disabled) return;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  private nextComposerField(): string {
+    if (this.usesLoad()) return 'health-workout-load';
+    if (this.usesReps()) return 'health-workout-reps';
+    if (this.usesTime()) return 'health-workout-seconds';
+    return 'health-workout-set-type';
+  }
+
+  private editFieldId(setId: string, type: ExerciseType): string {
+    if (this.lineUsesLoad(type)) return `health-set-load-${setId}`;
+    if (this.lineUsesReps(type)) return `health-set-reps-${setId}`;
+    if (this.lineUsesTime(type)) return `health-set-seconds-${setId}`;
+    return `health-set-edit-${setId}`;
+  }
+
+  private containsSet(draft: WorkoutDraft, setId: string): boolean {
+    return draft.sets.some(set => set.id === setId)
+      || draft.floorBefore.some(line => line.sets.some(set => set.id === setId))
+      || draft.floorAfter.some(line => line.sets.some(set => set.id === setId));
   }
 
   private patch(change: Partial<WorkoutDraft>): void {

@@ -1,6 +1,71 @@
-form {
+.workout-sheet {
   display: grid;
   gap: var(--space-3);
+  min-width: 0;
+  scroll-behavior: auto;
+}
+
+.workout-sheet--logging {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 4.5rem);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workout-head,
+.workout-scroll,
+.set-dock {
+  min-width: 0;
+  scroll-behavior: auto;
+}
+
+.workout-sheet--logging .workout-head {
+  order: 1;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.workout-sheet--logging .workout-scroll {
+  order: 2;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.workout-sheet--logging .set-dock {
+  order: 3;
+  flex: 0 0 auto;
+}
+
+.workout-head,
+.workout-scroll,
+.set-dock,
+.set-entry,
+.set-edit {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.set-dock {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  background: var(--card-bg);
+  max-height: 70dvh;
+  overflow: auto;
+}
+
+.set-entry,
+.set-edit {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+  align-items: end;
+}
+
+.set-span {
+  grid-column: 1 / -1;
 }
 
 input,
