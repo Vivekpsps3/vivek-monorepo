@@ -50,7 +50,7 @@ The first `make e2e` failed two rich-gallery tests: automatic price checks were 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded after the pull request is opened. The body is only `Closes #609`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/645. The body is only `Closes #609`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: none. Portfolio has no position deep link, so Open in Holdings uses `t=holdings` only. Gallery sort stays local because Activity does not read a sort query.
