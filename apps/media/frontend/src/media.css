@@ -353,6 +353,12 @@
 .media-page .source-details {
   margin: 1rem 0;
 }
+.media-page .source-details summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+}
 @media (max-width: 640px) {
   .page.media-page {
     padding: 1.25rem max(var(--gutter), env(safe-area-inset-right)) 3rem
@@ -564,18 +570,10 @@
   min-width: 44px;
   margin-bottom: 0.5rem;
 }
-.media-page .provider-coverage {
-  margin: 0 0 1rem;
-}
-.media-page .provider-coverage h2,
-.media-page .capture-manual h2 {
-  font-size: 1rem;
-  margin: 0 0 0.5rem;
-}
-.media-page .provider-coverage ul {
-  margin: 0;
+.media-page .source-details ul {
+  margin: 0.5rem 0 0;
   padding-left: 1.1rem;
 }
 .media-page .capture-manual {
-  margin-top: 1.5rem;
+  margin-top: 0;
 }

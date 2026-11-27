@@ -21,7 +21,7 @@ test('search distinguishes unavailable, unconfigured and available source covera
   expect(requests).toBe(0);
   await page.getByRole('searchbox').fill('dune');
   await expect(page.getByText('Search is incomplete.', { exact: true })).toBeVisible();
-  await page.getByText('Source coverage · all types', { exact: true }).click();
+  await page.getByText('Provider coverage', { exact: true }).click();
   await expect(page.locator('.source-details')).toContainText('Steam coverage remains available');
   await expect(page.locator('.source-details')).toContainText('needs valid credentials');
   await expect(page.getByText('Available sources returned no matches', { exact: true })).toBeVisible();
