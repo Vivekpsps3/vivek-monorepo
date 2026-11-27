@@ -241,10 +241,134 @@ describe('Residents', () => {
   });
 
   it('keeps an unauthored resident on the shared line', async () => {
-    const { el } = await open('/town/residents?resident=imani');
+    const { el } = await open('/town/residents?resident=wren');
     expect(el.textContent).toContain('A public line.');
     expect(el.textContent).not.toContain('Choose a reply');
     expect(el.textContent).not.toContain('Sample civic ledger');
+    expect(el.textContent).not.toContain('Sample departure board');
+    expect(el.textContent).not.toContain('Sample training card');
+  });
+
+  it('offers every Imani talk from an unread Travel board and posts no trip', async () => {
+    const { harness, el, click } = await open('/town/residents?resident=imani');
+    for (const title of ['Welcome', 'How this place works', 'A preference', 'A short activity', 'A reflection']) {
+      expect(el.textContent).toContain(`Talk about ${title}`);
+    }
+    expect(el.textContent).not.toContain('A public line.');
+    expect(el.textContent).not.toContain('Synthetic harbor');
+    expect(el.textContent).not.toContain('Lisbon quay');
+    click('Talk about A short activity');
+    expect(el.querySelector('[data-mention-sample]')?.getAttribute('data-mention-sample')).toBe('true');
+    expect(el.querySelector('[data-mention-label]')?.textContent).toBe('Sample departure board');
+    expect(el.textContent).toContain('Labeled sample. Not a saved trip.');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank rises by 1. No Stamps.');
+    const finish = Array.from(el.querySelectorAll('button')).find(item => item.textContent?.trim() === 'Finish talk');
+    expect(finish?.hasAttribute('disabled')).toBeTrue();
+    click('Look at the sample board.');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('Sample departure board. Labeled sample. Not a saved trip.');
+    click('Leave the board alone.');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('The board stays as it is.');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank rises by 1. No Stamps.');
+    click('Finish talk');
+    expect(api.completeConversation).toHaveBeenCalledOnceWith({
+      resident_id: 'imani',
+      conversation_id: 'activity',
+      expected_revision: 0,
+    });
+    const saved = directory();
+    saved.revision = 1;
+    const imani = saved.residents.find(item => item.id === 'imani');
+    if (imani) {
+      imani.rank = 1;
+      imani.conversations = imani.conversations.map(item => item.id === 'activity' ? { ...item, completed: true } : item);
+    }
+    writes[0].next(saved);
+    harness.detectChanges();
+    expect(el.textContent).toContain('Rank is 1. No extra Stamps.');
+    expect(el.querySelector('[data-resident="imani"]')?.getAttribute('data-rank')).toBe('1');
+    expect(api.getResidents).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers every Jun talk while Health is locked and skips workouts and badges', async () => {
+    const { el, click } = await open('/town/residents?resident=jun');
+    for (const title of ['Welcome', 'How this place works', 'A preference', 'A short activity', 'A reflection']) {
+      expect(el.textContent).toContain(`Talk about ${title}`);
+    }
+    expect(el.textContent).not.toContain('Back squat 100 kg');
+    expect(el.textContent).not.toContain('Marathon finisher');
+    expect(el.textContent).not.toContain('72 bpm');
+    click('Talk about A short activity');
+    expect(el.querySelector('[data-mention-label]')?.textContent).toBe('Sample training card');
+    expect(el.textContent).toContain('Labeled sample. Not a Health record.');
+    expect(el.textContent).toContain('Noticing does not log a workout.');
+    click('Notice the open floor.');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank rises by 1. No Stamps.');
+    click('Leave the floor alone.');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('No session from this talk.');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank rises by 1. No Stamps.');
+    click('Cancel');
+    localStorage.setItem(VAULT_PRESENCE, '1');
+    click('Talk about A short activity');
+    expect(el.querySelector('[data-mention-sample]')?.getAttribute('data-mention-sample')).toBe('false');
+    expect(el.querySelector('[data-mention-label]')?.textContent).toBe('Training floor');
+    expect(el.textContent).toContain('A public floor. Records stay in Health.');
+    expect(el.textContent).not.toContain('Back squat 100 kg');
+    expect(el.textContent).not.toContain('Marathon finisher');
+    expect(api.completeConversation).not.toHaveBeenCalled();
+  });
+
+  it('keeps an Imani reply across a failure and retries the same identity', async () => {
+    const { harness, el, click, typeNote } = await open('/town/residents?resident=imani');
+    click('Talk about Welcome');
+    click('Start with the departure board.');
+    typeNote('Synthetic session note');
+    click('Finish talk');
+    const body = { resident_id: 'imani', conversation_id: 'welcome', expected_revision: 0 };
+    expect(api.completeConversation).toHaveBeenCalledOnceWith(body);
+    writes[0].error({ status: 503 });
+    harness.detectChanges();
+    expect(el.querySelector<HTMLTextAreaElement>('#dialogue-note')?.value).toBe('Synthetic session note');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('The board, then.');
+    expect(el.querySelector('[data-resident="imani"]')?.getAttribute('data-rank')).toBe('0');
+    click('Retry talk');
+    expect(api.completeConversation.calls.argsFor(1)).toEqual([body]);
+    const saved = directory();
+    saved.revision = 1;
+    const imani = saved.residents.find(item => item.id === 'imani');
+    if (imani) {
+      imani.rank = 1;
+      imani.conversations = imani.conversations.map(item => item.id === 'welcome' ? { ...item, completed: true } : item);
+    }
+    writes[1].next(saved);
+    harness.detectChanges();
+    expect(el.textContent).toContain('Rank is 1. Welcome gave 2 Stamps once.');
+    expect(el.textContent).not.toContain('Synthetic session note');
+    expect(el.textContent).not.toContain('The board, then.');
+  });
+
+  it('drops a Jun reply and a late success when Health locks', async () => {
+    const { harness, el, click, typeNote } = await open('/town/residents?resident=jun');
+    click('Talk about Welcome');
+    click('Start at the routine desk.');
+    typeNote('Synthetic session note');
+    click('Finish talk');
+    window.dispatchEvent(new StorageEvent('storage', { key: LOCK_SIGNAL, newValue: '1' }));
+    const late = directory();
+    late.revision = 9;
+    const jun = late.residents.find(item => item.id === 'jun');
+    if (jun) {
+      jun.rank = 9;
+      jun.conversations = jun.conversations.map(item => item.id === 'welcome' ? { ...item, completed: true } : item);
+    }
+    writes[0].next(late);
+    loads.at(-1)?.next(directory());
+    harness.detectChanges();
+    expect(el.querySelector('main')?.getAttribute('data-revision')).toBe('0');
+    expect(el.textContent).not.toContain('Rank is 9');
+    expect(el.textContent).not.toContain('Synthetic session note');
+    expect(el.textContent).not.toContain('The desk, then.');
+    expect(el.textContent).not.toContain('Finish Welcome with Jun?');
+    expect(el.querySelector('[data-resident="jun"]')?.getAttribute('data-rank')).toBe('0');
   });
 
   it('uses a labeled sample for Ada when Finance is locked and the door when it is open', async () => {
