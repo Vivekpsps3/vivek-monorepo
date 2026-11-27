@@ -66,6 +66,10 @@ LATER_THAN_BIRTHDAY = {
     "add_table:town_dialogue_completions",
     "add_index:ix_town_dialogue_completions_user_id",
     "add_index:uq_town_dialogue_completion",
+    "add_table:town_discovery_journals",
+    "add_table:town_discovery_stamps",
+    "add_index:ix_town_discovery_stamps_user_id",
+    "add_index:uq_town_discovery_stamp",
 }
 
 

@@ -75,6 +75,8 @@ DOMAIN_TABLES = {
         "town_quest_steps",
         "town_dialogue_journals",
         "town_dialogue_completions",
+        "town_discovery_journals",
+        "town_discovery_stamps",
     ),
     "world": ("world_concepts",),
 }

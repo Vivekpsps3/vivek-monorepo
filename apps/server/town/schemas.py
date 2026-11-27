@@ -365,3 +365,17 @@ class DialogueDirectoryView(_Shape):
     revision: int
     hour: int
     residents: list[DialogueResidentView]
+
+
+class DiscoveryView(_Shape):
+    id: str
+    name: str
+    district: str
+    hint: str
+    reaction: str
+    found: bool
+
+
+class DiscoveryJournalView(_Shape):
+    revision: int
+    discoveries: list[DiscoveryView]

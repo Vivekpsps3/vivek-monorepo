@@ -361,6 +361,27 @@ describe('Town exterior scene', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  it('opens a discovery from the scene and leaves the sixteen buildings alone', () => {
+    const router = TestBed.inject(Router);
+    const navigate = spyOn(router, 'navigate').and.resolveTo(true);
+    const { el, viewport } = render(town('founded'));
+    expect(el.querySelectorAll('[aria-label="Town buildings"] [role="listitem"]').length).toBe(16);
+    expect(viewport.querySelectorAll('[data-scene-object][aria-hidden="true"]').length).toBe(16);
+    expect(viewport.querySelectorAll('[data-discovery]').length).toBe(12);
+    expect(el.querySelectorAll('[aria-label="Town discoveries"] a').length).toBe(12);
+    const painted = spyOn(document, 'elementFromPoint');
+    painted.and.returnValue(viewport.querySelector('[data-discovery="ferry-bell"] .spot'));
+    const rect = viewport.getBoundingClientRect();
+    viewport.dispatchEvent(pointer('pointerdown', rect.left + 24, rect.top + 24));
+    viewport.dispatchEvent(pointer('pointerup', rect.left + 24, rect.top + 24));
+    expect(navigate).toHaveBeenCalledWith(['/town/discoveries'], { queryParams: { object: 'ferry-bell' } });
+    navigate.calls.reset();
+    painted.and.returnValue(el.querySelector('[data-scene-object="library"] .landmark use'));
+    viewport.dispatchEvent(pointer('pointerdown', rect.left + 40, rect.top + 40));
+    viewport.dispatchEvent(pointer('pointerup', rect.left + 40, rect.top + 40));
+    expect(navigate).toHaveBeenCalledWith(['/town/library'], { queryParams: undefined, state: undefined });
+  });
+
   it('keeps a committed view when town data changes and drops only an open drag on owner change', () => {
     const router = TestBed.inject(Router);
     spyOn(router, 'navigate').and.resolveTo(true);

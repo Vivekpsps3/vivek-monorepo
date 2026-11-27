@@ -178,6 +178,10 @@ const PLACED: readonly Placement[] = Object.freeze([
 
 const PLACEMENT = new Map(PLACED.map(item => [item.id, item]));
 
+export function exteriorFootprints(): readonly { id: string; x: number; y: number; width: number; height: number }[] {
+  return PLACED.map(item => ({ id: item.id, x: item.x, y: item.y, width: item.width, height: item.height }));
+}
+
 function placed(id: string): Placement {
   const found = PLACEMENT.get(id);
   if (!found) throw new Error(`missing exterior placement ${id}`);
