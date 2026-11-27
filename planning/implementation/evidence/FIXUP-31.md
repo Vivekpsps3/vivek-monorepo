@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#619](https://github.com/Vivekpsps3/vivek-monorepo/issues/619) under [#578](https://github.com/Vivekpsps3/vivek-monorepo/issues/578) and [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304).
 - Agent/context, branch/worktree: branch `agent/fixup-31`, worktree `/tmp/vivek-fixup-31`. [Claim](https://github.com/Vivekpsps3/vivek-monorepo/issues/619#issuecomment-7229264105). No subagents. The shared checkout was not edited.
-- Base main SHA `a60cd5fb4dfe3f2c66bda1e682f3385c07dd07fd`. Media behavior tested at `9b19d53e76175ec4048dc8b80359243fe428b1c0`. FIXUP-29 then reached main as `2bd41147c144bb95d3611f008fc289929ff24c00` and was merged here as `56691d6a`. That merge only added Gym files and `planning/implementation/evidence/FIXUP-29.md`. Media files were not edited again.
+- Base main SHA `a60cd5fb4dfe3f2c66bda1e682f3385c07dd07fd`. Media behavior tested at `9b19d53e76175ec4048dc8b80359243fe428b1c0`. FIXUP-29 then reached main as `2bd41147c144bb95d3611f008fc289929ff24c00` and was merged here as `56691d6a19a9b83b72aaba744fd161ded668b153`. That merge only added Gym files and `planning/implementation/evidence/FIXUP-29.md`. Media files were not edited again.
 - Fresh-main/prerequisite/active-PR checks: fetched `origin/main` before the worktree. MUX-08 (#404, PR #521 merge `c14616b014e1b64138f635372cf2db03840fea37`, archive `2e699ab66ec68318cb7d971964e7be0432eeca42`) is an ancestor. Detail still leads films, books, songs, and games with progress, rating, and note, and a direct link still falls back to the collection. ROOM-08 (#458, PR #562 merge `f527ccf6515fe64d5441d0068f1c6c26114816e8`) is an ancestor. The episode lounge still watches, undoes, and keeps caught-up separate from a future episode. FIXUP-29 merged while this leaf was open. Its Gym files came in through the merge commit and were not edited here. GAME-11 was still open and was not touched.
 
 ## Acceptance
@@ -49,7 +49,7 @@ Media commands ran from `/tmp/vivek-fixup-31` on `9b19d53e76175ec4048dc8b8035924
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded when the pull request is opened. The body is only `Closes #619`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/654. The body is only `Closes #619`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: none. Gym files from FIXUP-29 are present and were not edited.
