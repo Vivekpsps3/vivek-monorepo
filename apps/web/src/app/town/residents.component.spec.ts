@@ -57,6 +57,8 @@ describe('Residents', () => {
     localStorage.removeItem(VAULT_PRESENCE);
     localStorage.removeItem(DEK_STORE);
     localStorage.removeItem(LOCK_SIGNAL);
+    localStorage.removeItem('synthetic-review');
+    localStorage.removeItem('synthetic-concept');
     user = new BehaviorSubject<{ id: number } | null>({ id: 1 });
     loads = [];
     writes = [];
@@ -240,13 +242,24 @@ describe('Residents', () => {
     expect(el.textContent).not.toContain('Synthetic session note');
   });
 
-  it('keeps an unauthored resident on the shared line', async () => {
-    const { el } = await open('/town/residents?resident=wren');
+  it('keeps an unknown conversation on the shared line', async () => {
+    const initial = directory();
+    const wren = initial.residents.find(item => item.id === 'wren');
+    wren?.conversations.push({
+      id: 'aside',
+      title: 'Aside',
+      line: 'A public line.',
+      stamps: 0,
+      completed: false,
+    });
+    const { el, click } = await open('/town/residents?resident=wren', initial);
+    expect(el.textContent).toContain('Wren keeps the music room and the arcade. The bar, the sign, and the play floor stay here when you are away.');
     expect(el.textContent).toContain('A public line.');
+    click('Talk about Aside');
     expect(el.textContent).not.toContain('Choose a reply');
-    expect(el.textContent).not.toContain('Sample civic ledger');
-    expect(el.textContent).not.toContain('Sample departure board');
-    expect(el.textContent).not.toContain('Sample training card');
+    expect(el.textContent).not.toContain('Sample arcade sign');
+    const finish = Array.from(el.querySelectorAll('button')).find(item => item.textContent?.trim() === 'Finish talk');
+    expect(finish?.hasAttribute('disabled')).toBeFalse();
   });
 
   it('offers every Imani talk from an unread Travel board and posts no trip', async () => {
@@ -406,6 +419,152 @@ describe('Residents', () => {
     localStorage.setItem(VAULT_PRESENCE, '2');
     click('Talk about A preference');
     expect(el.querySelector('[data-mention-label]')?.textContent).toBe('Sample civic ledger');
+  });
+
+  it('offers every Wren talk without a review and keeps a reply across failure', async () => {
+    localStorage.setItem('synthetic-review', 'Harbor week note stays shut');
+    localStorage.setItem('synthetic-concept', 'Concept note tide tables');
+    const { harness, el, click, typeNote } = await open('/town/residents?resident=wren');
+    for (const title of ['Welcome', 'How this place works', 'A preference', 'A short activity', 'A reflection']) {
+      expect(el.textContent).toContain(`Talk about ${title}`);
+    }
+    expect(el.textContent).not.toContain('A public line.');
+    expect(el.textContent).not.toContain('Harbor week note stays shut');
+    expect(el.textContent).not.toContain('Concept note tide tables');
+    click('Talk about A reflection');
+    expect(el.querySelector('[data-chapter-visit]')?.textContent).toBe('Not visited yet. This talk does not mark a chapter done.');
+    expect(el.querySelector('[data-mention-label]')?.textContent).toBe('Sample arcade sign');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank rises by 1. No Stamps.');
+    click('The room is for hearing a piece again.');
+    expect(el.querySelector('[data-chapter-visit]')?.textContent).toBe('Not visited yet. This talk does not mark a chapter done.');
+    click('The floor is for playing again.');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank rises by 1. No Stamps.');
+    click('Cancel');
+    click('Talk about A short activity');
+    expect(el.querySelector('[data-chapter-visit]')).toBeNull();
+    const finish = Array.from(el.querySelectorAll('button')).find(item => item.textContent?.trim() === 'Finish talk');
+    expect(finish?.hasAttribute('disabled')).toBeTrue();
+    click('Look at the sample sign.');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('Sample arcade sign. Labeled sample. Not a review.');
+    click('Leave the floor alone.');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('The floor stays as it is.');
+    click('Cancel');
+    click('Talk about Welcome');
+    click('Start in the music room.');
+    typeNote('Synthetic session note');
+    click('Finish talk');
+    const body = { resident_id: 'wren', conversation_id: 'welcome', expected_revision: 0 };
+    expect(api.completeConversation).toHaveBeenCalledOnceWith(body);
+    writes[0].error({ status: 503 });
+    harness.detectChanges();
+    expect(el.querySelector<HTMLTextAreaElement>('#dialogue-note')?.value).toBe('Synthetic session note');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('The music room, then.');
+    expect(el.querySelector('[data-resident="wren"]')?.getAttribute('data-rank')).toBe('0');
+    click('Retry talk');
+    expect(api.completeConversation.calls.argsFor(1)).toEqual([body]);
+    const saved = directory();
+    saved.revision = 1;
+    const wren = saved.residents.find(item => item.id === 'wren');
+    if (wren) {
+      wren.rank = 1;
+      wren.conversations = wren.conversations.map(item => item.id === 'welcome' ? { ...item, completed: true } : item);
+    }
+    writes[1].next(saved);
+    harness.detectChanges();
+    expect(el.textContent).toContain('Rank is 1. Welcome gave 2 Stamps once.');
+    expect(el.textContent).not.toContain('Synthetic session note');
+    expect(el.textContent).not.toContain('Harbor week note stays shut');
+    expect(el.textContent).not.toContain('The music room, then.');
+  });
+
+  it('drops a Sol reply when the Hall locks and replays the chapter without another reward', async () => {
+    const { harness, el, click, typeNote } = await open('/town/residents?resident=sol');
+    click('Talk about A short activity');
+    expect(el.querySelector('[data-mention-label]')?.textContent).toBe('Sample rules card');
+    expect(el.textContent).toContain('Labeled sample. Not a review or a concept note.');
+    expect(el.textContent).not.toContain('Harbor week note stays shut');
+    expect(el.textContent).not.toContain('Concept note tide tables');
+    click('Notice the public rules.');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('The public rules only.');
+    click('Leave the notes alone.');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('No note from this talk.');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank rises by 1. No Stamps.');
+    click('Cancel');
+    localStorage.setItem(DEK_STORE, 'present');
+    localStorage.setItem(VAULT_PRESENCE, '1');
+    click('Talk about A short activity');
+    expect(el.querySelector('[data-mention-sample]')?.getAttribute('data-mention-sample')).toBe('false');
+    expect(el.querySelector('[data-mention-label]')?.textContent).toBe('Rules board');
+    expect(el.textContent).toContain('A public board. Reviews and concept notes are not copied here.');
+    expect(el.textContent).not.toContain('Harbor week note stays shut');
+    click('Cancel');
+    click('Talk about Welcome');
+    click('Start with the rules.');
+    typeNote('Synthetic session note');
+    click('Finish talk');
+    window.dispatchEvent(new StorageEvent('storage', { key: LOCK_SIGNAL, newValue: '1' }));
+    const late = directory();
+    late.revision = 9;
+    const sol = late.residents.find(item => item.id === 'sol');
+    if (sol) {
+      sol.rank = 9;
+      sol.conversations = sol.conversations.map(item => item.id === 'welcome' ? { ...item, completed: true } : item);
+    }
+    writes[0].next(late);
+    loads.at(-1)?.next(directory());
+    harness.detectChanges();
+    expect(el.querySelector('main')?.getAttribute('data-revision')).toBe('0');
+    expect(el.textContent).not.toContain('Rank is 9');
+    expect(el.textContent).not.toContain('Synthetic session note');
+    expect(el.textContent).not.toContain('The rules, then.');
+    expect(el.textContent).not.toContain('Finish Welcome with Sol?');
+    expect(el.querySelector('[data-resident="sol"]')?.getAttribute('data-rank')).toBe('0');
+
+    click('Talk about A reflection');
+    click('The Hall is for reading a rule again.');
+    click('Finish talk');
+    const reflected = directory();
+    reflected.revision = 1;
+    const savedSol = reflected.residents.find(item => item.id === 'sol');
+    if (savedSol) {
+      savedSol.rank = 1;
+      savedSol.conversations = savedSol.conversations.map(item => item.id === 'reflection' ? { ...item, completed: true } : item);
+    }
+    writes.at(-1)?.next(reflected);
+    harness.detectChanges();
+    expect(el.textContent).toContain('Rank is 1. No extra Stamps.');
+    expect(el.textContent).not.toContain('Harbor week note stays shut');
+    expect(el.textContent).not.toContain('Concept note tide tables');
+    click('Replay A reflection');
+    expect(el.querySelector('[data-chapter-visit]')?.textContent).toBe('Already visited. This talk is not recorded again.');
+    expect(el.querySelector('[data-rank-effect]')?.textContent).toBe('Rank stays. No Stamps.');
+    click('The study can wait.');
+    expect(el.querySelector('[data-chapter-visit]')?.textContent).toBe('Already visited. This talk is not recorded again.');
+    expect(el.querySelector('[data-selected-reply]')?.textContent).toBe('The study can wait.');
+  });
+
+  it('clears a Sol replay note when the conversation conflicts', async () => {
+    const initial = directory(1, []);
+    initial.revision = 1;
+    const sol = initial.residents.find(item => item.id === 'sol');
+    if (sol) {
+      sol.rank = 1;
+      sol.conversations = sol.conversations.map(item => item.id === 'reflection' ? { ...item, completed: true } : item);
+    }
+    const { harness, el, click, typeNote } = await open('/town/residents?resident=sol', initial);
+    click('Replay A reflection');
+    click('The study can wait.');
+    typeNote('Synthetic session note');
+    click('Finish talk');
+    writes[0].error({ status: 409, error: { code: 'dialogue_conflict' } });
+    harness.detectChanges();
+    expect(el.textContent).toContain('This conversation changed. The current ranks are shown.');
+    expect(el.querySelector('#dialogue-note')).toBeNull();
+    expect(el.querySelector('[data-selected-reply]')).toBeNull();
+    expect(el.querySelector('[data-chapter-visit]')).toBeNull();
+    expect(el.querySelector('[data-resident="sol"]')?.getAttribute('data-rank')).toBe('1');
+    expect(el.textContent).not.toContain('Synthetic session note');
+    expect(el.textContent).not.toContain('The study can wait.');
   });
 
   it('clears a reply and a note when Finance locks and ignores the losing response', async () => {
