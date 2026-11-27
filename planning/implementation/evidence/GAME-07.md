@@ -47,7 +47,7 @@ Commands ran from `/tmp/vivek-game-07` on the sources in tested SHA `9fee052de2b
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/642
 - Roadmap #134 append-only status-note URL: added after merge.
 - Merged/activation status: not merged yet.
 - Remaining external prerequisites or approved scope decisions: GAME-08 still authors Wren and Sol. Parent issues stay open.
