@@ -44,8 +44,8 @@ Commands ran from `/tmp/vivek-fixup-13` on tested SHA `ddbef00d92f27f153aedd2f17
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending open.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/643
 - Roadmap #134 append-only status-note URL: added after merge.
 - Merged/activation status: not merged yet.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Parent issues stay open. #277 stays open.
-- Next actor: open the pull request, wait for green checks, then merge. Do not deploy.
+- Next actor: wait for green checks, then merge. Do not deploy.
