@@ -50,7 +50,7 @@ The first `make e2e` timed out in `treasury-gallery.spec.ts` at 1280 light while
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded when the pull request opens. The body is only `Closes #614`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/647. The body is only `Closes #614`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: none. Projection and Stock research templates were reordered so their answer and ticker lead. Those pages are Planning destinations and are not owned by the other open leaves.
