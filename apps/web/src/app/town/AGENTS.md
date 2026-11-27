@@ -16,7 +16,6 @@ Clinic creates, corrects, and deletes weight, heart rate, blood pressure, sleep,
 Use [health constants](health/health.constants.ts) for units, thresholds, and badges.
 Do not duplicate conversion or XP math.
 
-Town reset fixtures and worker clock stay deterministic.
-Gym objects open [scene appearance](../platform/scene-appearance.ts).
+Optional quests record one game action once. Labeled samples award no XP.
 
 Town's y-down [frame](library-room.scene.ts) supports [paint picking](town-exterior.component.ts). Home projects one layout, checks revisions and entitlements, preserves unsupported records, clears drafts and notes on lock. Old catalog links open Home or Workshop. `/town/memory` skips matched shelves. No Stamps. [Workshop](workshop.component.ts) confirms fixed-price purchases and refunds through the Stamp ledger. Refunds require unused furniture. Locked, empty, and archived lots clear check-in marks on Undo, owner, or day change. The keepsake shelf stores nothing. Clinic and Gym read [loadTownHealthStages](health/index.ts).

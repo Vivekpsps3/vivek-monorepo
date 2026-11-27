@@ -66,6 +66,26 @@ describe('TownApiService', () => {
     expect(JSON.stringify(save.request.body)).not.toContain('note');
     save.flush({ room_id: 'study', revision: 1, items: [] });
   });
+  it('posts a quest step with only the action identity and expected revision', () => {
+    api.getQuests().subscribe();
+    const read = http.expectOne(request => request.url === '/api/town/quests');
+    expect(read.request.method).toBe('GET');
+    read.flush({ revision: 0, quests: [] });
+    const body = {
+      quest_id: 'make-a-home',
+      step_id: 'enter-home',
+      action_id: 'make-a-home:enter-home',
+      expected_revision: 0,
+    };
+    api.recordQuestStep(body).subscribe();
+    const post = http.expectOne(request => request.url === '/api/town/quests/steps');
+    expect(post.request.method).toBe('POST');
+    expect(post.request.body).toEqual(body);
+    expect(Object.keys(post.request.body as object).sort()).toEqual([
+      'action_id', 'expected_revision', 'quest_id', 'step_id',
+    ]);
+    post.flush({ revision: 1, quests: [] });
+  });
   it('preserves authentication errors for the expired state', () => {
     const error = jasmine.createSpy('error');
     api.getTown().subscribe({ error });

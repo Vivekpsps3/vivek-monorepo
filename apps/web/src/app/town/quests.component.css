@@ -1,0 +1,27 @@
+:host { display: block; color: var(--text); animation: none; }
+main { box-sizing: border-box; max-width: 40rem; margin: auto; padding: clamp(12px, 4vw, 32px); }
+header, .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+header { justify-content: space-between; margin-bottom: 16px; }
+h1, h2, p { margin: 0; overflow-wrap: anywhere; }
+article { display: grid; gap: 8px; margin-top: 20px; }
+ol { display: grid; gap: 12px; margin: 0; padding-left: 1.25rem; }
+li { display: grid; gap: 8px; justify-items: start; min-width: 0; }
+button, a.action {
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+a.action { display: inline-flex; align-items: center; text-decoration: none; }
+button:disabled { cursor: wait; opacity: .7; }
+:is(button, a, [tabindex]):focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  :host, main, button, a { animation: none; }
+}

@@ -58,6 +58,10 @@ LATER_THAN_BIRTHDAY = {
     "add_index:uq_town_stamp_entitlement_item",
     "add_table:town_room_layouts",
     "add_index:uq_town_room_layout_owner",
+    "add_table:town_quest_journals",
+    "add_table:town_quest_steps",
+    "add_index:ix_town_quest_steps_user_id",
+    "add_index:uq_town_quest_step",
 }
 
 
