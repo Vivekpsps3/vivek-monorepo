@@ -287,21 +287,21 @@ class GraphFixtureTests(unittest.TestCase):
     def test_reviewed_file_does_not_cover_a_new_file(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write(root, "apps/web/src/app/pixels/pixels-model.ts", "export const score = 1;\n")
+            write(root, "apps/web/src/app/hub/hub-load.ts", "export const load = 1;\n")
             write(
                 root,
-                "apps/web/src/app/hub/hub.component.ts",
-                "import { score } from '../pixels/pixels-model';\nexport const used = score;\n",
+                "apps/web/src/app/search/search-dialog.component.ts",
+                "import { load } from '../hub/hub-load';\nexport const used = load;\n",
             )
             write(
                 root,
-                "apps/web/src/app/hub/extra.ts",
-                "import { score } from '../pixels/pixels-model';\nexport const used = score;\n",
+                "apps/web/src/app/search/extra.ts",
+                "import { load } from '../hub/hub-load';\nexport const used = load;\n",
             )
             code, output = run_checker(root)
         self.assertEqual(code, 1)
-        self.assertIn("apps/web/src/app/hub/extra.ts", output)
-        self.assertNotIn("hub.component.ts", output)
+        self.assertIn("apps/web/src/app/search/extra.ts", output)
+        self.assertNotIn("search-dialog.component.ts", output)
 
     def test_one_import_owner_remains(self):
         checker = load_checker()

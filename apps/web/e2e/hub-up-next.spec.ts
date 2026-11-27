@@ -111,7 +111,8 @@ for (const width of [390, 1280]) {
       await page.goto('/hub');
       const next = page.getByRole('region', { name: 'Up next' });
       await expect(next.getByRole('link', { name: 'Check in' })).toBeVisible();
-      await expect(page.locator('.pixel-strip .pixel')).toHaveCount(91);
+      await expect(page.locator('.pixel-strip')).toHaveCount(0);
+      await expect(page.getByRole('region', { name: 'Year in Pixels' })).toHaveCount(0);
       const shortcuts = page.getByRole('navigation', { name: 'Shortcuts' });
       await expect(shortcuts.getByRole('listitem')).toHaveCount(7);
       await expect(shortcuts).toContainText('Health');
@@ -129,15 +130,22 @@ for (const width of [390, 1280]) {
         expect(box.y + box.height).toBeLessThanOrEqual(height);
       }
       const town = page.locator('.town-bar');
-      await expect(town.locator('details')).not.toHaveAttribute('open');
+      await expect(town.locator('details')).toHaveCount(0);
       await expect(town.locator('img')).toHaveCount(2);
+      await expect(town.getByRole('link', { name: 'Open Town', exact: true })).toHaveAttribute('href', '/town');
       expect(await town.locator('.town-preview').evaluate(el => el.getAnimations({ subtree: true }).length)).toBe(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-      for (const control of [next.getByRole('button', { name: 'Mark Check in done' }), page.getByRole('link', { name: 'Open Travel', exact: true }), page.getByRole('link', { name: 'Open Media', exact: true }), page.getByRole('link', { name: 'Open Finance', exact: true })]) {
+      await expect(page.getByRole('link', { name: 'Open Travel', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Open Media', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Open Finance', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Unlock', exact: true })).toHaveCount(1);
+      for (const control of [next.getByRole('button', { name: 'Mark Check in done' }), page.getByRole('region', { name: 'Next trip' }).getByRole('link', { name: 'Leaves tomorrow', exact: true }), page.getByRole('region', { name: 'In progress' }).getByRole('link', { name: /Example series/ })]) {
         const box = await control.boundingBox();
         expect(box!.height).toBeGreaterThanOrEqual(44);
       }
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      const populatedHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+      info.annotations.push({ type: 'populated-hub', description: `${width}x${height} ${theme} page ${populatedHeight}px` });
       await info.attach(`hub-up-next-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
       const preview = town.locator('.town-preview');
       await preview.scrollIntoViewIfNeeded();
@@ -149,10 +157,18 @@ for (const width of [390, 1280]) {
       await page.route('**/media/api/summary', route => route.fulfill({ json: { currently: [], upcoming: [], recent_reviews: [], next_episodes: [] } }));
       await page.route('**/media/api/calendar?*', route => route.fulfill({ json: { days: [] } }));
       await page.reload();
-      await expect(page.getByRole('region', { name: 'Next trip' })).toContainText('No trips yet');
-      await expect(page.getByRole('region', { name: 'In progress' })).toContainText('Nothing in progress');
-      await expect(page.locator('.compact-locked')).toContainText('Finance is locked');
-      expect((await page.getByRole('region', { name: 'Net worth' }).boundingBox())!.height).toBeLessThan(215);
+      await expect(page.getByRole('region', { name: 'Next trip' })).toHaveCount(0);
+      await expect(page.getByRole('region', { name: 'In progress' })).toHaveCount(0);
+      await expect(page.getByText('No trips yet')).toHaveCount(0);
+      await expect(page.getByText('Nothing in progress')).toHaveCount(0);
+      await expect(page.getByRole('region', { name: 'Up next' }).getByRole('link', { name: 'Unlock', exact: true })).toHaveCount(1);
+      await expect(page.getByRole('region', { name: 'Net worth' }).getByRole('link', { name: 'Unlock', exact: true })).toHaveCount(0);
+      await expect(page.locator('.compact-locked')).toContainText('Finance is locked. Unlock to see net worth.');
+      const netWorthHeight = (await page.getByRole('region', { name: 'Net worth' }).boundingBox())!.height;
+      const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+      info.annotations.push({ type: 'empty-hub', description: `${width}x${height} ${theme} page ${pageHeight}px net-worth ${netWorthHeight}px` });
+      expect(netWorthHeight).toBeLessThan(215);
+      expect(pageHeight).toBeLessThan(1400);
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       await info.attach(`hub-empty-${width}-${theme}`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
     });

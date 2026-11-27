@@ -609,14 +609,8 @@ test('TF5 Hub card stays free of Treasury and answers loading, retry, expiry, em
   const summary = await (await page.request.get('/api/town/summary?tz=America%2FLos_Angeles')).json() as {
     level: number; xp: number; level_xp_start: number; next_level_xp: number; name: string;
   };
-  const progress = town.locator('summary', { hasText: 'Town progress' });
-  const bar = town.getByRole('progressbar', { name: 'Town XP' });
-  await expect(bar).toBeHidden();
-  await progress.press('Enter');
-  await expect(bar).toHaveAttribute('aria-valuemin', String(summary.level_xp_start));
-  await expect(bar).toHaveAttribute('aria-valuemax', String(summary.next_level_xp));
-  await expect(bar).toHaveAttribute('aria-valuenow', String(summary.xp));
-  await expect(bar).toHaveAttribute('aria-valuetext', `Level ${summary.level}, ${summary.xp} of ${summary.next_level_xp} XP`);
+  await expect(town.getByRole('progressbar')).toHaveCount(0);
+  await expect(town).toContainText(`Lv ${summary.level} · ${summary.xp} / ${summary.next_level_xp} XP`);
   await expect(town).toContainText(`${summary.name}`);
   await expect(town).not.toContainText('Treasury');
   await expect(town).not.toContainText('Health');
@@ -639,14 +633,12 @@ test('TF5 Hub card stays free of Treasury and answers loading, retry, expiry, em
   }));
   expect(JSON.parse(credited).id).toBeGreaterThan(0);
   await page.reload();
-  await progress.click();
-  await expect(bar).toHaveAttribute('aria-valuenow', String(summary.xp + 10));
+  await expect(town).toContainText(`Lv ${summary.level} · ${summary.xp + 10} / ${summary.next_level_xp} XP`);
 
   await page.route('**/api/town/summary**', route => route.fulfill({
     status: 503, contentType: 'application/json', body: '{}',
   }));
   await page.goto('/hub');
-  await progress.click();
   await expect(town.getByText("Couldn't load your town.")).toBeVisible();
   const retry = town.getByRole('button', { name: 'Retry' });
   expect((await retry.boundingBox())?.height).toBeGreaterThanOrEqual(44);
@@ -654,25 +646,24 @@ test('TF5 Hub card stays free of Treasury and answers loading, retry, expiry, em
   await expect(retry).toBeFocused();
   await page.unroute('**/api/town/summary**');
   await page.keyboard.press('Enter');
-  await expect(town.getByRole('progressbar', { name: 'Town XP' })).toBeVisible();
+  await expect(town).toContainText(`Lv ${summary.level}`);
 
   await page.route('**/api/town/summary**', route => route.fulfill({
     status: 401, contentType: 'application/json', body: JSON.stringify({ detail: 'expired' }),
   }));
   await page.goto('/hub');
-  await progress.click();
   await expect(town.getByText('Your session ended. Sign in again to see your town.')).toBeVisible();
-  await expect(town.getByRole('progressbar', { name: 'Town XP' })).toHaveCount(0);
+  await expect(town.getByRole('progressbar')).toHaveCount(0);
   await page.unroute('**/api/town/summary**');
 
   expect((await request.post('/e2e/reset?seed=town-empty')).ok()).toBeTruthy();
   await page.goto('/hub');
-  await progress.click();
-  const start = town.getByRole('link', { name: 'Choose a first habit' });
-  await expect(town).toContainText('Start your town');
-  await expect(town).not.toContainText('habits done today');
-  expect((await start.boundingBox())?.height).toBeGreaterThanOrEqual(44);
-  await start.focus();
+  await expect(page.locator('section[aria-labelledby="town-heading"]')).toHaveCount(0);
+  await expect(page.getByText('Start your town')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Choose a first habit' })).toHaveCount(0);
+  const shortcut = page.getByRole('navigation', { name: 'Shortcuts' }).getByRole('link', { name: 'Town', exact: true });
+  await expect(shortcut).toHaveAttribute('href', '/town');
+  await shortcut.focus();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/town\/?$/);
 });

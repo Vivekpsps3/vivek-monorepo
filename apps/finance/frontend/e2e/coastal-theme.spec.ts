@@ -52,7 +52,7 @@ for (const width of [320, 390, 1280]) {
         .toBe(theme === 'light' ? 'rgb(118, 84, 34)' : 'rgb(230, 195, 126)');
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       await info.attach(`coastal-hub-${width}-${theme}`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
-      await finance.getByRole('link', { name: 'Open Finance', exact: true }).tap();
+      await finance.locator('a.quiet-title').tap();
       await expect(page.locator('app-dashboard')).toContainText(/\$\u2060?1,234\.56/);
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       await info.attach(`coastal-finance-${width}-${theme}`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
@@ -105,7 +105,7 @@ for (const mode of ['forced-colors', '200% text'] as const) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       await info.attach(`coastal-${mode}-${theme}`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
-      await page.getByRole('link', { name: 'Open Finance', exact: true }).tap();
+      await page.getByRole('region', { name: 'Net worth', exact: true }).locator('a.quiet-title').tap();
       await expect(page.locator('app-dashboard')).toContainText(/\$\u2060?1,234\.56/);
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       await info.attach(`coastal-finance-${mode}-${theme}`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
