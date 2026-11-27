@@ -16,7 +16,7 @@ import { emptyWorkoutDraft, type WorkoutDraft } from './workout';
       [today]="today"
       [units]="units"
       [draft]="draft"
-      (draftChange)="changes = changes + 1" />
+      (draftChange)="draft = $event; changes = changes + 1" />
   `,
 })
 class RestHost {
@@ -224,4 +224,54 @@ describe('workout rest timer dialog', () => {
     expect(started).toBe(0);
     fixture.destroy();
   }));
+
+  it('keeps the next set field focused and corrects a saved set in place', () => {
+    const { el, host, fixture } = show();
+    host.draft = emptyWorkoutDraft('session', '2026-10-29');
+    fixture.detectChanges();
+    expect(el.querySelector('#health-workout-state')).toBeNull();
+    expect(el.textContent).toContain('Save draft');
+    expect(el.textContent).toContain('Finish session');
+    expect(el.textContent).not.toContain('Complete session');
+    expect(el.querySelector('form')?.getAttribute('data-session-state')).toBe('draft');
+    const type = (selector: string, value: string): void => {
+      const input = el.querySelector(selector);
+      if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) throw new Error(selector);
+      input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      fixture.detectChanges();
+    };
+    type('#health-workout-name', 'Synthetic press');
+    type('#health-workout-load', '40');
+    type('#health-workout-reps', '5');
+    restButton(el, 'health-workout-add-set').click();
+    TestBed.tick();
+    const load = el.querySelector('#health-workout-load');
+    expect(document.activeElement).toBe(load);
+    expect(load instanceof HTMLInputElement && load.value).toBe('');
+    const row = el.querySelector('[data-entered-set]');
+    if (!(row instanceof HTMLElement)) throw new Error('missing set');
+    expect(row.textContent).not.toContain('Earlier');
+    expect(row.textContent).toContain('5 reps');
+    const edit = row.querySelector('button');
+    if (!(edit instanceof HTMLButtonElement)) throw new Error('missing edit');
+    edit.click();
+    TestBed.tick();
+    const reps = el.querySelector('[id^="health-set-reps-"]');
+    if (!(reps instanceof HTMLInputElement)) throw new Error('missing reps');
+    expect(document.activeElement?.id.startsWith('health-set-load-')).toBeTrue();
+    reps.value = '8';
+    reps.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    expect(row.textContent).toContain('8 reps');
+    expect(el.querySelector('[id^="health-move-earlier-"]')).not.toBeNull();
+
+    host.draft = { ...host.draft, state: 'completed', clientId: 'hlt_syntheticcompleted0001' };
+    fixture.detectChanges();
+    expect(el.textContent).not.toContain('Save draft');
+    expect(el.textContent).not.toContain('Finish session');
+    expect(el.textContent).toContain('Save');
+    expect(el.querySelector('#health-set-completed-' + (row.getAttribute('data-entered-set') ?? ''))).not.toBeNull();
+    fixture.destroy();
+  });
 });
