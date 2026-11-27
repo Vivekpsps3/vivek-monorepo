@@ -50,7 +50,7 @@ The first full health-entry Playwright run failed because `hlt_SyntheticLabEntry
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded after the pull request opens. The body is only `Closes #620`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/655. The body is only `Closes #620`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: none. The health-room stylesheet was edited with the template so the single row wraps. Harbor Rhythm files were not needed.
