@@ -54,8 +54,8 @@ Commands ran from `/tmp/vivek-game-03` on tested SHA `2abcd75610ed9d786c98d8cdb1
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened from `agent/game-03` with body `Closes #472`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/637
 - Roadmap #134 append-only status-note URL: added after merge.
-- Merged/activation status: not merged yet.
+- Merged/activation status: not merged yet. The pull request body is `Closes #472`.
 - Remaining external prerequisites or approved scope decisions: GAME-04 still owns chapter rewards. This leaf grants no Stamps and no XP.
 - Next actor: merge after GitHub checks pass. Do not deploy. Leave #304 and #277 open.
