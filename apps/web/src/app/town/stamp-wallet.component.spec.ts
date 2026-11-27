@@ -52,6 +52,7 @@ describe('Stamp wallet', () => {
     expect(el.textContent).toContain('Minigames');
     expect(el.textContent).toContain('No receipts yet.');
     expect(el.querySelector('a[href="/town/workshop"]')).not.toBeNull();
+    expect(el.querySelector('a[href="/town/quests"]')).not.toBeNull();
     expect(el.querySelector('a[href="/town/memory"]')).not.toBeNull();
   });
 

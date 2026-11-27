@@ -3,6 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { timeout } from 'rxjs';
 import { silentErrorToast } from '@vivek/ui';
 import { HUB_SUMMARY_DEADLINE_MS } from '../hub/hub-load';
+
+export { HUB_SUMMARY_DEADLINE_MS };
 import type { HomeLayoutWrite } from './home-layout';
 import type { KeepsakeShelf } from './keepsake.types';
 import type { Habit, TownResponse } from './town.types';
@@ -63,6 +65,34 @@ export interface StampRefund {
   catalog_id: string;
   spend_receipt_id: number;
 }
+export interface QuestStepView {
+  id: string;
+  label: string;
+  action_id: string;
+  source: 'library' | 'travel' | 'memory' | null;
+  sample_action_id: string | null;
+  sample_label: string | null;
+  sample_detail: string | null;
+  recorded_action: string | null;
+}
+export interface QuestView {
+  id: string;
+  title: string;
+  detail: string;
+  completed: number;
+  total: number;
+  steps: QuestStepView[];
+}
+export interface QuestJournal {
+  revision: number;
+  quests: QuestView[];
+}
+export interface QuestStepWrite {
+  quest_id: string;
+  step_id: string;
+  action_id: string;
+  expected_revision: number;
+}
 
 @Injectable({ providedIn: 'root' })
 export class TownApiService {
@@ -110,5 +140,11 @@ export class TownApiService {
   }
   saveLayout(room: string, body: HomeLayoutWrite) {
     return this.http.put<RoomLayout>(`/api/town/layouts/${encodeURIComponent(room)}`, body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
+  getQuests() {
+    return this.http.get<QuestJournal>('/api/town/quests', this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
+  recordQuestStep(body: QuestStepWrite) {
+    return this.http.post<QuestJournal>('/api/town/quests/steps', body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
   }
 }

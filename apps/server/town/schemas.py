@@ -316,3 +316,28 @@ class RoomLayoutView(_Shape):
     revision: int
     items: list[RoomLayoutItem]
     recovery_required: Literal[True] | None = None
+
+
+class QuestStepView(_Shape):
+    id: str
+    label: str
+    action_id: str
+    source: Literal["library", "travel", "memory"] | None
+    sample_action_id: str | None
+    sample_label: str | None
+    sample_detail: str | None
+    recorded_action: str | None
+
+
+class QuestView(_Shape):
+    id: str
+    title: str
+    detail: str
+    completed: int
+    total: int
+    steps: list[QuestStepView]
+
+
+class QuestJournalView(_Shape):
+    revision: int
+    quests: list[QuestView]

@@ -119,6 +119,12 @@
       "status": "mounted"
     },
     {
+      "id": "town-quests",
+      "path": "town/quests",
+      "owner": "town",
+      "status": "mounted"
+    },
+    {
       "id": "town-home",
       "path": "town/home",
       "owner": "town",
