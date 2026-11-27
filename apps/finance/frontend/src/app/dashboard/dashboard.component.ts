@@ -302,6 +302,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.firstSteps.filter(step => step.done).length;
   }
 
+  /** Steps whose action is already on the starter card or the empty balance tile. */
+  get firstStepRows(): FirstStep[] {
+    return this.firstSteps.filter(step => !this.repeatsStarterAction(step.id));
+  }
+
+  get starterCardVisible(): boolean {
+    return !this.isLoading && !this.error && !!this.netWorth && this.isStarterState && !this.incomeOccurrences.length;
+  }
+
+  repeatsStarterAction(id: FirstStep['id']): boolean {
+    const factsVisible = !this.isLoading && !this.error && !!this.netWorth && !this.starterCardVisible;
+    if (id === 'balance') return this.starterCardVisible || (factsVisible && !this.hasBalances);
+    return id === 'activity' && this.starterCardVisible;
+  }
+
   get showFirstSteps(): boolean {
     if (this.isStarterState) return true;
     return this.guide.firstStepsRequested() || (!this.firstStepsHidden && this.firstStepsDoneCount < 4);
@@ -338,7 +353,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       case 'holdings':
         return { path: '/finance/have', params: { t: 'holdings' } };
       case 'activity':
-        return { path: '/finance/spending', params: { add: '1' } };
+        return { path: '/finance/imports', params: { start: 'bank' } };
       case 'recurring':
         return { path: '/finance/pay', params: null };
     }
