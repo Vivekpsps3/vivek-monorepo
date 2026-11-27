@@ -350,7 +350,7 @@ test.describe('Town exterior', () => {
     expect(await clinic.innerText()).not.toMatch(/\d/);
     await clinic.click();
     await expect(page).toHaveURL(/\/town\/clinic\/?$/);
-    await expect(page.getByText('Finance is locked. Unlock to see measurements.')).toBeVisible();
+    await expect(page.getByText('Finance is locked. Unlock to open Clinic.')).toBeVisible();
     await page.goBack();
 
     await page.setViewportSize({ width: 390, height: 844 });

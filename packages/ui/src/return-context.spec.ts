@@ -13,8 +13,8 @@ describe('return context', () => {
       '/travel/calendar?month=2026-11',
       '/travel/terminal?object=board&trip=4&leg=9&day=2026-12-12',
       '/settings/calendars',
-      '/town/clinic?entry=hlt_SyntheticWeightEntryAB',
-      '/town/gym?entry=hlt_SyntheticLiftEntryABCD',
+      '/town/clinic?entry=hlt_SyntheticWeightEntryAB&object=weight',
+      '/town/gym?entry=hlt_SyntheticLiftEntryABCD&object=desk&up=cabinet',
       '/town/cosmetics?item=oak-seat&part=night',
       '/town/home/living?item=oak-seat&part=night',
       '/town/home/study?item=desk&part=day&object=study-desk',
@@ -51,6 +51,8 @@ describe('return context', () => {
     expect(returnPath('/media/library?kind=book&face=text&face=spine')).toBe('/media/library?kind=book');
     expect(returnPath('/town/clinic?entry=hlt_short&kg=80')).toBe('/town/clinic');
     expect(returnPath('/town/clinic?entry=hlt_SyntheticWeightEntryAB&entry=hlt_SyntheticLiftEntryABCD')).toBe('/town/clinic');
+    expect(returnPath('/town/clinic?object=station&up=wall')).toBe('/town/clinic');
+    expect(returnPath('/town/gym?object=bp&up=176.4')).toBe('/town/gym');
     expect(returnPath('/town/gym?entry=80&weight=176.4')).toBe('/town/gym');
     expect(returnPath('/town/home/living?object=living-frame&note=secret&scale=1.5')).toBe('/town/home/living?object=living-frame');
     expect(returnPath('/town/home/study?object=living-frame')).toBe('/town/home/study');

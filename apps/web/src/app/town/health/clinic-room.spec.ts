@@ -7,12 +7,10 @@ import {
   clinicObjectId,
   clinicRoomDetail,
   clinicUnitLine,
-  type ClinicGate,
   type ClinicObjectId,
 } from './clinic-room';
 
 describe('Clinic room geometry', () => {
-  const gates: ClinicGate[] = ['locked', 'setup', 'unavailable', 'ready'];
   const ids: Array<ClinicObjectId | null> = [null, 'reception', 'weight', 'rhr', 'bp', 'sleep', 'labs', 'checkups'];
 
   it('picks the front object and fades whatever covers the selection', () => {
@@ -42,13 +40,11 @@ describe('Clinic room geometry', () => {
     expect(CLINIC_PIECES).toHaveSize(7);
   });
 
-  it('keeps locked, empty, and unavailable copy free of digits and advice', () => {
-    for (const gate of gates) {
-      for (const id of ids) {
-        const detail = clinicRoomDetail(id, gate);
-        expect(detail).not.toMatch(/\d/);
-        expect(detail).not.toMatch(/normal|healthy|diagnos/i);
-      }
+  it('keeps object descriptions free of digits and advice', () => {
+    for (const id of ids) {
+      const detail = clinicRoomDetail(id);
+      expect(detail).not.toMatch(/\d/);
+      expect(detail).not.toMatch(/normal|healthy|diagnos/i);
     }
     const units = DEFAULT_HEALTH_UNITS;
     expect(clinicUnitLine('weight', units)).toBe('Shown in pounds. Stored in kilograms.');

@@ -63,47 +63,15 @@ export const CLINIC_PIECES: readonly ClinicPiece[] = [
   piece('checkups', 7, 508, 276, 120, 72, 'Checkup book'),
 ];
 
-const DETAILS: Record<ClinicGate, Record<ClinicObjectId | 'room', string>> = {
-  locked: {
-    room: 'Choose reception, a vital station, the lab folders, or the checkup book. Digits stay hidden until Finance is unlocked.',
-    reception: 'Reception keeps the stations. Digits stay hidden until Finance is unlocked.',
-    weight: 'The weight station shows the latest reading and its history. Digits stay hidden until Finance is unlocked.',
-    rhr: 'The heart rate station shows the latest reading and its history. Digits stay hidden until Finance is unlocked.',
-    bp: 'The blood pressure station shows the latest reading and its history. Digits stay hidden until Finance is unlocked.',
-    sleep: 'The sleep station shows the latest reading and its history. Digits stay hidden until Finance is unlocked.',
-    labs: 'The lab folders keep each result with its date and unit. Digits stay hidden until Finance is unlocked.',
-    checkups: 'The checkup book keeps each visit with its date. Digits stay hidden until Finance is unlocked.',
-  },
-  setup: {
-    room: 'Set up Finance before this clinic can open.',
-    reception: 'Reception is here. Set up Finance to see a measurement.',
-    weight: 'The weight station is here. Set up Finance to record a weight.',
-    rhr: 'The heart rate station is here. Set up Finance to record a heart rate.',
-    bp: 'The blood pressure station is here. Set up Finance to record a blood pressure.',
-    sleep: 'The sleep station is here. Set up Finance to record sleep.',
-    labs: 'The lab folders are here. Set up Finance to record a result.',
-    checkups: 'The checkup book is here. Set up Finance to record a visit.',
-  },
-  unavailable: {
-    room: 'This clinic is here, and measurements are unavailable right now.',
-    reception: 'Reception is here. Measurements are unavailable right now.',
-    weight: 'The weight station is here. Measurements are unavailable right now.',
-    rhr: 'The heart rate station is here. Measurements are unavailable right now.',
-    bp: 'The blood pressure station is here. Measurements are unavailable right now.',
-    sleep: 'The sleep station is here. Measurements are unavailable right now.',
-    labs: 'The lab folders are here. Results are unavailable right now.',
-    checkups: 'The checkup book is here. Visits are unavailable right now.',
-  },
-  ready: {
-    room: 'Reception, the vital stations, the lab folders, and the checkup book open the same records.',
-    reception: 'Choose a station to see the latest reading, its date, and the history.',
-    weight: 'The latest weight, its date, and the history are here. Correcting a reading uses the measurement editor.',
-    rhr: 'The latest heart rate, its date, and the history are here. Correcting a reading uses the measurement editor.',
-    bp: 'The latest blood pressure, its date, and the history are here. Correcting a reading uses the measurement editor.',
-    sleep: 'The latest sleep, its date, and the history are here. Correcting a reading uses the measurement editor.',
-    labs: 'Open a folder to see each result with its value, unit, date, and range.',
-    checkups: 'The checkup book lists each visit with its measured date, including an older visit.',
-  },
+const DETAILS: Record<ClinicObjectId | 'room', string> = {
+  room: 'Reception, the vital stations, the lab folders, and the checkup book open the same records.',
+  reception: 'Choose a station to see the latest reading, its date, and the history.',
+  weight: 'The latest weight, its date, and the history are here. Correcting a reading uses the measurement editor.',
+  rhr: 'The latest heart rate, its date, and the history are here. Correcting a reading uses the measurement editor.',
+  bp: 'The latest blood pressure, its date, and the history are here. Correcting a reading uses the measurement editor.',
+  sleep: 'The latest sleep, its date, and the history are here. Correcting a reading uses the measurement editor.',
+  labs: 'Open a folder to see each result with its value, unit, date, and range.',
+  checkups: 'The checkup book lists each visit with its measured date, including an older visit.',
 };
 
 const TITLES: Record<ClinicVitalId, string> = {
@@ -156,8 +124,8 @@ export function clinicRoomHeading(id: ClinicObjectId | null): string {
   return CLINIC_PIECES.find(item => item.asset.id === id)?.label ?? 'Clinic';
 }
 
-export function clinicRoomDetail(id: ClinicObjectId | null, gate: ClinicGate): string {
-  return DETAILS[gate][id ?? 'room'];
+export function clinicRoomDetail(id: ClinicObjectId | null): string {
+  return DETAILS[id ?? 'room'];
 }
 
 export function clinicFrames(): readonly ClinicFrame[] {

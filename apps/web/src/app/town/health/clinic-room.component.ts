@@ -54,7 +54,7 @@ export class ClinicRoomComponent {
   protected readonly frames = clinicFrames();
   protected readonly room = CLINIC_ROOM;
   protected readonly heading = computed(() => clinicRoomHeading(this.selected()));
-  protected readonly detail = computed(() => clinicRoomDetail(this.selected(), this.gate()));
+  protected readonly detail = computed(() => clinicRoomDetail(this.selected()));
   protected readonly faded = computed(() => clinicFaded(this.selected()));
   protected readonly sheet = computed(() => this.narrow() && this.selected() !== null);
   protected readonly cameraTransform = computed(() => {
