@@ -53,7 +53,7 @@ This Chromium exposes `<summary>` as a disclosure triangle, so the memories jour
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded after the pull request is opened. The body is only `Closes #592`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/656. The body is only `Closes #592`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: none. This leaf does not need Immich, Obsidian, or an off-host backup.
