@@ -75,12 +75,20 @@ export interface QuestStepView {
   sample_detail: string | null;
   recorded_action: string | null;
 }
+export interface QuestKeepsake {
+  id: string;
+  name: string;
+  kind: 'postcard' | 'seal' | 'pennant' | 'print';
+  kept: boolean;
+}
 export interface QuestView {
   id: string;
   title: string;
   detail: string;
   completed: number;
   total: number;
+  reward_stamps: number;
+  keepsake: QuestKeepsake;
   steps: QuestStepView[];
 }
 export interface QuestJournal {

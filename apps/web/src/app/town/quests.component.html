@@ -3,7 +3,7 @@
     <a class="action" routerLink="/town">Back to Town</a>
     <h1>Optional quests</h1>
   </header>
-  <p>Optional. No deadline.</p>
+  <p>Optional. No deadline. Leaving does not expire a step or remove a reward.</p>
   @if (loadError()) {
     <p id="quest-load-error" role="alert" tabindex="-1">Optional quests are unavailable right now.</p>
     <button type="button" class="action" (click)="load()">Retry</button>
@@ -16,13 +16,21 @@
       <article [attr.data-quest]="quest.id" [attr.data-completed]="quest.completed">
         <h2>{{ quest.title }}</h2>
         <p>{{ quest.detail }}</p>
+        <p>{{ quest.reward_stamps }} Stamps and the {{ quest.keepsake.name }}, once.</p>
+        @if (quest.keepsake.kept) {
+          <p class="keepsake" [attr.data-keepsake]="quest.keepsake.id">{{ quest.keepsake.name }}</p>
+        }
         <p>{{ quest.completed }} of {{ quest.total }}</p>
         <ol>
           @for (step of quest.steps; track step.id) {
             <li [attr.data-step]="step.id" [attr.data-recorded]="step.recorded_action ? 'true' : 'false'" [attr.data-offer]="offer(quest, step)">
               <span>{{ step.label }}</span>
               @if (offer(quest, step) === 'done') {
-                <span>Recorded.</span>
+                @if (step.sample_action_id && step.recorded_action === step.sample_action_id) {
+                  <span>Recorded. {{ step.sample_label }}. Labeled sample.</span>
+                } @else {
+                  <span>Recorded.</span>
+                }
               } @else if (offer(quest, step) === 'wait') {
                 <span>Checking the {{ sourceName(step.source) }}.</span>
               } @else if (offer(quest, step) === 'record') {
