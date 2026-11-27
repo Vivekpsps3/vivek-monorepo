@@ -161,21 +161,6 @@ REVIEWED: tuple[Reviewed, ...] = (
         "web-platform",
     ),
     Reviewed(
-        "apps/web/src/app/hub/hub.component.ts",
-        "apps/web/src/app/pixels/pixels-data.service.ts",
-        "web-hub",
-    ),
-    Reviewed(
-        "apps/web/src/app/hub/hub.component.ts",
-        "apps/web/src/app/pixels/pixels-model.ts",
-        "web-hub",
-    ),
-    Reviewed(
-        "apps/web/src/app/hub/pixels-hub-card.ts",
-        "apps/web/src/app/pixels/pixels-dates.ts",
-        "web-hub",
-    ),
-    Reviewed(
         "apps/web/src/app/search/search-dialog.component.ts",
         "apps/web/src/app/hub/hub-load.ts",
         "web-search",

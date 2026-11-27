@@ -76,7 +76,8 @@ test('episode Undo survives navigation away from the Hub', async ({ page, reques
   await seedShow(request, 'Navigation show');
   await openHub(page, theme, violations);
   await mediaCard(page).getByRole('button', { name: /Watched S1E1/ }).click();
-  await page.getByRole('link', { name: 'Open Media', exact: true }).click();
+  await page.locator('.app-switcher__toggle').click();
+  await page.locator('#app-switcher-menu').getByRole('link', { name: 'Media', exact: true }).click();
   await expect(page).toHaveURL(/\/media\/?$/);
   await page.locator('.toast').filter({ hasText: 'Marked S1E1 watched' }).getByRole('button', { name: 'Undo' }).click();
   await expect(page.locator('.toast').filter({ hasText: 'S1E1 is next again.' })).toBeVisible();

@@ -27,18 +27,6 @@ import {
 } from './hub-load';
 import { townIsEmpty, townStreakText, type TownSummary } from './town-hub-card';
 import {
-  adjacentHubStripDate,
-  hubStripLabel,
-  hubStripRows,
-  hubStripSummary,
-  hubStripTabDate,
-  hubStripWindow,
-  isHubStripKey,
-  type HubStripCell,
-} from './pixels-hub-card';
-import { PixelsDataService } from '../pixels/pixels-data.service';
-import { withoutFinance, yearStats } from '../pixels/pixels-model';
-import {
   journalKindLabel,
   mediaReleaseLabel,
 } from './hub-summary';
@@ -76,7 +64,7 @@ interface FinanceView {
     UiStateComponent,
   ],
   templateUrl: './hub.component.html',
-  styleUrls: ['./hub.component.css', '../pixels/pixels.css'],
+  styleUrl: './hub.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HubComponent implements OnInit {
@@ -89,7 +77,6 @@ export class HubComponent implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
   private readonly episodeUndo = inject(NextEpisodeUndoService);
-  private readonly pixelsData = inject(PixelsDataService);
 
   name = '';
   billsDueThisWeek: number | null = null;
@@ -146,6 +133,29 @@ export class HubComponent implements OnInit {
   travelState: HubCardState = 'loading';
   travel: TravelSummary | null = null;
   get trip(): TravelTrip | null { return this.travel?.next_trip ?? null; }
+
+  /** Failure stays visible. An empty trip card repeats the Trips shortcut. */
+  get showTrip(): boolean {
+    return this.travelState === 'loading'
+      || this.travelState === 'unavailable'
+      || this.travelState === 'stale'
+      || this.travelState === 'expired'
+      || this.trip != null;
+  }
+
+  /** Continuation only. Dated releases already appear in Up next. */
+  get showContinuation(): boolean {
+    if (this.mediaState === 'loading' || this.mediaState === 'unavailable' || this.mediaState === 'stale' || this.mediaState === 'expired') return true;
+    const media = this.media;
+    if (!media) return false;
+    return media.currently.length > 0 || media.upcoming.length > 0 || media.recent_reviews.length > 0 || media.next_episodes.length > 0;
+  }
+
+  /** A small preview when the town has habits. Empty setup stays on the Town shortcut. */
+  get showTown(): boolean {
+    if (this.townState === 'loading' || this.townState === 'unavailable' || this.townState === 'stale' || this.townState === 'expired') return true;
+    return this.town != null && !townIsEmpty(this.town);
+  }
   travelPending = false;
   travelUpdatedAt: number | null = null;
   mediaState: HubCardState = 'loading';
@@ -156,16 +166,8 @@ export class HubComponent implements OnInit {
   town: TownSummary | null = null;
   townPending = false;
   townUpdatedAt: number | null = null;
-  pixelsState: HubCardState = 'loading';
-  pixels: Parameters<typeof withoutFinance>[0] | null = null;
-  pixelsPending = false;
-  pixelsUpdatedAt: number | null = null;
 
-  /** The one strip cell in the tab order. Arrows move it; Enter and click open that date. */
-  private stripRoving: string | null = null;
   private generation = 0;
-  private pixelsLoad = 0;
-  private pixelsClearGeneration = 0;
   private financeGeneration = 0;
   userId: number | null | undefined = undefined;
   private travelCtrl: AbortController | null = null;
@@ -186,7 +188,6 @@ export class HubComponent implements OnInit {
       if (event instanceof NavigationEnd) this.syncAgenda();
     });
     this.episodeUndo.restored$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.onMediaNextReload());
-    this.pixelsData.financeCleared$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.onPixelsFinanceCleared());
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       if (params.get('settings') === 'account') {
         void this.router.navigateByUrl('/settings/account', { replaceUrl: true });
@@ -205,13 +206,11 @@ export class HubComponent implements OnInit {
           void this.loadMedia();
           void this.loadTown();
           void this.loadFinance();
-          void this.loadPixels();
         } else {
           this.travelState = 'empty';
           this.mediaState = 'empty';
           this.townState = 'empty';
           this.financeState = 'locked';
-          this.pixelsState = 'empty';
         }
       }
       this.userId = nextId;
@@ -221,7 +220,6 @@ export class HubComponent implements OnInit {
     void this.loadMedia();
     void this.loadTown();
     void this.loadFinance();
-    void this.loadPixels();
     this.viewInitialized = true;
   }
 
@@ -305,7 +303,7 @@ export class HubComponent implements OnInit {
       const rowLink = this.host.nativeElement.querySelector<HTMLElement>(
         `.next-episode-row a[href="/media/item/${item.entry_id}"]`,
       );
-      const heading = this.host.nativeElement.querySelector<HTMLElement>('.media-open');
+      const heading = this.host.nativeElement.querySelector<HTMLElement>('#media-heading');
       (rowLink ?? heading)?.focus();
     });
   }
@@ -319,63 +317,6 @@ export class HubComponent implements OnInit {
     if (this.townPending) return;
     this.townPending = true;
     void this.loadTown();
-  }
-
-  retryPixels(): void {
-    if (this.pixelsPending) return;
-    this.pixelsPending = true;
-    void this.loadPixels();
-  }
-
-  pixelRows(): HubStripCell[][] {
-    return this.pixels ? hubStripRows(this.pixels.days) : [];
-  }
-
-  pixelsSummary(): { activeLine: string; runLine: string } | null {
-    if (!this.pixels) return null;
-    return hubStripSummary(yearStats(this.pixels.days, this.pixels.financeStatus));
-  }
-
-  stripLabel(cell: HubStripCell): string {
-    return hubStripLabel(cell);
-  }
-
-  stripTabDate(): string {
-    return hubStripTabDate(this.stripRoving, this.stripDates(), todayIsoDate());
-  }
-
-  onStripKey(event: KeyboardEvent): void {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    const date = target.getAttribute('data-date');
-    if (!date) return;
-    if (event.key === 'Enter' || event.key === ' ') {
-      const cell = this.pixelRows().flat().find(item => item.date === date);
-      if (!cell) return;
-      event.preventDefault();
-      this.openPixelDay(cell);
-      return;
-    }
-    if (!isHubStripKey(event.key)) return;
-    event.preventDefault();
-    const next = adjacentHubStripDate(date, event.key, this.stripDates());
-    if (!next || next === date) return;
-    this.stripRoving = next;
-    this.cdr.markForCheck();
-    const node = this.host.nativeElement.querySelector(`[data-date="${next}"]`);
-    if (node instanceof HTMLElement) node.focus();
-  }
-
-  /** Past, today, and future cells open that date. Pointer and keyboard share this path. */
-  openPixelDay(cell: HubStripCell): void {
-    this.stripRoving = cell.date;
-    void this.router.navigate(['/pixels'], {
-      queryParams: { year: cell.date.slice(0, 4), day: cell.date },
-    });
-  }
-
-  private stripDates(): readonly string[] {
-    return this.pixelRows().flatMap(row => row.map(cell => cell.date)).sort();
   }
 
   townStreak(summary: TownSummary): string | null {
@@ -404,23 +345,18 @@ export class HubComponent implements OnInit {
     this.travel = null;
     this.media = null;
     this.town = null;
-    this.pixels = null;
     this.travelPending = false;
     this.mediaPending = false;
     this.townPending = false;
-    this.pixelsPending = false;
     this.financePending = false;
     this.travelUpdatedAt = null;
     this.mediaUpdatedAt = null;
     this.financeUpdatedAt = null;
     this.townUpdatedAt = null;
-    this.pixelsUpdatedAt = null;
-    this.stripRoving = null;
     this.clearFinanceNumbers();
     this.travelState = 'loading';
     this.mediaState = 'loading';
     this.townState = 'loading';
-    this.pixelsState = 'loading';
     this.financeState = 'loading';
   }
 
@@ -498,56 +434,6 @@ export class HubComponent implements OnInit {
       this.town = settled.data;
     } finally {
       if (this.townCtrl === ctrl) this.townPending = false;
-      this.cdr.markForCheck();
-    }
-  }
-
-  private onPixelsFinanceCleared(): void {
-    this.pixelsClearGeneration += 1;
-    if (!this.pixels) return;
-    this.pixels = withoutFinance(this.pixels, todayIsoDate());
-    this.cdr.markForCheck();
-  }
-
-  private async loadPixels(): Promise<void> {
-    const generation = this.generation;
-    const load = ++this.pixelsLoad;
-    const clearGeneration = this.pixelsClearGeneration;
-    if (!this.pixels) this.pixelsState = 'loading';
-    this.cdr.markForCheck();
-    const current = () => generation === this.generation && load === this.pixelsLoad;
-    try {
-      const today = todayIsoDate();
-      const range = hubStripWindow(today);
-      const result = await this.pixelsData.load({
-        from: range.start,
-        to: range.end,
-        profile: false,
-        includeTrips: false,
-        today,
-      });
-      if (!current()) return;
-      if (result.status === 'dropped') return;
-      if (result.status === 'expired') {
-        this.pixels = null;
-        this.pixelsState = 'expired';
-        return;
-      }
-      if (result.status === 'unavailable') {
-        if (this.pixels && yearStats(this.pixels.days, this.pixels.financeStatus).active > 0) {
-          this.pixelsState = 'stale';
-          return;
-        }
-        this.pixels = null;
-        this.pixelsState = 'unavailable';
-        return;
-      }
-      const snapshot = clearGeneration === this.pixelsClearGeneration ? result.snapshot : withoutFinance(result.snapshot, today);
-      this.pixels = snapshot;
-      this.pixelsUpdatedAt = Date.now();
-      this.pixelsState = 'ready';
-    } finally {
-      if (load === this.pixelsLoad) this.pixelsPending = false;
       this.cdr.markForCheck();
     }
   }
