@@ -953,6 +953,11 @@ export class HealthRoomComponent implements OnInit {
     if (workout) this.workoutDraft.set(reformatWorkoutDraft(workout, { ...next, weight: previous }, next));
   }
 
+  /** Accessible name for the one edit control on a lab or checkup row. */
+  protected rowLabel(rows: readonly { clientId: string; label: string }[], clientId: string): string {
+    return rows.find(row => row.clientId === clientId)?.label ?? '';
+  }
+
   protected showMore(kind: HealthStat['kind']): void {
     const series = this.clinicSeries().find(item => item.kind === kind);
     const page = this.clinicPages().find(item => item.kind === kind);

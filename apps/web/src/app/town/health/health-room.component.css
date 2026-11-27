@@ -158,30 +158,73 @@
   stroke: none;
 }
 
-.wall-table,
-.archive-table {
+.wall-table {
   width: 100%;
   max-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
-.wall-table caption,
-.archive-table caption {
+.wall-table caption {
   text-align: start;
   margin-block: var(--space-2);
   font-weight: 600;
 }
 
 .wall-table th,
-.wall-table td,
-.archive-table th,
-.archive-table td {
+.wall-table td {
   padding: var(--space-2);
   border-block-end: 1px solid var(--border);
   text-align: start;
   vertical-align: top;
   overflow-wrap: anywhere;
+}
+
+.clinic-trend {
+  margin: 0;
+  min-width: 0;
+}
+
+.clinic-trend figcaption {
+  margin: 0;
+}
+
+.clinic-trend svg {
+  display: block;
+  width: 100%;
+  max-width: 16rem;
+  height: 44px;
+  transition: none;
+  animation: none;
+}
+
+.clinic-trend polyline {
+  fill: none;
+  stroke: var(--chart-1);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.clinic-trend circle {
+  fill: var(--chart-1);
+  stroke: none;
+}
+
+.archive-field {
+  display: grid;
+  flex: 1 1 7rem;
+  min-width: 0;
+  gap: 2px;
+}
+
+.archive-key {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.archive-field .entry-label {
+  flex: 0 1 auto;
 }
 
 .record-cabinet {
@@ -298,7 +341,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .health-room,
-  .wall-chart svg {
+  .wall-chart svg,
+  .clinic-trend svg {
     transition: none;
     animation: none;
   }

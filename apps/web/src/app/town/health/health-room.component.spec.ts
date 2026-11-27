@@ -1085,15 +1085,23 @@ describe('Health room shell', () => {
     expect(other?.textContent).toBe('Ω-other');
     expect(marker?.closest('.lab-block')?.querySelectorAll('[data-health-kind="lab"]').length).toBe(3);
     expect(other?.closest('.lab-block')?.querySelectorAll('[data-health-kind="lab"]').length).toBe(1);
-    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('below range');
-    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('in range');
-    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('above range');
-    expect(other?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('no range');
-    expect(el.textContent).toContain(`Lab · Ω-marker · 9 u · below range · 10 to 20 u · ${DAY}`);
-    expect(el.textContent).toContain(`Lab · Ω-marker · 15 u · in range · 10 to 20 u · ${DAY}`);
-    expect(el.textContent).toContain(`Lab · Ω-marker · 21 u · above range · 10 to 20 u · ${DAY}`);
-    expect(el.textContent).toContain(`Lab · Ω-other · 4 u · no range · ${DAY}`);
-    expect(el.textContent).toContain(`Checkup · Synthetic visit note · ${DAY}`);
+    const markerChart = marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]');
+    expect(markerChart?.querySelector('polyline')?.getAttribute('points')).toContain(',');
+    expect(markerChart?.textContent).not.toContain('below range');
+    expect(markerChart?.textContent).not.toContain('Ω-marker');
+    expect(other?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"] polyline')).toBeNull();
+    expect(other?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"] circle')).not.toBeNull();
+    expect(marker?.closest('.lab-block')?.querySelector('[data-clinic-table="below"] [data-field="range"]')?.textContent).toContain('below range');
+    expect(marker?.closest('.lab-block')?.querySelector('[data-clinic-table="in"] [data-field="range"]')?.textContent).toContain('in range');
+    expect(marker?.closest('.lab-block')?.querySelector('[data-clinic-table="above"] [data-field="range"]')?.textContent).toContain('above range');
+    expect(other?.closest('.lab-block')?.querySelector('[data-field="range"]')?.textContent).toContain('no range');
+    const markerLine = markerChart?.querySelector('polyline')?.getAttribute('points');
+    expect(el.textContent).not.toContain(`Lab · Ω-marker · 9 u · below range · 10 to 20 u · ${DAY}`);
+    expect(el.textContent).not.toContain(`Checkup · Synthetic visit note · ${DAY}`);
+    expect(el.textContent?.split('Synthetic visit note').length).toBe(2);
+    expect(el.querySelector(`#health-edit-${belowId} button`)?.getAttribute('aria-label')).toBe(`Edit Lab · Ω-marker · 9 u · below range · 10 to 20 u · ${DAY}`);
+    expect(el.querySelector(`[data-clinic-lab="${belowId}"] [data-field="value"]`)?.textContent?.trim()).toBe('9');
+    expect(el.querySelector(`[data-clinic-lab="${belowId}"] #health-edit-${belowId}`)).not.toBeNull();
     expect(el.querySelector(`#health-edit-${belowId}`)).not.toBeNull();
     expect(el.querySelector(`#health-delete-${checkupId}`)).not.toBeNull();
     expect(el.textContent).not.toContain('medical');
@@ -1128,10 +1136,22 @@ describe('Health room shell', () => {
     fixture.detectChanges();
     expect(el.textContent).toContain('Could not save this entry. Try again.');
     expect(el.querySelector<HTMLInputElement>('#health-lab-name')?.value).toBe('Ω-held');
-    expect(el.textContent).toContain(`Lab · Ω-other · 4 u · no range · ${DAY}`);
+    expect(el.querySelector(`[data-clinic-lab="${noneId}"] [data-field="value"]`)?.textContent?.trim()).toBe('4');
     expect(fake.rows.find(item => item.client_id === noneId)?.revision).toBe(1);
 
     fake.failUpsert = false;
+    fake.conflict = true;
+    button(el, 'Save').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.textContent).toContain(HEALTH_CONFLICT_MESSAGE);
+    expect(el.querySelector<HTMLInputElement>('#health-lab-name')?.value).toBe('Ω-held');
+    expect(el.querySelector(`[data-clinic-lab="${noneId}"] [data-field="value"]`)?.textContent?.trim()).toBe('4');
+    expect(el.querySelector(`[data-clinic-lab="${noneId}"] [data-field="unit"]`)?.textContent?.trim()).toBe('u');
+    expect(fake.rows.find(item => item.client_id === noneId)?.revision).toBe(1);
+
+    fake.conflict = false;
     typeInto(el, '#health-lab-name', 'Ω-other');
     typeInto(el, '#health-lab-value', '5');
     button(el, 'Save').click();
@@ -1139,7 +1159,10 @@ describe('Health room shell', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(el.querySelector('#health-lab-name')).toBeNull();
-    expect(el.textContent).toContain(`Lab · Ω-other · 5 u · no range · ${DAY}`);
+    expect(el.querySelector(`[data-clinic-lab="${noneId}"] [data-field="value"]`)?.textContent?.trim()).toBe('5');
+    expect(el.querySelector(`#health-edit-${noneId} button`)?.getAttribute('aria-label')).toBe(`Edit Lab · Ω-other · 5 u · no range · ${DAY}`);
+    const markerAfter = [...el.querySelectorAll('h3.lab-folder')].find(node => node.textContent === 'Ω-marker');
+    expect(markerAfter?.closest('.lab-block')?.querySelector('polyline')?.getAttribute('points')).toBe(markerLine);
     const savedLab = fake.encryptCalls.at(-1) as { lab?: { name?: string; value?: number; unit?: string; ref_low?: number } };
     expect(savedLab.lab).toEqual({ name: 'Ω-other', value: 5, unit: 'u' });
     const stored = decode(String(fake.rows.find(item => item.client_id === noneId)?.ciphertext_b64)) as { lab?: { name?: string } };
@@ -1156,7 +1179,8 @@ describe('Health room shell', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(el.textContent).toContain(`Checkup · Second synthetic note · ${DAY}`);
+    expect(el.textContent?.split('Second synthetic note').length).toBe(2);
+    expect(el.textContent).not.toContain('Checkup · Second synthetic note');
     expect(fake.encryptCalls.at(-1)).toEqual(jasmine.objectContaining({
       kind: 'checkup', note: 'Second synthetic note', measured_on: DAY, logged_on: localTodayIso(),
     }));
@@ -1263,12 +1287,14 @@ describe('Health room shell', () => {
     expect(el.querySelector('[data-health-series="weight"]')?.getAttribute('data-health-total')).toBe('101');
     expect(el.querySelector(`#health-entry-${historyId('W', 0)}`)).toBeNull();
     expect(el.querySelector('[data-health-sparkline="bp"]')?.querySelectorAll('polyline').length).toBe(2);
-    expect(el.querySelector('[data-health-sparkline="checkup"] polyline')).toBeNull();
-    expect(el.querySelector('[data-health-sparkline="checkup"]')?.textContent).toContain(`Checkup · Note ${count - 1} · ${newest}`);
+    expect(el.querySelector('[data-health-sparkline="checkup"]')).toBeNull();
+    expect(el.querySelector('[data-clinic-checkup]')?.textContent).toContain(`Note ${count - 1}`);
+    expect(el.textContent?.split(`Note ${count - 1}`).length).toBe(2);
     const marker = [...el.querySelectorAll('h3.lab-folder')].find(node => node.textContent === 'Ω-marker');
-    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('below range');
-    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('in range');
-    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"]')?.textContent).toContain('above range');
+    expect(marker?.closest('.lab-block')?.querySelector('[data-health-sparkline="lab"] polyline')).not.toBeNull();
+    expect(marker?.closest('.lab-block')?.querySelector('[data-clinic-table="below"]')).not.toBeNull();
+    expect(marker?.closest('.lab-block')?.querySelector('[data-clinic-table="in"]')).not.toBeNull();
+    expect(marker?.closest('.lab-block')?.querySelector('[data-clinic-table="above"]')).not.toBeNull();
     expect(el.querySelector('[data-health-series="lab"]')?.getAttribute('data-health-total')).toBe('105');
     expect(el.textContent).not.toContain('medical');
 
@@ -3525,7 +3551,9 @@ describe('Health room shell', () => {
     route.routeData.next({ healthRoom: 'clinic' });
     route.query.next(convertToParamMap({}));
     const { fixture, el } = await show();
-    const noneCells = () => [...el.querySelectorAll('[data-clinic-table="none"] td')].map(cell => cell.textContent?.trim());
+    const noneCells = () => ['measured', 'value', 'unit', 'range'].map(field => (
+      el.querySelector(`[data-clinic-table="none"] [data-field="${field}"]`)?.textContent?.trim()
+    ));
     expect(noneCells()).toEqual([DAY, '4', 'u', 'no range']);
     expect(el.querySelector('[data-clinic-table="below"]')?.textContent).toContain('9');
     expect(el.querySelector('[data-clinic-table="below"]')?.textContent).toContain('below range · 10 to 20 u');
@@ -3546,7 +3574,8 @@ describe('Health room shell', () => {
     expect(document.activeElement).toBe(el.querySelector('#health-lab-folder-0'));
     expect(noneCells()).toEqual([DAY, '4', 'u', 'no range']);
     expect(el.querySelector('[data-clinic-unit="lab"]')?.textContent).toBe('Shown in u.');
-    expect(el.querySelector('[data-clinic-table="none"] td:last-child')?.textContent?.trim()).toBe('no range');
+    expect(el.querySelector('[data-clinic-table="none"] [data-field="range"]')?.textContent?.trim()).toBe('no range');
+    expect(el.querySelector(`[data-clinic-lab="${noneId}"] #health-edit-${noneId}`)).not.toBeNull();
     expect(el.querySelector('#health-group-labs')).toBeNull();
 
     const back = el.querySelector<HTMLButtonElement>('#health-lab-back button');

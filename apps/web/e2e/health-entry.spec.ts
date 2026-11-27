@@ -584,7 +584,9 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(room.locator('[data-clinic-history="weight"] [data-health-latest="weight"]')).toContainText('176.4 lb');
       await expect(room.locator('[data-clinic-history="weight"]')).toContainText(older);
       await expect(room.locator('[data-health-group="health-group-measurements"] [data-health-series="weight"]')).toHaveCount(0);
-      await expect(room.locator('[data-health-sparkline="lab"]')).toContainText('in range');
+      await expect(room.locator('[data-clinic-table="in"] [data-field="range"]')).toHaveText('in range · 10 to 20 u');
+      await expect(room.locator('[data-health-sparkline="lab"] svg')).toBeVisible();
+      expect(await room.locator('[data-health-sparkline="lab"]').innerText()).not.toContain('in range');
       const stored = await snapshot(WEIGHT_ID);
       const olderStored = await snapshot(olderId);
       expect(stored?.revision).toBe(1);
@@ -877,7 +879,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
         }
         await route.fallback();
       });
-      const labId = 'hlt_SyntheticLabEntryABCD';
+      const labId = 'hlt_SyntheticLabEntryABCDE';
       await syntheticVault(page, {
         ...SEED,
         health_stats: [
@@ -908,10 +910,12 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
       await page.getByRole('button', { name: 'Unlock', exact: true }).click();
       await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
-      const seeded = `Lab · ${marker} · 9 u · below range · 10 to 20 u · ${DAY}`;
+      const seededRange = 'below range · 10 to 20 u';
       await expect(room.getByRole('heading', { name: 'Lab results' })).toBeVisible();
       await expect(room.getByRole('heading', { name: marker })).toBeVisible();
-      await expect(room).toContainText(seeded);
+      await expect(room.locator(`[data-clinic-lab="${labId}"] [data-field="value"]`)).toHaveText('9');
+      await expect(room.locator(`[data-clinic-lab="${labId}"] [data-field="range"]`)).toHaveText(seededRange);
+      expect(await room.innerText()).not.toContain(`Lab · ${marker} · 9 u`);
 
       const addLab = room.getByRole('button', { name: 'Add lab result', exact: true });
       await target(addLab);
@@ -939,17 +943,17 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       if (touch) await draft.getByRole('button', { name: 'Save' }).tap();
       else await draft.getByRole('button', { name: 'Save' }).click();
       await expect(draft).toHaveCount(0);
-      await expect(room).toContainText(`Lab · ${marker} · 8 u · below range · 10 to 20 u · ${DAY}`);
+      await expect(room.locator('[data-clinic-table="below"] [data-field="value"]').filter({ hasText: '8' })).toHaveCount(1);
 
-      await saveLab(page, room, touch, marker, '15', '10', '20', `Lab · ${marker} · 15 u · in range · 10 to 20 u · ${DAY}`);
-      await saveLab(page, room, touch, marker, '21', '10', '20', `Lab · ${marker} · 21 u · above range · 10 to 20 u · ${DAY}`);
-      await saveLab(page, room, touch, other, '4', '', '', `Lab · ${other} · 4 u · no range · ${DAY}`);
+      await saveLab(page, room, touch, marker, '15', '10', '20', 'in range · 10 to 20 u');
+      await saveLab(page, room, touch, marker, '21', '10', '20', 'above range · 10 to 20 u');
+      await saveLab(page, room, touch, other, '4', '', '', 'no range');
       await expect(room.getByRole('heading', { name: marker })).toBeVisible();
       await expect(room.getByRole('heading', { name: other })).toBeVisible();
       await saveVital(page, room, touch, 'Add checkup', 'Add checkup', async dialog => {
         await target(dialog.locator('#health-checkup-note'));
         await enter(page, dialog.locator('#health-checkup-note'), 'Synthetic visit note', touch);
-      }, `Checkup · Synthetic visit note · ${DAY}`);
+      }, 'Synthetic visit note');
       await expect(room.getByRole('heading', { name: 'Checkups' })).toBeVisible();
 
       const edit = room.getByRole('button', { name: `Edit Lab · ${other} · 4 u · no range · ${DAY}` });
@@ -963,7 +967,8 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(editor.locator('#health-form-error')).toBeFocused();
       await expect(editor).toContainText('Could not save this entry. Try again.');
       await expect(editor.locator('#health-lab-name')).toHaveValue(held);
-      await expect(room).toContainText(`Lab · ${other} · 4 u · no range · ${DAY}`);
+      await expect(room.locator('[data-clinic-table="none"] [data-field="value"]')).toHaveText('4');
+      await expect(room.locator('[data-clinic-table="none"] [data-field="range"]')).toHaveText('no range');
       await page.keyboard.press('Escape');
       await expect(editor).toHaveCount(0);
       await expect(edit).toBeFocused();
@@ -991,11 +996,13 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       }
       await page.reload();
       await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
-      await expect(room).toContainText(seeded);
-      await expect(room).toContainText(`Lab · ${marker} · 15 u · in range · 10 to 20 u · ${DAY}`);
-      await expect(room).toContainText(`Lab · ${marker} · 21 u · above range · 10 to 20 u · ${DAY}`);
-      await expect(room).toContainText(`Lab · ${other} · 4 u · no range · ${DAY}`);
-      await expect(room).toContainText(`Checkup · Synthetic visit note · ${DAY}`);
+      await expect(room.locator(`[data-clinic-lab="${labId}"] [data-field="value"]`)).toHaveText('9');
+      await expect(room.locator(`[data-clinic-lab="${labId}"] [data-field="range"]`)).toHaveText(seededRange);
+      await expect(room.locator('[data-clinic-table="in"] [data-field="value"]')).toHaveText('15');
+      await expect(room.locator('[data-clinic-table="above"] [data-field="value"]')).toHaveText('21');
+      await expect(room.locator('[data-clinic-table="none"] [data-field="value"]')).toHaveText('4');
+      await expect(room.locator('[data-field="visit"]')).toHaveText('Synthetic visit note');
+      expect((await room.innerText()).split('Synthetic visit note').length - 1).toBe(1);
       await expect(room).not.toContainText(held);
     });
 
@@ -1071,9 +1078,12 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(room.locator('[data-health-latest="rhr"]')).toContainText('62 bpm');
       await expect(room.locator('[data-health-sparkline="bp"]')).toContainText('118/76');
       await expect(room.locator('[data-health-sparkline="sleep"]')).toContainText('7.25 h');
-      await expect(room.locator('[data-health-sparkline="lab"]')).toContainText('Ω-marker');
-      await expect(room.locator('[data-health-sparkline="lab"]')).toContainText('below range');
-      await expect(room.locator('[data-health-sparkline="checkup"]')).toContainText('Synthetic visit note');
+      await expect(room.getByRole('heading', { name: 'Ω-marker' })).toBeVisible();
+      await expect(room.locator('[data-clinic-table="below"] [data-field="range"]')).toHaveText('below range · 10 to 20 u');
+      await expect(room.locator('[data-health-sparkline="lab"] svg')).toBeVisible();
+      await expect(room.locator('[data-field="visit"]')).toHaveText('Synthetic visit note');
+      await expect(room.locator('[data-health-sparkline="checkup"]')).toHaveCount(0);
+      expect((await room.innerText()).split('Synthetic visit note').length - 1).toBe(1);
       await expect(room).toContainText('1 saved entry could not be read. It stays in the vault.');
       await expect(room).not.toContainText('64.25');
       const overflow = await room.evaluate(node => (node as HTMLElement).scrollWidth - node.clientWidth);
@@ -1151,7 +1161,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(page.locator('html')).toHaveAttribute('data-theme', nextTheme);
       await expect(spark.locator('li').last()).toHaveText(newestLb);
       await expect(room.locator('[data-health-latest="rhr"]')).toContainText('62 bpm');
-      await expect(room.locator('[data-health-sparkline="lab"]')).toContainText('below range');
+      await expect(room.locator('[data-clinic-table="below"] [data-field="range"]')).toHaveText('below range · 10 to 20 u');
       expect(await snapshot(historyId('W', newestIndex))).toEqual(newestStored);
       expect(await snapshot(historyId('W', 0))).toEqual(oldestStored);
       expect(await snapshot(historyId('L', 1))).toEqual(labStored);
@@ -2181,7 +2191,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'light'],
     });
 
     test('opens a no-range lab folder and an older checkup in the clinic archive', async ({ page }) => {
-      test.setTimeout(180_000);
+      test.setTimeout(240_000);
       await openClinicArchive(page, width === 390);
     });
   });
@@ -2731,6 +2741,14 @@ async function openClinicArchive(page: Page, touch: boolean): Promise<void> {
         lab: { name: marker, value: 9, unit: 'u', ref_low: 10, ref_high: 20 },
       },
       {
+        client_id: 'hlt_SyntheticLabInRangeABC',
+        v: 1,
+        kind: 'lab',
+        measured_on: older,
+        logged_on: older,
+        lab: { name: marker, value: 15, unit: 'u', ref_low: 10, ref_high: 20 },
+      },
+      {
         client_id: 'hlt_SyntheticLabNoRangeABC',
         v: 1,
         kind: 'lab',
@@ -2783,11 +2801,12 @@ async function openClinicArchive(page: Page, touch: boolean): Promise<void> {
   await target(otherFolder);
   await activate(page, otherFolder, touch);
   await expect(room.locator('h3.lab-folder')).toContainText(other);
-  const none = room.locator('[data-clinic-table="none"] td');
-  await expect(none.nth(0)).toHaveText(DAY);
-  await expect(none.nth(1)).toHaveText('4');
-  await expect(none.nth(2)).toHaveText('u');
-  await expect(none.nth(3)).toHaveText('no range');
+  const none = room.locator('[data-clinic-table="none"] [data-clinic-lab]');
+  await expect(none.locator('[data-field="measured"]')).toHaveText(DAY);
+  await expect(none.locator('[data-field="value"]')).toHaveText('4');
+  await expect(none.locator('[data-field="unit"]')).toHaveText('u');
+  await expect(none.locator('[data-field="range"]')).toHaveText('no range');
+  await expect(none.getByRole('button', { name: `Edit Lab · ${other} · 4 u · no range · ${DAY}` })).toHaveCount(1);
   await expect(room.locator('[data-clinic-unit="lab"]')).toHaveText('Shown in u.');
   await expect(room.locator('[data-clinic-table="none"]')).not.toContainText('10 to 20');
   await expect(room.locator('[data-clinic-table="below"]')).toHaveCount(0);
@@ -2806,7 +2825,7 @@ async function openClinicArchive(page: Page, touch: boolean): Promise<void> {
   else await editor.getByRole('button', { name: 'Save' }).click();
   await expect(editor).toContainText('Could not save this entry. Try again.');
   await expect(editor.locator('#health-lab-name')).toHaveValue(held);
-  await expect(none.nth(1)).toHaveText('4');
+  await expect(none.locator('[data-field="value"]')).toHaveText('4');
   await page.keyboard.press('Escape');
   await expect(editor).toHaveCount(0);
   await expect(edit).toBeFocused();
@@ -2819,10 +2838,28 @@ async function openClinicArchive(page: Page, touch: boolean): Promise<void> {
   const markerFolder = room.locator('[data-clinic-folder]').filter({ hasText: marker }).getByRole('button');
   await activate(page, markerFolder, touch);
   const below = room.locator('[data-clinic-table="below"]');
-  await expect(below).toContainText(DAY);
-  await expect(below).toContainText('9');
-  await expect(below).toContainText('u');
-  await expect(below).toContainText('below range · 10 to 20 u');
+  await expect(below.locator('[data-field="measured"]')).toHaveText(DAY);
+  await expect(below.locator('[data-field="value"]')).toHaveText('9');
+  await expect(below.locator('[data-field="unit"]')).toHaveText('u');
+  await expect(below.locator('[data-field="range"]')).toHaveText('below range · 10 to 20 u');
+  const inRange = room.locator('[data-clinic-table="in"]');
+  await expect(inRange.locator('[data-field="measured"]')).toHaveText(older);
+  await expect(inRange.locator('[data-field="value"]')).toHaveText('15');
+  await expect(inRange.locator('[data-field="range"]')).toHaveText('in range · 10 to 20 u');
+  await expect(room.locator('[data-health-sparkline="lab"] polyline')).toHaveCount(1);
+  expect(await room.locator('[data-health-sparkline="lab"]').innerText()).toBe('Trend');
+  const belowRow = room.locator('[data-clinic-lab="hlt_SyntheticLabBelowRange"]');
+  const rowEdit = belowRow.getByRole('button', { name: /^Edit / });
+  await target(rowEdit);
+  const chartBox = await room.locator('[data-health-sparkline="lab"]').boundingBox();
+  const editBox = await rowEdit.boundingBox();
+  if (!chartBox || !editBox) throw new Error('missing clinic chart or row edit');
+  expect(editBox.y).toBeGreaterThanOrEqual(chartBox.y);
+  expect(editBox.y - chartBox.y).toBeLessThan(520);
+  const markerText = await room.locator('.lab-block').innerText();
+  expect(markerText).not.toContain(`Lab · ${marker}`);
+  expect(markerText.split('below range').length - 1).toBe(1);
+  expect(markerText.split('in range').length - 1).toBe(1);
 
   const book = room.locator('.clinic-objects').getByRole('button', { name: 'Checkup book', exact: true });
   await target(book);
@@ -2836,7 +2873,18 @@ async function openClinicArchive(page: Page, touch: boolean): Promise<void> {
   await expect(visits.nth(1)).toContainText(olderNote);
   await expect(room.locator('[data-clinic-date="checkup"]')).toContainText('measured dates');
   const bookText = await room.innerText();
+  expect(bookText.split(newerNote).length - 1).toBe(1);
+  expect(bookText.split(olderNote).length - 1).toBe(1);
+  expect(bookText).not.toContain(`Checkup · ${newerNote}`);
   expect(bookText).not.toMatch(/diagnos|healthy|normal/i);
+  const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+  const zoomed = await room.evaluate(node => (node as HTMLElement).scrollWidth - node.clientWidth);
+  expect(zoomed).toBeLessThanOrEqual(1);
+  await target(visits.nth(0).getByRole('button', { name: /^Edit / }));
+  await page.evaluate(() => { document.documentElement.style.removeProperty('font-size'); });
+  await page.setViewportSize(viewport);
   const scan = await new AxeBuilder({ page }).include('app-health-room').analyze();
   expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
   for (const entry of town) {
@@ -2845,6 +2893,24 @@ async function openClinicArchive(page: Page, touch: boolean): Promise<void> {
     expect(entry).not.toContain(held);
     expect(entry).not.toContain(olderNote);
   }
+
+  await page.goto('/settings/finance');
+  await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+  await expect(page.getByText('Finance locked.')).toBeVisible();
+  await page.goto('/town/clinic?object=checkups');
+  await expect(room).toHaveAttribute('data-health-state', 'locked');
+  const lockedBook = await room.innerText();
+  expect(lockedBook).not.toContain(newerNote);
+  expect(lockedBook).not.toContain(olderNote);
+  expect(lockedBook).not.toContain(marker);
+  await expect(room.locator('[data-clinic-table]')).toHaveCount(0);
+  await activate(page, room.getByRole('link', { name: 'Unlock' }), touch);
+  await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+  await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+  await expect(room.locator('[data-field="visit"]').nth(0)).toHaveText(newerNote);
+  await expect(room.locator('[data-field="visit"]').nth(1)).toHaveText(olderNote);
+  expect((await room.innerText()).split(newerNote).length - 1).toBe(1);
 
   await activate(page, page.getByRole('button', { name: 'synthetic', exact: true }), touch);
   await activate(page, page.getByRole('button', { name: 'Sign out', exact: true }), touch);
@@ -2872,6 +2938,11 @@ async function saveLab(
     if (low) await enter(page, dialog.locator('#health-lab-ref-low'), low, touch);
     if (high) await enter(page, dialog.locator('#health-lab-ref-high'), high, touch);
   }, saved);
+  const row = room.locator('[data-clinic-lab]').filter({ has: page.locator('[data-field="value"]', { hasText: new RegExp(`^${value}$`) }) });
+  await expect(row.first().locator('[data-field="value"]')).toHaveText(value);
+  await expect(row.first().locator('[data-field="unit"]')).toHaveText('u');
+  await expect(row.first().locator('[data-field="range"]')).toHaveText(saved);
+  await expect(row.first().getByRole('button', { name: /^Edit / })).toHaveCount(1);
 }
 
 async function enter(page: Page, locator: Locator, value: string, touch: boolean): Promise<void> {

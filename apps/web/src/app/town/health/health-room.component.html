@@ -408,66 +408,77 @@
 <ng-template #labFolder let-folder>
   <div class="lab-block">
     <h3 class="lab-folder" [id]="folder.id" tabindex="-1">{{ folder.title }}</h3>
-    <p class="latest" data-health-latest="lab">Latest · {{ folder.latestLabel }}</p>
     <p class="station-fact" data-clinic-unit="lab">{{ folder.unitLine }}</p>
-    <app-health-sparkline seriesId="lab" [caption]="folder.title + ' history'" [view]="folder.sparkline" />
+    @if (folder.sparkline.line || folder.sparkline.dot) {
+      <figure class="clinic-trend" data-health-sparkline="lab">
+        <figcaption>Trend</figcaption>
+        <svg aria-hidden="true" viewBox="0 0 120 36" focusable="false">
+          @if (folder.sparkline.line) {
+            <polyline [attr.points]="folder.sparkline.line" />
+          }
+          @if (folder.sparkline.dot; as dot) {
+            <circle [attr.cx]="dot.x" [attr.cy]="dot.y" r="1.8" />
+          }
+        </svg>
+      </figure>
+    }
     @for (group of folder.groups; track group.id) {
       <section [attr.data-clinic-range]="group.id" [attr.aria-labelledby]="folder.id + '-' + group.id">
         <h4 [id]="folder.id + '-' + group.id">{{ group.label }}</h4>
-        <table class="archive-table" [attr.data-clinic-table]="group.id">
-          <caption>{{ folder.title }} · {{ group.label }}</caption>
-          <thead>
-            <tr>
-              <th scope="col">Measured</th>
-              <th scope="col">Value</th>
-              <th scope="col">Unit</th>
-              <th scope="col">Range</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of group.rows; track row.clientId) {
-              <tr [attr.data-clinic-lab]="row.clientId">
-                <td>{{ row.measuredOn }}</td>
-                <td>{{ row.value }}</td>
-                <td>{{ row.unit }}</td>
-                <td>{{ row.range }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <ul class="entries" [attr.data-clinic-table]="group.id">
+          @for (row of group.rows; track row.clientId) {
+            <li [attr.data-clinic-lab]="row.clientId" data-health-kind="lab">
+              <div class="archive-field">
+                <span class="archive-key">Measured</span>
+                <span class="entry-label" [id]="'health-entry-' + row.clientId" data-field="measured" tabindex="-1" [appHealthLinkedFocus]="!dialogOpen() && (row.clientId === entryId() || row.clientId === revealFocusId())" [attr.aria-current]="row.clientId === entryId() ? 'true' : null">{{ row.measuredOn }}</span>
+              </div>
+              <div class="archive-field">
+                <span class="archive-key">Value</span>
+                <span data-field="value">{{ row.value }}</span>
+              </div>
+              <div class="archive-field">
+                <span class="archive-key">Unit</span>
+                <span data-field="unit">{{ row.unit }}</span>
+              </div>
+              <div class="archive-field">
+                <span class="archive-key">Range</span>
+                <span data-field="range">{{ row.range }}</span>
+              </div>
+              @if (folder.rows[0]?.clientId === row.clientId) {
+                <span class="latest" data-health-latest="lab">Latest</span>
+              }
+              <span class="entry-actions">
+                <ui-button variant="secondary" size="sm" [attr.id]="'health-edit-' + row.clientId" [ariaLabel]="'Edit ' + rowLabel(folder.rows, row.clientId)" (clicked)="openEdit(row.clientId)">Edit</ui-button>
+                <ui-button variant="danger" size="sm" [attr.id]="'health-delete-' + row.clientId" [ariaLabel]="'Delete ' + rowLabel(folder.rows, row.clientId)" (clicked)="removeEntry(row.clientId)">Delete</ui-button>
+              </span>
+            </li>
+          }
+        </ul>
       </section>
     }
-    <ul class="entries" [attr.aria-label]="folder.title + ' results'">
-      @for (row of folder.rows; track row.clientId) {
-        <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: row }" />
-      }
-    </ul>
   </div>
 </ng-template>
 <ng-template #checkupBody let-checkup>
-  <p class="latest" data-health-latest="checkup">Latest · {{ checkup.latestLabel }}</p>
   <p class="station-fact" data-clinic-date="checkup">Dates are the measured dates saved with each visit.</p>
-  <app-health-sparkline seriesId="checkup" caption="Checkup history" [view]="checkup.sparkline" />
-  <table class="archive-table" data-clinic-table="checkups">
-    <caption>Checkups</caption>
-    <thead>
-      <tr>
-        <th scope="col">Measured</th>
-        <th scope="col">Visit</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (visit of checkup.visibleVisits; track visit.clientId) {
-        <tr [attr.data-clinic-checkup]="visit.clientId">
-          <td>{{ visit.measuredOn }}</td>
-          <td>{{ visit.note }}</td>
-        </tr>
-      }
-    </tbody>
-  </table>
-  <ul class="entries" aria-label="Checkups">
-    @for (row of checkup.visibleRows; track row.clientId) {
-      <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: row }" />
+  <ul class="entries" data-clinic-table="checkups" aria-label="Checkups">
+    @for (visit of checkup.visibleVisits; track visit.clientId) {
+      <li [attr.data-clinic-checkup]="visit.clientId" data-health-kind="checkup">
+        <div class="archive-field">
+          <span class="archive-key">Measured</span>
+          <span class="entry-label" [id]="'health-entry-' + visit.clientId" data-field="measured" tabindex="-1" [appHealthLinkedFocus]="!dialogOpen() && (visit.clientId === entryId() || visit.clientId === revealFocusId())" [attr.aria-current]="visit.clientId === entryId() ? 'true' : null">{{ visit.measuredOn }}</span>
+        </div>
+        <div class="archive-field">
+          <span class="archive-key">Visit</span>
+          <span data-field="visit">{{ visit.note }}</span>
+        </div>
+        @if (checkup.visibleRows[0]?.clientId === visit.clientId) {
+          <span class="latest" data-health-latest="checkup">Latest</span>
+        }
+        <span class="entry-actions">
+          <ui-button variant="secondary" size="sm" [attr.id]="'health-edit-' + visit.clientId" [ariaLabel]="'Edit ' + rowLabel(checkup.visibleRows, visit.clientId)" (clicked)="openEdit(visit.clientId)">Edit</ui-button>
+          <ui-button variant="danger" size="sm" [attr.id]="'health-delete-' + visit.clientId" [ariaLabel]="'Delete ' + rowLabel(checkup.visibleRows, visit.clientId)" (clicked)="removeEntry(visit.clientId)">Delete</ui-button>
+        </span>
+      </li>
     }
   </ul>
   @if (checkup.more) {
