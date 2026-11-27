@@ -49,7 +49,7 @@ Media commands ran from `/tmp/vivek-fixup-27` on `bc152925cb78a134169b1f442acde7
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this file. The body is only `Closes #615`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/650. The body is only `Closes #615`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. No deployment.
 - Remaining external prerequisites or approved scope decisions: none. `media.css` owns the capture disclosure style and is not a Town or Travel file.
