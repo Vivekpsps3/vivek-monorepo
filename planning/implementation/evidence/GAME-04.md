@@ -52,7 +52,7 @@ Full Karma ran on the reward implementation before the reward sentence used "the
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this file.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/651
 - Roadmap #134 append-only status-note URL: added after merge.
 - Merged/activation status: not merged yet.
 - Remaining external prerequisites or approved scope decisions: `POST /api/town/stamps/grants` still accepts a caller-chosen key. A receipt already stored under `quest:{quest_id}` would satisfy the unique ledger key. Normal chapter completion uses a fresh wallet. Harbor Rhythm remains GAME-11.
