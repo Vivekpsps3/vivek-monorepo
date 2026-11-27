@@ -42,7 +42,7 @@ from apps.server.town.quest_catalog import triple_check_sql
 from apps.server.town.quests import read_journal, record_step
 
 PARENT = "site_town_layouts_v1"
-HEAD = "site_town_dialogue_v1"
+HEAD = "site_town_discoveries_v1"
 WHEN = datetime(2026, 11, 2, 20, 0, tzinfo=UTC)
 _CHECK = "Check the highlighted fields."
 _FORBIDDEN = {"xp", "due_on", "deadline", "user_id", "weight", "trip_id", "created_at", "balance"}

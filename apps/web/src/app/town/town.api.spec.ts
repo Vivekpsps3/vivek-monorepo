@@ -101,6 +101,19 @@ describe('TownApiService', () => {
     ]);
     post.flush({ revision: 1, hour: 0, residents: [] });
   });
+  it('posts a discovery identity without a life field', () => {
+    api.getDiscoveries().subscribe();
+    const read = http.expectOne(request => request.url === '/api/town/discoveries');
+    expect(read.request.method).toBe('GET');
+    read.flush({ revision: 0, discoveries: [] });
+    const body = { discovery_id: 'ferry-bell', expected_revision: 0 };
+    api.recordDiscovery(body).subscribe();
+    const post = http.expectOne(request => request.url === '/api/town/discoveries');
+    expect(post.request.method).toBe('POST');
+    expect(post.request.body).toEqual(body);
+    expect(Object.keys(post.request.body as object).sort()).toEqual(['discovery_id', 'expected_revision']);
+    post.flush({ revision: 1, discoveries: [] });
+  });
   it('preserves authentication errors for the expired state', () => {
     const error = jasmine.createSpy('error');
     api.getTown().subscribe({ error });
