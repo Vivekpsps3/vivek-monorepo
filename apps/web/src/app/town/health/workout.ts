@@ -171,7 +171,7 @@ export function emptyWorkoutDraft(kind: WorkoutKind, today: string): WorkoutDraf
     seconds: '',
     distance: '',
     setType: 'work',
-    state: 'completed',
+    state: kind === 'session' ? 'draft' : 'completed',
     exerciseLineId: newWorkoutPartId('wex'),
     setId: newWorkoutPartId('wst'),
     clientId: '',
@@ -447,6 +447,78 @@ export function markSetCounted(draft: WorkoutDraft, setId: string, count: boolea
     sets: draft.sets.map(apply),
     floorBefore: draft.floorBefore.map(line => ({ ...line, sets: line.sets.map(apply) })),
     floorAfter: draft.floorAfter.map(line => ({ ...line, sets: line.sets.map(apply) })),
+  };
+}
+
+/** Display strings for one entered set. Canonical kilograms and metres stay on the set. */
+export interface SetEntryFields {
+  load: string;
+  reps: string;
+  seconds: string;
+  distance: string;
+}
+
+export function setEntryFields(set: WorkoutDraftSet, units: HealthUnits): SetEntryFields {
+  return {
+    load: typeof set.kg === 'number' ? displayWeight(set.kg, units.weight) : '',
+    reps: typeof set.reps === 'number' ? String(set.reps) : '',
+    seconds: typeof set.seconds === 'number' ? String(set.seconds) : '',
+    distance: typeof set.metres === 'number' ? displayDistance(set.metres, units.distance) : '',
+  };
+}
+
+/**
+ * Replace one entered set from display strings.
+ * An empty or invalid entry leaves the draft object unchanged.
+ * A field whose text still matches the current display keeps its canonical number.
+ */
+export function reviseDraftSet(
+  draft: WorkoutDraft,
+  setId: string,
+  entry: SetEntryFields,
+  units: HealthUnits,
+  today: string,
+): { draft: WorkoutDraft; fieldErrors: FieldErrors } {
+  if (draft.kind === 'exercise') return { draft, fieldErrors: {} };
+  const located = locateDraftSet(draft, setId);
+  if (!located) return { draft, fieldErrors: {} };
+  const probeDraft: WorkoutDraft = {
+    ...draft,
+    name: located.name.trim() !== '' ? located.name : 'Set',
+    exerciseType: located.exerciseType,
+    sets: [],
+    floorBefore: [],
+    floorAfter: [],
+    note: '',
+    load: entry.load,
+    reps: entry.reps,
+    seconds: entry.seconds,
+    distance: entry.distance,
+    setType: located.set.setType,
+    setId: located.set.id,
+  };
+  if (progressBlank(probeDraft)) {
+    return { draft, fieldErrors: { [progressField(located.exerciseType)]: 'required' } };
+  }
+  const probe = workoutFromDraft(probeDraft, today, units);
+  const checked = validateWorkoutRecord(probe, 0, today);
+  if (Object.keys(checked.fieldErrors).length > 0 || checked.value.kind === 'exercise') {
+    return { draft, fieldErrors: checked.fieldErrors };
+  }
+  const stored = checked.value.kind === 'routine' || checked.value.kind === 'session'
+    ? checked.value.exercises[0]?.sets[0]
+    : undefined;
+  if (!stored) return { draft, fieldErrors: { sets: 'required' } };
+  const next = mergeRevisedSet(located.set, stored, entry, setEntryFields(located.set, units));
+  const apply = (item: WorkoutDraftSet): WorkoutDraftSet => item.id === setId ? next : item;
+  return {
+    draft: {
+      ...draft,
+      sets: draft.sets.map(apply),
+      floorBefore: draft.floorBefore.map(line => ({ ...line, sets: line.sets.map(apply) })),
+      floorAfter: draft.floorAfter.map(line => ({ ...line, sets: line.sets.map(apply) })),
+    },
+    fieldErrors: {},
   };
 }
 
@@ -731,6 +803,45 @@ function progressField(type: ExerciseType): string {
   if (type === 'bodyweight-reps') return 'reps';
   if (type === 'time-only' || type === 'time-distance') return 'seconds';
   return 'kg';
+}
+
+function locateDraftSet(
+  draft: WorkoutDraft,
+  setId: string,
+): { set: WorkoutDraftSet; exerciseType: ExerciseType; name: string } | null {
+  const active = draft.sets.find(set => set.id === setId);
+  if (active) return { set: active, exerciseType: draft.exerciseType, name: draft.name };
+  for (const line of [...draft.floorBefore, ...draft.floorAfter]) {
+    const set = line.sets.find(item => item.id === setId);
+    if (set) return { set, exerciseType: line.exerciseType, name: line.name };
+  }
+  return null;
+}
+
+function mergeRevisedSet(
+  previous: WorkoutDraftSet,
+  stored: WorkoutSet,
+  entry: SetEntryFields,
+  initial: SetEntryFields,
+): WorkoutDraftSet {
+  const next: WorkoutDraftSet = {
+    id: previous.id,
+    setType: previous.setType,
+    ...(previous.count === false ? { count: false } : {}),
+  };
+  if (typeof stored.kg === 'number') {
+    next.kg = entry.load === initial.load && typeof previous.kg === 'number' ? previous.kg : stored.kg;
+  }
+  if (typeof stored.reps === 'number') {
+    next.reps = entry.reps === initial.reps && typeof previous.reps === 'number' ? previous.reps : stored.reps;
+  }
+  if (typeof stored.seconds === 'number') {
+    next.seconds = entry.seconds === initial.seconds && typeof previous.seconds === 'number' ? previous.seconds : stored.seconds;
+  }
+  if (typeof stored.metres === 'number') {
+    next.metres = entry.distance === initial.distance && typeof previous.metres === 'number' ? previous.metres : stored.metres;
+  }
+  return next;
 }
 
 function draftSetFromStored(set: WorkoutSet, keepUncomplete = false): WorkoutDraftSet {

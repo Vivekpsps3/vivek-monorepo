@@ -103,8 +103,8 @@ firstVaultTest.describe('Health Quick add with a new vault', () => {
     await editor.locator('#health-workout-load').fill('30');
     await editor.locator('#health-workout-reps').fill('5');
     await editor.getByRole('button', { name: 'Add set' }).click();
-    await editor.locator('#health-workout-state').selectOption('draft');
-    await editor.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor.locator('#health-workout-state')).toHaveCount(0);
+    await editor.getByRole('button', { name: 'Save draft', exact: true }).click();
     await expect(page).toHaveURL(/\/hub$/);
     const draft = (await collectionCipher(page)).health_workouts;
     expect(draft).toHaveLength(1);
@@ -279,9 +279,9 @@ for (const [width, height, theme] of [[390, 844, 'light'], [390, 844, 'dark'], [
       const set = editor.locator('[data-entered-set]');
       const setId = await set.getAttribute('data-entered-set');
       expect(setId).toMatch(/^wst_/);
-      await editor.locator('#health-workout-state').selectOption('draft');
+      await expect(editor.locator('#health-workout-state')).toHaveCount(0);
       vault.failNextWrites();
-      const save = editor.getByRole('button', { name: 'Save', exact: true });
+      const save = editor.getByRole('button', { name: 'Save draft', exact: true });
       await activate(page, save, touch);
       await expect(editor.getByRole('alert')).toContainText('Could not save this workout');
       await expect(set).toHaveAttribute('data-entered-set', setId!);
@@ -1237,14 +1237,14 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
         await load.fill('100');
         await reps.tap();
         await reps.fill('5');
-        await dialog.getByRole('button', { name: 'Save' }).tap();
+        await dialog.getByRole('button', { name: 'Finish session' }).tap();
       } else {
         await name.fill('Synthetic press');
         await focusControl(page, '#health-workout-load');
         await page.keyboard.type('100');
         await focusControl(page, '#health-workout-reps');
         await page.keyboard.type('5');
-        await page.keyboard.press('Enter');
+        await activate(page, dialog.getByRole('button', { name: 'Finish session' }), false);
       }
       await expect(dialog).toHaveCount(0);
       await expect(room).toContainText(sessionLabel);
@@ -1394,8 +1394,8 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       const entered = dialog.locator('[data-entered-set]');
       const box = await entered.boundingBox();
       expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-      await dialog.locator('#health-workout-state').selectOption('draft');
-      if (touch) await dialog.getByRole('button', { name: 'Save' }).tap();
+      await expect(dialog.locator('#health-workout-state')).toHaveCount(0);
+      if (touch) await dialog.getByRole('button', { name: 'Save draft' }).tap();
       else {
         await dialog.getByRole('button', { name: 'Save' }).focus();
         await page.keyboard.press('Enter');
@@ -1606,9 +1606,11 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await fillControl(page, dialog, '#health-workout-reps', '1', touch);
       await activate(page, dialog.getByRole('button', { name: 'Add set' }), touch);
       await expect(dialog.locator('[data-entered-set]')).toHaveCount(3);
+      await expect(dialog.getByRole('button', { name: 'Move set 3 on exercise 1 earlier' })).toHaveCount(0);
+      await activate(page, dialog.getByRole('button', { name: 'Edit set 3 on exercise 1' }), touch);
       const earlier = dialog.getByRole('button', { name: 'Move set 3 on exercise 1 earlier' });
       await target(earlier);
-      await target(dialog.getByRole('button', { name: 'Remove set 2 on exercise 1' }));
+      await target(dialog.getByRole('button', { name: 'Remove set 3 on exercise 1' }));
       await activate(page, earlier, touch);
       await expect(dialog.locator('[data-entered-set]').nth(1)).toContainText('1 reps');
       await activate(page, dialog.getByRole('button', { name: 'Remove set 2 on exercise 1' }), touch);
@@ -1616,6 +1618,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await expect(dialog).not.toContainText('1 reps');
       await expect(dialog.locator('[data-canonical-preview]').nth(0)).toContainText(`Stored as ${liftKg} kg · 5 reps`);
       await expect(dialog.locator('[data-canonical-preview]').nth(1)).toContainText(`Stored as ${workKg} kg · 3 reps`);
+      await activate(page, dialog.getByRole('button', { name: 'Edit set 2 on exercise 1' }), touch);
       await dialog.locator('[data-entered-set]').nth(1).getByRole('combobox', { name: 'Set 2 role on exercise 1' }).selectOption('drop');
       await expect(dialog.locator('[data-entered-set]').nth(1)).toHaveAttribute('data-set-role', 'drop');
       await dialog.locator('[data-entered-set]').nth(1).getByRole('combobox', { name: 'Set 2 role on exercise 1' }).selectOption('work');
@@ -1655,13 +1658,13 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       expect(openScan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
 
       failWorkoutUpsert = true;
-      await activate(page, dialog.getByRole('button', { name: 'Save' }), touch);
+      await activate(page, dialog.getByRole('button', { name: 'Finish session' }), touch);
       await expect(dialog).toContainText('Could not save this workout. Try again.');
       await expect(dialog.locator('#health-workout-note')).toHaveValue('Synthetic floor');
       await expect(dialog.locator('[data-entered-set]')).toHaveCount(4);
       expect(await collectionCipher(page)).toEqual(before);
-      await target(dialog.getByRole('button', { name: 'Save' }));
-      await activate(page, dialog.getByRole('button', { name: 'Save' }), touch);
+      await target(dialog.getByRole('button', { name: 'Save', exact: true }));
+      await activate(page, dialog.getByRole('button', { name: 'Save', exact: true }), touch);
       await expect(dialog).toHaveCount(0);
       await expect(page.locator('#health-add-session button')).toBeFocused();
       const sessionRow = room.locator('[data-workout-kind="session"]');
@@ -1823,17 +1826,17 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       const started = page.getByRole('dialog', { name: 'Start session' });
       await expect(started.locator('#health-workout-measured-on')).toBeFocused();
       await expect(started.locator('#health-workout-measured-on')).toHaveValue(measured);
-      await expect(started.locator('#health-workout-state')).toHaveValue('draft');
+      await expect(started.locator('#health-workout-state')).toHaveCount(0);
+      await expect(started.locator('form')).toHaveAttribute('data-session-state', 'draft');
       await expect(started.locator('[data-entered-set]')).toHaveCount(1);
       await expect(started.locator('[data-entered-set]')).toContainText(shown);
       await expect(started.locator('[data-canonical-preview]')).toContainText(canonical);
       const plannedId = await started.locator('[data-entered-set]').getAttribute('data-entered-set');
-      await started.locator('#health-workout-state').selectOption('completed');
       const openScan = await new AxeBuilder({ page }).include('app-health-room').analyze();
       expect(openScan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
       const fits = await started.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
       expect(fits).toBe(true);
-      await activate(page, started.getByRole('button', { name: 'Save' }), touch);
+      await activate(page, started.getByRole('button', { name: 'Finish session' }), touch);
       await expect(started).toHaveCount(0);
       const completed = room.locator('[data-workout-state="completed"]');
       await expect(completed).toHaveCount(1);
@@ -1850,6 +1853,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       const routineEditor = page.getByRole('dialog', { name: 'Edit routine' });
       await target(routineEditor.locator('#health-workout-routine-name'));
       await fillControl(page, routineEditor, '#health-workout-routine-name', 'Synthetic plan edited', touch);
+      await activate(page, routineEditor.getByRole('button', { name: 'Edit set 1 on exercise 1' }), touch);
       await activate(page, routineEditor.getByRole('button', { name: 'Remove set 1 on exercise 1' }), touch);
       await expect(routineEditor.locator('[data-entered-set]')).toHaveCount(0);
       await fillControl(page, routineEditor, '#health-workout-load', '20', touch);
@@ -1884,7 +1888,8 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark']] 
       await target(repeat);
       await activate(page, repeat, touch);
       const copy = page.getByRole('dialog', { name: 'Start session' });
-      await expect(copy.locator('#health-workout-state')).toHaveValue('draft');
+      await expect(copy.locator('#health-workout-state')).toHaveCount(0);
+      await expect(copy.locator('form')).toHaveAttribute('data-session-state', 'draft');
       const copyId = await copy.locator('[data-entered-set]').getAttribute('data-entered-set');
       expect(copyId).toBeTruthy();
       expect(copyId).not.toBe(plannedId);
@@ -2303,7 +2308,7 @@ for (const [width, height, theme] of [[1280, 800, 'light'], [390, 844, 'dark'], 
       await expect(rest).toHaveAttribute('data-rest-phase', 'running');
       await expect(dialog.locator('[data-entered-set]')).toHaveCount(1);
       await dialog.locator('#health-workout-note').fill('Synthetic kept');
-      await dialog.locator('#health-workout-state').selectOption('draft');
+      await expect(dialog.locator('#health-workout-state')).toHaveCount(0);
       const fits = await dialog.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
       expect(fits).toBe(true);
       const openScan = await new AxeBuilder({ page }).include('app-health-room').analyze();
@@ -2450,6 +2455,167 @@ test.describe('workout rest timer sound', () => {
     await expect(again.locator('#health-rest-clock')).toHaveText('0:00');
   });
 });
+
+test.describe('gym set logging', () => {
+  test.describe.configure({ timeout: 240_000 });
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, timezoneId: 'America/Los_Angeles' });
+
+  test('logs, corrects, and finishes sets on a phone and a desktop', async ({ page, request }) => {
+    expect((await request.post('/e2e/reset?seed=town')).ok()).toBeTruthy();
+    await page.clock.setFixedTime(new Date('2026-10-29T19:00:00Z'));
+    await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('suite-theme')) localStorage.setItem('suite-theme', 'dark');
+    });
+    const vault = await syntheticVault(page, SEED);
+    await page.goto('/town/gym');
+    const room = page.locator('app-health-room');
+    await activate(page, room.getByRole('link', { name: 'Unlock' }), true);
+    await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(SYNTHETIC_VAULT_PASSPHRASE);
+    await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+    await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+    await activate(page, room.locator('#health-add-session button'), true);
+    const dialog = page.getByRole('dialog', { name: 'Add session' });
+    await expect(dialog.locator('#health-workout-measured-on')).toBeFocused();
+    await expect(dialog.locator('#health-workout-state')).toHaveCount(0);
+    await expect(dialog.locator('form')).toHaveAttribute('data-session-state', 'draft');
+    await expect(dialog.getByRole('button', { name: 'Complete session' })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Save draft' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Finish session' })).toBeVisible();
+    const phone = { width: 390, height: 844 };
+    await inViewport(dialog.locator('#health-workout-load'), phone);
+    await inViewport(dialog.locator('#health-workout-reps'), phone);
+    await inViewport(dialog.getByRole('button', { name: 'Finish session' }), phone);
+    const loadBox = await dialog.locator('#health-workout-load').boundingBox();
+    const repsBox = await dialog.locator('#health-workout-reps').boundingBox();
+    expect(loadBox && repsBox && Math.abs(loadBox.y - repsBox.y)).toBeLessThan(8);
+
+    await fillControl(page, dialog, '#health-workout-name', 'Synthetic press', true);
+    await fillControl(page, dialog, '#health-workout-load', '100', true);
+    await fillControl(page, dialog, '#health-workout-reps', '5', true);
+    const storedKg = lbToKg(100).toFixed(2);
+    await expect(dialog.locator('[data-open-preview]')).toContainText(`Stored as ${storedKg} kg · 5 reps`);
+    await activate(page, dialog.getByRole('button', { name: 'Add set' }), true);
+    await expect(dialog.locator('#health-workout-load')).toBeFocused();
+    await inViewport(dialog.locator('#health-workout-load'), phone);
+    await fillControl(page, dialog, '#health-workout-load', '80', true);
+    await fillControl(page, dialog, '#health-workout-reps', '3', true);
+    await activate(page, dialog.getByRole('button', { name: 'Add set' }), true);
+    await expect(dialog.locator('#health-workout-load')).toBeFocused();
+    await activate(page, dialog.getByRole('button', { name: 'Add exercise' }), true);
+    await fillControl(page, dialog, '#health-workout-name', 'Synthetic run', true);
+    await dialog.locator('#health-workout-type').selectOption('time-distance');
+    await fillControl(page, dialog, '#health-workout-seconds', '90', true);
+    await fillControl(page, dialog, '#health-workout-distance', '1', true);
+    await activate(page, dialog.getByRole('button', { name: 'Add set' }), true);
+    await expect(dialog.locator('#health-workout-seconds')).toBeFocused();
+    await inViewport(dialog.locator('#health-workout-seconds'), phone);
+    await inViewport(dialog.getByRole('button', { name: 'Add set' }), phone);
+    await expect(dialog.locator('[data-entered-set]')).toHaveCount(3);
+
+    const preview = dialog.locator('[data-entered-set]').nth(0).locator('[data-canonical-preview]');
+    await expect(preview).toContainText(`Stored as ${storedKg} kg · 5 reps`);
+    await activate(page, dialog.getByRole('button', { name: 'Edit set 1 on exercise 1' }), true);
+    const reps = dialog.locator('input[id^="health-set-reps-"]');
+    await reps.fill('6');
+    await expect(preview).toContainText(`Stored as ${storedKg} kg · 6 reps`);
+    await expect(dialog.locator('[data-entered-set]').nth(0)).toContainText('6 reps');
+    await activate(page, dialog.getByRole('button', { name: 'Edit set 2 on exercise 1' }), true);
+    await activate(page, dialog.getByRole('button', { name: 'Move set 2 on exercise 1 earlier' }), true);
+    await expect(dialog.locator('[data-entered-set]').nth(0)).toContainText('3 reps');
+    await expect(dialog.locator('[data-entered-set]').nth(1)).toContainText('6 reps');
+    const setIds = await dialog.locator('[data-entered-set]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-entered-set')));
+    expect(setIds).toHaveLength(3);
+    expect(new Set(setIds).size).toBe(3);
+
+    await activate(page, dialog.getByRole('button', { name: 'Save draft' }), true);
+    await expect(dialog).toHaveCount(0);
+    const draftRow = room.locator('[data-workout-state="draft"]');
+    await expect(draftRow).toHaveAttribute('data-set-count', '3');
+    await activate(page, room.getByRole('button', { name: /^Resume Draft session/ }), true);
+    const resumed = page.getByRole('dialog', { name: 'Resume session' });
+    await expect(resumed.locator('[data-entered-set]')).toHaveCount(3);
+    const resumedIds = await resumed.locator('[data-entered-set]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-entered-set')));
+    expect(resumedIds).toEqual(setIds);
+    await activate(page, resumed.getByRole('button', { name: 'Cancel' }), true);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
+    await page.evaluate(() => localStorage.setItem('suite-theme', 'light'));
+    await page.reload();
+    await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await activate(page, room.getByRole('button', { name: /^Resume Draft session/ }), false);
+    const desktop = page.getByRole('dialog', { name: 'Resume session' });
+    const wide = { width: 1280, height: 800 };
+    await activate(page, desktop.getByRole('button', { name: 'Switch to exercise 1' }), false);
+    await expect(desktop.locator('#health-workout-name')).toHaveValue('Synthetic press');
+    await inViewport(desktop.locator('#health-workout-load'), wide);
+    await inViewport(desktop.getByRole('button', { name: 'Finish session' }), wide);
+    await desktop.locator('#health-workout-load').focus();
+    await page.keyboard.type('40');
+    await desktop.locator('#health-workout-reps').focus();
+    await page.keyboard.type('4');
+    await desktop.getByRole('button', { name: 'Add set' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(desktop.locator('#health-workout-load')).toBeFocused();
+    await inViewport(desktop.locator('#health-workout-load'), wide);
+    await expect(desktop.locator('[data-entered-set]')).toHaveCount(4);
+    const finish = desktop.getByRole('button', { name: 'Finish session' });
+    await finish.focus();
+    await expect(finish).toBeFocused();
+    vault.failNextWrites(1);
+    await page.keyboard.press('Enter');
+    const editor = page.getByRole('dialog', { name: 'Edit session' });
+    await expect(editor.getByRole('alert')).toContainText('Could not save this workout');
+    await expect(editor.locator('form')).toHaveAttribute('data-session-state', 'completed');
+    await expect(editor.getByRole('button', { name: 'Finish session' })).toHaveCount(0);
+    await activate(page, editor.getByRole('button', { name: 'Save', exact: true }), false);
+    await expect(editor).toHaveCount(0);
+    const completed = room.locator('[data-workout-state="completed"]');
+    await expect(completed).toHaveAttribute('data-set-count', '4');
+    await expect(completed).toContainText('Session · 2 exercises');
+    await expect(room.locator('[data-workout-state="draft"]')).toHaveCount(0);
+
+    await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
+    await page.evaluate(() => localStorage.setItem('suite-theme', 'dark'));
+    await page.reload();
+    await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await activate(page, room.locator('#health-add-session button'), false);
+    const night = page.getByRole('dialog', { name: 'Add session' });
+    await inViewport(night.locator('#health-workout-load'), wide);
+    await inViewport(night.getByRole('button', { name: 'Save draft' }), wide);
+    await activate(page, night.getByRole('button', { name: 'Cancel' }), false);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
+    await page.evaluate(() => localStorage.setItem('suite-theme', 'light'));
+    await page.reload();
+    await expect(room).toHaveAttribute('data-health-state', 'ready', { timeout: 90_000 });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await activate(page, room.locator('#health-add-session button'), true);
+    const dayPhone = page.getByRole('dialog', { name: 'Add session' });
+    await inViewport(dayPhone.locator('#health-workout-load'), phone);
+    await inViewport(dayPhone.locator('#health-workout-reps'), phone);
+    await inViewport(dayPhone.getByRole('button', { name: 'Finish session' }), phone);
+    await activate(page, dayPhone.getByRole('button', { name: 'Cancel' }), true);
+    await expect(dayPhone).toHaveCount(0);
+  });
+});
+
+async function inViewport(locator: Locator, viewport: { width: number; height: number }): Promise<void> {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x).toBeGreaterThanOrEqual(-1);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
+}
 
 async function selectedDefinition(dialog: Locator): Promise<{ value: string; label: string }> {
   return dialog.locator('#health-workout-definition').evaluate(node => {

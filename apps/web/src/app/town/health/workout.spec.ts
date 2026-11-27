@@ -13,6 +13,8 @@ import {
   draftFromRoutine,
   draftFromSession,
   emptyWorkoutDraft,
+  reviseDraftSet,
+  setEntryFields,
   formatWorkout,
   markSetCounted,
   moveDraftSet,
@@ -205,6 +207,56 @@ describe('workout records', () => {
     expect(again.measured_on).toBe(TODAY);
     expect(again.exercises[0].sets).toEqual(saved.exercises[0].sets);
     expect(formatWorkout(saved, LB)).toBe(`Draft session · Synthetic press · ${TODAY} · 2 sets`);
+  });
+
+  it('starts a session as a draft and corrects one set without drifting canonical numbers', () => {
+    const blank = emptyWorkoutDraft('session', TODAY);
+    expect(blank.state).toBe('draft');
+    const entered = commitEnteredSet({
+      ...blank,
+      name: 'Synthetic press',
+      load: '100',
+      reps: '5',
+    }, LB, TODAY);
+    const set = entered.draft.sets[0];
+    const fields = setEntryFields(set, LB);
+    expect(fields.reps).toBe('5');
+    const corrected = reviseDraftSet(entered.draft, set.id, { ...fields, reps: '6' }, LB, TODAY);
+    expect(corrected.fieldErrors).toEqual({});
+    expect(corrected.draft).not.toBe(entered.draft);
+    expect(corrected.draft.sets[0].id).toBe(set.id);
+    expect(corrected.draft.sets[0].reps).toBe(6);
+    expect(corrected.draft.sets[0].kg).toBe(set.kg);
+    const invalid = reviseDraftSet(corrected.draft, set.id, { ...fields, reps: '' }, LB, TODAY);
+    expect(invalid.draft).toBe(corrected.draft);
+    expect(invalid.fieldErrors['reps']).toBe('finite');
+    const marked = markSetCounted({ ...corrected.draft, state: 'completed' }, set.id, false);
+    const kept = reviseDraftSet(
+      marked,
+      set.id,
+      { ...setEntryFields(marked.sets[0], LB), reps: '6' },
+      LB,
+      TODAY,
+    );
+    expect(kept.draft.sets[0].count).toBeFalse();
+    expect(kept.draft.sets[0].kg).toBe(set.kg);
+    expect(kept.draft.sets[0].reps).toBe(6);
+
+    const run = commitEnteredSet({
+      ...emptyWorkoutDraft('session', TODAY),
+      name: 'Synthetic run',
+      exerciseType: 'time-distance',
+      seconds: '90',
+      distance: '1',
+    }, LB, TODAY);
+    const runSet = run.draft.sets[0];
+    const longer = reviseDraftSet(run.draft, runSet.id, { ...setEntryFields(runSet, LB), seconds: '100' }, LB, TODAY);
+    expect(longer.fieldErrors).toEqual({});
+    expect(longer.draft.sets[0].seconds).toBe(100);
+    expect(longer.draft.sets[0].metres).toBe(runSet.metres);
+    const blankRun = reviseDraftSet(longer.draft, runSet.id, { load: '', reps: '', seconds: '', distance: '' }, LB, TODAY);
+    expect(blankRun.draft).toBe(longer.draft);
+    expect(blankRun.fieldErrors['seconds']).toBe('required');
   });
 
   it('stores a lift, an assisted set, a bodyweight set, and a run without inventing a set', () => {
