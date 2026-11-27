@@ -22,6 +22,12 @@ async function expectTarget(control: Locator) {
   expect(Math.min(bounds!.width, bounds!.height)).toBeGreaterThanOrEqual(44);
 }
 
+async function openCoverage(page: Page) {
+  const details = page.locator('main details.source-details');
+  await expect(details).toBeVisible();
+  if ((await details.getAttribute('open')) === null) await details.locator('summary').click();
+}
+
 async function activate(control: Locator, pointer: 'keyboard' | 'touch') {
   await control.scrollIntoViewIfNeeded();
   if (pointer === 'touch') {
@@ -59,11 +65,14 @@ for (const [width, height, theme, pointer] of [
       await expect(type).toHaveCount(1);
       await expect(type).toHaveValue('book');
       await expect(page.getByText('This capture stays on Books.', { exact: false })).toBeVisible();
+      await openCoverage(page);
       await expect(page.getByText('Open Library can search book (official).', { exact: true })).toBeVisible();
       await expect(page.locator('.search-results article')).toHaveCount(0);
+      await expect(page.locator('main .capture-manual')).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Add manually', exact: true })).toHaveCount(1);
       await expectTarget(type);
       await expectTarget(page.locator('main').getByRole('button', { name: 'Search', exact: true }));
-      await expectTarget(page.locator('.capture-manual').getByRole('button', { name: 'Add to library', exact: true }));
+      await expectTarget(page.getByRole('link', { name: 'Add manually', exact: true }));
       if (pointer === 'keyboard') {
         await page.getByRole('searchbox', { name: 'Title or artist' }).focus();
         await page.keyboard.press('Tab');
@@ -85,6 +94,7 @@ for (const [width, height, theme, pointer] of [
       await activate(gamesSearch, pointer);
       await expect(page).toHaveURL(/\/media\/search\?kind=game/);
       await expect(type).toHaveValue('game');
+      await openCoverage(page);
       await expect(page.getByText('RAWG (game) is not configured.', { exact: false })).toBeVisible();
       await expect(page.getByText('Steam can search game (keyless).', { exact: false })).toBeVisible();
       await expect(page.getByText('No hosted game account is connected.', { exact: false })).toBeVisible();
@@ -198,6 +208,10 @@ test('a down provider keeps manual capture, and pending metadata retries on the 
   await expect(page.getByText('Search retry limit reached.', { exact: false })).toBeVisible();
   expect(searches).toBe(4);
 
+  await page.getByRole('navigation', { name: 'Media sections', exact: true }).getByRole('link', { name: 'Add manually', exact: true }).click();
+  await expect(page).toHaveURL(/\/media\/add\?/);
+  await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('book');
+
   let failSave = true;
   await page.route('**/media/api/library', async route => {
     const path = new URL(route.request().url()).pathname;
@@ -210,6 +224,7 @@ test('a down provider keeps manual capture, and pending metadata retries on the 
   });
   const manual = page.locator('.capture-manual');
   const title = manual.getByRole('textbox', { name: 'Title', exact: true });
+  await expect(title).toHaveValue('down');
   await title.fill('Shelf Harbor');
   await manual.getByText('Optional details', { exact: true }).click();
   await manual.getByLabel('Release year').fill('2026');
@@ -219,7 +234,8 @@ test('a down provider keeps manual capture, and pending metadata retries on the 
   await expect(title).toHaveValue('Shelf Harbor');
   await expect(manual.getByLabel('Release year')).toHaveValue('2026');
   await expect(manual.getByLabel('Note')).toHaveValue('Still on the form');
-  await expect(page).toHaveURL(/\/media\/search\?/);
+  await expect(page).toHaveURL(/\/media\/add\?/);
+  await expectTarget(manual.getByRole('button', { name: 'Add to library', exact: true }));
   await manual.getByRole('button', { name: 'Add to library', exact: true }).click();
   await expect(page).toHaveURL(/\/media\/item\/\d+$/);
   const id = Number(page.url().match(/item\/(\d+)/)?.[1]);
@@ -264,6 +280,178 @@ test('a down provider keeps manual capture, and pending metadata retries on the 
   await expect(note).toHaveValue('Still editable.');
   expect(refreshes).toBe(3);
   expect(providers).toEqual([]);
+});
+
+for (const [width, height, theme, pointer] of [
+  [390, 844, 'light', 'keyboard'],
+  [390, 844, 'dark', 'touch'],
+  [1280, 800, 'light', 'touch'],
+  [1280, 800, 'dark', 'keyboard'],
+] as const) {
+  test.describe(`capture lead at ${width} ${theme} ${pointer}`, () => {
+    test.use({ viewport: { width, height }, hasTouch: pointer === 'touch' });
+
+    test('a partial match leads, and Search return keeps the query', async ({ page }) => {
+      test.setTimeout(90_000);
+      const providers = watchProviders(page);
+      await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.route('**/media/api/search?**', route => {
+        const query = new URL(route.request().url()).searchParams.get('q') || '';
+        if (query === 'fail') {
+          return route.fulfill({ status: 502, json: { message: 'Synthetic source timeout' } });
+        }
+        if (query === 'empty') {
+          return route.fulfill({
+            json: {
+              results: [],
+              sources: [{ id: 'openlibrary', state: 'ok', kinds: ['book'], coverage: 'official', cached: false, reason: null }],
+              partial: false,
+              total: 0,
+              offset: 0,
+              has_more: false,
+            },
+          });
+        }
+        const results = Array.from({ length: 8 }, (_, index) => ({
+          source: 'fixture',
+          source_id: 'OL-' + index,
+          kind: 'book',
+          title: index === 0 ? 'Paper Harbor' : 'Paper Harbor ' + index,
+          creator: 'Synthetic',
+          year: 2024,
+          already_saved: index === 7,
+          saved_id: index === 7 ? 77 : null,
+        }));
+        return route.fulfill({
+          json: {
+            results,
+            sources: [
+              { id: 'openlibrary', state: 'ok', kinds: ['book'], coverage: 'official', cached: false, reason: null },
+              { id: 'tmdb', state: 'timeout', kinds: ['movie'], coverage: 'official', cached: false, reason: 'This source timed out.' },
+            ],
+            partial: true,
+            total: results.length,
+            offset: 0,
+            has_more: false,
+          },
+        });
+      });
+      await page.goto('/media/search?kind=book&q=Paper%20Harbor');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      const first = page.locator('.search-results article').first();
+      await expect(first.getByRole('heading', { name: 'Paper Harbor', exact: true })).toBeVisible();
+      await expect(page.getByText('Search is incomplete.', { exact: true })).toBeVisible();
+      await expect(first.getByRole('button', { name: 'Add to library', exact: true })).toBeEnabled();
+      await expect(page.locator('.search-results article').nth(7).getByRole('link', { name: 'Open saved item', exact: true })).toBeVisible();
+      await expect(page.locator('main .capture-manual')).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Add manually', exact: true })).toHaveCount(1);
+      await expect(page.locator('main details.source-details')).not.toHaveAttribute('open', '');
+      const place = await page.evaluate(() => {
+        const top = (selector: string) => {
+          const node = document.querySelector(selector);
+          if (!node) return null;
+          return Math.round(node.getBoundingClientRect().top + window.scrollY);
+        };
+        return {
+          result: top('.search-results article'),
+          failure: top('.local-error'),
+          coverage: top('main details.source-details'),
+          popular: top('.popular'),
+          height: window.innerHeight,
+        };
+      });
+      expect(place.result).toBeLessThan(place.height);
+      expect(place.failure).toBeLessThan(place.result!);
+      expect(place.coverage).toBeGreaterThan(place.result!);
+      expect(place.popular).toBeGreaterThan(place.result!);
+      await expect(page.getByText('This source timed out.', { exact: false })).toBeHidden();
+
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      const scrolled = await page.evaluate(() => window.scrollY);
+      expect(scrolled).toBeGreaterThan(160);
+      const add = page.getByRole('navigation', { name: 'Media sections', exact: true }).getByRole('link', { name: 'Add manually', exact: true });
+      await activate(add, pointer);
+      await expect(page).toHaveURL(/\/media\/add\?/);
+      await expect(page).toHaveURL(/fromKind=book/);
+      await expect(page).toHaveURL(/[?&]q=Paper(?:\+|%20)Harbor/);
+      await expect(page).toHaveURL(/[?&]kind=book/);
+      const title = page.getByRole('textbox', { name: 'Title', exact: true });
+      await expect(title).toHaveValue('Paper Harbor');
+      await expect(page.getByRole('searchbox')).toHaveCount(0);
+      const manualPlace = await page.evaluate(() => {
+        const top = (selector: string) => {
+          const node = document.querySelector(selector);
+          return node ? Math.round(node.getBoundingClientRect().top + window.scrollY) : null;
+        };
+        return {
+          title: top('#add-title'),
+          save: top('.capture-manual button'),
+          coverage: top('main details.source-details'),
+          height: window.innerHeight,
+        };
+      });
+      expect(manualPlace.title).toBeLessThan(manualPlace.coverage!);
+      expect(manualPlace.save).toBeLessThan(manualPlace.coverage!);
+      expect(manualPlace.title).toBeLessThan(manualPlace.height);
+      expect(manualPlace.save).toBeLessThan(manualPlace.height);
+      if (width === 390) expect(manualPlace.title).toBeLessThan(608);
+      await page.getByRole('combobox', { name: 'Type', exact: true }).selectOption('game');
+      await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('game');
+      const back = page.locator('a.capture-back');
+      await activate(back, pointer);
+      await page.getByRole('button', { name: 'Leave draft', exact: true }).click();
+      await expect(page).toHaveURL(/\/media\/search\?/);
+      await expect(page).toHaveURL(/[?&]q=Paper(?:\+|%20)Harbor/);
+      await expect(page).toHaveURL(/[?&]kind=book/);
+      await expect(page.getByRole('searchbox', { name: 'Title or artist' })).toHaveValue('Paper Harbor');
+      await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('book');
+      await expect(page.getByRole('searchbox', { name: 'Title or artist' })).toBeFocused();
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scrolled - 80);
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(scrolled + 80);
+      await expect(first.getByRole('heading', { name: 'Paper Harbor', exact: true })).toBeVisible();
+
+      const query = page.getByRole('searchbox', { name: 'Title or artist' });
+      await query.fill('fail');
+      await expect(page.locator('main [role=alert]')).toContainText('Synthetic source timeout');
+      await expect(page.getByText('Search is incomplete.', { exact: true })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Paper Harbor', exact: true })).toHaveCount(0);
+      const retry = page.getByRole('button', { name: 'Retry search', exact: true });
+      await expect(retry).toBeVisible();
+      const retryBox = await retry.boundingBox();
+      expect(retryBox).toBeTruthy();
+      expect(retryBox!.y).toBeGreaterThanOrEqual(0);
+      expect(retryBox!.y).toBeLessThan(height);
+      await query.fill('empty');
+      await expect(page.getByText('No matching titles', { exact: true })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Add manually', exact: true })).toHaveCount(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      expect(providers).toEqual([]);
+    });
+  });
+}
+
+test('capture lead stays in view at 320px', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.route('**/media/api/search?**', route => route.fulfill({
+    json: {
+      results: [{ source: 'fixture', source_id: 'OL-ONE', kind: 'book', title: 'Paper Harbor', creator: 'Synthetic' }],
+      sources: [{ id: 'openlibrary', state: 'ok', kinds: ['book'], coverage: 'official', cached: false }],
+      partial: false,
+      total: 1,
+      offset: 0,
+      has_more: false,
+    },
+  }));
+  await page.goto('/media/search?kind=book&q=Paper%20Harbor');
+  const card = page.locator('.search-results article').first();
+  await expect(card).toBeVisible();
+  const cardBox = await card.boundingBox();
+  expect(cardBox).toBeTruthy();
+  expect(cardBox!.y).toBeGreaterThanOrEqual(0);
+  expect(cardBox!.y).toBeLessThan(844);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test('sign-out clears an unsaved capture draft', async ({ page }) => {

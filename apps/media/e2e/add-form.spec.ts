@@ -34,7 +34,7 @@ test('manual add validates locally, keeps the draft, and saves after correction'
     await year.fill('99');
     await submit.click();
     await expect(page.getByText('Enter a year between 1000 and 3000.', { exact: true })).toBeVisible();
-    await expect(page.locator('details')).toHaveAttribute('open', '');
+    await expect(page.locator('details', { hasText: 'Optional details' })).toHaveAttribute('open', '');
     await expect(year).toBeFocused();
     await expect(title).toHaveValue('A valid synthetic title');
     await expect(page).toHaveURL(/\/media\/add$/);
