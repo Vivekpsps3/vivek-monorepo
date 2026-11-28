@@ -300,6 +300,18 @@ class StampWalletView(_Shape):
     entitlements: list[StampEntitlementView]
 
 
+class PlayRunView(_Shape):
+    nonce: str
+    game_id: Literal["memory-shelves", "harbor-rhythm"]
+    seed: int
+    civil_day: str
+    status: Literal["open", "complete"]
+    score: int | None
+    rewarded: bool
+    amount: Literal[0, 5]
+    balance: int
+
+
 class RoomLayoutItem(_Shape):
     instance_id: str
     catalog_id: str

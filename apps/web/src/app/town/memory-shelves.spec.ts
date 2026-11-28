@@ -120,16 +120,23 @@ describe('Memory Shelves', () => {
   it('stores one owner and drops a corrupt or foreign board', () => {
     const storage = box();
     let board = pauseBoard(flipTile(dealMemory(), 4));
-    writeMemoryPlay(storage, { ownerId: 4, board, lastMoves: 8 });
+    writeMemoryPlay(storage, { ownerId: 4, board, lastMoves: 8, reward: null });
     expect(readMemoryPlay(storage, 4)?.board?.tiles[4]?.face).toBe('up');
     expect(readMemoryPlay(storage, 4)?.lastMoves).toBe(8);
     expect(readMemoryPlay(storage, 5)).toBeNull();
     storage.setItem(memoryPlayKey(4), '{');
     expect(readMemoryPlay(storage, 4)).toBeNull();
-    writeMemoryPlay(storage, { ownerId: 4, board: finish(), lastMoves: 5 });
+    writeMemoryPlay(storage, { ownerId: 4, board: finish(), lastMoves: 5, reward: null });
     expect(readMemoryPlay(storage, 4)).toBeNull();
-    writeMemoryPlay(storage, { ownerId: 9, board: null, lastMoves: 6 });
-    expect(readMemoryPlay(storage, 9)).toEqual({ ownerId: 9, board: null, lastMoves: 6 });
+    writeMemoryPlay(storage, { ownerId: 9, board: null, lastMoves: 6, reward: null });
+    expect(readMemoryPlay(storage, 9)).toEqual({ ownerId: 9, board: null, lastMoves: 6, reward: null });
+    storage.setItem(memoryPlayKey(9), JSON.stringify({
+      ownerId: 9,
+      board: null,
+      lastMoves: 6,
+      reward: { nonce: 'edited', seed: 10, phase: 'rewarded', amount: 5, note: 'nope' },
+    }));
+    expect(readMemoryPlay(storage, 9)).toEqual({ ownerId: 9, board: null, lastMoves: 6, reward: null });
     clearMemoryPlay(storage);
     expect(readMemoryPlay(storage, 9)).toBeNull();
     expect(validMemoryPlay({ ownerId: 4, board: { seed: 11 }, lastMoves: null }, 4)).toBeNull();

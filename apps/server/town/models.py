@@ -1,4 +1,4 @@
-"""Town habits, check-ins, cadence rows, cosmetic room layouts, quests, dialogue, and discoveries.
+"""Town habits, check-ins, cadence rows, cosmetic room layouts, quests, dialogue, discoveries, and play receipts.
 
 TownBase is its own registry, separate from Finance, Travel, and Media.
 Owner foreign keys to users.id are attached by apps.server.schema.OWNER_TABLES.
@@ -38,6 +38,7 @@ __all__ = [
     "Habit",
     "HabitCadence",
     "HabitCheckin",
+    "PlayReceipt",
     "QuestJournal",
     "QuestStep",
     "RoomLayout",
@@ -333,3 +334,51 @@ class DiscoveryStamp(TownBase):
     user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     discovery_id: Mapped[str] = mapped_column(String(40), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+_PLAY_SEED = (
+    "(game_id = 'memory-shelves' AND seed = 10 AND mode IS NULL) OR "
+    "(game_id = 'harbor-rhythm' AND seed = 1 AND mode IN ('timed', 'untimed'))"
+)
+_PLAY_DONE = (
+    "(status = 'open' AND score IS NULL AND reward_amount = 0 AND completed_at IS NULL) OR "
+    "(status = 'complete' AND score IS NOT NULL AND completed_at IS NOT NULL "
+    "AND reward_amount IN (0, 5))"
+)
+
+
+class PlayReceipt(TownBase):
+    """One owner-scoped run. The Town civil day is fixed when the run opens."""
+
+    __tablename__ = "town_play_receipts"
+    __table_args__ = (
+        Index("ix_town_play_receipts_user_id", "user_id"),
+        Index("uq_town_play_receipt_nonce", "nonce", unique=True),
+        CheckConstraint(
+            "game_id IN ('memory-shelves', 'harbor-rhythm')",
+            name="ck_town_play_receipts_game",
+        ),
+        CheckConstraint(_PLAY_SEED, name="ck_town_play_receipts_seed"),
+        CheckConstraint("status IN ('open', 'complete')", name="ck_town_play_receipts_status"),
+        CheckConstraint(_PLAY_DONE, name="ck_town_play_receipts_complete"),
+        CheckConstraint("length(nonce) BETWEEN 16 AND 64", name="ck_town_play_receipts_nonce"),
+        CheckConstraint("length(zone) BETWEEN 1 AND 64", name="ck_town_play_receipts_zone"),
+        CheckConstraint(
+            "score IS NULL OR score BETWEEN 0 AND 1000",
+            name="ck_town_play_receipts_score",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    nonce: Mapped[str] = mapped_column(String(64), nullable=False)
+    game_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    seed: Mapped[int] = mapped_column(Integer, nullable=False)
+    mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    civil_day: Mapped[date] = mapped_column(Date, nullable=False)
+    zone: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reward_amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

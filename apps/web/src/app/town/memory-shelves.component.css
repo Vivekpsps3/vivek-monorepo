@@ -18,7 +18,7 @@ p {
   margin: 0;
 }
 
-.memory > p:not(#memory-status) {
+.memory > p:not(#memory-status):not(#memory-reward) {
   color: var(--text-secondary);
 }
 

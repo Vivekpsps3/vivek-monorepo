@@ -14,7 +14,7 @@ from apps.server.migrations import (
 
 PARENT = "site_flight_occurrence_v1"
 REVISION = "site_trip_draft_v1"
-HEAD = "site_town_discoveries_v1"
+HEAD = "site_town_play_receipts_v1"
 STAMP_GAP = {
     "add_index:town_stamp_entitlements:ix_town_stamp_entitlements_user_id",
     "add_index:town_stamp_entitlements:uq_town_stamp_entitlement_item",
@@ -37,6 +37,9 @@ STAMP_GAP = {
     "add_table:None:town_discovery_stamps",
     "add_index:town_discovery_stamps:ix_town_discovery_stamps_user_id",
     "add_index:town_discovery_stamps:uq_town_discovery_stamp",
+    "add_table:None:town_play_receipts",
+    "add_index:town_play_receipts:ix_town_play_receipts_user_id",
+    "add_index:town_play_receipts:uq_town_play_receipt_nonce",
 }
 KEPT = (
     "trips",

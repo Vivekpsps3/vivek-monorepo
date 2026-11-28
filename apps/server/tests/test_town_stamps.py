@@ -35,7 +35,7 @@ from apps.server.town.models import StampEntitlement, StampReceipt, StampWallet,
 from apps.server.town.stamps import grant_stamps, purchase_stamps, read_wallet, refund_stamps
 
 PARENT = "site_trip_draft_v1"
-HEAD = "site_town_discoveries_v1"
+HEAD = "site_town_play_receipts_v1"
 WHEN = datetime(2026, 10, 29, 19, 0, tzinfo=UTC)
 GRANT = {"grant_key": "quest:chapter-1", "amount": 10, "consumer": "quest"}
 _CHECK = "Check the highlighted fields."

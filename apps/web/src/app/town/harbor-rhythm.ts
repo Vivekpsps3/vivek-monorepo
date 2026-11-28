@@ -1,11 +1,15 @@
 /** Harbor Rhythm. Lantern Tide is an original 30-second four-lane chart, not a recording. */
 
+import { validReward, type RewardDraft } from './play-reward';
+
 export const RHYTHM_LANES = Object.freeze(['Bell', 'Glass', 'Lantern', 'Ferry'] as const);
 export const RHYTHM_DURATION_MS = 30_000;
 export const RHYTHM_TICK_MS = 100;
 /** A note is playable from this many milliseconds before its beat until the same span after it. */
 export const RHYTHM_WINDOW_MS = 800;
 export const RHYTHM_PLAY_PREFIX = 'town.harbor-rhythm.v1.';
+/** Chart identity stored on the play receipt. The board itself has no numeric seed. */
+export const RHYTHM_SEED = 1;
 
 export interface RhythmBeat {
   readonly lane: number;
@@ -60,6 +64,7 @@ export interface RhythmPlay {
   readonly ownerId: number;
   readonly board: RhythmBoard | null;
   readonly last: RhythmResult | null;
+  readonly reward: RewardDraft | null;
 }
 
 export interface RhythmStorage {
@@ -178,9 +183,9 @@ export function laneStep(key: string): number | null {
 
 export function rhythmStatus(board: RhythmBoard | null, last: RhythmResult | null): string {
   if (!board) {
-    if (!last) return 'Play the 30-second chart or the untimed sequence. This game does not award Stamps.';
+    if (!last) return 'Play the 30-second chart or the untimed sequence.';
     const kind = last.mode === 'timed' ? '30-second chart' : 'untimed sequence';
-    return `Last ${kind} finished at ${last.accuracy}% accuracy. This game does not award Stamps.`;
+    return `Last ${kind} finished at ${last.accuracy}% accuracy.`;
   }
   const score = accuracyPhrase(board);
   if (board.phase === 'complete') {
@@ -334,7 +339,7 @@ function validBoard(value: unknown): RhythmBoard | null {
 
 function validPlay(value: unknown, ownerId: number): RhythmPlay | null {
   if (!value || typeof value !== 'object') return null;
-  const record = value as { ownerId?: unknown; board?: unknown; last?: unknown };
+  const record = value as { ownerId?: unknown; board?: unknown; last?: unknown; reward?: unknown };
   if (record.ownerId !== ownerId) return null;
   const board = record.board == null ? null : validBoard(record.board);
   if (record.board != null && !board) return null;
@@ -344,5 +349,6 @@ function validPlay(value: unknown, ownerId: number): RhythmPlay | null {
     const finished = finishedResult(board);
     if (!last || !finished || last.mode !== finished.mode || last.accuracy !== finished.accuracy) return null;
   }
-  return { ownerId, board, last };
+  const reward = record.reward == null ? null : validReward(record.reward, RHYTHM_SEED);
+  return { ownerId, board, last, reward };
 }

@@ -150,13 +150,13 @@ describe('Harbor Rhythm', () => {
     const storage = box();
     storage.setItem('town.memory-shelves.v1.4', '{"ownerId":4}');
     const board = playLane(startRhythm('untimed'), 0);
-    const play = { ownerId: 4, board, last: null };
+    const play = { ownerId: 4, board, last: null, reward: null };
     writeRhythmPlay(storage, play);
     expect(readRhythmPlay(storage, 4)?.board?.step).toBe(1);
     expect(readRhythmPlay(storage, 9)).toBeNull();
 
     const paused = pauseRhythm(advanceRhythm(startRhythm('timed'), 1_800));
-    writeRhythmPlay(storage, { ownerId: 4, board: paused, last: { mode: 'untimed', accuracy: 100 } });
+    writeRhythmPlay(storage, { ownerId: 4, board: paused, last: { mode: 'untimed', accuracy: 100 }, reward: null });
     expect(readRhythmPlay(storage, 4)?.board?.phase).toBe('paused');
     expect(readRhythmPlay(storage, 4)?.board?.elapsed).toBe(1_800);
 
@@ -172,7 +172,7 @@ describe('Harbor Rhythm', () => {
     expect(storage.getItem('town.memory-shelves.v1.4')).toBe('{"ownerId":4}');
     expect([...Array(storage.length)].some((_, index) => storage.key(index)?.startsWith(RHYTHM_PLAY_PREFIX))).toBeFalse();
     expect(rhythmStatus(null, { mode: 'timed', accuracy: 100 })).toBe(
-      'Last 30-second chart finished at 100% accuracy. This game does not award Stamps.',
+      'Last 30-second chart finished at 100% accuracy.',
     );
   });
 });

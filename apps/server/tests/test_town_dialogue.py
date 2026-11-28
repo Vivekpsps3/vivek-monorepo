@@ -46,7 +46,7 @@ from apps.server.town.resident_catalog import (
 from apps.server.town.stamps import read_wallet
 
 PARENT = "site_town_quests_v1"
-HEAD = "site_town_discoveries_v1"
+HEAD = "site_town_play_receipts_v1"
 WHEN = datetime(2026, 11, 2, 20, 0, tzinfo=UTC)
 AWAY = 0
 _FORBIDDEN = {

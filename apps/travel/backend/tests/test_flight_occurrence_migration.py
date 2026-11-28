@@ -14,7 +14,7 @@ from apps.server.migrations import (
 
 PARENT = "site_town_ownership_v1"
 REVISION = "site_flight_occurrence_v1"
-HEAD = "site_town_discoveries_v1"
+HEAD = "site_town_play_receipts_v1"
 DRAFT_GAP = {
     "add_index:trip_draft_legs:ix_trip_draft_legs_draft_id",
     "add_index:trip_draft_proposals:ix_trip_draft_proposals_draft_id",
@@ -44,6 +44,9 @@ DRAFT_GAP = {
     "add_table:None:town_discovery_stamps",
     "add_index:town_discovery_stamps:ix_town_discovery_stamps_user_id",
     "add_index:town_discovery_stamps:uq_town_discovery_stamp",
+    "add_table:None:town_play_receipts",
+    "add_index:town_play_receipts:ix_town_play_receipts_user_id",
+    "add_index:town_play_receipts:uq_town_play_receipt_nonce",
 }
 
 
