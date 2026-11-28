@@ -59,7 +59,7 @@ Not run: Finance, Travel, and Media product gates beyond the suite project. This
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded when the pull request opens. The body is only `Closes #484`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/660. The body is only `Closes #484`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet. Not deployed.
 - Remaining external prerequisites or approved scope decisions: MERGE-02 keeps the World day and week URLs addressable. Direct concept ids already open `/town/library/study/:conceptId`.
