@@ -68,6 +68,7 @@ const destinations: Readonly<Record<string, Readonly<Record<string, Coordinate>>
   '/town/home/bedroom': { ...townFurniture, object: ['bedroom-bed', 'bedroom-record', 'bedroom-frame'] },
   '/town/home/courtyard': { ...townFurniture, object: ['courtyard-planter', 'courtyard-fern', 'courtyard-seat', 'courtyard-lantern'] },
   '/town/library': {},
+  '/town/library/study': { new: ['1'] },
   '/town/hall': { object: ['rules', 'progress', 'archive'] },
   '/town/cosmetics': townFurniture,
   '/town/workshop': { ...townFurniture, item: value => /^[a-z0-9][a-z0-9:_-]{0,63}$/.test(value) },
@@ -131,6 +132,11 @@ export function returnPath(next: string): string | null {
   if (!path) return null;
   const url = new URL(path, window.location.origin);
   const pathname = url.pathname.replace(/\/$/, '') || '/';
+  const studyConcept = /^\/town\/library\/study\/([1-9]\d{0,18})$/.exec(pathname);
+  if (studyConcept) {
+    const id = Number(studyConcept[1]);
+    return Number.isSafeInteger(id) ? pathname : null;
+  }
   if (!Object.hasOwn(destinations, pathname)) {
     return pathname.startsWith('/finance/') && financeAliases.has(pathname.slice('/finance/'.length))
       ? pathname : null;

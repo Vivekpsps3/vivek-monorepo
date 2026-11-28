@@ -22,6 +22,8 @@ export const routes: Routes = [
       { path: '', loadComponent: () => import('./town/town.component').then(m => m.TownComponent) },
       { path: 'home', pathMatch: 'full', redirectTo: '/town/home/living' },
       { path: 'home/:room', title: 'Town · Home', loadComponent: () => import('./town/home-room.component').then(m => m.HomeRoomComponent) },
+      { path: 'library/study', title: 'Town · Study', loadComponent: () => import('./world/ui/library-study.component').then(m => m.LibraryStudyComponent) },
+      { path: 'library/study/:conceptId', title: 'Town · Study', loadComponent: () => import('./world/ui/library-study.component').then(m => m.LibraryStudyComponent) },
       { path: 'library', title: 'Town · Reading Hall', loadComponent: () => import('./town/library-room.component').then(m => m.LibraryRoomComponent) },
       { path: 'hall/journal', title: 'Town · Hall journal', loadComponent: () => import('./town/hall-journal.component').then(m => m.HallJournalComponent) },
       { path: 'hall/journal/:collection', title: 'Town · Hall journal', loadComponent: () => import('./town/hall-journal.component').then(m => m.HallJournalComponent) },

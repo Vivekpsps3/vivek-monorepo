@@ -1,11 +1,12 @@
-<ui-dialog [open]="open()" [panelClass]="panelClass()" labelledBy="concept-sheet-title" (closed)="close()">
+@if (open()) {
+<section class="concept-study" aria-labelledby="concept-sheet-title">
   <h2 id="concept-sheet-title">{{ copy.concepts }}</h2>
   <div class="concept-tabs" role="tablist" aria-label="Concepts">
     <button type="button" role="tab" class="world-tab" [attr.aria-selected]="tab() === 'notyet'" (click)="tab.set('notyet')">{{ copy.notYet }}</button>
     <button type="button" role="tab" class="world-tab" [attr.aria-selected]="tab() === 'understood'" (click)="tab.set('understood')">{{ copy.understood }}</button>
     <button type="button" role="tab" class="world-tab" [attr.aria-selected]="tab() === 'archived'" (click)="tab.set('archived')">{{ copy.archived }}</button>
   </div>
-  @if (listError()) { <p role="alert">{{ listError() }}</p> }
+  @if (listError()) { <p id="concept-missing" role="alert" tabindex="-1">{{ listError() }}</p> }
   @if (notice()) { <p aria-live="polite">{{ notice() }}</p> }
   <ui-button variant="secondary" (clicked)="startCreate()">{{ copy.addConcept }}</ui-button>
   @if (showForm() || creating()) {
@@ -62,5 +63,6 @@
       </article>
     }
   </div>
-</ui-dialog>
+</section>
+}
 <ui-confirm-dialog />

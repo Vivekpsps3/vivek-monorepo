@@ -81,8 +81,6 @@ import {
   type WorldMeta,
   type WorldWeek,
 } from '../world.types';
-import { ConceptSheetComponent, type ConceptChange } from './concept-sheet.component';
-
 const WORLD_ART = [
   'flower', 'rock', 'oak', 'pine', 'snowrock', 'cactus', 'bones', 'palm', 'fern',
   'beacon', 'pile', 'guide', 'vivekbot', 'terrarian', 'manager',
@@ -183,7 +181,7 @@ function connectController(): ExplorerController {
 
 @Component({
   selector: 'app-world',
-  imports: [RouterLink, UiButtonComponent, UiEmptyStateComponent, ConceptSheetComponent],
+  imports: [RouterLink, UiButtonComponent, UiEmptyStateComponent],
   templateUrl: './world.component.html',
   styleUrl: './world.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -216,7 +214,6 @@ export class WorldComponent {
   readonly reduced = signal(false);
   readonly fogOn = signal(true);
   readonly view = signal<WorldView | null>(null);
-  readonly names = signal<Readonly<Record<number, string>>>({});
   readonly centerWeek = signal('');
   readonly centerDay = signal(0);
   readonly inTown = signal(false);
@@ -227,10 +224,6 @@ export class WorldComponent {
   readonly townFailed = signal(false);
   readonly townData = signal<TownResponse | null>(null);
   readonly health = signal<TownHealthStages>({ state: 'locked' });
-  readonly conceptsOpen = signal(false);
-  readonly conceptFocus = signal<number | null>(null);
-  readonly creatingConcept = signal(false);
-
   private model: CameraModel = { x: 0, reduced: false };
   private readonly atlas = new SpriteAtlas();
   private bitmaps: BitmapCache = createBitmapCache();
@@ -251,17 +244,7 @@ export class WorldComponent {
   private observer?: ResizeObserver;
   private readonly cleanups: Array<() => void> = [];
 
-  readonly weeksOldest = computed(() => {
-    const names = this.names();
-    const weeks = [...(this.view()?.weeks ?? [])].sort((a, b) => (a.week < b.week ? -1 : a.week > b.week ? 1 : 0));
-    return weeks.map(week => ({
-      ...week,
-      concepts: week.concepts.map(concept => {
-        const name = names[concept.id];
-        return name ? { ...concept, name } : concept;
-      }),
-    }));
-  });
+  readonly weeksOldest = computed(() => [...(this.view()?.weeks ?? [])].sort((a, b) => (a.week < b.week ? -1 : a.week > b.week ? 1 : 0)));
 
   readonly readings = computed(() => {
     const snap = this.view();
@@ -382,13 +365,11 @@ export class WorldComponent {
       if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
       this.view.set(null);
       this.townData.set(null);
-      this.names.set({});
       this.error.set(null);
       this.townFailed.set(false);
       this.selectedDate.set('');
       this.selectedItemId.set(null);
       this.choices.set([]);
-      this.conceptsOpen.set(false);
       this.busy.set(false);
       this.bitmaps = createBitmapCache();
       this.paint();
@@ -628,25 +609,6 @@ export class WorldComponent {
     return null;
   }
 
-  openConcepts(id?: number, create = false): void {
-    this.conceptFocus.set(id ?? null);
-    this.creatingConcept.set(create);
-    this.conceptsOpen.set(true);
-  }
-
-  openCreate(): void {
-    this.openConcepts(undefined, true);
-  }
-
-  closeConcepts(): void {
-    this.conceptsOpen.set(false);
-    this.creatingConcept.set(false);
-  }
-
-  onConceptChanged(change: ConceptChange): void {
-    void this.applyConceptChange(change);
-  }
-
   retry(): void {
     this.work.abort();
     this.work = new AbortController();
@@ -714,24 +676,6 @@ export class WorldComponent {
         this.clearSlow();
       }
     }
-  }
-
-  private async applyConceptChange(change: ConceptChange): Promise<void> {
-    if (this.disposed) return;
-    if (change.id != null && change.name) {
-      const id = change.id;
-      const name = change.name;
-      this.names.update(current => ({ ...current, [id]: name }));
-    }
-    const signal = this.work.signal;
-    const edit: ConceptEdit = change.kind === 'weeks'
-      ? { kind: 'weeks', weeks: change.weeks ?? [] }
-      : { kind: change.kind };
-    await this.controller.applyConceptEdit(edit, signal);
-    if (signal.aborted || change.kind !== 'weeks') return;
-    this.pull();
-    await this.refreshArt();
-    this.paint();
   }
 
   private async loadDistrict(signal: AbortSignal): Promise<void> {

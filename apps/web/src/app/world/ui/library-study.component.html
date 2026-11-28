@@ -1,0 +1,12 @@
+<main [attr.data-today]="today()">
+  <header>
+    <nav class="study-crumbs" aria-label="Breadcrumb">
+      <a routerLink="/town">Town</a>
+      <a routerLink="/town/library">Reading Hall</a>
+      <span aria-current="page">Study</span>
+    </nav>
+    <h1>Study</h1>
+    <p>Saved concepts keep their notes, sources, understood dates, and archive state.</p>
+  </header>
+  <app-concept-sheet [open]="true" [today]="today()" [focusId]="focusId()" [absent]="absent()" [creating]="creating()" />
+</main>

@@ -8,7 +8,7 @@
     <nav class="world-links" aria-label="Your places">
       <a routerLink="/town">← Town</a>
       <a [routerLink]="pixelsReturn().commands" [queryParams]="pixelsReturn().query">Pixels ↗</a>
-      <ui-button variant="secondary" (clicked)="openConcepts()">{{ copy.concepts }}</ui-button>
+      <ui-button variant="secondary" href="/town/library/study" [label]="copy.concepts" />
     </nav>
   </header>
 
@@ -107,7 +107,7 @@
             <p class="world-item-detail">{{ item.detail }} @if (itemDates(item)) { <span>· {{ itemDates(item) }}</span> }</p>
             <p>{{ itemReason(item) }}</p>
             @if (conceptId(item); as id) {
-              <ui-button variant="secondary" (clicked)="openConcepts(id)">Open concept</ui-button>
+              <a class="world-inline" [routerLink]="['/town/library/study', id]">Open concept</a>
             } @else if (sourceHref(item); as href) {
               <a class="world-inline" [routerLink]="href.split('?')[0]" [queryParams]="item.kind === 'trip' ? { day: selectedDate() } : href.includes('next=') ? { next: '/town/world' } : {}">{{ item.kind === 'habit' ? 'Manage habits in Town' : 'Open in ' + sourceName(item) }} →</a>
             }
@@ -130,7 +130,7 @@
             <h3>{{ selectedDate() > serverToday() ? 'A little further along the path.' : 'Room for the unrecorded.' }}</h3>
             <p>{{ selectedDate() > serverToday() ? 'This day is still ahead. Any saved travel plans appear here; the rest of the landscape is a horizon.' : 'There’s no recorded activity for this day. That says nothing about how the day was lived.' }}</p>
             <a routerLink="/town">Tend a habit in Town</a>
-            <button type="button" class="world-text" (click)="openCreate()">{{ copy.addConcept }}</button>
+            <a class="world-text" routerLink="/town/library/study" [queryParams]="{ new: '1' }">{{ copy.addConcept }}</a>
           </div>
         }
         <a class="world-pixels-link" [routerLink]="pixelsReturn().commands" [queryParams]="pixelsReturn().query">{{ pixelsReturnName() }} →</a>
@@ -163,7 +163,7 @@
   @if (showEmpty()) {
     <ui-empty-state [title]="copy.emptyTitle" [message]="copy.emptyMessage">
       <a routerLink="/town">{{ copy.town }}</a>
-      <ui-button (clicked)="openCreate()">{{ copy.addConcept }}</ui-button>
+      <ui-button href="/town/library/study" [queryParams]="{ new: '1' }" [label]="copy.addConcept" />
     </ui-empty-state>
   }
   @if (mode() === 'list' && readings().length) {
@@ -193,6 +193,4 @@
       <ui-button variant="secondary" [disabled]="historyBusy() || dateBusy()" (clicked)="loadOlder()">{{ historyBusy() ? 'Loading older weeks…' : copy.loadOlder }}</ui-button>
     }
   </footer>
-  <app-concept-sheet [open]="conceptsOpen()" [today]="serverToday()" [focusId]="conceptFocus()" [creating]="creatingConcept()"
-    (closed)="closeConcepts()" (changed)="onConceptChanged($event)" />
 </main>

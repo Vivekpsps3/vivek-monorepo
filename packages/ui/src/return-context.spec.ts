@@ -58,6 +58,10 @@ describe('return context', () => {
     expect(returnPath('/town/home/study?object=living-frame')).toBe('/town/home/study');
     expect(returnPath('/town/home/study?item=desk&item=fern&part=dusk&note=private')).toBe('/town/home/study');
     expect(returnPath('/town/hall?object=rules&edit=15&history=15&balance=10')).toBe('/town/hall?object=rules');
+    expect(returnPath('/town/library/study?new=1&note=secret')).toBe('/town/library/study?new=1');
+    expect(returnPath('/town/library/study/41?note=secret')).toBe('/town/library/study/41');
+    expect(returnPath('/town/library/study/0')).toBeNull();
+    expect(returnPath('/town/library/study/nope')).toBeNull();
     expect(returnPath('/town/review?week=2026-12-28')).toBe('/town/review?week=2026-12-28');
     expect(returnPath('/town/review?week=2027-01-04')).toBe('/town/review?week=2027-01-04');
     expect(returnPath('/town/review?week=2027-01-03&note=secret')).toBe('/town/review');

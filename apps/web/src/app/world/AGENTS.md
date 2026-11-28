@@ -13,7 +13,9 @@ must not publish later. Keep public Town content separate from private budget/ch
 Preserve deterministic generation/golden vectors, URL reload/back-forward,
 concept invalidation, pointer/keyboard camera, reduced motion and theme redraw.
 The `day=YYYY-MM-DD` query is an exact civil date; legacy `week=` links select
-Monday. A Town visit keeps `from` plus the Year or Life span on this URL.
+Monday. Concept notes, sources, understood dates, and archive state stay on
+`/api/world/concepts`. `/town/library/study` opens those same ids. A Town visit
+keeps `from` plus the Year or Life span on this URL.
 Explicit visits create history entries; camera movement replaces only
 its settled selection and does not push history. The Pixels link returns
 that origin when it is valid. Restore browser popstate even when Angular skips the URL.

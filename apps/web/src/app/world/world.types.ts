@@ -211,6 +211,7 @@ export const WORLD_COPY = Object.freeze({
   archive: 'Archive',
   unarchive: 'Unarchive',
   edit: 'Edit',
+  missing: "That concept doesn't exist.",
   listView: 'List',
   mapView: 'Map',
   reducedMotionNote: 'Reduced motion is on, so World opens on the list. The map stays still until you move it.',
