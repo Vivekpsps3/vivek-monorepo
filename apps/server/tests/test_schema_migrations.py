@@ -167,6 +167,7 @@ def test_baseline_database_is_stamped_then_upgraded(tmp_path):
             "site_town_layouts_v1",
             "site_town_quests_v1",
             "site_town_dialogue_v1",
+            "site_town_discoveries_v1",
         }
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
     assert model_diff(database) == []
