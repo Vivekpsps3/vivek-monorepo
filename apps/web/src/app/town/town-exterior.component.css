@@ -323,6 +323,17 @@ button.action { cursor: pointer; }
   .caption[data-building-label="theater"] { margin: -0.125rem 0 0 0.25rem; }
   .caption[data-building-label="music"] { margin-left: -0.5rem; }
 }
+.viewport[data-motion="reduce"] .piece .old,
+.viewport[data-decoration="off"] .idle-mark,
+.viewport[data-decoration="off"] .habit-mark { display: none; }
+.viewport[data-motion="reduce"] .idle-mark,
+.viewport[data-hidden="true"] .idle-mark,
+.viewport[data-hidden="true"] .habit-mark,
+.viewport[data-motion="reduce"] .habit-mark {
+  animation: none !important;
+  opacity: 1;
+  transform: none;
+}
 @media (prefers-reduced-motion: reduce) {
   .piece .old { display: none; }
   .viewport[data-ambience="live"] .idle-mark { animation: none; }

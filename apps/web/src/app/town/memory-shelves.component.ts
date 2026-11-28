@@ -59,7 +59,8 @@ export class MemoryShelvesComponent {
   private readonly scene = inject(SceneAppearanceService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly matchTone = inject(MEMORY_MATCH_TONE, { optional: true }) ?? playSceneTone;
+  private readonly matchTone = inject(MEMORY_MATCH_TONE, { optional: true })
+    ?? (() => playSceneTone(this.scene.effective().volume));
   private readonly api = inject(TownApiService);
   private ownerId: number | null = null;
   private generation = 0;
@@ -70,7 +71,7 @@ export class MemoryShelvesComponent {
     { label: 'Town', href: '/town' },
     { label: 'Memory Shelves' },
   ];
-  readonly reduced = signal(false);
+  readonly reduced = this.scene.reduced;
   private readonly focusIndex = signal(0);
   private readonly view = signal<MemoryView>({ board: null, lastMoves: null, reward: null });
   protected readonly board = computed(() => this.view().board);
@@ -91,13 +92,6 @@ export class MemoryShelvesComponent {
     this.destroyRef.onDestroy(() => {
       this.alive = false;
     });
-    if (typeof matchMedia === 'function') {
-      const query = matchMedia('(prefers-reduced-motion: reduce)');
-      this.reduced.set(query.matches);
-      const onChange = (): void => this.reduced.set(query.matches);
-      query.addEventListener('change', onChange);
-      this.destroyRef.onDestroy(() => query.removeEventListener('change', onChange));
-    }
     this.session.user$.pipe(takeUntilDestroyed()).subscribe(user => this.useOwner(user?.id ?? null));
     this.session.cleared$.pipe(takeUntilDestroyed()).subscribe(() => {
       this.generation += 1;
@@ -147,7 +141,7 @@ export class MemoryShelvesComponent {
     this.focusIndex.set(index);
     this.publish({ board, lastMoves }, owner, generation);
     if (!this.owns(owner, generation)) return;
-    if (matched && matchToneAllowed(this.soundOn(), this.reduced())) {
+    if (matched && this.scene.effective().volume > 0 && matchToneAllowed(this.soundOn(), this.reduced())) {
       void this.matchTone().catch(() => undefined);
     }
     if (board.phase === 'complete') this.focusNamed('Restart');

@@ -270,7 +270,7 @@ describe('Harbor Rhythm page', () => {
     sounded.harness.detectChanges();
     lane(sounded.host, 0).click();
     sounded.harness.detectChanges();
-    expect(sounded.tones.play).toHaveBeenCalledOnceWith(0);
+    expect(sounded.tones.play).toHaveBeenCalledOnceWith(0, 0.7);
     sounded.tones.stop.calls.reset();
     button(sounded.host, 'Pause').click();
     sounded.harness.detectChanges();
@@ -293,7 +293,7 @@ describe('Harbor Rhythm page', () => {
     harness.detectChanges();
     lane(host, 0).click();
     harness.detectChanges();
-    expect(tones.play).toHaveBeenCalledOnceWith(0);
+    expect(tones.play).toHaveBeenCalledOnceWith(0, 0.7);
     TestBed.resetTestingModule();
     wipe();
 

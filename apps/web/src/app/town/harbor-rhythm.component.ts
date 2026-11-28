@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, InjectionToken, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, InjectionToken, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { UiButtonComponent } from '@vivek/ui';
 import { fromEvent } from 'rxjs';
@@ -53,7 +53,7 @@ export interface RhythmScheduler {
 }
 
 export interface RhythmTones {
-  play(lane: number): void;
+  play(lane: number, volume?: number): void;
   stop(): void;
 }
 
@@ -78,11 +78,13 @@ export function rhythmInterval(): RhythmScheduler {
 export function browserRhythmTones(): RhythmTones {
   let context: AudioContext | null = null;
   return {
-    play(lane: number): void {
+    play(lane: number, volume = 1): void {
+      if (!(volume > 0)) return;
       if (typeof window === 'undefined' || typeof window.AudioContext !== 'function') return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       const hz = LANE_HZ[lane];
       if (hz == null) return;
+      const peak = Math.max(0.0002, 0.04 * Math.min(1, volume));
       if (!context || context.state === 'closed') context = new window.AudioContext();
       const oscillator = context.createOscillator();
       const gain = context.createGain();
@@ -90,7 +92,7 @@ export function browserRhythmTones(): RhythmTones {
       oscillator.type = 'sine';
       oscillator.frequency.value = hz;
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.04, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(peak, start + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
       oscillator.connect(gain);
       gain.connect(context.destination);
@@ -145,7 +147,7 @@ export class HarborRhythmComponent {
     { label: 'Harbor Rhythm' },
   ];
   protected readonly lanes = RHYTHM_LANES;
-  readonly reduced = signal(false);
+  readonly reduced = this.scene.reduced;
   private readonly clockOn = signal(false);
   private readonly view = signal<RhythmView>({ board: null, last: null, reward: null });
   protected readonly board = computed(() => this.view().board);
@@ -174,16 +176,9 @@ export class HarborRhythmComponent {
       this.alive = false;
       this.silence();
     });
-    if (typeof matchMedia === 'function') {
-      const query = matchMedia('(prefers-reduced-motion: reduce)');
-      this.reduced.set(query.matches);
-      const onChange = (): void => {
-        this.reduced.set(query.matches);
-        if (query.matches) this.tones.stop();
-      };
-      query.addEventListener('change', onChange);
-      this.destroyRef.onDestroy(() => query.removeEventListener('change', onChange));
-    }
+    effect(() => {
+      if (this.reduced()) this.tones.stop();
+    });
     this.session.user$.pipe(takeUntilDestroyed()).subscribe(user => this.useOwner(user?.id ?? null));
     this.session.cleared$.pipe(takeUntilDestroyed()).subscribe(() => {
       this.generation += 1;
@@ -222,8 +217,7 @@ export class HarborRhythmComponent {
 
   protected setSound(event: Event): void {
     const target = event.target;
-    this.scene.preview({ sound: target instanceof HTMLInputElement && target.checked });
-    this.scene.save();
+    this.scene.persist({ sound: target instanceof HTMLInputElement && target.checked });
   }
 
   protected play(mode: RhythmMode): void {
@@ -253,7 +247,7 @@ export class HarborRhythmComponent {
     const last = board.phase === 'complete' ? finishedResult(board) ?? current.last : current.last;
     this.publish({ board, last }, owner, generation);
     if (!this.owns(owner, generation)) return;
-    if (connected && rhythmToneAllowed(this.soundOn(), this.reduced())) this.tones.play(lane);
+    if (connected && rhythmToneAllowed(this.soundOn(), this.reduced())) this.tones.play(lane, this.scene.effective().volume);
     if (board.phase === 'complete') {
       this.silence();
       this.focusNamed('Restart');

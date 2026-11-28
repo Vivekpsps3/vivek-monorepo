@@ -1264,6 +1264,7 @@ describe('loadTownHealthStages (barrel)', () => {
 
   it('returns locked without touching the store or the vault', async () => {
     localStorage.removeItem('finance-dek');
+    localStorage.removeItem('finance-vault-present');
     const throwing = {
       get: () => {
         throw new Error('injector must not be used while locked');

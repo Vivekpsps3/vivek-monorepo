@@ -85,8 +85,8 @@ export class RestTickAudio {
     }
   }
 
-  pulse(allowed: boolean): void {
-    if (!allowed || this.closed || !this.context || !this.canPlay()) {
+  pulse(allowed: boolean, volume = 1): void {
+    if (!allowed || !(volume > 0) || this.closed || !this.context || !this.canPlay()) {
       this.silence();
       return;
     }
@@ -102,7 +102,8 @@ export class RestTickAudio {
     oscillator.frequency.value = 880;
     const start = context.currentTime;
     gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.02, start + 0.01);
+    const peak = Math.max(0.0002, 0.02 * Math.min(1, volume));
+    gain.gain.exponentialRampToValueAtTime(peak, start + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.04);
     oscillator.connect(gain);
     gain.connect(context.destination);

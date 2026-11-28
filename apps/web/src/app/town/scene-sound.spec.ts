@@ -51,11 +51,13 @@ describe('scene sound', () => {
     expect(closed).toBe(1);
   });
 
-  it('does not construct a context while hidden or motion is reduced', async () => {
+  it('does not construct a context for silence, a hidden page, or reduced motion', async () => {
     let constructed = 0;
     window.AudioContext = class {
       constructor() { constructed += 1; }
     } as unknown as typeof AudioContext;
+    await playSceneTone(0);
+    expect(constructed).toBe(0);
     visibility = 'hidden';
     await playSceneTone();
     visibility = 'visible';

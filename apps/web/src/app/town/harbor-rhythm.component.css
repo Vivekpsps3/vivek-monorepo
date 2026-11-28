@@ -139,6 +139,12 @@ p {
   }
 }
 
+.rhythm[data-motion="reduce"] .lanes,
+.rhythm[data-motion="reduce"] .note {
+  transform: none;
+  animation: none;
+}
+.rhythm[data-motion="reduce"] .note { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .lanes {
     transform: none;
