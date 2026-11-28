@@ -341,7 +341,7 @@ test.describe('Memory Shelves', () => {
       });
       await prepare(page, width, theme);
       let reject = true;
-      await page.route('**/api/town/minigames/runs/*/finish', async route => {
+      await page.route(/\/api\/town\/minigames\/runs\/[^/]+\/finish(?:\?|$)/, async route => {
         if (reject) {
           reject = false;
           await new Promise(resolve => setTimeout(resolve, 300));
