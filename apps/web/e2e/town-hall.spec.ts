@@ -1,8 +1,19 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '../../../tests/e2e/fixtures';
+import { expect, test, type Locator } from '../../../tests/e2e/fixtures';
 import type { TownResponse } from '../src/app/town/town.types';
 
 const FOREIGN_HABIT = "Other's habit";
+
+async function expectInViewport(locator: Locator): Promise<void> {
+  const box = await locator.boundingBox();
+  const size = locator.page().viewportSize();
+  expect(box).toBeTruthy();
+  expect(size).toBeTruthy();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(size!.height + 1);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(size!.width + 1);
+}
 
 async function archiveWalk(page: import('@playwright/test').Page): Promise<TownResponse> {
   const before = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json() as TownResponse;
@@ -42,6 +53,27 @@ test.describe('Hall', () => {
       else await page.keyboard.press('Enter');
       const hall = page.locator('app-town-hall');
       await expect(hall.getByRole('heading', { name: 'Hall', level: 1 })).toBeVisible();
+      await expect(hall.locator('.place').getByRole('link', { name: 'Town', exact: true })).toHaveCount(0);
+      await expect(hall.getByRole('link', { name: 'Back to Town' })).toHaveCount(1);
+      if (touch) {
+        await expect(hall.getByRole('heading', { name: 'How Town grows' })).toHaveCount(0);
+        const dial = hall.locator('.scene').getByRole('button', { name: 'Progress dial' });
+        await expect(dial).toBeVisible();
+        await dial.tap();
+        await expectInViewport(hall.getByRole('heading', { name: 'Progress dial', level: 2 }));
+        await expectInViewport(hall.getByRole('link', { name: 'Edit Read 20 pages' }));
+        const readsBefore = hallCalls.length;
+        await hall.getByRole('link', { name: 'Rules board' }).focus();
+        await page.keyboard.press('Enter');
+        await expectInViewport(hall.getByRole('heading', { name: 'Rules board', level: 2 }));
+        await expectInViewport(hall.getByRole('heading', { name: 'How Town grows' }));
+        expect(hallCalls.length).toBe(readsBefore);
+        await page.keyboard.press('Escape');
+        await expect(hall.getByRole('link', { name: 'Rules board' })).toBeFocused();
+        await expect(page).not.toHaveURL(/object=/);
+        await hall.getByRole('link', { name: 'Rules board' }).focus();
+        await page.keyboard.press('Enter');
+      }
       await expect(hall.getByRole('heading', { name: 'How Town grows' })).toBeVisible();
       await expect(hall).toContainText('Level 2 starts at 100 XP');
       await expect(hall).toContainText('Level 10 starts at 5000 XP');
@@ -50,26 +82,47 @@ test.describe('Hall', () => {
       await expect(hall).toContainText('Kept budget weeks: 0, 1, 2, 4, 8');
       await expect(hall).toContainText('Balances stay in Finance and are not shown here.');
       await expect(hall).toContainText('The Hall does not list them.');
-      await expect(hall.getByRole('link', { name: 'Edit Read 20 pages' })).toBeVisible();
-      await expect(hall.getByRole('link', { name: 'History for Walk 30 minutes' })).toBeVisible();
       await expect(hall).not.toContainText(FOREIGN_HABIT);
       expect(await hall.innerText()).not.toMatch(/\$\d|\bkg\b|mmHg|bpm/);
+      if (touch) {
+        await hall.getByRole('link', { name: 'Progress dial' }).focus();
+        await page.keyboard.press('Enter');
+      }
+      await expect(hall.getByRole('link', { name: 'Edit Read 20 pages' })).toBeVisible();
+      if (touch) {
+        await hall.getByRole('link', { name: 'Archive ledger' }).focus();
+        await page.keyboard.press('Enter');
+      }
+      await expect(hall.getByRole('link', { name: 'History for Walk 30 minutes' })).toBeVisible();
 
       await page.reload();
-      await expect(hall.getByRole('link', { name: 'History for Walk 30 minutes' })).toBeVisible();
+      if (touch) {
+        await hall.getByRole('link', { name: 'Rules board' }).focus();
+        await page.keyboard.press('Enter');
+      }
       await expect(hall).toContainText('Level 10 starts at 5000 XP');
+      if (touch) {
+        await hall.getByRole('link', { name: 'Progress dial' }).focus();
+        await page.keyboard.press('Enter');
+      }
       await expect(hall).toContainText('Edit Read 20 pages');
       const body = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json() as TownResponse;
       const read = body.habits.find(item => item.name === 'Read 20 pages');
       const walk = body.archived.find(item => item.name === 'Walk 30 minutes');
       await expect(hall).toContainText(`Level ${body.town.level} · ${body.town.xp} / ${body.town.next_level_xp} XP`);
       await expect(hall).toContainText(`Read 20 pages · Level ${read!.level} · ${read!.xp} XP`);
+      if (touch) {
+        await hall.getByRole('link', { name: 'Archive ledger' }).focus();
+        await page.keyboard.press('Enter');
+      }
+      await expect(hall.getByRole('link', { name: 'History for Walk 30 minutes' })).toBeVisible();
       await expect(hall).toContainText(`Walk 30 minutes · Level ${walk!.level} · ${walk!.xp} XP`);
 
       const history = hall.getByRole('link', { name: 'History for Walk 30 minutes' });
       const historyBox = await history.boundingBox();
       expect(historyBox?.width).toBeGreaterThanOrEqual(44);
       expect(historyBox?.height).toBeGreaterThanOrEqual(44);
+      if (touch) await expectInViewport(history);
       if (touch) await history.tap();
       else {
         await history.focus();
@@ -83,6 +136,10 @@ test.describe('Hall', () => {
       await expect(dialog).toHaveCount(0);
       await expect(history).toBeFocused();
 
+      if (touch) {
+        await hall.getByRole('link', { name: 'Progress dial' }).focus();
+        await page.keyboard.press('Enter');
+      }
       const edit = hall.getByRole('link', { name: 'Edit Read 20 pages' });
       await edit.click();
       const name = page.locator('#habit-name');
@@ -121,5 +178,47 @@ test.describe('Hall', () => {
     await page.getByRole('link', { name: 'Back to Town' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Terraria-on-Sea' })).toBeVisible();
     await expect(entrance).toBeFocused();
+  });
+
+  test('keeps the selected action in view at 390 light, 1280 night, 320px, and 200% text', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/town/hall');
+    await page.evaluate(() => localStorage.setItem('suite-theme', 'light'));
+    await page.reload();
+    const hall = page.locator('app-town-hall');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    const rules = hall.locator('.scene').getByRole('button', { name: 'Rules board' });
+    await expect(rules).toBeVisible();
+    await rules.tap();
+    await expectInViewport(hall.getByRole('heading', { name: 'Rules board', level: 2 }));
+    await expectInViewport(hall.getByRole('heading', { name: 'How Town grows' }));
+    await hall.getByRole('button', { name: 'Close details' }).tap();
+    await expect(hall.getByRole('link', { name: 'Rules board' })).toBeFocused();
+    await expect(page).not.toHaveURL(/object=/);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await page.evaluate(() => localStorage.setItem('suite-theme', 'dark'));
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await hall.getByRole('link', { name: 'Progress dial' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(hall.locator('.phone-sheet')).toHaveCount(0);
+    await expect(hall.locator('.inspector')).toBeVisible();
+    await expect(hall.getByRole('link', { name: 'Edit Read 20 pages' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(/object=progress/);
+
+    await page.setViewportSize({ width: 320, height: 844 });
+    await page.goto('/town/hall?object=progress');
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    await expect(page.locator('html')).toHaveCSS('font-size', '32px');
+    await expect(hall.locator('.phone-sheet')).toBeVisible();
+    await expectInViewport(hall.getByRole('heading', { name: 'Progress dial', level: 2 }));
+    await expectInViewport(hall.getByRole('link', { name: 'Edit Read 20 pages' }));
+    const motion = await hall.evaluate(element => element.getAnimations({ subtree: true }).length);
+    expect(motion).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   });
 });

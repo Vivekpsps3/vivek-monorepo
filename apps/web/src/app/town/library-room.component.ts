@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -34,7 +35,7 @@ interface SceneGesture {
 
 @Component({
   selector: 'app-town-library-room',
-  imports: [RouterLink, UiButtonComponent, TownPlaceComponent],
+  imports: [NgTemplateOutlet, RouterLink, UiButtonComponent, TownPlaceComponent],
   templateUrl: './library-room.component.html',
   styleUrl: './library-room.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -59,7 +60,7 @@ export class LibraryRoomComponent {
   protected readonly room = readingRoom;
   protected readonly objects = readingRoomObjects;
   protected readonly camera = signal<SceneCamera>(REST_CAMERA);
-  private readonly narrow = signal(false);
+  protected readonly narrow = signal(false);
   protected readonly cameraTransform = computed(() => {
     const camera = this.camera();
     return `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
@@ -68,15 +69,15 @@ export class LibraryRoomComponent {
   private readonly params = toSignal(this.route.queryParamMap, { requireSync: true });
   protected readonly selected = computed(() => this.objects.find(object => object.asset.id === this.params().get('object')));
   protected readonly sheet = computed(() => this.narrow() && this.selected() != null);
+  /** Desktop keeps the adjacent inspector. Phone renders it only after a selection. */
+  protected readonly inspectorOpen = computed(() => !this.narrow() || this.selected() != null);
   protected readonly occluded = computed(() => new Set(occludingIds(this.objects, this.selected()?.asset.id ?? null)));
   protected readonly crumbs = computed((): readonly PlaceCrumb[] => {
     const object = this.selected();
     const roomCrumb: PlaceCrumb = object
       ? { label: 'Reading Hall', href: '/town/library', query: sceneQuery(null, this.camera()) }
       : { label: 'Reading Hall' };
-    return object
-      ? [{ label: 'Town', href: '/town' }, roomCrumb, { label: object.label }]
-      : [{ label: 'Town', href: '/town' }, roomCrumb];
+    return object ? [roomCrumb, { label: object.label }] : [roomCrumb];
   });
   protected readonly inspectorState = computed(() => {
     const progress = this.progress();
@@ -165,6 +166,8 @@ export class LibraryRoomComponent {
 
   protected onEscape(): void {
     if (!this.sheet() || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+    // A committed pan stays in the URL. Escape only undoes a drag that has not been published.
+    if (this.gesture) this.cancelPointer();
     this.closeSheet();
   }
 

@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -50,7 +51,7 @@ function positiveId(value: string | null): number | null {
 
 @Component({
   selector: 'app-town-hall',
-  imports: [RouterLink, UiButtonComponent, TownPlaceComponent, HabitDialogComponent, HistoryDialogComponent],
+  imports: [NgTemplateOutlet, RouterLink, UiButtonComponent, TownPlaceComponent, HabitDialogComponent, HistoryDialogComponent],
   templateUrl: './hall-room.component.html',
   styleUrls: ['./library-room.component.css', './hall-room.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -81,7 +82,7 @@ export class HallRoomComponent {
   protected readonly habitProgressLine = habitProgressLine;
   protected readonly hallProgressLine = hallProgressLine;
   protected readonly camera = signal<SceneCamera>(REST_CAMERA);
-  private readonly narrow = signal(false);
+  protected readonly narrow = signal(false);
   protected readonly data = signal<TownResponse | null>(null);
   protected readonly loadState = signal<'loading' | 'ready' | 'unavailable' | 'stale'>('loading');
   protected readonly cameraTransform = computed(() => {
@@ -91,15 +92,16 @@ export class HallRoomComponent {
   protected readonly theme = toSignal(this.themeService.theme$, { requireSync: true });
   private readonly params = toSignal(this.route.queryParamMap, { requireSync: true });
   protected readonly selected = computed(() => this.objects.find(object => object.asset.id === this.params().get('object')));
+  protected readonly sheet = computed(() => this.narrow() && this.selected() != null);
+  /** Desktop keeps the adjacent inspector. Phone renders it only after a selection. */
+  protected readonly inspectorOpen = computed(() => !this.narrow() || this.selected() != null);
   protected readonly occluded = computed(() => new Set(occludingIds(this.objects, this.selected()?.asset.id ?? null)));
   protected readonly crumbs = computed((): readonly PlaceCrumb[] => {
     const object = this.selected();
     const roomCrumb: PlaceCrumb = object
       ? { label: 'Hall', href: '/town/hall', query: this.viewQuery(null) }
       : { label: 'Hall' };
-    return object
-      ? [{ label: 'Town', href: '/town' }, roomCrumb, { label: object.label }]
-      : [{ label: 'Town', href: '/town' }, roomCrumb];
+    return object ? [roomCrumb, { label: object.label }] : [roomCrumb];
   });
   protected readonly editHabit = computed(() => {
     const data = this.data();
@@ -246,10 +248,16 @@ export class HallRoomComponent {
     if (changed) this.reload();
   }
 
-  protected onEscape(): void {
-    if (!this.narrow() || !this.selected() || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+  protected closeSheet(): void {
     const id = this.selected()?.asset.id ?? null;
     this.publish(this.viewQuery(null), () => this.focusObject(id));
+  }
+
+  protected onEscape(): void {
+    if (!this.sheet() || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+    // A committed pan stays in the URL. Escape only undoes a drag that has not been published.
+    if (this.gesture) this.cancelPointer();
+    this.closeSheet();
   }
 
   protected beginPointer(event: PointerEvent): void {

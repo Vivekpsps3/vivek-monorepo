@@ -207,6 +207,8 @@ describe('Reading Hall load ownership', () => {
     expect(stage.style.transform).toBe(kept);
     expect(document.activeElement).toBe(host.querySelector('[data-object="shelves"]'));
     expect(host.querySelector('.inspector.sheet')).toBeNull();
+    expect(host.textContent).not.toContain('Choose an object to explore your Media library.');
+    expect(host.querySelector('.place a')?.textContent).not.toContain('Town');
     harness.fixture.destroy();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   });
