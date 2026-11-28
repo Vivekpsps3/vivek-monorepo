@@ -6,7 +6,7 @@ engine/session lifecycle; [identity](identity/) owns auth/session/credentials.
 owns hash-only capabilities and owner-scoped management. URL query tokens must be
 redacted, including exceptions. Reauthorize conditional reads after revocation.
 Town, Pixels and search are server projections. Day facts and keepsakes project existing
-rows and leave scores unchanged. Stamp receipts start at zero and are game-only. A play receipt grants 5 Stamps for each minigame's first Town-day win, cap 10. Quests and discoveries are stored once. Welcome grants 2 once. Ranks do not decay. Domain rules
+rows and leave scores unchanged. Stamp receipts start at zero and are game-only. Each minigame's first Town-day win grants 5 Stamps, cap 10. GET /api/town/minigames/runs grants none. Quests and discoveries are stored once. Welcome grants 2 once. Ranks do not decay. Domain rules
 stay in app directories.
 
 Shared transport must not import app business rules.

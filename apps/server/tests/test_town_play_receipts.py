@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -347,6 +347,92 @@ def _wallet_count(database, user_id: int | None = None) -> int:
         return int(db.scalar(query) or 0)
     finally:
         db.close()
+
+
+def test_arcade_read_projects_scores_and_grants_nothing(api) -> None:
+    client, database, _application = api
+    empty = client.get("/api/town/minigames/runs")
+    assert empty.status_code == 200, empty.text
+    body = empty.json()
+    assert [game["game_id"] for game in body["games"]] == ["memory-shelves", "harbor-rhythm"]
+    assert all(game["score"] is None and game["medals"] == [] for game in body["games"])
+    assert _balance(database) == 0
+    assert _wallet_count(database) == 0
+
+    memory = _open_run(client, "memory-shelves")
+    memory_nonce = memory.json()["nonce"]
+    assert _finish(client, memory_nonce, _memory(moves=8)).status_code == 201
+    replay = _open_run(client, "memory-shelves")
+    replay_nonce = replay.json()["nonce"]
+    assert _finish(client, replay_nonce, _memory(moves=6)).status_code == 201
+    harbor = _open_run(client, "harbor-rhythm", mode="untimed")
+    harbor_nonce = harbor.json()["nonce"]
+    perfect = _finish(client, harbor_nonce, _harbor())
+    assert perfect.status_code == 201, perfect.text
+    blocked = _open_run(client, "harbor-rhythm", mode="timed")
+    missed = _finish(
+        client, blocked.json()["nonce"], _harbor(mode="timed", elapsed=30_000, result="miss")
+    )
+    assert missed.status_code == 201, missed.text
+    assert missed.json()["amount"] == 0
+    waiting = _open_run(client, "memory-shelves")
+    assert waiting.status_code == 201
+
+    listed = client.get("/api/town/minigames/runs")
+    assert listed.status_code == 200, listed.text
+    games = {game["game_id"]: game for game in listed.json()["games"]}
+    assert games["memory-shelves"]["score"] == 6
+    assert games["memory-shelves"]["score_kind"] == "moves"
+    assert games["memory-shelves"]["source_nonce"] == replay_nonce
+    assert games["memory-shelves"]["medals"] == [
+        {
+            "civil_day": "2026-11-28",
+            "grant_key": "minigame:memory-shelves:2026-11-28",
+            "amount": 5,
+            "nonce": memory_nonce,
+        }
+    ]
+    assert games["harbor-rhythm"]["score"] == 100
+    assert games["harbor-rhythm"]["score_kind"] == "accuracy"
+    assert games["harbor-rhythm"]["source_nonce"] == harbor_nonce
+    assert games["harbor-rhythm"]["medals"] == [
+        {
+            "civil_day": "2026-11-28",
+            "grant_key": "minigame:harbor-rhythm:2026-11-28",
+            "amount": 5,
+            "nonce": harbor_nonce,
+        }
+    ]
+    assert _balance(database) == 10
+
+    db = database.sessionmaker()
+    try:
+        db.add(
+            PlayReceipt(
+                user_id=2,
+                nonce="other-owner-nonce",
+                game_id="memory-shelves",
+                seed=10,
+                mode=None,
+                civil_day=date(2026, 11, 28),
+                zone="UTC",
+                status="complete",
+                score=1,
+                reward_amount=5,
+                created_at=WHEN,
+                completed_at=WHEN,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    hidden = client.get("/api/town/minigames/runs")
+    assert hidden.status_code == 200, hidden.text
+    again = {game["game_id"]: game for game in hidden.json()["games"]}
+    assert again["memory-shelves"]["score"] == 6
+    assert again["memory-shelves"]["source_nonce"] == replay_nonce
+    assert _balance(database) == 10
+    assert _wallet_count(database) == 1
 
 
 def test_upgrade_keeps_discoveries_and_downgrade_drops_only_play_receipts(tmp_path: Path) -> None:

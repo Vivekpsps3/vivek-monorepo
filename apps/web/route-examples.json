@@ -92,6 +92,19 @@
       "query": "object=rules"
     },
     {
+      "id": "town-hall-journal",
+      "path": "town/hall/journal",
+      "owner": "town",
+      "status": "mounted"
+    },
+    {
+      "id": "town-hall-journal-chapters",
+      "path": "town/hall/journal/chapters",
+      "owner": "town",
+      "status": "mounted",
+      "query": "item=make-a-home"
+    },
+    {
       "id": "town-cosmetics",
       "path": "town/cosmetics",
       "owner": "town",
