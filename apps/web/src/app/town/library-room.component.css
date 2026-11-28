@@ -102,6 +102,23 @@ p { margin-block: 8px 12px; }
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     box-shadow: 0 -8px 24px color-mix(in srgb, var(--text) 16%, transparent);
   }
+
+  /* Home reuses the sticky sheet. Reading Hall and Hall opt into the viewport sheet. */
+  .inspector.sheet.phone-sheet {
+    position: fixed;
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    z-index: 30;
+    width: auto;
+    max-height: min(46vh, 320px);
+    margin: 0;
+    overflow: auto;
+  }
+
+  :host:has(.phone-sheet) {
+    padding-bottom: calc(clamp(12px, 3vw, 32px) + min(46vh, 320px));
+  }
 }
 .progress { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; }
 .progress p { margin-bottom: 0; }

@@ -6,7 +6,8 @@
   </header>
   <div class="room-layout">
     <div class="composition">
-      <div #viewport class="viewport" role="group" aria-labelledby="scene-hint"
+      <div #viewport class="viewport" role="group"
+        aria-label="Drag to look around. Tap the front object to inspect it. Dragging does not change the selection."
         [style.aspect-ratio]="room.bounds.width + ' / ' + room.bounds.height"
         (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
         (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
@@ -31,7 +32,6 @@
           </div>
         </div>
       </div>
-      <p id="scene-hint" class="scene-hint">Drag to look around. Tap the front object to inspect it. Dragging does not change the selection.</p>
       <div class="camera-controls" role="group" aria-label="Scene view">
         <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
         <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
@@ -50,38 +50,54 @@
         }
       </ul>
     </div>
-    <aside class="inspector" [class.sheet]="sheet()" [attr.data-inspector]="inspectorState()" aria-label="Reading Hall details">
-      @if (sheet()) {
-        <button type="button" class="action" (click)="closeSheet()">Close details</button>
-      }
-      <section aria-live="polite">
-        @if (selected(); as object) {
-          <h2>{{ object.label }}</h2>
-          <p>{{ object.detail }}</p>
-          <ui-button [href]="object.link" [queryParams]="object.query" [label]="object.action" />
-        } @else {
-          <h2>Library</h2>
-          <p>Choose an object to explore your Media library.</p>
-          <ui-button href="/media" label="Open Media Now" />
-        }
-      </section>
-      <section class="progress" aria-labelledby="library-progress">
-        <h2 id="library-progress" tabindex="-1">Library progress</h2>
-        @let building = progress();
-        @if (building === 'loading') {
-          <p role="status">Loading Library progress…</p>
-        } @else if (!building) {
-          <p role="status">Library progress is unavailable.</p>
-          <ui-button variant="secondary" (clicked)="retryProgress()">Retry progress</ui-button>
-        } @else if (building.source === 'unavailable') {
-          <p role="status">Media is unavailable. Library progress may be out of date.</p>
-          <ui-button variant="secondary" (clicked)="retryProgress()">Retry progress</ui-button>
-        } @else {
-          <p>Level {{ building.level }} · {{ building.today_xp }} / {{ building.today_cap }} Media XP today</p>
-        }
-        <p><a class="action" routerLink="/town/library/study">Open study</a></p>
-        <p><a class="action" routerLink="/town/keepsakes">Keepsake shelf</a></p>
-      </section>
-    </aside>
+    @if (inspectorOpen() && !sheet()) {
+      <aside class="inspector" [attr.data-inspector]="inspectorState()" aria-label="Reading Hall details">
+        <ng-container *ngTemplateOutlet="objectDetails" />
+        <ng-container *ngTemplateOutlet="libraryProgress" />
+      </aside>
+    }
+    @if (narrow()) {
+      <div [attr.data-inspector]="sheet() ? null : inspectorState()">
+        <ng-container *ngTemplateOutlet="libraryProgress" />
+      </div>
+    }
   </div>
+  @if (sheet()) {
+    <aside class="inspector sheet phone-sheet" [attr.data-inspector]="inspectorState()" aria-label="Reading Hall details">
+      <button type="button" class="action" (click)="closeSheet()">Close details</button>
+      <ng-container *ngTemplateOutlet="objectDetails" />
+    </aside>
+  }
 </main>
+
+<ng-template #objectDetails>
+  @if (selected(); as object) {
+    <h2>{{ object.label }}</h2>
+    <ui-button [href]="object.link" [queryParams]="object.query" [label]="object.action" />
+    <p>{{ object.detail }}</p>
+  } @else {
+    <h2>Library</h2>
+    <p>Choose an object to explore your Media library.</p>
+    <ui-button href="/media" label="Open Media Now" />
+  }
+</ng-template>
+
+<ng-template #libraryProgress>
+  <section class="progress" aria-labelledby="library-progress">
+    <h2 id="library-progress" tabindex="-1">Library progress</h2>
+    @let building = progress();
+    @if (building === 'loading') {
+      <p role="status">Loading Library progress…</p>
+    } @else if (!building) {
+      <p role="status">Library progress is unavailable.</p>
+      <ui-button variant="secondary" (clicked)="retryProgress()">Retry progress</ui-button>
+    } @else if (building.source === 'unavailable') {
+      <p role="status">Media is unavailable. Library progress may be out of date.</p>
+      <ui-button variant="secondary" (clicked)="retryProgress()">Retry progress</ui-button>
+    } @else {
+      <p>Level {{ building.level }} · {{ building.today_xp }} / {{ building.today_cap }} Media XP today</p>
+    }
+    <p><a class="action" routerLink="/town/library/study">Open study</a></p>
+    <p><a class="action" routerLink="/town/keepsakes">Keepsake shelf</a></p>
+  </section>
+</ng-template>

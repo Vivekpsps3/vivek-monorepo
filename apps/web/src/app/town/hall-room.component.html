@@ -9,7 +9,8 @@
   </header>
   <div class="room-layout">
     <div class="composition">
-      <div #viewport class="viewport" role="group" aria-labelledby="scene-hint"
+      <div #viewport class="viewport" role="group"
+        aria-label="Drag to look around. Tap the front object to inspect it. Dragging does not change the selection."
         [style.aspect-ratio]="room.bounds.width + ' / ' + room.bounds.height"
         (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
         (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
@@ -34,7 +35,6 @@
           </div>
         </div>
       </div>
-      <p id="scene-hint" class="scene-hint">Drag to look around. Tap the front object to inspect it. Dragging does not change the selection.</p>
       <div class="camera-controls" role="group" aria-label="Scene view">
         <button type="button" class="action" (click)="zoomIn()" [disabled]="atMaxZoom()">Zoom in</button>
         <button type="button" class="action" (click)="zoomOut()" [disabled]="atMinZoom()">Zoom out</button>
@@ -45,6 +45,15 @@
         <p role="status">Some room artwork is unavailable. You can still use the rules and links below.</p>
         <ui-button variant="secondary" (clicked)="retryArt()">Retry artwork</ui-button>
       }
+      @if (statusText(); as status) {
+        <p role="status">{{ status }}</p>
+      }
+      @if (danglingEdit()) {
+        <p role="status">That habit is not active.</p>
+      }
+      @if (danglingHistory()) {
+        <p role="status">That history is not on this town.</p>
+      }
       <ul class="objects" aria-label="Room objects">
         @for (object of objects; track object.asset.id) {
           <li>
@@ -54,72 +63,18 @@
         }
       </ul>
     </div>
-    <aside class="inspector" [attr.data-inspector]="loadState()" aria-label="Hall details">
-      @if (selected(); as object) {
-        <h2>{{ object.label }}</h2>
-        <p>{{ object.detail }}</p>
-      }
-      <section aria-labelledby="hall-rules">
-        <h2 id="hall-rules">How Town grows</h2>
-        <p class="rules-version" data-rules-version>Rules version {{ rulesVersion }}</p>
-        @if (rulesNote(); as note) { <p role="status">{{ note }}</p> }
-        <ul class="rules">
-          @for (rule of rules; track rule.id) {
-            <li><strong>{{ rule.label }}.</strong> {{ rule.text }}</li>
-          }
-        </ul>
-      </section>
-      @if (statusText(); as status) {
-        <p role="status">{{ status }}</p>
-      }
-      @if (data(); as town) {
-        <section class="progress" aria-labelledby="hall-progress">
-          <h2 id="hall-progress" tabindex="-1">Town progress</h2>
-          <p data-town-progress>{{ town.town.name }} · {{ hallProgressLine(town.town) }}</p>
-          @if (town.town.next_level_xp !== null && town.town.next_level_xp > town.town.level_xp_start) {
-            <progress [value]="town.town.xp - town.town.level_xp_start" [max]="town.town.next_level_xp - town.town.level_xp_start"
-              aria-label="Town XP" [attr.aria-valuetext]="hallProgressLine(town.town)"></progress>
-          }
-          @if (town.habits.length === 0) {
-            <p>No active habits.</p>
-          }
-          <ul class="habits" aria-label="Active habits">
-            @for (habit of town.habits; track habit.id) {
-              <li>
-                <p>{{ habitProgressLine(habit) }}</p>
-                <div class="habit-links">
-                  <a class="action" [attr.data-edit]="habit.id" [routerLink]="[]" [queryParams]="editQuery(habit.id)" [replaceUrl]="true">Edit {{ habit.name }}</a>
-                  <a class="action" [attr.data-history]="habit.id" [routerLink]="[]" [queryParams]="historyQuery(habit.id)" [replaceUrl]="true">History for {{ habit.name }}</a>
-                </div>
-              </li>
-            }
-          </ul>
-        </section>
-        <section aria-labelledby="hall-archive">
-          <h2 id="hall-archive">Archived habits</h2>
-          @if (town.archived.length === 0) {
-            <p>No archived habits.</p>
-          }
-          <ul class="habits" aria-label="Archived habits">
-            @for (item of town.archived; track item.id) {
-              <li>
-                <p>{{ habitProgressLine(item) }} · Archived {{ formatTownDay(item.archived_on) }}</p>
-                <div class="habit-links">
-                  <a class="action" [attr.data-history]="item.id" [routerLink]="[]" [queryParams]="historyQuery(item.id)" [replaceUrl]="true">History for {{ item.name }}</a>
-                </div>
-              </li>
-            }
-          </ul>
-        </section>
-        @if (danglingEdit()) {
-          <p role="status">That habit is not active.</p>
-        }
-        @if (danglingHistory()) {
-          <p role="status">That history is not on this town.</p>
-        }
-      }
-    </aside>
+    @if (inspectorOpen() && !sheet()) {
+      <aside class="inspector" [attr.data-inspector]="loadState()" aria-label="Hall details">
+        <ng-container *ngTemplateOutlet="hallDetails" />
+      </aside>
+    }
   </div>
+  @if (sheet()) {
+    <aside class="inspector sheet phone-sheet" [attr.data-inspector]="loadState()" aria-label="Hall details">
+      <button type="button" class="action" (click)="closeSheet()">Close details</button>
+      <ng-container *ngTemplateOutlet="hallDetails" />
+    </aside>
+  }
   @if (data(); as town) {
     @if (editHabit(); as habit) {
       <app-habit-dialog [data]="town" [slot]="habit.slot" [habitId]="habit.id" (closed)="closeEdit($event)" />
@@ -129,3 +84,86 @@
     }
   }
 </main>
+
+<ng-template #hallDetails>
+  @if (selected(); as object) {
+    <h2>{{ object.label }}</h2>
+  }
+  @if (!sheet() || selected()?.asset?.id === 'rules') {
+    <section aria-labelledby="hall-rules">
+      <h2 id="hall-rules">How Town grows</h2>
+      <p class="rules-version" data-rules-version>Rules version {{ rulesVersion }}</p>
+      @if (rulesNote(); as note) { <p role="status">{{ note }}</p> }
+      <ul class="rules">
+        @for (rule of rules; track rule.id) {
+          <li><strong>{{ rule.label }}.</strong> {{ rule.text }}</li>
+        }
+      </ul>
+    </section>
+  }
+  @if (data(); as town) {
+    @if (!sheet() || selected()?.asset?.id === 'progress') {
+      <section class="progress" aria-labelledby="hall-progress">
+        @if (sheet()) {
+          <ng-container *ngTemplateOutlet="activeHabits; context: { $implicit: town }" />
+        }
+        <h2 id="hall-progress" tabindex="-1">Town progress</h2>
+        @if (town.habits.length === 0) {
+          <p>No active habits.</p>
+        }
+        @if (!sheet()) {
+          <ng-container *ngTemplateOutlet="activeHabits; context: { $implicit: town }" />
+        }
+        <p data-town-progress>{{ town.town.name }} · {{ hallProgressLine(town.town) }}</p>
+        @if (town.town.next_level_xp !== null && town.town.next_level_xp > town.town.level_xp_start) {
+          <progress [value]="town.town.xp - town.town.level_xp_start" [max]="town.town.next_level_xp - town.town.level_xp_start"
+            aria-label="Town XP" [attr.aria-valuetext]="hallProgressLine(town.town)"></progress>
+        }
+      </section>
+    }
+    @if (!sheet() || selected()?.asset?.id === 'archive') {
+      <section aria-labelledby="hall-archive">
+        @if (sheet()) {
+          <ng-container *ngTemplateOutlet="archivedHabits; context: { $implicit: town }" />
+        }
+        <h2 id="hall-archive">Archived habits</h2>
+        @if (town.archived.length === 0) {
+          <p>No archived habits.</p>
+        }
+        @if (!sheet()) {
+          <ng-container *ngTemplateOutlet="archivedHabits; context: { $implicit: town }" />
+        }
+      </section>
+    }
+  }
+  @if (selected(); as object) {
+    <p>{{ object.detail }}</p>
+  }
+</ng-template>
+
+<ng-template #activeHabits let-town>
+  <ul class="habits" aria-label="Active habits">
+    @for (habit of town.habits; track habit.id) {
+      <li>
+        <div class="habit-links">
+          <a class="action" [attr.data-edit]="habit.id" [routerLink]="[]" [queryParams]="editQuery(habit.id)" [replaceUrl]="true">Edit {{ habit.name }}</a>
+          <a class="action" [attr.data-history]="habit.id" [routerLink]="[]" [queryParams]="historyQuery(habit.id)" [replaceUrl]="true">History for {{ habit.name }}</a>
+        </div>
+        <p>{{ habitProgressLine(habit) }}</p>
+      </li>
+    }
+  </ul>
+</ng-template>
+
+<ng-template #archivedHabits let-town>
+  <ul class="habits" aria-label="Archived habits">
+    @for (item of town.archived; track item.id) {
+      <li>
+        <div class="habit-links">
+          <a class="action" [attr.data-history]="item.id" [routerLink]="[]" [queryParams]="historyQuery(item.id)" [replaceUrl]="true">History for {{ item.name }}</a>
+        </div>
+        <p>{{ habitProgressLine(item) }} · Archived {{ formatTownDay(item.archived_on) }}</p>
+      </li>
+    }
+  </ul>
+</ng-template>

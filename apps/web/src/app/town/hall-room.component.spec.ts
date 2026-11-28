@@ -10,6 +10,19 @@ import { frontObject, REST_CAMERA, roomRect, roomToScreen } from './library-room
 import { TownApiService } from './town.api';
 import type { Habit, TownResponse } from './town.types';
 
+function narrowScreen(matches: boolean): void {
+  spyOn(window, 'matchMedia').and.callFake((query: string) => ({
+    matches: matches && query.includes('max-width'),
+    media: query,
+    addEventListener(): void { /* test double */ },
+    removeEventListener(): void { /* test double */ },
+    addListener(): void { /* test double */ },
+    removeListener(): void { /* test double */ },
+    dispatchEvent(): boolean { return false; },
+    onchange: null,
+  } as MediaQueryList));
+}
+
 function habit(partial: Partial<Habit> = {}): Habit {
   return {
     id: 15, name: 'Read 20 pages', slot: 0, building_style: 'forge',
@@ -85,6 +98,7 @@ describe('Hall load', () => {
   }
 
   it('ignores a held town on owner change and on destruction', () => {
+    narrowScreen(false);
     const { user$, loads, api } = setup();
     TestBed.configureTestingModule({
       imports: [HallRoomComponent],
@@ -117,6 +131,7 @@ describe('Hall load', () => {
   });
 
   it('shows thresholds, archived history links, and no private building values', async () => {
+    narrowScreen(false);
     const { user$, loads, api } = setup();
     TestBed.configureTestingModule({
       providers: [
@@ -161,6 +176,7 @@ describe('Hall load', () => {
   });
 
   it('keeps a typed habit name when save or reload fails, and clears it for a new owner', async () => {
+    narrowScreen(false);
     const { user$, loads, api } = setup();
     const patch = new Subject<Habit>();
     api.patchHabit.and.returnValue(patch);
@@ -208,6 +224,42 @@ describe('Hall load', () => {
     harness.detectChanges();
     expect(host.textContent).not.toContain('Secret balance 41829');
     expect(host.textContent).not.toContain('41829');
+  });
+
+  it('shows the selected phone action in a sheet and leaves the others closed', async () => {
+    narrowScreen(true);
+    const { user$, loads, api } = setup();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'town/hall', component: HallRoomComponent }]),
+        { provide: SessionService, useValue: { user$ } },
+        { provide: TownApiService, useValue: api },
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/town/hall');
+    const host = harness.routeNativeElement as HTMLElement;
+    harness.detectChanges();
+    expect(host.textContent).not.toContain('How Town grows');
+    expect(host.querySelector('.inspector')).toBeNull();
+    expect(host.querySelector('.place a')?.textContent).not.toContain('Town');
+
+    await harness.navigateByUrl('/town/hall?object=progress');
+    loads[0].next(town());
+    harness.detectChanges();
+    expect(host.querySelector('.inspector.sheet.phone-sheet')).not.toBeNull();
+    expect(host.querySelector('[aria-modal]')).toBeNull();
+    expect(host.textContent).toContain('Edit Read 20 pages');
+    expect(host.textContent).not.toContain('How Town grows');
+    expect(host.textContent).not.toContain('History for Walk 30 minutes');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(TestBed.inject(Router).url).not.toContain('object=');
+    expect(document.activeElement).toBe(host.querySelector('[data-object="progress"]'));
+    expect(host.querySelector('.phone-sheet')).toBeNull();
+    expect(host.textContent).not.toContain('Edit Read 20 pages');
   });
 
   it('selects only a tap and drops an unfinished drag when the owner changes', () => {

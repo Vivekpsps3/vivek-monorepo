@@ -732,6 +732,10 @@ test.describe('Reading Hall', () => {
     await room.getByRole('link', { name: 'Back to Town' }).click();
     await expect(page).toHaveURL(/\/town$/);
     await expect(library).toBeFocused();
+    await page.goBack();
+    await expect(page).toHaveURL(/\/town\/library/);
+    await expect(page).toHaveURL(/object=calendar/);
+    await expect(objects.getByRole('link', { name: 'Wall calendar' })).toBeFocused();
   });
 
   test('loads artwork only in the room and preserves selection through artwork and progress retries', async ({ page }) => {
@@ -876,6 +880,10 @@ test.describe('Reading Hall', () => {
       await page.touchscreen.tap(front.cx, front.cy);
       await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
       await expect(objects.getByRole('link', { name: 'Reading desk' })).toBeFocused();
+      if (viewport.width === 390) {
+        await expectInViewport(room.getByRole('heading', { name: 'Reading desk', level: 2 }));
+        await expectInViewport(room.getByRole('link', { name: 'Open Media Now' }));
+      }
       await expect(page).toHaveURL(/object=desk/);
       expect(townReads.length).toBe(reads);
 
@@ -1002,6 +1010,8 @@ test.describe('Reading Hall', () => {
     await expect(page.locator('html')).toHaveCSS('font-size', '32px');
     const room = page.locator('app-town-library-room');
     await expect(room.getByRole('link', { name: 'Open Media calendar' })).toBeVisible();
+    await expectInViewport(room.getByRole('heading', { name: 'Wall calendar', level: 2 }));
+    await expectInViewport(room.getByRole('link', { name: 'Open Media calendar' }));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
     await info.attach('reading-hall-320-text-200', { body: await room.screenshot(), contentType: 'image/png' });
   });
@@ -1019,6 +1029,9 @@ test.describe('Reading Hall', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/town/library');
     await expect(room.getByRole('heading', { name: 'Reading Hall', level: 1 })).toBeVisible();
+    await expect(room.getByText('Choose an object to explore your Media library.')).toHaveCount(0);
+    await expect(room.locator('.place').getByRole('link', { name: 'Town', exact: true })).toHaveCount(0);
+    await expect(room.getByRole('link', { name: 'Back to Town' })).toHaveCount(1);
     await objects.getByRole('link', { name: 'Reading desk' }).focus();
     await page.keyboard.press('Enter');
     await expect(room.getByRole('heading', { name: 'Reading desk' })).toBeVisible();
@@ -1036,6 +1049,9 @@ test.describe('Reading Hall', () => {
     expect(matrix).toContain('matrix(1.5,');
     await expect(room.locator('.inspector.sheet')).toBeVisible();
     await expect(room.locator('[aria-modal="true"]')).toHaveCount(0);
+    await expectInViewport(room.getByRole('heading', { name: 'Bookshelves', level: 2 }));
+    await expectInViewport(room.getByRole('link', { name: 'Browse saved books' }));
+    await expectInViewport(room.getByRole('button', { name: 'Close details' }));
     const zoom = room.getByRole('button', { name: 'Zoom in' });
     await zoom.focus();
     await expect(zoom).toBeFocused();
@@ -1129,6 +1145,17 @@ test.describe('Reading Hall', () => {
     await info.attach('scene-03-room-1280-dark', { body: await room.screenshot(), contentType: 'image/png' });
   });
 });
+
+async function expectInViewport(locator: Locator): Promise<void> {
+  const box = await locator.boundingBox();
+  const size = locator.page().viewportSize();
+  expect(box).toBeTruthy();
+  expect(size).toBeTruthy();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(size!.height + 1);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(size!.width + 1);
+}
 
 function stageMatrix(room: Locator): Promise<string> {
   return room.locator('.stage').evaluate(el => getComputedStyle(el).transform);
