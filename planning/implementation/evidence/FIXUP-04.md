@@ -53,7 +53,7 @@ Node and the linked repository venv ran these checks from `/tmp/vivek-fixup-04`.
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this evidence commit. Body is only `Closes #582`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/661. Body is only `Closes #582`.
 - Roadmap #134 append-only status-note URL: added after merge with this leaf, the PR number, and the merge SHA.
 - Merged/activation status: not merged at the time of this file.
 - Remaining external prerequisites or approved scope decisions: exterior district camera framing is unchanged. No deploy.
