@@ -49,7 +49,9 @@ The single room exit is Back to Town. It pushes history, so browser Back restore
 | `npx playwright test --config apps/web/e2e/playwright.config.ts` | PASS. 348 tests. |
 | `npx playwright test --project=suite` | PASS. 75 tests. |
 
-Node and the linked repository venv ran these checks from `/tmp/vivek-fixup-04`. Focused Reading Hall, Hall, and study journeys passed before the full suites. No known unrelated flake needed a rerun.
+Node and the linked repository venv ran these checks from `/tmp/vivek-fixup-04` on `fbd538752ebad397ea55da9a8e602f7486c9e0ba`. Focused Reading Hall, Hall, and study journeys passed before the full suites.
+
+The first CI Playwright run failed the Hall 320px / 200% text check: the edit link bottom was 892px in an 844px viewport. The phone sheet cap is now `min(58vh, 420px)`, with a tighter sheet heading, so the title and action stay together. A production rebuild then passed that Hall matrix, the Reading Hall front-object journey, and the Reading Hall 320px / 200% journey. The same CI run also failed the known Harbor-to-Terminal URL mismatch and the Media series-resume bounding box. Those suites were not edited.
 
 ## Handoff
 

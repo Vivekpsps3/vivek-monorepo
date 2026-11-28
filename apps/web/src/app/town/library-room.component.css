@@ -111,13 +111,20 @@ p { margin-block: 8px 12px; }
     bottom: max(12px, env(safe-area-inset-bottom));
     z-index: 30;
     width: auto;
-    max-height: min(46vh, 320px);
+    max-height: min(58vh, 420px);
     margin: 0;
+    padding: 12px;
     overflow: auto;
   }
 
+  .inspector.sheet.phone-sheet h2 {
+    margin: 0 0 8px;
+    font-size: 1.15rem;
+    line-height: 1.2;
+  }
+
   :host:has(.phone-sheet) {
-    padding-bottom: calc(clamp(12px, 3vw, 32px) + min(46vh, 320px));
+    padding-bottom: calc(clamp(12px, 3vw, 32px) + min(58vh, 420px));
   }
 }
 .progress { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; }
