@@ -51,7 +51,7 @@ Commands ran in `/tmp/vivek-game-14`. `make` used `PATH="/tmp/vivek-game-14/.ven
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded when the pull request is opened. The body is only `Closes #483`.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/659. The body is only `Closes #483`.
 - Roadmap #134 append-only status-note URL: recorded after merge.
 - Merged/activation status (actual evidence, not assumption): not merged yet.
 - Remaining external prerequisites or approved scope decisions: no deployment. MERGE-01 and FIXUP-06 stay on their own leaves.
