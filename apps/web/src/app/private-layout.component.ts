@@ -77,6 +77,7 @@ export class PrivateLayoutComponent {
       { label: 'Hall', link: '/town/hall' },
       { label: 'Workshop', link: '/town/workshop' },
       { label: 'Memory Shelves', link: '/town/memory' },
+      { label: 'Harbor Rhythm', link: '/town/rhythm' },
       { label: 'World', link: '/town/world' },
     ] },
     { label: 'Pixels', href: '/pixels', sections: [{ label: 'Life', link: '/pixels/life' }] },

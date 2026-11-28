@@ -35,6 +35,7 @@ export const routes: Routes = [
       { path: 'workshop', title: 'Town · Workshop', loadComponent: () => import('./town/workshop.component').then(m => m.WorkshopComponent) },
       { path: 'keepsakes', title: 'Town · Keepsakes', loadComponent: () => import('./town/keepsake-page.component').then(m => m.KeepsakePageComponent) },
       { path: 'memory', title: 'Town · Memory Shelves', loadComponent: () => import('./town/memory-shelves.component').then(m => m.MemoryShelvesComponent) },
+      { path: 'rhythm', title: 'Town · Harbor Rhythm', loadComponent: () => import('./town/harbor-rhythm.component').then(m => m.HarborRhythmComponent) },
       { path: 'clinic', title: 'Town · Clinic', data: { healthRoom: 'clinic' }, loadComponent: () => import('./town/health/health-room.component').then(m => m.HealthRoomComponent) },
       { path: 'gym', title: 'Town · Gym', data: { healthRoom: 'gym' }, loadComponent: () => import('./town/health/health-room.component').then(m => m.HealthRoomComponent) },
       {
