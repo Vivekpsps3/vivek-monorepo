@@ -1,11 +1,11 @@
 .memory-list {
   display: grid;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .memory-card {
   min-width: 0;
-  padding: 1rem;
+  padding: 0.75rem 1rem 1rem;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -17,21 +17,92 @@
   outline-offset: 2px;
 }
 
+.memory-card__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
+.memory-card__identity {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
 .memory-card h2,
-.memory-card h3,
-.memory-card p {
+.memory-card dd {
   overflow-wrap: anywhere;
 }
 
-.memory-card h3 {
-  margin: 0.75rem 0 0.2rem;
-  font-size: 0.8rem;
+.memory-card h2 {
+  margin: 0;
+}
+
+.memory-facts {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+}
+
+.memory-facts div {
+  display: grid;
+  grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr);
+  gap: 0.15rem 0.75rem;
+  align-items: baseline;
+}
+
+.memory-facts dt,
+.memory-facts dd {
+  margin: 0;
+}
+
+.memory-facts dt {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 650;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.memory-card .button-row {
+.memory-manage {
+  margin-top: 0.75rem;
+}
+
+.travel-page details.memory-manage > summary {
+  max-width: 100%;
+  min-width: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.8rem;
+}
+
+.memory-manage summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.memory-manage .button-row {
   margin-top: 0.5rem;
+}
+
+.memory-rules {
+  margin-top: 1rem;
+}
+
+.memory-rules summary {
+  max-width: 100%;
+}
+
+.memory-rules ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+}
+
+@media (max-width: 380px) {
+  .memory-facts div {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @keyframes memory-in {

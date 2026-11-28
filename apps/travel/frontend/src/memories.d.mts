@@ -73,3 +73,15 @@ export function settleMemoryWrite(input: {
 }): "drop" | "reload" | "apply";
 
 export function clearMemoryDraft(): MemoryDraft;
+
+export function civilDay(iso?: string | null): string;
+
+export function memoryDates(memory: Partial<TripMemory> | null | undefined): string;
+
+export function memoryPlace(memory: Partial<TripMemory> | null | undefined): string;
+
+export function memoryCredit(memory: Partial<TripMemory> | null | undefined): string;
+
+export function memoryLoggedDay(memory: Partial<TripMemory> | null | undefined): string;
+
+export function memoryOverlapNames(memory: Partial<TripMemory> | null | undefined): string;
