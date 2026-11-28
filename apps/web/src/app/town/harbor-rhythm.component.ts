@@ -6,8 +6,21 @@ import { SceneAppearanceService } from '../platform/scene-appearance.service';
 import { SessionService } from '../platform/session.service';
 import { TownPlaceComponent, type PlaceCrumb } from './town-place.component';
 import {
+  failedReward,
+  harborFinishBody,
+  nextRewardAction,
+  openedReward,
+  openingReward,
+  savingReward,
+  settledReward,
+  type RewardDraft,
+} from './play-reward';
+import { TownApiService } from './town.api';
+import {
   RHYTHM_LANES,
+  RHYTHM_SEED,
   RHYTHM_TICK_MS,
+  accuracyOf,
   advanceRhythm,
   clearRhythmPlay,
   dueLane,
@@ -99,6 +112,7 @@ export const RHYTHM_TONES = new InjectionToken<RhythmTones>('RHYTHM_TONES');
 interface RhythmView {
   readonly board: RhythmBoard | null;
   readonly last: RhythmResult | null;
+  readonly reward: RewardDraft | null;
 }
 
 interface RhythmMarker {
@@ -120,8 +134,10 @@ export class HarborRhythmComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly scheduler = inject(RHYTHM_SCHEDULER, { optional: true }) ?? rhythmInterval();
   private readonly tones = inject(RHYTHM_TONES, { optional: true }) ?? browserRhythmTones();
+  private readonly api = inject(TownApiService);
   private ownerId: number | null = null;
   private generation = 0;
+  private rewardRun = 0;
   private alive = true;
 
   readonly crumbs: readonly PlaceCrumb[] = [
@@ -131,9 +147,12 @@ export class HarborRhythmComponent {
   protected readonly lanes = RHYTHM_LANES;
   readonly reduced = signal(false);
   private readonly clockOn = signal(false);
-  private readonly view = signal<RhythmView>({ board: null, last: null });
+  private readonly view = signal<RhythmView>({ board: null, last: null, reward: null });
   protected readonly board = computed(() => this.view().board);
   protected readonly status = computed(() => rhythmStatus(this.view().board, this.view().last));
+  protected readonly rewardNote = computed(() => this.view().reward?.note || null);
+  protected readonly rewardFailed = computed(() =>
+    this.view().board?.phase === 'complete' && this.view().reward?.phase === 'failed');
   protected readonly soundOn = computed(() => this.scene.effective().sound);
   protected readonly soundError = computed(() => this.scene.saveError());
   protected readonly phase = computed(() => this.view().board?.phase ?? 'ready');
@@ -168,10 +187,11 @@ export class HarborRhythmComponent {
     this.session.user$.pipe(takeUntilDestroyed()).subscribe(user => this.useOwner(user?.id ?? null));
     this.session.cleared$.pipe(takeUntilDestroyed()).subscribe(() => {
       this.generation += 1;
+      this.rewardRun += 1;
       this.ownerId = null;
       this.silence();
       clearRhythmPlay(this.storage());
-      this.view.set({ board: null, last: null });
+      this.view.set({ board: null, last: null, reward: null });
     });
     if (typeof document !== 'undefined') {
       fromEvent(document, 'visibilitychange').pipe(takeUntilDestroyed()).subscribe(() => {
@@ -210,9 +230,16 @@ export class HarborRhythmComponent {
     const owner = this.ownerId;
     const generation = this.generation;
     if (owner == null || this.view().board) return;
-    this.publish({ board: startRhythm(mode), last: this.view().last }, owner, generation);
+    this.beginRun(startRhythm(mode), this.view().last, owner, generation);
     this.arm();
     this.focusLane(0);
+  }
+
+  protected retry(): void {
+    const owner = this.ownerId;
+    const generation = this.generation;
+    if (owner == null) return;
+    this.submitIfComplete(owner, generation, true);
   }
 
   protected hit(lane: number): void {
@@ -266,7 +293,7 @@ export class HarborRhythmComponent {
     const current = this.view();
     if (owner == null || !current.board) return;
     const last = current.board.phase === 'complete' ? finishedResult(current.board) ?? current.last : current.last;
-    this.publish({ board: restartRhythm(current.board), last }, owner, generation);
+    this.beginRun(restartRhythm(current.board), last, owner, generation);
     this.arm();
     this.focusLane(0);
   }
@@ -344,29 +371,142 @@ export class HarborRhythmComponent {
     }
   }
 
-  private publish(next: RhythmView, owner: number, generation: number): void {
+  private publish(
+    next: { board: RhythmBoard | null; last: RhythmResult | null; reward?: RewardDraft | null },
+    owner: number,
+    generation: number,
+    submit: 'if-new' | 'no' = 'if-new',
+  ): void {
     if (!this.owns(owner, generation)) return;
-    const play: RhythmPlay = { ownerId: owner, board: next.board, last: next.last };
-    this.view.set(next);
+    const reward = next.reward === undefined ? this.view().reward : next.reward;
+    const view: RhythmView = { board: next.board, last: next.last, reward };
+    const became = view.board?.phase === 'complete' && this.view().board?.phase !== 'complete';
+    const play: RhythmPlay = { ownerId: owner, board: view.board, last: view.last, reward };
+    this.view.set(view);
     const storage = this.storage();
     try {
       writeRhythmPlay(storage, play);
     } catch {
+      if (this.owns(owner, generation) && submit === 'if-new' && became) {
+        this.submitIfComplete(owner, generation, false);
+      }
       return;
     }
-    if (!this.owns(owner, generation)) storage?.removeItem(rhythmPlayKey(owner));
+    if (!this.owns(owner, generation)) {
+      storage?.removeItem(rhythmPlayKey(owner));
+      return;
+    }
+    if (submit === 'if-new' && became) this.submitIfComplete(owner, generation, false);
+  }
+
+  private beginRun(board: RhythmBoard, last: RhythmResult | null, owner: number, generation: number): void {
+    this.publish({ board, last, reward: openingReward(RHYTHM_SEED) }, owner, generation);
+    this.requestOpen(owner, generation, board.mode);
+  }
+
+  private requestOpen(owner: number, generation: number, mode: RhythmBoard['mode']): void {
+    this.rewardRun += 1;
+    const run = this.rewardRun;
+    this.api.openPlayRun({ game_id: 'harbor-rhythm', mode }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: view => this.acceptOpen(view, owner, generation, run),
+      error: () => this.failOpen(owner, generation, run),
+    });
+  }
+
+  private acceptOpen(view: unknown, owner: number, generation: number, run: number): void {
+    if (!this.owns(owner, generation) || run !== this.rewardRun) return;
+    const opened = openedReward(view, 'harbor-rhythm', RHYTHM_SEED);
+    if (!opened) {
+      this.failOpen(owner, generation, run);
+      return;
+    }
+    const current = this.view();
+    this.publish({ board: current.board, last: current.last, reward: opened }, owner, generation, 'no');
+    if (current.board?.phase === 'complete') this.submitIfComplete(owner, generation, false);
+  }
+
+  private failOpen(owner: number, generation: number, run: number): void {
+    if (!this.owns(owner, generation) || run !== this.rewardRun) return;
+    const current = this.view();
+    const show = current.board?.phase === 'complete';
+    this.publish({
+      board: current.board,
+      last: current.last,
+      reward: failedReward(current.reward, RHYTHM_SEED, show),
+    }, owner, generation, 'no');
+    if (show) this.focusNamed('Try the reward again');
+  }
+
+  private submitIfComplete(owner: number, generation: number, force: boolean): void {
+    if (!this.owns(owner, generation)) return;
+    const current = this.view();
+    const board = current.board;
+    if (!board || board.phase !== 'complete') return;
+    const action = nextRewardAction(current.reward, force);
+    if (action === 'open') this.requestOpen(owner, generation, board.mode);
+    else if (action === 'finish') this.sendFinish(owner, generation);
+  }
+
+  private sendFinish(owner: number, generation: number): void {
+    const current = this.view();
+    const board = current.board;
+    const nonce = current.reward?.nonce;
+    if (!board || !nonce || !current.reward) return;
+    const run = this.rewardRun;
+    const score = accuracyOf(board) ?? 0;
+    this.publish({ board, last: current.last, reward: savingReward(current.reward) }, owner, generation, 'no');
+    this.api.finishPlayRun(nonce, harborFinishBody(board, RHYTHM_SEED)).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: view => this.acceptFinish(view, owner, generation, run, nonce, score),
+      error: () => this.failFinish(owner, generation, run),
+    });
+  }
+
+  private acceptFinish(
+    view: unknown,
+    owner: number,
+    generation: number,
+    run: number,
+    nonce: string,
+    score: number,
+  ): void {
+    if (!this.owns(owner, generation) || run !== this.rewardRun) return;
+    const current = this.view();
+    if (current.board && current.board.phase !== 'complete') return;
+    if (current.board && (accuracyOf(current.board) ?? 0) !== score) {
+      this.failFinish(owner, generation, run);
+      return;
+    }
+    const settled = settledReward(view, 'harbor-rhythm', RHYTHM_SEED, nonce, score);
+    if (!settled) {
+      this.failFinish(owner, generation, run);
+      return;
+    }
+    this.publish({ board: current.board, last: current.last, reward: settled }, owner, generation, 'no');
+  }
+
+  private failFinish(owner: number, generation: number, run: number): void {
+    if (!this.owns(owner, generation) || run !== this.rewardRun) return;
+    const current = this.view();
+    if (current.board?.phase !== 'complete') return;
+    this.publish({
+      board: current.board,
+      last: current.last,
+      reward: failedReward(current.reward, RHYTHM_SEED, true),
+    }, owner, generation, 'no');
+    this.focusNamed('Try the reward again');
   }
 
   private useOwner(next: number | null): void {
     if (next === this.ownerId) return;
     this.generation += 1;
+    this.rewardRun += 1;
     const previous = this.ownerId;
     this.ownerId = next;
     this.silence();
     const storage = this.storage();
     if (next == null) {
       if (previous != null) clearRhythmPlay(storage);
-      this.view.set({ board: null, last: null });
+      this.view.set({ board: null, last: null, reward: null });
       return;
     }
     const saved = readRhythmPlay(storage, next);
@@ -378,7 +518,12 @@ export class HarborRhythmComponent {
         /* The open chart stays on screen when this tab cannot store it. */
       }
     }
-    this.view.set(saved ? { board: saved.board, last: saved.last } : { board: null, last: null });
+    this.view.set(saved
+      ? { board: saved.board, last: saved.last, reward: saved.reward }
+      : { board: null, last: null, reward: null });
+    if (saved?.board?.phase === 'complete' && saved.reward?.phase !== 'rewarded' && saved.reward?.phase !== 'replay') {
+      this.submitIfComplete(next, this.generation, true);
+    }
     this.arm();
   }
 

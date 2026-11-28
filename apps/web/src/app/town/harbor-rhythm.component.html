@@ -11,7 +11,7 @@
   <h1>Harbor Rhythm</h1>
   <p>Lantern Tide is an original four-lane pattern. It is not a recording.</p>
   <p>The timed chart lasts 30 seconds. The untimed sequence uses the same lanes and no clock.</p>
-  <p>This play does not award Stamps or save a life record.</p>
+  <p>The first win each Town day grants 5 Stamps. A replay keeps the score and grants no more. This play does not save a life record.</p>
   <p>{{ soundCopy() }}</p>
   <label class="sound-choice">
     <input type="checkbox" [checked]="soundOn()" (change)="setSound($event)" />
@@ -22,6 +22,9 @@
   }
   <p id="rhythm-keys">1, 2, 3, and 4 play the lanes. Arrow keys move. P plays, pauses, or resumes. R restarts. Q quits.</p>
   <p id="rhythm-status" role="status">{{ status() }}</p>
+  @if (rewardNote(); as note) {
+    <p id="rhythm-reward">{{ note }}</p>
+  }
   @if (board(); as board) {
     <div class="cabinet">
       <div class="lanes" role="group" aria-label="Lanes" aria-describedby="rhythm-keys">
@@ -50,6 +53,9 @@
       }
       @if (board.phase === 'paused') {
         <ui-button variant="secondary" (clicked)="resume()">Resume</ui-button>
+      }
+      @if (rewardFailed()) {
+        <ui-button variant="secondary" (clicked)="retry()">Try the reward again</ui-button>
       }
       <ui-button variant="secondary" (clicked)="restart()">Restart</ui-button>
       <ui-button variant="ghost" (clicked)="quit()">Quit</ui-button>

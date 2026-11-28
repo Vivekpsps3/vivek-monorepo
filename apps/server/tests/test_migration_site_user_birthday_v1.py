@@ -70,6 +70,9 @@ LATER_THAN_BIRTHDAY = {
     "add_table:town_discovery_stamps",
     "add_index:ix_town_discovery_stamps_user_id",
     "add_index:uq_town_discovery_stamp",
+    "add_table:town_play_receipts",
+    "add_index:ix_town_play_receipts_user_id",
+    "add_index:uq_town_play_receipt_nonce",
 }
 
 

@@ -7,10 +7,13 @@
 >
   <h1>Memory Shelves</h1>
   <p>Match six pairs. Turn two shelves per move.</p>
-  <p>This play does not award Stamps or save a life record.</p>
+  <p>The first win each Town day grants 5 Stamps. A replay keeps the score and grants no more. This play does not save a life record.</p>
   <p>{{ soundOn() ? 'Town sound is on. A match can play a short tone.' : 'Town sound is off. The game stays silent.' }}</p>
   <p id="memory-keys">Arrow keys move. Enter or Space turns a shelf. P plays, pauses, or resumes. R restarts. Q quits.</p>
   <p id="memory-status" role="status">{{ status() }}</p>
+  @if (rewardNote(); as note) {
+    <p id="memory-reward">{{ note }}</p>
+  }
   @if (board(); as board) {
     <div class="board" role="group" aria-label="Shelves" aria-describedby="memory-keys">
       @for (tile of board.tiles; track tile.index) {
@@ -37,6 +40,9 @@
       }
       @if (board.phase === 'paused') {
         <ui-button variant="secondary" (clicked)="resume()">Resume</ui-button>
+      }
+      @if (rewardFailed()) {
+        <ui-button variant="secondary" (clicked)="retry()">Try the reward again</ui-button>
       }
       <ui-button variant="secondary" (clicked)="restart()">Restart</ui-button>
       <ui-button variant="ghost" (clicked)="quit()">Quit</ui-button>

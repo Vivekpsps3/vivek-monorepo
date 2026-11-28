@@ -53,6 +53,7 @@ EXPECTED_OWNERS = {
     "town_dialogue_journals": 0,
     "town_discovery_journals": 0,
     "town_discovery_stamps": 0,
+    "town_play_receipts": 0,
     "town_quest_journals": 0,
     "town_quest_steps": 0,
     "town_room_layouts": 0,

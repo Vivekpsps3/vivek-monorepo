@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { BehaviorSubject, Subject } from 'rxjs';
+import { TownApiService } from './town.api';
 import { scenePreferenceKey } from '../platform/scene-appearance';
 import { SessionService } from '../platform/session.service';
 import { MEMORY_MATCH_TONE, MemoryShelvesComponent } from './memory-shelves.component';
@@ -40,7 +41,7 @@ describe('Memory Shelves page', () => {
     TestBed.resetTestingModule();
   });
 
-  async function open(owner = 4): Promise<{
+  async function open(owner = 4, api?: { openPlayRun: () => unknown; finishPlayRun: () => unknown }): Promise<{
     harness: RouterTestingHarness;
     host: HTMLElement;
     session: { currentUser: { id: number } | null };
@@ -60,6 +61,7 @@ describe('Memory Shelves page', () => {
         ]),
         { provide: SessionService, useValue: session },
         { provide: MEMORY_MATCH_TONE, useValue: tone },
+        { provide: TownApiService, useValue: api ?? { openPlayRun: () => new Subject(), finishPlayRun: () => new Subject() } },
       ],
     });
     const harness = await RouterTestingHarness.create();
@@ -72,7 +74,8 @@ describe('Memory Shelves page', () => {
     expect(host.querySelector('h1')?.textContent).toContain('Memory Shelves');
     expect(host.textContent).toContain('Enter or Space turns a shelf');
     expect(host.textContent).toContain('not timed');
-    expect(host.textContent).toContain('does not award Stamps');
+    expect(host.textContent).toContain('grants 5 Stamps');
+    expect(host.textContent).toContain('does not save a life record');
     expect(host.textContent).not.toMatch(/Buy|Grant/);
     button(host, 'Play Memory Shelves').click();
     harness.detectChanges();
@@ -224,5 +227,98 @@ describe('Memory Shelves page', () => {
     reduced.harness.detectChanges();
     expect(reduced.host.querySelector('[role=status]')?.textContent).toContain('1 move. 1 of 6 pairs matched.');
     expect(reduced.tone).not.toHaveBeenCalled();
+  });
+
+  function memoryRun(nonce: string, amount: 0 | 5, score: number | null, status: 'open' | 'complete') {
+    return {
+      nonce,
+      game_id: 'memory-shelves',
+      seed: 10,
+      civil_day: '2026-11-27',
+      status,
+      score,
+      rewarded: amount === 5,
+      amount,
+      balance: amount === 5 ? 5 : 0,
+    };
+  }
+
+  it('keeps the finished shelves when the reward fails, then retries and replays', async () => {
+    const opened = new Subject<unknown>();
+    const finished = new Subject<unknown>();
+    const api = {
+      openPlayRun: jasmine.createSpy('open').and.returnValue(opened),
+      finishPlayRun: jasmine.createSpy('finish').and.returnValue(finished),
+    };
+    const { harness, host } = await open(4, api);
+    button(host, 'Play Memory Shelves').click();
+    harness.detectChanges();
+    opened.next(memoryRun('abcdefghijklmnop', 0, null, 'open'));
+    harness.detectChanges();
+    for (const index of [2, 3, 0, 11, 1, 6, 4, 7, 5, 8, 9, 10]) {
+      shelf(host, index).click();
+      harness.detectChanges();
+    }
+    expect(host.textContent).toContain('All six pairs matched in 6 moves.');
+    expect(api.finishPlayRun).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(api.finishPlayRun.calls.mostRecent().args[1])).not.toMatch(/weight|blood|steps|finance|trip/i);
+    finished.error(new Error('unavailable'));
+    harness.detectChanges();
+    expect(host.querySelector('#memory-reward')?.textContent).toContain('This win is still here.');
+    expect(host.querySelector('[role=status]')?.textContent).toContain('All six pairs matched in 6 moves.');
+    expect(shelf(host, 2).dataset['face']).toBe('matched');
+
+    const saved = new Subject<unknown>();
+    api.finishPlayRun.and.returnValue(saved);
+    button(host, 'Try the reward again').click();
+    harness.detectChanges();
+    saved.next(memoryRun('abcdefghijklmnop', 5, 6, 'complete'));
+    harness.detectChanges();
+    expect(host.querySelector('#memory-reward')?.textContent).toContain('5 Stamps for this Town day.');
+    expect(host.querySelector('#memory-reward')?.getAttribute('role')).toBeNull();
+    expect(host.textContent).not.toContain('Try the reward again');
+
+    const reopened = new Subject<unknown>();
+    const replayed = new Subject<unknown>();
+    api.openPlayRun.and.returnValue(reopened);
+    api.finishPlayRun.and.returnValue(replayed);
+    button(host, 'Restart').click();
+    harness.detectChanges();
+    reopened.next(memoryRun('replaynonce123456', 0, null, 'open'));
+    harness.detectChanges();
+    for (const index of [2, 3, 0, 11, 1, 6, 4, 7, 5, 8, 9, 10]) {
+      shelf(host, index).click();
+      harness.detectChanges();
+    }
+    replayed.next(memoryRun('replaynonce123456', 0, 6, 'complete'));
+    harness.detectChanges();
+    expect(host.querySelector('#memory-reward')?.textContent).toContain('No extra Stamps');
+    expect(shelf(host, 2).dataset['face']).toBe('matched');
+  });
+
+  it('ignores a late reward after the owner changes', async () => {
+    const opened = new Subject<unknown>();
+    const finished = new Subject<unknown>();
+    const api = {
+      openPlayRun: jasmine.createSpy('open').and.returnValue(opened),
+      finishPlayRun: jasmine.createSpy('finish').and.returnValue(finished),
+    };
+    const { harness, host, session, user$ } = await open(4, api);
+    button(host, 'Play Memory Shelves').click();
+    harness.detectChanges();
+    opened.next(memoryRun('abcdefghijklmnop', 0, null, 'open'));
+    harness.detectChanges();
+    for (const index of [2, 3, 0, 11, 1, 6, 4, 7, 5, 8, 9, 10]) {
+      shelf(host, index).click();
+      harness.detectChanges();
+    }
+    session.currentUser = { id: 9 };
+    user$.next({ id: 9 });
+    harness.detectChanges();
+    finished.next(memoryRun('abcdefghijklmnop', 5, 6, 'complete'));
+    harness.detectChanges();
+    expect(host.querySelector('[data-index]')).toBeNull();
+    expect(host.textContent).not.toContain('5 Stamps for this Town day.');
+    expect(sessionStorage.getItem(memoryPlayKey(4))).toBeNull();
   });
 });

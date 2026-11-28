@@ -23,6 +23,7 @@ from apps.server.town.discoveries import read_journal as read_discoveries
 from apps.server.town.discoveries import record_discovery
 from apps.server.town.keepsakes import read_keepsakes
 from apps.server.town.layouts import ROOMS, parse_body, read_layout, save_layout
+from apps.server.town.play_receipts import finish_run, open_run, refuse_public_minigame
 from apps.server.town.quests import read_journal, record_step
 from apps.server.town.schemas import (
     CheckinDays,
@@ -33,6 +34,7 @@ from apps.server.town.schemas import (
     HabitList,
     HubTownSummary,
     Keepsakes,
+    PlayRunView,
     QuestJournalView,
     RoomLayoutView,
     StampWalletView,
@@ -245,9 +247,40 @@ async def post_stamp_grant(
     now: datetime = Depends(get_town_clock),
 ) -> StampWalletView:
     payload = await writes.json_object(request)
+    refuse_public_minigame(db, user.id, payload)
     wallet, created = grant_stamps(db, user.id, payload, now)
     response.status_code = 201 if created else 200
     return StampWalletView.model_validate(wallet)
+
+
+@router.post("/minigames/runs", response_model=PlayRunView, status_code=201)
+async def post_play_run(
+    request: Request,
+    tz: str | None = None,
+    db: Session = Depends(get_db, scope="function"),
+    user: User = Depends(get_current_user),
+    now: datetime = Depends(get_town_clock),
+) -> PlayRunView:
+    payload = await writes.json_object(request)
+    view = await run_in_threadpool(open_run, db, user.id, payload, now, tz)
+    return PlayRunView.model_validate(view)
+
+
+@router.post("/minigames/runs/{nonce}/finish", response_model=PlayRunView)
+async def post_play_finish(
+    nonce: str,
+    request: Request,
+    response: Response,
+    tz: str | None = None,
+    db: Session = Depends(get_db, scope="function"),
+    user: User = Depends(get_current_user),
+    now: datetime = Depends(get_town_clock),
+) -> PlayRunView:
+    del tz
+    payload = await writes.json_object(request)
+    view, created = await run_in_threadpool(finish_run, db, user.id, nonce, payload, now)
+    response.status_code = 201 if created else 200
+    return PlayRunView.model_validate(view)
 
 
 @router.post("/stamps/purchases", response_model=StampWalletView)

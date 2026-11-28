@@ -1,5 +1,7 @@
 /** Memory Shelves. Seed 10 is the authored order. The score is turns, and nothing is timed. */
 
+import { validReward, type RewardDraft } from './play-reward';
+
 export const MEMORY_SYMBOLS = Object.freeze([
   'Lantern',
   'Ferry',
@@ -35,6 +37,7 @@ export interface MemoryPlay {
   readonly ownerId: number;
   readonly board: MemoryBoard | null;
   readonly lastMoves: number | null;
+  readonly reward: RewardDraft | null;
 }
 
 export interface MemoryStorage {
@@ -222,14 +225,15 @@ function validBoard(value: unknown): MemoryBoard | null {
 
 export function validMemoryPlay(value: unknown, ownerId: number): MemoryPlay | null {
   if (!value || typeof value !== 'object') return null;
-  const record = value as { ownerId?: unknown; board?: unknown; lastMoves?: unknown };
+  const record = value as { ownerId?: unknown; board?: unknown; lastMoves?: unknown; reward?: unknown };
   if (record.ownerId !== ownerId) return null;
   const board = record.board == null ? null : validBoard(record.board);
   if (record.board != null && !board) return null;
   const lastMoves = record.lastMoves == null ? null : moveCount(record.lastMoves);
   if (record.lastMoves != null && lastMoves == null) return null;
   if (board?.phase === 'complete' && lastMoves !== board.moves) return null;
-  return { ownerId, board, lastMoves };
+  const reward = record.reward == null ? null : validReward(record.reward, MEMORY_SEED);
+  return { ownerId, board, lastMoves, reward };
 }
 
 export function readMemoryPlay(storage: MemoryStorage | null, ownerId: number): MemoryPlay | null {

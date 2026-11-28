@@ -209,4 +209,36 @@ export class TownApiService {
   recordDiscovery(body: DiscoveryWrite) {
     return this.http.post<DiscoveryJournal>('/api/town/discoveries', body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
   }
+  openPlayRun(body: PlayRunRequest) {
+    return this.http.post<PlayRunResponse>('/api/town/minigames/runs', body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
+  finishPlayRun(nonce: string, body: PlayFinishRequest) {
+    const path = `/api/town/minigames/runs/${encodeURIComponent(nonce)}/finish`;
+    return this.http.post<PlayRunResponse>(path, body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
+}
+
+export interface PlayRunRequest {
+  game_id: 'memory-shelves' | 'harbor-rhythm';
+  mode?: 'timed' | 'untimed';
+}
+export interface PlayFinishRequest {
+  seed: number;
+  moves?: number;
+  tiles?: { index: number; symbol: string; face: string }[];
+  mode?: 'timed' | 'untimed';
+  elapsed?: number;
+  wrong?: number;
+  notes?: { lane: number; at: number; result: string }[];
+}
+export interface PlayRunResponse {
+  nonce: string;
+  game_id: PlayRunRequest['game_id'];
+  seed: number;
+  civil_day: string;
+  status: 'open' | 'complete';
+  score: number | null;
+  rewarded: boolean;
+  amount: 0 | 5;
+  balance: number;
 }

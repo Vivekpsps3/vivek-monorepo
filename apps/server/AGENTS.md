@@ -4,13 +4,12 @@
 engine/session lifecycle; [identity](identity/) owns auth/session/credentials.
 [Calendar feeds](calendar.py) compose saved Travel/Media projections; identity
 owns hash-only capabilities and owner-scoped management. URL query tokens must be
-redacted, including exception messages. Reauthorize conditional reads after revocation.
+redacted, including exceptions. Reauthorize conditional reads after revocation.
 Town, Pixels and search are server projections. Day facts and keepsakes project existing
-rows and leave scores unchanged. Stamp receipts start at zero and are game-only. Quests and discoveries are stored once. Welcome grants 2 Stamps once. Ranks do not decay. Domain rules
+rows and leave scores unchanged. Stamp receipts start at zero and are game-only. A play receipt grants 5 Stamps for each minigame's first Town-day win, cap 10. Quests and discoveries are stored once. Welcome grants 2 once. Ranks do not decay. Domain rules
 stay in app directories.
 
-Keep dependency direction explicit: shared transport must not
-import app business rules.
+Shared transport must not import app business rules.
 
 Preserve owner scoping, atomic challenge consumption, canonical origin/purpose,
 commit-before-cookie/response and no sensitive SQL parameters in logs. Credential
@@ -21,7 +20,7 @@ and a response cookie must describe the same committed winner. Provider I/O rele
 database transaction ownership before waiting.
 
 [alembic/versions](alembic/versions/) and helpers imported by applied revisions are
-historical behavior, not dead code. Schema changes extend the actual single head;
+historical. Schema changes extend the single head;
 read [MIGRATIONS](../../docs/MIGRATIONS.md) and prove upgrade/data preservation.
 A domain reset must not delete another domain or unknown ciphertext.
 Password-only migration endpoints are retired (404). Stored migration-only
@@ -35,4 +34,4 @@ nothing. No recipient is hardcoded, and a synthetic transport is not activation.
 Use root Python lint/type/coverage gates plus affected domain suites. Use
 [SECURITY_MODEL](../../docs/SECURITY_MODEL.md) for auth/vault protocol changes and
 [OPERATIONS](../../docs/OPERATIONS.md) for release/restore work. Test with disposable
-synthetic databases; a code merge alone does not establish runtime activation.
+synthetic databases; a merge alone does not activate runtime.

@@ -114,6 +114,28 @@ describe('TownApiService', () => {
     expect(Object.keys(post.request.body as object).sort()).toEqual(['discovery_id', 'expected_revision']);
     post.flush({ revision: 1, discoveries: [] });
   });
+  it('opens and finishes a play run without a life or finance field', () => {
+    const openBody = { game_id: 'memory-shelves' as const };
+    api.openPlayRun(openBody).subscribe();
+    const opened = http.expectOne(request => request.url === '/api/town/minigames/runs');
+    expect(opened.request.method).toBe('POST');
+    expect(opened.request.body).toEqual(openBody);
+    expect(opened.request.params.get('tz')).toBeTruthy();
+    opened.flush({
+      nonce: 'abcdefghijklmnop', game_id: 'memory-shelves', seed: 10, civil_day: '2026-11-27',
+      status: 'open', score: null, rewarded: false, amount: 0, balance: 0,
+    });
+    const finishBody = { seed: 10, moves: 6, tiles: [] };
+    api.finishPlayRun('abcdefghijklmnop', finishBody).subscribe();
+    const finished = http.expectOne(request => request.url === '/api/town/minigames/runs/abcdefghijklmnop/finish');
+    expect(finished.request.method).toBe('POST');
+    expect(finished.request.body).toEqual(finishBody);
+    expect(JSON.stringify(finished.request.body)).not.toMatch(/weight|blood|steps|finance|trip/i);
+    finished.flush({
+      nonce: 'abcdefghijklmnop', game_id: 'memory-shelves', seed: 10, civil_day: '2026-11-27',
+      status: 'complete', score: 6, rewarded: true, amount: 5, balance: 5,
+    });
+  });
   it('preserves authentication errors for the expired state', () => {
     const error = jasmine.createSpy('error');
     api.getTown().subscribe({ error });

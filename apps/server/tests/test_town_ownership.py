@@ -56,6 +56,7 @@ def _later_model(diff) -> tuple[set[str], set[str]]:
         "town_dialogue_completions",
         "town_discovery_journals",
         "town_discovery_stamps",
+        "town_play_receipts",
     }
     for item in diff:
         if item[0] == "add_column":
@@ -182,8 +183,8 @@ def test_upgrade_preserves_multi_owner_history_and_is_the_only_head(tmp_path: Pa
     digest = _digest(before)
     _upgrade_to(database, REVISION)
     assert current_revision(database) == REVISION
-    assert head_revision() == "site_town_discoveries_v1"
-    assert ScriptDirectory.from_config(_cfg(database)).get_heads() == ["site_town_discoveries_v1"]
+    assert head_revision() == "site_town_play_receipts_v1"
+    assert ScriptDirectory.from_config(_cfg(database)).get_heads() == ["site_town_play_receipts_v1"]
     assert _later_model(model_diff(database)) == (
         {"transports.fa_flight_id"},
         {
@@ -200,6 +201,7 @@ def test_upgrade_preserves_multi_owner_history_and_is_the_only_head(tmp_path: Pa
             "town_dialogue_completions",
             "town_discovery_journals",
             "town_discovery_stamps",
+            "town_play_receipts",
         },
     )
     after = _snapshot(database)
@@ -286,6 +288,7 @@ def test_upgrade_preserves_multi_owner_history_and_is_the_only_head(tmp_path: Pa
             "town_dialogue_completions",
             "town_discovery_journals",
             "town_discovery_stamps",
+            "town_play_receipts",
         },
     )
 

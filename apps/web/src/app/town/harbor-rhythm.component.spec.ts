@@ -2,7 +2,8 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, Subject, throwError } from 'rxjs';
+import { TownApiService } from './town.api';
 import { scenePreferenceKey } from '../platform/scene-appearance';
 import { SCENE_SAVE_ERROR } from '../platform/scene-appearance.service';
 import { SessionService } from '../platform/session.service';
@@ -77,7 +78,7 @@ describe('Harbor Rhythm page', () => {
     TestBed.resetTestingModule();
   });
 
-  async function open(owner = 4): Promise<{
+  async function open(owner = 4, api?: { openPlayRun: () => unknown; finishPlayRun: () => unknown }): Promise<{
     harness: RouterTestingHarness;
     host: HTMLElement;
     session: { currentUser: { id: number } | null };
@@ -100,6 +101,13 @@ describe('Harbor Rhythm page', () => {
         { provide: SessionService, useValue: session },
         { provide: RHYTHM_SCHEDULER, useValue: scheduler },
         { provide: RHYTHM_TONES, useValue: tones },
+        {
+          provide: TownApiService,
+          useValue: api ?? {
+            openPlayRun: () => new Subject(),
+            finishPlayRun: () => throwError(() => new Error('unavailable')),
+          },
+        },
       ],
     });
     const harness = await RouterTestingHarness.create();
@@ -124,7 +132,8 @@ describe('Harbor Rhythm page', () => {
     const { harness, host } = await open();
     expect(host.querySelector('h1')?.textContent).toContain('Harbor Rhythm');
     expect(host.textContent).toContain('not a recording');
-    expect(host.textContent).toContain('does not award Stamps');
+    expect(host.textContent).toContain('grants 5 Stamps');
+    expect(host.textContent).toContain('does not save a life record');
     expect(host.textContent).not.toMatch(/Buy|Grant/);
     expect(host.querySelector('[data-clock]')?.getAttribute('data-clock')).toBe('off');
     expect(host.querySelector('[data-sound]')?.getAttribute('data-sound')).toBe('off');
@@ -327,5 +336,38 @@ describe('Harbor Rhythm page', () => {
     scheduler.fireStale();
     harness.detectChanges();
     expect(host.textContent).toContain('Win. 30-second chart complete. Accuracy 100%.');
+  });
+
+  it('keeps the finished chart when the reward fails and ignores a late other-owner result', async () => {
+    const opened = new Subject<unknown>();
+    const finished = new Subject<unknown>();
+    const api = {
+      openPlayRun: jasmine.createSpy('open').and.returnValue(opened),
+      finishPlayRun: jasmine.createSpy('finish').and.returnValue(finished),
+    };
+    const { harness, host, session, user$ } = await open(4, api);
+    button(host, 'Play untimed sequence').click();
+    harness.detectChanges();
+    opened.next({
+      nonce: 'abcdefghijklmnop', game_id: 'harbor-rhythm', seed: 1, civil_day: '2026-11-27',
+      status: 'open', score: null, rewarded: false, amount: 0, balance: 0,
+    });
+    harness.detectChanges();
+    for (const beat of RHYTHM_CHART) {
+      lane(host, beat.lane).click();
+      harness.detectChanges();
+    }
+    expect(host.textContent).toContain('Win. Untimed sequence complete. Accuracy 100%.');
+    expect(JSON.stringify(api.finishPlayRun.calls.mostRecent().args[1])).not.toMatch(/weight|blood|steps|finance|trip/i);
+    finished.error(new Error('unavailable'));
+    harness.detectChanges();
+    expect(host.querySelector('#rhythm-reward')?.textContent).toContain('This win is still here.');
+    expect(lane(host, 0).disabled).toBeTrue();
+    session.currentUser = { id: 9 };
+    user$.next({ id: 9 });
+    harness.detectChanges();
+    expect(host.querySelector('[data-lane]')).toBeNull();
+    expect(host.textContent).not.toContain('5 Stamps for this Town day.');
+    expect(sessionStorage.getItem(rhythmPlayKey(4))).toBeNull();
   });
 });

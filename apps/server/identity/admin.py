@@ -165,6 +165,7 @@ def delete_user_account(db: Session, user: User, *, actor_user_id: int) -> None:
             {"owner": user.id},
         )
         for table in (
+            "town_play_receipts",
             "town_discovery_stamps",
             "town_discovery_journals",
             "town_dialogue_completions",

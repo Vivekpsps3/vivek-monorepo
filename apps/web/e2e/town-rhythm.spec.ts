@@ -28,6 +28,11 @@ async function prepare(page: Page, width: number, theme: 'light' | 'dark', reduc
   expect((await page.request.post('/e2e/reset?seed=town-empty')).ok()).toBeTruthy();
 }
 
+function unexpectedWrites(writes: string[]): string[] {
+  const allowed = /^POST \/api\/town\/minigames\/runs(\/[^/]+\/finish)?$/;
+  return writes.filter(item => allowed.test(item) ? false : /\/api\/(town|media|pixels|health)|stamp/i.test(item));
+}
+
 async function activate(page: Page, locator: Locator, touch: boolean): Promise<void> {
   if (touch) await locator.tap();
   else {
@@ -90,7 +95,7 @@ test.describe('Harbor Rhythm', () => {
       await expect(game.locator('[data-motion="reduce"]')).toBeVisible();
       await expect(game.locator('[data-sound="off"]')).toBeVisible();
       await expect(game.locator('[data-clock="off"]')).toBeVisible();
-      await expect(game.getByRole('status')).toHaveText('Play the 30-second chart or the untimed sequence. This game does not award Stamps.');
+      await expect(game.getByRole('status')).toHaveText('Play the 30-second chart or the untimed sequence.');
       await expect(game).toContainText('does not play recorded music');
       await expect(game.getByRole('button', { name: /Buy|Grant/ })).toHaveCount(0);
       await expect(game.locator('audio, video, iframe')).toHaveCount(0);
@@ -150,12 +155,12 @@ test.describe('Harbor Rhythm', () => {
       if (touch) await game.getByRole('button', { name: 'Quit', exact: true }).tap();
       else await page.keyboard.press('q');
       await expect(game.locator('[data-lane]')).toHaveCount(0);
-      await expect(game.getByRole('status')).toHaveText('Last untimed sequence finished at 100% accuracy. This game does not award Stamps.');
+      await expect(game.getByRole('status')).toHaveText('Last untimed sequence finished at 100% accuracy.');
       await expect(game.getByRole('button', { name: 'Play untimed sequence' })).toBeFocused();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBeTruthy();
       expect(await game.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
       expect(await page.evaluate(() => (window as Window & { __rhythmAudio?: number }).__rhythmAudio ?? 0)).toBe(0);
-      expect(writes.filter(item => /\/api\/(town|media|pixels|health)|stamp/i.test(item))).toEqual([]);
+      expect(unexpectedWrites(writes)).toEqual([]);
       await info.attach(`rhythm-${width}-${theme}`, { body: await game.screenshot(), contentType: 'image/png' });
     });
   }
@@ -283,4 +288,62 @@ test.describe('Harbor Rhythm', () => {
     await expect(page).toHaveURL(/\/auth\/login/);
     expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('town.harbor-rhythm.v1.')))).toEqual([]);
   });
+
+  for (const [width, theme, touch] of [
+    [390, 'light', true],
+    [390, 'dark', true],
+    [1280, 'light', false],
+    [1280, 'dark', false],
+  ] as const) {
+    test(`grants one Town-day reward and keeps a rejected receipt at ${width} ${theme}`, async ({ page }) => {
+      test.setTimeout(120_000);
+      const finishes: string[] = [];
+      page.on('request', request => {
+        if (request.method() !== 'POST' || !request.url().includes('/finish')) return;
+        finishes.push(request.postData() ?? '');
+      });
+      await prepare(page, width, theme);
+      let reject = true;
+      await page.route('**/api/town/minigames/runs/*/finish', async route => {
+        if (reject) {
+          reject = false;
+          await new Promise(resolve => setTimeout(resolve, 300));
+          await route.fulfill({
+            status: 422,
+            contentType: 'application/json',
+            body: JSON.stringify({ code: 'play_receipt_rejected', message: 'That play receipt does not match this run.' }),
+          });
+          return;
+        }
+        await route.continue();
+      });
+      await page.goto('/town/rhythm');
+      const game = page.locator('app-harbor-rhythm');
+      await activate(page, game.getByRole('button', { name: 'Play untimed sequence' }), touch);
+      await solveUntimed(page, game, touch);
+      await expect(game.getByRole('status')).toHaveText('Win. Untimed sequence complete. Accuracy 100%.');
+      await expect(game.locator('#rhythm-reward')).toHaveText('This win is still here. The reward was not saved.');
+      const retry = game.getByRole('button', { name: 'Try the reward again' });
+      const retryBox = await retry.boundingBox();
+      expect(retryBox?.width).toBeGreaterThanOrEqual(44);
+      expect(retryBox?.height).toBeGreaterThanOrEqual(44);
+      expect((await (await page.request.get('/api/town/stamps')).json()).balance).toBe(0);
+      await activate(page, retry, touch);
+      await expect(game.locator('#rhythm-reward')).toHaveText('5 Stamps for this Town day. A replay keeps the score and adds none.');
+      await expect(game.getByRole('status')).toHaveText('Win. Untimed sequence complete. Accuracy 100%.');
+      expect((await (await page.request.get('/api/town/stamps')).json()).balance).toBe(5);
+
+      await activate(page, game.getByRole('button', { name: 'Restart', exact: true }), touch);
+      await expect(game.getByRole('status')).toHaveText('0 of 16. Next Bell. Accuracy not scored yet.');
+      await solveUntimed(page, game, touch);
+      await expect(game.locator('#rhythm-reward')).toHaveText('Score kept. No extra Stamps for this game today.');
+      await expect(game.getByRole('status')).toHaveText('Win. Untimed sequence complete. Accuracy 100%.');
+      expect((await (await page.request.get('/api/town/stamps')).json()).balance).toBe(5);
+      expect(finishes.length).toBeGreaterThanOrEqual(3);
+      for (const body of finishes) expect(body).not.toMatch(/weight|blood|steps|sleep|finance|trip_id|heart/i);
+      const scan = await new AxeBuilder({ page }).include('app-harbor-rhythm').analyze();
+      expect(scan.violations.filter(item => item.id === 'color-contrast' || item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+      expect(await game.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+    });
+  }
 });

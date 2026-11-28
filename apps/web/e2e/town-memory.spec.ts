@@ -39,6 +39,11 @@ async function activate(page: Page, locator: Locator, touch: boolean): Promise<v
   }
 }
 
+function unexpectedWrites(writes: string[]): string[] {
+  const allowed = /^POST \/api\/town\/minigames\/runs(\/[^/]+\/finish)?$/;
+  return writes.filter(item => allowed.test(item) ? false : /\/api\/(town|media|pixels|health)|stamp/i.test(item));
+}
+
 async function solve(page: Page, game: Locator, touch: boolean, firstPair = 0): Promise<void> {
   for (const indexes of pairs().slice(firstPair)) {
     for (const index of indexes) await activate(page, game.locator(`[data-index="${index}"]`), touch);
@@ -152,7 +157,7 @@ test.describe('Memory Shelves', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBeTruthy();
       expect(await game.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
       expect(await page.evaluate(() => (window as Window & { __memoryAudio?: number }).__memoryAudio ?? 0)).toBe(0);
-      expect(writes.filter(item => /\/api\/(town|media|pixels|health)|stamp/i.test(item))).toEqual([]);
+      expect(unexpectedWrites(writes)).toEqual([]);
       await info.attach(`memory-${width}-${theme}`, { body: await game.screenshot(), contentType: 'image/png' });
     });
 
@@ -320,4 +325,63 @@ test.describe('Memory Shelves', () => {
     await expect(page).toHaveURL(/\/auth\/login/);
     expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('town.memory-shelves.v1.')))).toEqual([]);
   });
+
+  for (const [width, theme, touch] of [
+    [390, 'light', true],
+    [390, 'dark', true],
+    [1280, 'light', false],
+    [1280, 'dark', false],
+  ] as const) {
+    test(`grants one Town-day reward and keeps a rejected receipt at ${width} ${theme}`, async ({ page }) => {
+      test.setTimeout(120_000);
+      const finishes: string[] = [];
+      page.on('request', request => {
+        if (request.method() !== 'POST' || !request.url().includes('/minigames/runs/')) return;
+        if (request.url().includes('/finish')) finishes.push(request.postData() ?? '');
+      });
+      await prepare(page, width, theme);
+      let reject = true;
+      await page.route('**/api/town/minigames/runs/*/finish', async route => {
+        if (reject) {
+          reject = false;
+          await new Promise(resolve => setTimeout(resolve, 300));
+          await route.fulfill({
+            status: 422,
+            contentType: 'application/json',
+            body: JSON.stringify({ code: 'play_receipt_rejected', message: 'That play receipt does not match this run.' }),
+          });
+          return;
+        }
+        await route.continue();
+      });
+      await page.goto('/town/memory');
+      const game = page.locator('app-memory-shelves');
+      await activate(page, game.getByRole('button', { name: 'Play Memory Shelves' }), touch);
+      await solve(page, game, touch);
+      await expect(game.getByRole('status')).toHaveText('All six pairs matched in 6 moves.');
+      await expect(game.locator('#memory-reward')).toHaveText('This win is still here. The reward was not saved.');
+      await expect(game.locator('[data-face="matched"]')).toHaveCount(12);
+      const retry = game.getByRole('button', { name: 'Try the reward again' });
+      const retryBox = await retry.boundingBox();
+      expect(retryBox?.width).toBeGreaterThanOrEqual(44);
+      expect(retryBox?.height).toBeGreaterThanOrEqual(44);
+      expect((await (await page.request.get('/api/town/stamps')).json()).balance).toBe(0);
+      await activate(page, retry, touch);
+      await expect(game.locator('#memory-reward')).toHaveText('5 Stamps for this Town day. A replay keeps the score and adds none.');
+      await expect(game.getByRole('status')).toHaveText('All six pairs matched in 6 moves.');
+      expect((await (await page.request.get('/api/town/stamps')).json()).balance).toBe(5);
+
+      await activate(page, game.getByRole('button', { name: 'Restart', exact: true }), touch);
+      await expect(game.getByRole('status')).toHaveText('0 moves.');
+      await solve(page, game, touch);
+      await expect(game.locator('#memory-reward')).toHaveText('Score kept. No extra Stamps for this game today.');
+      await expect(game.getByRole('status')).toHaveText('All six pairs matched in 6 moves.');
+      expect((await (await page.request.get('/api/town/stamps')).json()).balance).toBe(5);
+      expect(finishes.length).toBeGreaterThanOrEqual(3);
+      for (const body of finishes) expect(body).not.toMatch(/weight|blood|steps|sleep|finance|trip_id|heart/i);
+      const scan = await new AxeBuilder({ page }).include('app-memory-shelves').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+      expect(await game.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+    });
+  }
 });
