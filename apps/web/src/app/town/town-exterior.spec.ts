@@ -609,14 +609,17 @@ describe('Town scene ambience work', () => {
     FakeObserver.last?.emit(false);
     fixture.detectChanges();
     expect(el.querySelector('.viewport')?.getAttribute('data-ambience')).toBe('still');
+    expect(el.querySelector('.viewport')?.getAttribute('data-hidden')).toBe('true');
     FakeObserver.last?.emit(true);
     fixture.detectChanges();
     expect(el.querySelector('.viewport')?.getAttribute('data-ambience')).toBe('live');
+    expect(el.querySelector('.viewport')?.getAttribute('data-hidden')).toBe('false');
     expect(getComputedStyle(el.querySelector('.idle-mark')!).animationName).toContain('scene-idle');
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
     fixture.detectChanges();
     expect(el.querySelector('.viewport')?.getAttribute('data-ambience')).toBe('still');
+    expect(el.querySelector('.viewport')?.getAttribute('data-hidden')).toBe('true');
     playButton(el).click();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -630,9 +633,45 @@ describe('Town scene ambience work', () => {
     playButton(el).click();
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(play).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledOnceWith(0.7);
     expect(el.textContent).toContain('Played one Town tone.');
     fixture.destroy();
     expect(FakeObserver.last?.disconnected).toBeTrue();
+  });
+
+  it('keeps a stored reduce-motion choice still and silent when the device allows motion', async () => {
+    const play = spyOn(sceneAudio, 'play').and.resolveTo();
+    localStorage.setItem(scenePreferenceKey(7), JSON.stringify({
+      season: 'winter', sound: true, volume: 0.7, motion: 'reduce', decoration: true,
+    }));
+    const fixture = await shown(false);
+    const el = fixture.nativeElement as HTMLElement;
+    FakeObserver.last?.emit(true);
+    fixture.detectChanges();
+    const viewport = el.querySelector('.viewport') as HTMLElement;
+    expect(viewport.getAttribute('data-motion')).toBe('reduce');
+    expect(viewport.getAttribute('data-ambience')).toBe('still');
+    expect(getComputedStyle(el.querySelector('.idle-mark')!).animationName).toBe('none');
+    playButton(el).click();
+    await fixture.whenStable();
+    expect(play).not.toHaveBeenCalled();
+    expect(el.querySelector('[data-building="home"]')).not.toBeNull();
+  });
+
+  it('hides decoration without removing a building or its action', async () => {
+    localStorage.setItem(scenePreferenceKey(7), JSON.stringify({
+      season: 'winter', sound: false, volume: 0.4, motion: 'system', decoration: false,
+    }));
+    const fixture = await shown(false);
+    const el = fixture.nativeElement as HTMLElement;
+    FakeObserver.last?.emit(true);
+    fixture.detectChanges();
+    const viewport = el.querySelector('.viewport') as HTMLElement;
+    expect(viewport.getAttribute('data-decoration')).toBe('off');
+    expect(viewport.getAttribute('data-ambience')).toBe('still');
+    expect(getComputedStyle(el.querySelector('.idle-mark')!).display).toBe('none');
+    const home = el.querySelector('[data-building="home"]') as HTMLAnchorElement;
+    expect(home.textContent).toContain('Home');
+    expect(home.getAttribute('href') || home.getAttribute('ng-reflect-router-link')).toContain('/town/home/living');
   });
 });

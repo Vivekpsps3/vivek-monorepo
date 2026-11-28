@@ -1,5 +1,6 @@
 /** One short original tone. The context closes when the tone ends or the page hides. */
-export async function playSceneTone(): Promise<void> {
+export async function playSceneTone(volume = 1): Promise<void> {
+  if (!(volume > 0)) return;
   if (typeof window === 'undefined' || typeof window.AudioContext !== 'function') return;
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
   if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -22,7 +23,8 @@ export async function playSceneTone(): Promise<void> {
     oscillator.frequency.value = 523.25;
     const start = context.currentTime;
     gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.03, start + 0.02);
+    const peak = Math.max(0.0002, 0.03 * Math.min(1, volume));
+    gain.gain.exponentialRampToValueAtTime(peak, start + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
     oscillator.connect(gain);
     gain.connect(context.destination);

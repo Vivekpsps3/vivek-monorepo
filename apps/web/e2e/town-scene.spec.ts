@@ -93,7 +93,9 @@ test.describe('Town season and ambience', () => {
       owner: localStorage.getItem('town.scene.v1.1'),
       other: localStorage.getItem('town.scene.v1.2'),
     }));
-    expect(JSON.parse(stored.owner!)).toEqual({ season: 'winter', sound: false });
+    expect(JSON.parse(stored.owner!)).toEqual({
+      season: 'winter', sound: false, volume: 0.7, motion: 'system', decoration: true,
+    });
     await page.evaluate(() => localStorage.setItem('town.scene.v1.2', JSON.stringify({ season: 'spring', sound: true })));
     await page.reload();
     await expect(season.getByRole('radio', { name: 'Winter' })).toBeChecked();

@@ -1,0 +1,69 @@
+<h1>Game</h1>
+<ui-card>
+  <h2>Sound, motion, and decoration</h2>
+  @if (scene.owner() === null) {
+    <p>Sign in to save game preferences on this device.</p>
+  } @else {
+    <fieldset class="game-choices" data-game-preferences>
+      <legend>Audio</legend>
+      <label class="game-choice">
+        <input
+          type="checkbox"
+          name="town-mute"
+          [checked]="muted()"
+          aria-describedby="town-mute-help"
+          (change)="muteFrom($event)" />
+        <span>Mute</span>
+      </label>
+      <p id="town-mute-help">Sound stays off until you unmute. Nothing plays by itself, and changing these controls does not start audio.</p>
+      <label class="game-choice" for="town-volume">Volume</label>
+      <input
+        id="town-volume"
+        type="range"
+        name="town-volume"
+        min="0"
+        max="100"
+        step="1"
+        [value]="volumePercent()"
+        aria-describedby="town-volume-help"
+        (change)="volumeFrom($event)" />
+      <p id="town-volume-help">Volume is saved for this account on this device. Mute keeps the level for later.</p>
+    </fieldset>
+    <fieldset class="game-choices">
+      <legend>Motion</legend>
+      <p id="town-motion-help">Reduce motion uses a static light or color change. Harbor Rhythm keeps an untimed sequence and does not travel notes.</p>
+      @for (choice of motionChoices; track choice.value) {
+        <label class="game-choice">
+          <input
+            type="radio"
+            name="town-motion"
+            [value]="choice.value"
+            [checked]="scene.effective().motion === choice.value"
+            aria-describedby="town-motion-help"
+            (change)="motionFrom(choice.value)" />
+          <span>{{ choice.label }}</span>
+        </label>
+      }
+    </fieldset>
+    <fieldset class="game-choices">
+      <legend>Town play</legend>
+      <label class="game-choice">
+        <input
+          type="checkbox"
+          name="town-decoration"
+          [checked]="scene.effective().decoration"
+          aria-describedby="town-decoration-help"
+          (change)="decorationFrom($event)" />
+        <span>Game decoration and feedback</span>
+      </label>
+      <p id="town-decoration-help">Turning this off hides optional marks. Rooms, objects, and Today still open.</p>
+    </fieldset>
+    <p #savedNote role="status" [hidden]="!notice()">{{ notice() }}</p>
+    <p #saveError tabindex="-1" [attr.role]="scene.saveError() ? 'alert' : null" [hidden]="!scene.saveError()">{{ scene.saveError() }}</p>
+  }
+  <div class="game-links">
+    <ui-button variant="secondary" href="/town/rhythm" label="Harbor Rhythm" />
+    <ui-button variant="secondary" href="/settings/appearance" label="Color theme" />
+    <ui-button variant="ghost" href="/town" label="Open Town" />
+  </div>
+</ui-card>

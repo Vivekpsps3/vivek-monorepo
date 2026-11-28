@@ -1,4 +1,5 @@
 import {
+  DEFAULT_SCENE_PREFERENCE,
   dayPartForHour,
   presentScene,
   readScenePreference,
@@ -6,8 +7,13 @@ import {
   scenePreferenceKey,
   seasonForMonth,
   writeScenePreference,
+  type ScenePreference,
   type SeasonChoice,
 } from './scene-appearance';
+
+function preference(patch: Partial<ScenePreference> = {}): ScenePreference {
+  return { ...DEFAULT_SCENE_PREFERENCE, ...patch };
+}
 
 describe('scene appearance', () => {
   const edges: { month: number; season: ReturnType<typeof seasonForMonth> }[] = [
@@ -67,20 +73,22 @@ describe('scene appearance', () => {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => { storage.set(key, value); },
     };
-    expect(writeScenePreference(memory, 4, { season: 'autumn', sound: true })).toBeTrue();
+    expect(writeScenePreference(memory, 4, preference({ season: 'autumn', sound: true, volume: 0.4, motion: 'reduce', decoration: false }))).toBeTrue();
     expect(scenePreferenceKey(4)).toBe('town.scene.v1.4');
-    expect(Object.keys(JSON.parse(storage.get('town.scene.v1.4')!))).toEqual(['season', 'sound']);
-    expect(readScenePreference(memory, 4)).toEqual({ season: 'autumn', sound: true });
-    expect(readScenePreference(memory, 5)).toEqual({ season: 'automatic', sound: false });
+    expect(Object.keys(JSON.parse(storage.get('town.scene.v1.4')!))).toEqual(['season', 'sound', 'volume', 'motion', 'decoration']);
+    expect(readScenePreference(memory, 4)).toEqual(preference({ season: 'autumn', sound: true, volume: 0.4, motion: 'reduce', decoration: false }));
+    expect(readScenePreference(memory, 5)).toEqual(preference());
     storage.set('town.scene.v1.5', '{');
     expect(readScenePreference(memory, 5).season).toBe('automatic');
     storage.set('town.scene.v1.5', JSON.stringify({ season: 'nope', sound: true }));
-    expect(readScenePreference(memory, 5)).toEqual({ season: 'automatic', sound: true });
-    storage.set('town.scene.v1.5', JSON.stringify({ season: 'spring', sound: 'yes' }));
-    expect(readScenePreference(memory, 5)).toEqual({ season: 'spring', sound: false });
-    expect(writeScenePreference(memory, 5, { season: 'nope' as SeasonChoice, sound: true })).toBeFalse();
-    expect(writeScenePreference(null, 5, { season: 'spring', sound: false })).toBeFalse();
+    expect(readScenePreference(memory, 5)).toEqual(preference({ sound: true }));
+    storage.set('town.scene.v1.5', JSON.stringify({ season: 'spring', sound: 'yes', volume: 4, motion: 'full', decoration: 'no' }));
+    expect(readScenePreference(memory, 5)).toEqual(preference({ season: 'spring', volume: 1 }));
+    expect(writeScenePreference(memory, 5, preference({ season: 'nope' as SeasonChoice, sound: true }))).toBeFalse();
+    expect(writeScenePreference(null, 5, preference({ season: 'spring' }))).toBeFalse();
     expect(readScenePreference({ getItem: () => { throw new Error('blocked'); } }, 5).sound).toBeFalse();
+    expect(readScenePreference(memory, 4).decoration).toBeFalse();
+    expect(readScenePreference(memory, 6).decoration).toBeTrue();
   });
 
   it('keeps February 29 in winter and March 1 in spring', () => {

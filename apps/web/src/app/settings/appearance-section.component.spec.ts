@@ -2,7 +2,11 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { SessionService } from '../platform/session.service';
-import { scenePreferenceKey } from '../platform/scene-appearance';
+import { DEFAULT_SCENE_PREFERENCE, scenePreferenceKey, type ScenePreference } from '../platform/scene-appearance';
+
+function preference(patch: Partial<ScenePreference> = {}): ScenePreference {
+  return { ...DEFAULT_SCENE_PREFERENCE, ...patch };
+}
 import { SCENE_SAVE_ERROR, SceneAppearanceService } from '../platform/scene-appearance.service';
 import { AppearanceSectionComponent } from './appearance-section.component';
 
@@ -69,7 +73,7 @@ describe('AppearanceSectionComponent seasons', () => {
     control(el, 'Save season').click();
     expect(document.activeElement?.textContent).toContain('Season saved on this device.');
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(JSON.parse(localStorage.getItem(scenePreferenceKey(4))!)).toEqual({ season: 'winter', sound: false });
+    expect(JSON.parse(localStorage.getItem(scenePreferenceKey(4))!)).toEqual(preference({ season: 'winter' }));
     service.at.set(new Date(2026, 11, 1, 12));
     fixture.detectChanges();
     expect(service.presentation().season).toBe('winter');

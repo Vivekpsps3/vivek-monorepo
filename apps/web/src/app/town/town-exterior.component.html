@@ -14,6 +14,9 @@
     [attr.data-day]="presentation().dayPart"
     [attr.data-weather]="presentation().weather"
     [attr.data-ambience]="ambience()"
+    [attr.data-motion]="reducedMotion() ? 'reduce' : 'ok'"
+    [attr.data-decoration]="decorationOn() ? 'on' : 'off'"
+    [attr.data-hidden]="sceneHidden() ? 'true' : 'false'"
     (pointerdown)="beginPointer($event)" (pointermove)="movePointer($event)"
     (pointerup)="endPointer($event)" (pointercancel)="cancelPointer()" (touchcancel)="cancelPointer()">
     <div class="stage" [style.transform]="cameraTransform()" [style.--label-scale]="1 / camera().scale">

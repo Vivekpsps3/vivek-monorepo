@@ -100,6 +100,7 @@ p {
   }
 }
 
+.memory[data-motion="reduce"] .shelf { transition: none; animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .shelf {
     transition: none;

@@ -121,8 +121,10 @@ export class TownExteriorComponent {
   protected readonly feedbackLabel = feedbackLabel;
   protected readonly feedbackAttr = feedbackAttr;
   protected readonly responseKind = responseKind;
+  protected readonly sceneHidden = signal(false);
   protected readonly soundStatus = computed(() => {
-    if (!this.scene.effective().sound) return 'Town sound is off until you turn it on in Appearance.';
+    const preference = this.scene.effective();
+    if (!preference.sound || preference.volume <= 0) return 'Town sound is off until you turn it on in Appearance.';
     return this.soundOutcome() ?? 'Town sound is on. Nothing plays until you choose Play Town sound.';
   });
 
@@ -330,7 +332,11 @@ export class TownExteriorComponent {
   }
 
   protected reducedMotion(): boolean {
-    return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return this.scene.reduced();
+  }
+
+  protected decorationOn(): boolean {
+    return this.scene.effective().decoration;
   }
 
   protected playSound(): void {
@@ -361,26 +367,36 @@ export class TownExteriorComponent {
 
   private syncAmbience(): void {
     const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
-    const live = this.alive && this.onScreen && !hidden && !this.reducedMotion();
+    const offscreen = !this.alive || !this.onScreen || hidden;
+    this.sceneHidden.set(offscreen);
+    const live = !offscreen && !this.reducedMotion() && this.decorationOn();
     this.ambience.set(live ? 'live' : 'still');
+    if (!live) this.stopAudibleWork();
     if (live && this.soundOutcome() === QUIET_SOUND) this.soundOutcome.set(null);
+  }
+
+  /** Hidden, offscreen, reduced, or undecorated scenes do not keep a tone running. */
+  private stopAudibleWork(): void {
+    if (this.soundOutcome() === 'Played one Town tone.') this.soundOutcome.set(QUIET_SOUND);
   }
 
   private async playSoundNow(): Promise<void> {
     if (!this.alive) return;
     const owner = this.owner;
-    if (!this.scene.effective().sound || this.ambience() !== 'live') {
-      this.soundOutcome.set(this.scene.effective().sound ? QUIET_SOUND : null);
+    const preference = this.scene.effective();
+    const allowed = preference.sound && preference.volume > 0 && this.ambience() === 'live';
+    if (!allowed) {
+      this.soundOutcome.set(preference.sound && preference.volume > 0 ? QUIET_SOUND : null);
       return;
     }
     try {
-      await sceneAudio.play();
+      await sceneAudio.play(preference.volume);
     } catch {
       if (!this.alive || this.owner !== owner) return;
       this.soundOutcome.set('Town sound could not play. The scene is unchanged.');
       return;
     }
-    if (!this.alive || this.owner !== owner || !this.scene.effective().sound || this.ambience() !== 'live') return;
+    if (!this.alive || this.owner !== owner || !this.scene.effective().sound || this.scene.effective().volume <= 0 || this.ambience() !== 'live') return;
     this.soundOutcome.set('Played one Town tone.');
   }
 

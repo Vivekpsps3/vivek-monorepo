@@ -5,9 +5,11 @@ import { SessionService } from './session.service';
 import {
   DEFAULT_SCENE_PREFERENCE,
   browserSceneStorage,
+  motionReduced,
   preferencesEqual,
   presentScene,
   readScenePreference,
+  scenePreference,
   writeScenePreference,
   type ScenePreference,
   type ScenePresentation,
@@ -27,7 +29,9 @@ export class SceneAppearanceService {
   readonly saveError = signal<string | null>(null);
   /** Local presentation clock. Visibility refreshes it once; nothing polls. */
   readonly at = signal(new Date());
+  readonly systemReduced = signal(false);
   readonly effective = computed(() => this.draft() ?? this.saved());
+  readonly reduced = computed(() => motionReduced(this.effective().motion, this.systemReduced()));
   readonly dirty = computed(() => {
     const draft = this.draft();
     return draft !== null && !preferencesEqual(draft, this.saved());
@@ -40,6 +44,7 @@ export class SceneAppearanceService {
       distinctUntilChanged(),
       takeUntilDestroyed(),
     ).subscribe(ownerId => this.useOwner(ownerId));
+    this.listenForReducedMotion();
     if (typeof document !== 'undefined') {
       const onVisible = (): void => {
         if (document.visibilityState === 'visible') this.at.set(new Date());
@@ -51,7 +56,7 @@ export class SceneAppearanceService {
 
   preview(patch: Partial<ScenePreference>): void {
     if (this.ownerId == null) return;
-    const next: ScenePreference = { ...this.effective(), ...patch };
+    const next = scenePreference({ ...this.effective(), ...patch });
     this.saveError.set(null);
     if (preferencesEqual(next, this.saved())) {
       this.draft.set(null);
@@ -84,6 +89,37 @@ export class SceneAppearanceService {
     this.draft.set(null);
     this.saveError.set(null);
     return true;
+  }
+
+  /**
+   * Writes one patched saved preference. An open season preview stays uncommitted.
+   * A failed write keeps the patch in this session and does not change the other owner.
+   */
+  persist(patch: Partial<ScenePreference>): boolean {
+    const owner = this.ownerId;
+    if (owner == null) return false;
+    const nextSaved = scenePreference({ ...this.saved(), ...patch });
+    const session = scenePreference({ ...this.effective(), ...patch });
+    const ok = writeScenePreference(browserSceneStorage(), owner, nextSaved);
+    if (this.ownerId !== owner) return false;
+    if (!ok) {
+      this.draft.set(session);
+      this.saveError.set(SCENE_SAVE_ERROR);
+      return false;
+    }
+    this.saved.set(nextSaved);
+    this.draft.set(preferencesEqual(session, nextSaved) ? null : session);
+    this.saveError.set(null);
+    return true;
+  }
+
+  private listenForReducedMotion(): void {
+    if (typeof matchMedia !== 'function') return;
+    const query = matchMedia('(prefers-reduced-motion: reduce)');
+    this.systemReduced.set(query.matches);
+    const onChange = (): void => this.systemReduced.set(query.matches);
+    query.addEventListener?.('change', onChange);
+    this.destroyRef.onDestroy(() => query.removeEventListener?.('change', onChange));
   }
 
   private useOwner(ownerId: number | null): void {

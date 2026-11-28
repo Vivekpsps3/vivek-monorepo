@@ -598,9 +598,10 @@ export class HealthWorkoutDialogComponent {
   }
 
   private tickAllowed(): boolean {
+    const preference = this.scene.effective();
     return restTickAllowed({
-      sound: this.scene.effective().sound,
-      reducedMotion: this.reducedMotion(),
+      sound: preference.sound && preference.volume > 0,
+      reducedMotion: this.reducedMotion() || preference.motion === 'reduce',
       visible: this.pageVisible(),
       running: this.rest().phase === 'running',
     });
@@ -634,7 +635,7 @@ export class HealthWorkoutDialogComponent {
     const second = Math.floor(elapsed / 1000);
     if (second > this.restSecond) {
       this.restSecond = second;
-      if (this.tickAllowed()) this.restAudio.pulse(true);
+      if (this.tickAllowed()) this.restAudio.pulse(true, this.scene.effective().volume);
       else this.restAudio.silence();
     }
   }
