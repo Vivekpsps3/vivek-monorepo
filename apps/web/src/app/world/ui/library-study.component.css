@@ -1,0 +1,26 @@
+:host { display: block; color: var(--text); }
+main {
+  box-sizing: border-box;
+  max-width: 40rem;
+  margin: auto;
+  padding: clamp(12px, 4vw, 32px);
+}
+header { display: grid; gap: 8px; margin-bottom: 16px; }
+h1, p { margin: 0; overflow-wrap: anywhere; }
+.study-crumbs { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.study-crumbs a, .study-crumbs [aria-current="page"] {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  color: inherit;
+  font-weight: 600;
+}
+.study-crumbs a { text-decoration: underline; }
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--focus-ring, currentColor);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  :host, main, a, button { animation: none; transition: none; }
+}

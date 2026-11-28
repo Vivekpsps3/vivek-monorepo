@@ -85,6 +85,20 @@
       "query": "object=calendar"
     },
     {
+      "id": "town-library-study",
+      "path": "town/library/study",
+      "owner": "town",
+      "status": "mounted",
+      "query": "new=1"
+    },
+    {
+      "id": "town-library-study-concept",
+      "path": "town/library/study/42",
+      "owner": "town",
+      "status": "mounted",
+      "angular": "town/library/study/:conceptId"
+    },
+    {
       "id": "town-hall",
       "path": "town/hall",
       "owner": "town",

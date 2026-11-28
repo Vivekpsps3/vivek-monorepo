@@ -12,9 +12,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { NavigationStart, Router } from '@angular/router';
-import { filter } from 'rxjs';
-import { ConfirmService, UiButtonComponent, UiConfirmDialogComponent, UiDialogComponent } from '@vivek/ui';
+import { distinctUntilChanged, map, skip } from 'rxjs';
+import { ConfirmService, UiButtonComponent, UiConfirmDialogComponent } from '@vivek/ui';
+import { SessionService } from '../../platform/session.service';
 import { WorldApi } from '../data/world-api';
 import { WORLD_COPY, type ConceptDraft, type ConceptFieldErrors, type ConceptRecord } from '../world.types';
 
@@ -67,7 +67,7 @@ function problemOf(error: unknown): ConceptProblem {
 
 @Component({
   selector: 'app-concept-sheet',
-  imports: [UiButtonComponent, UiDialogComponent, UiConfirmDialogComponent],
+  imports: [UiButtonComponent, UiConfirmDialogComponent],
   templateUrl: './concept-sheet.component.html',
   styleUrl: './concept-sheet.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -75,15 +75,16 @@ function problemOf(error: unknown): ConceptProblem {
 export class ConceptSheetComponent {
   private readonly api = inject(WorldApi);
   private readonly confirm = inject(ConfirmService);
-  private readonly router = inject(Router);
+  private readonly session = inject(SessionService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
 
   readonly open = input(false);
   readonly today = input('');
   readonly focusId = input<number | null>(null);
+  /** A route id that cannot be a concept. The list still loads for this owner. */
+  readonly absent = input(false);
   readonly creating = input(false);
-  readonly closed = output<void>();
   readonly changed = output<ConceptChange>();
 
   readonly copy = WORLD_COPY;
@@ -96,28 +97,38 @@ export class ConceptSheetComponent {
   readonly listError = signal('');
   readonly fieldErrors = signal<ConceptFieldErrors>({});
   readonly notice = signal('');
-  readonly panelClass = signal('world-concept-bottom');
   readonly busy = signal(false);
 
   private requests = new AbortController();
   private loadId = 0;
+  private seenFocus: number | null | undefined;
+  private alive = true;
 
   constructor() {
-    const query = typeof matchMedia === 'function' ? matchMedia('(min-width: 768px)') : null;
-    const apply = () => this.panelClass.set(query?.matches ? 'world-concept-side' : 'world-concept-bottom');
-    apply();
-    query?.addEventListener?.('change', apply);
-    this.router.events.pipe(
-      filter(event => event instanceof NavigationStart),
-      takeUntilDestroyed(),
-    ).subscribe(() => this.abortRequests());
     this.destroyRef.onDestroy(() => {
-      query?.removeEventListener?.('change', apply);
+      this.alive = false;
       this.requests.abort();
+    });
+    this.session.cleared$.pipe(takeUntilDestroyed()).subscribe(() => this.forget());
+    this.session.user$.pipe(
+      map(user => user?.id ?? null),
+      distinctUntilChanged(),
+      skip(1),
+      takeUntilDestroyed(),
+    ).subscribe(owner => {
+      this.forget();
+      if (this.open() && owner != null) void this.reload();
     });
     effect(() => {
       if (!this.open()) return;
-      void this.reload();
+      const focus = this.focusId();
+      const absent = this.absent();
+      if (this.seenFocus !== undefined && this.seenFocus !== focus) {
+        this.showForm.set(false);
+        this.editingId.set(null);
+      }
+      this.seenFocus = focus;
+      void this.reload(focus, absent);
     });
   }
 
@@ -128,11 +139,6 @@ export class ConceptSheetComponent {
       if (concept.archived) return false;
       return tab === 'understood' ? concept.understood_on != null : concept.understood_on == null;
     });
-  }
-
-  close(): void {
-    this.showForm.set(false);
-    this.closed.emit();
   }
 
   startCreate(): void {
@@ -205,6 +211,7 @@ export class ConceptSheetComponent {
       this.changed.emit(weeks.length ? { kind: 'weeks', id, name, weeks } : { kind: 'text', id, name });
       if (editing == null) this.draft.set({ name: '', note: '', source: '', understood_on: '' });
       this.showForm.set(false);
+      if (id != null) this.focusCard(id);
     } catch (error) {
       if (signal.aborted) return;
       const problem = problemOf(error);
@@ -318,7 +325,8 @@ export class ConceptSheetComponent {
     }
   }
 
-  private async reload(): Promise<void> {
+  private async reload(focus = this.focusId(), absent = this.absent()): Promise<void> {
+    this.abortRequests();
     const id = ++this.loadId;
     const signal = this.requests.signal;
     this.listError.set('');
@@ -331,7 +339,12 @@ export class ConceptSheetComponent {
       const byId = new Map<number, ConceptRecord>();
       for (const concept of [...asConcepts(active), ...asConcepts(archived)]) byId.set(concept.id, concept);
       this.concepts.set([...byId.values()]);
-      const focus = this.focusId();
+      const found = focus != null && this.concepts().some(concept => concept.id === focus);
+      if (absent || (focus != null && !found)) {
+        this.listError.set(WORLD_COPY.missing);
+        this.focusMissing();
+        return;
+      }
       if (focus != null) this.reveal(focus);
     } catch (error) {
       if (id !== this.loadId || signal.aborted) return;
@@ -339,11 +352,40 @@ export class ConceptSheetComponent {
     }
   }
 
+  /** Drop private concept state. A late response from the aborted request cannot publish. */
+  private forget(): void {
+    this.abortRequests();
+    this.loadId += 1;
+    this.concepts.set([]);
+    this.showForm.set(false);
+    this.editingId.set(null);
+    this.draft.set({ name: '', note: '', source: '', understood_on: '' });
+    this.formError.set('');
+    this.listError.set('');
+    this.fieldErrors.set({});
+    this.notice.set('');
+    this.busy.set(false);
+  }
+
   private reveal(id: number): void {
     const concept = this.concepts().find(item => item.id === id);
     if (!concept) return;
     this.tab.set(concept.archived ? 'archived' : concept.understood_on ? 'understood' : 'notyet');
-    queueMicrotask(() => document.getElementById(`concept-${id}`)?.focus());
+  }
+
+  /** Focus after render. Arrival focus stays with the page heading. */
+  private focusCard(id: number): void {
+    setTimeout(() => {
+      if (!this.alive) return;
+      document.getElementById(`concept-${id}`)?.focus();
+    });
+  }
+
+  private focusMissing(): void {
+    setTimeout(() => {
+      if (!this.alive) return;
+      document.getElementById('concept-missing')?.focus();
+    });
   }
 
   private replace(concept: ConceptRecord): void {

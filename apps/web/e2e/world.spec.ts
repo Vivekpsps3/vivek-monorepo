@@ -1,7 +1,7 @@
 import { generateChunk, normalizeWeek, worldSeed } from '../src/app/world/engine';
 import { engineWeek } from '../src/app/world/logic/engine-week';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Locator, type Page } from '../../../tests/e2e/fixtures';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '../../../tests/e2e/fixtures';
 
 // The town project sets reducedMotion: 'reduce' and America/Los_Angeles.
 //
@@ -456,41 +456,258 @@ test.describe('World dated landscape and inspection', () => {
   });
 });
 
-test('World learning saves, renames and undo retract the actual dated beacon', async ({ page, request }) => {
+test('World learning saves through the study and undo retracts the dated beacon', async ({ page, request }) => {
   expect((await request.post('/e2e/reset?seed=pixels')).ok()).toBeTruthy();
-  const response = await (await request.get('/api/world?tz=America%2FLos_Angeles')).json();
-  const today = response.meta.today as string;
+  const town = await (await request.get('/api/town?tz=America/Los_Angeles')).json() as { town: { today: string } };
+  const today = town.town.today;
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.addInitScript(() => localStorage.setItem('suite-theme', 'light'));
   await page.goto(`/town/world?day=${today}`);
   await expect(page.getByRole('button', { name: 'Previous week', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Concepts', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Concepts', exact: true });
-  await dialog.getByRole('button', { name: 'Add a concept', exact: true }).click();
-  await dialog.getByLabel('Name', { exact: true }).fill('A tide worth remembering');
-  await dialog.getByLabel('Note', { exact: true }).fill('A learning note saved through the real source.');
-  await dialog.locator('#concept-understood').fill(today);
-  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-  await dialog.getByRole('tab', { name: 'Understood', exact: true }).click();
-  await expect(dialog.getByRole('heading', { name: 'A tide worth remembering', exact: true })).toBeVisible();
-  await page.keyboard.press('Escape');
+  // The editor lives on the study route. Returning here loads the saved concept.
+  await page.getByRole('link', { name: 'Concepts', exact: true }).click();
+  await expect(page).toHaveURL(/\/town\/library\/study$/);
+  await page.getByRole('button', { name: 'Add a concept', exact: true }).click();
+  const study = page.locator('app-library-study');
+  await study.getByLabel('Name', { exact: true }).fill('A tide worth remembering');
+  await study.getByLabel('Note', { exact: true }).fill('A learning note saved through the real source.');
+  await study.locator('#concept-understood').fill(today);
+  await study.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(study.locator('form')).toHaveCount(0);
+  await study.getByRole('tab', { name: 'Understood', exact: true }).click();
+  const created = study.locator('article').filter({ has: page.getByRole('heading', { name: 'A tide worth remembering', exact: true }) });
+  await expect(created).toBeVisible();
+  const conceptDomId = await created.getAttribute('id');
+  expect(conceptDomId).toMatch(/^concept-\d+$/);
+  const conceptId = conceptDomId!.slice('concept-'.length);
+  await page.goBack();
   const items = page.getByRole('list', { name: 'Recorded items for this day' });
   await expect(items).toContainText('A tide worth remembering');
   await items.getByRole('button', { name: /A tide worth remembering/ }).click();
-  await page.getByRole('button', { name: 'Open concept', exact: true }).click();
-  const card = dialog.getByRole('article').filter({ has: page.getByRole('heading', { name: 'A tide worth remembering', exact: true }) });
-  await expect(card).toBeFocused();
-  let worldReads = 0;
-  page.on('request', request => { if (new URL(request.url()).pathname === '/api/world') worldReads++; });
+  const open = page.getByRole('link', { name: 'Open concept', exact: true });
+  await expect(open).toHaveAttribute('href', `/town/library/study/${conceptId}`);
+  await open.click();
+  const card = page.locator(`#concept-${conceptId}`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Study' })).toBeFocused();
   await card.getByRole('button', { name: 'Edit', exact: true }).click();
-  await dialog.getByLabel('Name', { exact: true }).fill('Understanding the tide');
-  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await study.getByLabel('Name', { exact: true }).fill('Understanding the tide');
+  await study.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(card).toBeFocused();
+  await expect(card.getByRole('heading', { name: 'Understanding the tide', exact: true })).toBeVisible();
+  await page.goBack();
   await expect(items).toContainText('Understanding the tide');
-  expect(worldReads).toBe(0);
-  await dialog.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Understanding the tide', exact: true }) }).getByRole('button', { name: 'Undo', exact: true }).click();
+  await items.getByRole('button', { name: /Understanding the tide/ }).click();
+  await page.getByRole('link', { name: 'Open concept', exact: true }).click();
+  await page.locator(`#concept-${conceptId}`).getByRole('button', { name: 'Undo', exact: true }).click();
+  await page.goBack();
   await expect(items.getByRole('button', { name: /Understanding the tide/ })).toHaveCount(0);
-  expect(worldReads).toBe(1);
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Previous week', exact: true })).toBeEnabled();
   await page.reload();
   await expect(page.getByLabel('Jump to date')).toHaveValue(today);
   await expect(page.getByRole('button', { name: 'Previous week', exact: true })).toBeEnabled();
   await expect(items.getByRole('button', { name: /Understanding the tide/ })).toHaveCount(0);
+});
+
+interface StudyConcept {
+  id: number;
+  name: string;
+  note: string | null;
+  source: string | null;
+  understood_on: string | null;
+  archived: boolean;
+}
+
+const csrf = { 'X-CSRF-Token': 'synthetic-csrf' };
+
+async function atLeast44(control: Locator): Promise<void> {
+  const box = await control.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.width).toBeGreaterThanOrEqual(44);
+  expect(box!.height).toBeGreaterThanOrEqual(44);
+}
+
+async function ownerConcept(request: APIRequestContext): Promise<StudyConcept> {
+  const rows = await (await request.get('/api/world/concepts')).json() as StudyConcept[];
+  const owner = rows.find(row => row.name === 'Synthetic concept');
+  expect(owner).toBeTruthy();
+  return owner!;
+}
+
+async function paintStudy(page: Page, width: number, height: number, theme: 'light' | 'dark'): Promise<void> {
+  await page.setViewportSize({ width, height });
+  await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+  await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+}
+
+test.describe('Library study', () => {
+  test.beforeEach(async ({ request }) => {
+    expect((await request.post('/e2e/reset?seed=pixels-facts')).ok()).toBeTruthy();
+  });
+
+  test('keeps an old concept id, note, source, and understood date at 1280 light', async ({ page, request }) => {
+    const owner = await ownerConcept(request);
+    await paintStudy(page, 1280, 800, 'light');
+    await page.goto(`/town/library/study/${owner.id}`);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    const study = page.locator('app-library-study');
+    await expect(study.getByRole('heading', { level: 1, name: 'Study' })).toBeVisible();
+    const card = page.locator(`#concept-${owner.id}`);
+    await expect(card).toContainText('Synthetic concept');
+    await expect(card).toContainText('synthetic private note');
+    await expect(card).toContainText('2026-08-15');
+    await expect(study.getByRole('heading', { level: 1, name: 'Study' })).toBeFocused();
+    const hall = study.getByRole('link', { name: 'Reading Hall', exact: true });
+    await atLeast44(hall);
+    await atLeast44(study.getByRole('tab', { name: 'Understood', exact: true }));
+    const edit = card.getByRole('button', { name: 'Edit', exact: true });
+    await atLeast44(edit);
+    await edit.focus();
+    await page.keyboard.press('Enter');
+    await study.getByLabel('Note', { exact: true }).fill('A dated annotation kept after editing.');
+    await study.getByLabel('Source', { exact: true }).fill('margin note');
+    const save = study.getByRole('button', { name: 'Save', exact: true });
+    await atLeast44(save);
+    await save.focus();
+    await page.keyboard.press('Enter');
+    await expect(card).toBeFocused();
+    await expect(card).toContainText('A dated annotation kept after editing.');
+    await expect(card).toContainText('margin note');
+    await expect(card).toContainText('2026-08-15');
+    await page.reload();
+    await expect(card).toContainText('Synthetic concept');
+    await expect(card).toContainText('A dated annotation kept after editing.');
+    await expect(card).toContainText('margin note');
+    await expect(card).toContainText('2026-08-15');
+    expect(await study.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
+    const scan = await new AxeBuilder({ page }).include('app-library-study').analyze();
+    expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+    await page.goto('/town/world?day=2026-08-15');
+    const items = page.getByRole('list', { name: 'Recorded items for this day' });
+    await expect(items).toContainText('Synthetic concept');
+    await items.getByRole('button', { name: /Synthetic concept/ }).click();
+    await expect(page.getByRole('link', { name: 'Open concept', exact: true })).toHaveAttribute('href', `/town/library/study/${owner.id}`);
+    await expect(page.getByRole('button', { name: 'Previous week', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Next week', exact: true })).toBeVisible();
+    await page.goto('/pixels?year=2026&day=2026-08-15');
+    await expect(page.getByRole('heading', { name: 'Synthetic concept' })).toBeVisible();
+  });
+
+  test('keeps unknown, archived, and other-owner boundaries', async ({ page, request }) => {
+    const owner = await ownerConcept(request);
+    const foreignId = owner.id + 1;
+    await paintStudy(page, 1280, 800, 'light');
+    await page.goto(`/town/library/study/${owner.id}`);
+    await page.goto('/town/library/study/999999');
+    const study = page.locator('app-library-study');
+    await expect(page.locator('#concept-missing')).toHaveText("That concept doesn't exist.");
+    await expect(study).not.toContainText('Foreign concept');
+    await expect(study).not.toContainText('foreign private note');
+    await page.goto(`/town/library/study/${foreignId}`);
+    await expect(page.locator('#concept-missing')).toHaveText("That concept doesn't exist.");
+    const hidden = await study.innerText();
+    expect(hidden).not.toContain('Foreign concept');
+    expect(hidden).not.toContain('foreign private note');
+    const denied = await page.request.patch(`/api/world/concepts/${foreignId}`, {
+      headers: csrf,
+      data: { note: 'should not land', tz: 'America/Los_Angeles' },
+    });
+    expect(denied.status()).toBe(404);
+    const archived = await page.request.patch(`/api/world/concepts/${owner.id}`, {
+      headers: csrf,
+      data: { archived: true, tz: 'America/Los_Angeles' },
+    });
+    expect(archived.ok(), await archived.text()).toBeTruthy();
+    const active = await (await page.request.get('/api/world/concepts')).json() as StudyConcept[];
+    expect(active.some(row => row.id === owner.id || row.name === 'Foreign concept')).toBe(false);
+    const shelf = await (await page.request.get('/api/world/concepts?archived=1')).json() as StudyConcept[];
+    const kept = shelf.find(row => row.id === owner.id);
+    expect(kept?.note).toBe('synthetic private note');
+    expect(kept?.understood_on).toBe('2026-08-15');
+    expect(kept?.archived).toBe(true);
+    await page.goto(`/town/library/study/${owner.id}`);
+    await expect(page.getByRole('tab', { name: 'Archived', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator(`#concept-${owner.id}`)).toContainText('synthetic private note');
+    await expect(page.locator(`#concept-${owner.id}`)).toContainText('2026-08-15');
+    await expect(page.locator('#concept-missing')).toHaveCount(0);
+    await page.getByRole('tab', { name: 'Not yet', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Synthetic concept' })).toHaveCount(0);
+    await page.goto('/town/world?day=2026-08-15&week=2026-08-10');
+    await expect(page.getByRole('list', { name: 'Recorded items for this day' })).toContainText('Synthetic concept');
+    await expect(page.getByRole('button', { name: 'Previous week', exact: true })).toBeEnabled();
+    await page.goto('/pixels?year=2026&day=2026-08-15');
+    await expect(page.getByRole('heading', { name: 'Synthetic concept' })).toHaveCount(0);
+  });
+
+  test('Reading Hall opens the study list', async ({ page }) => {
+    await paintStudy(page, 390, 844, 'light');
+    await page.goto('/town/library');
+    const open = page.getByRole('link', { name: 'Open study', exact: true });
+    await expect(open).toBeVisible();
+    await atLeast44(open);
+    await open.focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/town\/library\/study$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Study' })).toBeVisible();
+    await expect(page.getByText('Saved concepts keep their notes, sources, understood dates, and archive state.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add a concept', exact: true })).toBeVisible();
+    expect(await page.locator('body').innerText()).not.toMatch(/Obsidian|import notes/i);
+  });
+
+  for (const [width, height, theme] of [[390, 844, 'light'], [1280, 800, 'dark']] as const) {
+    test(`study surface stays within the viewport at ${width} ${theme}`, async ({ page, request }, info) => {
+      const owner = await ownerConcept(request);
+      await paintStudy(page, width, height, theme);
+      await page.goto(`/town/library/study/${owner.id}`);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      const study = page.locator('app-library-study');
+      await expect(study.getByRole('heading', { name: 'Synthetic concept' })).toBeVisible();
+      await expect(study).toContainText('synthetic private note');
+      await expect(study).toContainText('2026-08-15');
+      await atLeast44(study.getByRole('tab', { name: 'Archived', exact: true }));
+      await atLeast44(study.getByRole('link', { name: 'Town', exact: true }));
+      expect(await study.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
+      const scan = await new AxeBuilder({ page }).include('app-library-study').analyze();
+      expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+      await info.attach(`study-${width}-${theme}`, { body: await study.screenshot(), contentType: 'image/png' });
+    });
+  }
+});
+
+test.describe('Library study on a phone', () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+
+  test('edits the dated annotation at 390 night with touch', async ({ page, request }) => {
+    expect((await request.post('/e2e/reset?seed=pixels-facts')).ok()).toBeTruthy();
+    const owner = await ownerConcept(request);
+    await paintStudy(page, 390, 844, 'dark');
+    await page.goto(`/town/library/study/${owner.id}`);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    const study = page.locator('app-library-study');
+    const card = page.locator(`#concept-${owner.id}`);
+    await expect(card).toContainText('synthetic private note');
+    await expect(card).toContainText('2026-08-15');
+    const edit = card.getByRole('button', { name: 'Edit', exact: true });
+    await atLeast44(edit);
+    await edit.tap();
+    await study.getByLabel('Note', { exact: true }).fill('A dated annotation kept after a touch edit.');
+    await study.getByLabel('Source', { exact: true }).fill('phone margin');
+    const save = study.getByRole('button', { name: 'Save', exact: true });
+    await atLeast44(save);
+    await save.tap();
+    await expect(card).toContainText('A dated annotation kept after a touch edit.');
+    await expect(card).toContainText('2026-08-15');
+    await page.reload();
+    await expect(card).toContainText('A dated annotation kept after a touch edit.');
+    await expect(card).toContainText('phone margin');
+    await expect(card).toContainText('2026-08-15');
+    expect(await study.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
+    const scan = await new AxeBuilder({ page }).include('app-library-study').analyze();
+    expect(scan.violations.filter(item => item.impact === 'serious' || item.impact === 'critical')).toEqual([]);
+    await page.goto('/town/library/study/999999');
+    await expect(page.locator('#concept-missing')).toHaveText("That concept doesn't exist.");
+  });
 });
