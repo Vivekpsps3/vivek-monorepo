@@ -23,6 +23,8 @@ export const routes: Routes = [
       { path: 'home', pathMatch: 'full', redirectTo: '/town/home/living' },
       { path: 'home/:room', title: 'Town · Home', loadComponent: () => import('./town/home-room.component').then(m => m.HomeRoomComponent) },
       { path: 'library', title: 'Town · Reading Hall', loadComponent: () => import('./town/library-room.component').then(m => m.LibraryRoomComponent) },
+      { path: 'hall/journal', title: 'Town · Hall journal', loadComponent: () => import('./town/hall-journal.component').then(m => m.HallJournalComponent) },
+      { path: 'hall/journal/:collection', title: 'Town · Hall journal', loadComponent: () => import('./town/hall-journal.component').then(m => m.HallJournalComponent) },
       { path: 'hall', title: 'Town · Hall', loadComponent: () => import('./town/hall-room.component').then(m => m.HallRoomComponent) },
       { path: 'quests', title: 'Town · Optional quests', loadComponent: () => import('./town/quests.component').then(m => m.QuestsComponent) },
       { path: 'residents', title: 'Town · Residents', loadComponent: () => import('./town/residents.component').then(m => m.ResidentsComponent) },

@@ -1,0 +1,81 @@
+<main>
+  <header>
+    <app-town-place [crumbs]="crumbs()" />
+    <h1>Hall journal</h1>
+  </header>
+  <p>These records are Town game records. They are not Health badges, Finance totals, or Media memberships. Town XP stays on the Hall progress dial.</p>
+  @if (loadError() && !pages()) {
+    <p id="journal-load-error" role="alert" tabindex="-1">The Hall journal is unavailable right now.</p>
+    <button type="button" class="action" (click)="load()">Retry</button>
+  }
+  @if (loading() && !pages()) {
+    <p>Loading the Hall journal.</p>
+  }
+  @if (ownerMissing()) {
+    <p role="status">Sign in to read the Hall journal.</p>
+  }
+  @if (unknownCollection()) {
+    <p role="status">That collection is not in the Hall journal.</p>
+    <a class="action" routerLink="/town/hall/journal">Back to the journal</a>
+  }
+  @if (pages(); as pages) {
+    <button type="button" class="action" (click)="load()">Reload journal</button>
+    @if (!collectionId()) {
+      <ul aria-label="Hall collections">
+        @for (page of pages; track page.id) {
+          <li [attr.data-collection]="page.id">
+            <a class="action" [routerLink]="['/town/hall/journal', page.id]">{{ page.title }}</a>
+            <p>{{ page.summary }}</p>
+            <p>{{ earnedCount(page) }} earned.</p>
+          </li>
+        }
+      </ul>
+    } @else if (active(); as page) {
+      <p>{{ page.summary }}</p>
+      <label for="journal-find">Find in {{ page.title }}</label>
+      <input id="journal-find" [value]="find()" (input)="onFind($event)" autocomplete="off" />
+      @if (page.id === 'discoveries') {
+        <button type="button" class="action" [attr.aria-pressed]="hints()" (click)="toggleHints()">
+          {{ hints() ? 'Hide location hints' : 'Show location hints' }}
+        </button>
+      }
+      @if (loadError()) {
+        <p id="journal-stale" role="alert" tabindex="-1">This reading failed. The records already shown are unchanged.</p>
+        <button type="button" class="action" (click)="load()">Retry</button>
+      }
+      @if (visible(page).length === 0) {
+        <p>No matching records.</p>
+      }
+      <ul [attr.aria-label]="page.title">
+        @for (item of visible(page); track item.id) {
+          <li [attr.data-record]="item.id" [attr.data-earned]="item.earned ? 'true' : 'false'" [attr.data-kind]="item.kind">
+            <a class="action" [id]="'journal-open-' + item.id" [routerLink]="[]" [queryParams]="itemQuery(item.id)"
+              [attr.aria-current]="selected()?.id === item.id ? 'true' : null">Open {{ item.title }}</a>
+            @if (item.badge) {
+              <p data-badge="once">{{ item.badge }}</p>
+            }
+            @if (hints() && item.hint) {
+              <p class="hint" data-hint>{{ item.hint }}</p>
+            }
+          </li>
+        }
+      </ul>
+      @if (selected(); as item) {
+        <article [attr.data-record]="item.id" [attr.data-kind]="item.kind" data-open="true">
+          <h2 id="journal-item" tabindex="-1">{{ item.title }}</h2>
+          <p data-explanation>{{ item.explanation }}</p>
+          <p data-source>Source {{ item.source }}</p>
+          @if (item.sample) {
+            <p data-sample>{{ item.sample }}</p>
+          }
+          @if (item.badge) {
+            <p data-badge="once">{{ item.badge }}</p>
+          }
+          <a class="action" routerLink="." [queryParams]="itemQuery(null)">Back to {{ page.title }}</a>
+        </article>
+      } @else if (queryItem()) {
+        <p role="status">That record is not in this collection.</p>
+      }
+    }
+  }
+</main>

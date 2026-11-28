@@ -23,7 +23,7 @@ from apps.server.town.discoveries import read_journal as read_discoveries
 from apps.server.town.discoveries import record_discovery
 from apps.server.town.keepsakes import read_keepsakes
 from apps.server.town.layouts import ROOMS, parse_body, read_layout, save_layout
-from apps.server.town.play_receipts import finish_run, open_run, refuse_public_minigame
+from apps.server.town.play_receipts import finish_run, open_run, read_arcade, refuse_public_minigame
 from apps.server.town.quests import read_journal, record_step
 from apps.server.town.schemas import (
     CheckinDays,
@@ -34,6 +34,7 @@ from apps.server.town.schemas import (
     HabitList,
     HubTownSummary,
     Keepsakes,
+    PlayCollectionView,
     PlayRunView,
     QuestJournalView,
     RoomLayoutView,
@@ -251,6 +252,14 @@ async def post_stamp_grant(
     wallet, created = grant_stamps(db, user.id, payload, now)
     response.status_code = 201 if created else 200
     return StampWalletView.model_validate(wallet)
+
+
+@router.get("/minigames/runs", response_model=PlayCollectionView)
+def get_play_runs(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+) -> PlayCollectionView:
+    return PlayCollectionView.model_validate(read_arcade(db, principal.id))
 
 
 @router.post("/minigames/runs", response_model=PlayRunView, status_code=201)

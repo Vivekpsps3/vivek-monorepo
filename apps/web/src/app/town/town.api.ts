@@ -216,6 +216,9 @@ export class TownApiService {
     const path = `/api/town/minigames/runs/${encodeURIComponent(nonce)}/finish`;
     return this.http.post<PlayRunResponse>(path, body, this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
   }
+  getArcade() {
+    return this.http.get<ArcadeCollection>('/api/town/minigames/runs', this.options()).pipe(timeout(HUB_SUMMARY_DEADLINE_MS));
+  }
 }
 
 export interface PlayRunRequest {
@@ -241,4 +244,22 @@ export interface PlayRunResponse {
   rewarded: boolean;
   amount: 0 | 5;
   balance: number;
+}
+export interface ArcadeMedal {
+  civil_day: string;
+  grant_key: string;
+  amount: 5;
+  nonce: string;
+}
+export interface ArcadeGame {
+  game_id: PlayRunRequest['game_id'];
+  name: string;
+  score: number | null;
+  score_kind: 'moves' | 'accuracy';
+  source_nonce: string | null;
+  civil_day: string | null;
+  medals: ArcadeMedal[];
+}
+export interface ArcadeCollection {
+  games: ArcadeGame[];
 }

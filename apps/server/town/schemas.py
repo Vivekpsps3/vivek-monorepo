@@ -312,6 +312,27 @@ class PlayRunView(_Shape):
     balance: int
 
 
+class PlayMedalView(_Shape):
+    civil_day: str
+    grant_key: str
+    amount: Literal[5]
+    nonce: str
+
+
+class PlayGameView(_Shape):
+    game_id: Literal["memory-shelves", "harbor-rhythm"]
+    name: Literal["Memory Shelves", "Harbor Rhythm"]
+    score: int | None
+    score_kind: Literal["moves", "accuracy"]
+    source_nonce: str | None
+    civil_day: str | None
+    medals: list[PlayMedalView]
+
+
+class PlayCollectionView(_Shape):
+    games: list[PlayGameView]
+
+
 class RoomLayoutItem(_Shape):
     instance_id: str
     catalog_id: str

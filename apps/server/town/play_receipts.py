@@ -418,6 +418,65 @@ def _reload(db: Session, user_id: int, row_id: int) -> PlayReceipt:
     return row
 
 
+def read_arcade(db: Session, user_id: int) -> dict[str, Any]:
+    """Completed scores and once-only day medals. This read grants nothing."""
+    rows = list(
+        db.scalars(
+            select(PlayReceipt)
+            .where(PlayReceipt.user_id == user_id, PlayReceipt.status == "complete")
+            .order_by(PlayReceipt.id)
+        )
+    )
+    catalog = (
+        (MEMORY_GAME, "Memory Shelves", "moves"),
+        (HARBOR_GAME, "Harbor Rhythm", "accuracy"),
+    )
+    games: list[dict[str, Any]] = []
+    for game_id, name, score_kind in catalog:
+        owned = [row for row in rows if row.game_id == game_id and row.score is not None]
+        best: PlayReceipt | None = None
+        for row in owned:
+            score = row.score
+            if score is None:
+                continue
+            if best is None or best.score is None:
+                best = row
+                continue
+            lower = game_id == MEMORY_GAME and score < best.score
+            higher = game_id != MEMORY_GAME and score > best.score
+            if lower or higher:
+                best = row
+        medals: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for row in owned:
+            if row.reward_amount != REWARD:
+                continue
+            day = row.civil_day.isoformat()
+            if day in seen:
+                continue
+            seen.add(day)
+            medals.append(
+                {
+                    "civil_day": day,
+                    "grant_key": f"minigame:{game_id}:{day}",
+                    "amount": REWARD,
+                    "nonce": row.nonce,
+                }
+            )
+        games.append(
+            {
+                "game_id": game_id,
+                "name": name,
+                "score": None if best is None else best.score,
+                "score_kind": score_kind,
+                "source_nonce": None if best is None else best.nonce,
+                "civil_day": None if best is None else best.civil_day.isoformat(),
+                "medals": medals,
+            }
+        )
+    return {"games": games}
+
+
 def finish_run(
     db: Session,
     user_id: int,

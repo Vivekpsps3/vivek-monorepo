@@ -136,6 +136,13 @@ describe('TownApiService', () => {
       status: 'complete', score: 6, rewarded: true, amount: 5, balance: 5,
     });
   });
+  it('reads arcade scores without posting a run', () => {
+    api.getArcade().subscribe();
+    const read = http.expectOne(request => request.url === '/api/town/minigames/runs');
+    expect(read.request.method).toBe('GET');
+    expect(read.request.body).toBeNull();
+    read.flush({ games: [] });
+  });
   it('preserves authentication errors for the expired state', () => {
     const error = jasmine.createSpy('error');
     api.getTown().subscribe({ error });
