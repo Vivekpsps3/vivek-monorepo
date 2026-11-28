@@ -25,6 +25,11 @@ import {
   acceptMemoryLoad,
   browserZone,
   clearMemoryDraft,
+  memoryCredit,
+  memoryDates,
+  memoryLoggedDay,
+  memoryOverlapNames,
+  memoryPlace,
   settleMemoryWrite,
   type MemoryList,
   type TripMemory,
@@ -49,25 +54,16 @@ import { travelError } from "./travel.models";
         Reload memories
       </ui-button>
     </ui-page-header>
-    <p class="muted">
-      Each card is the saved trip. Town credit is a separate date from the span.
-      Pixels counts the days inside the span. Nothing here is a second copy.
-    </p>
     @if (error()) {
       <p class="local-error" role="alert">{{ error() }}</p>
       <ui-button variant="ghost" type="button" (click)="load()">Retry memories</ui-button>
     }
     @if (data(); as list) {
-      <section id="trip-memories" tabindex="-1" aria-labelledby="memory-differences">
-        <h2 id="memory-differences">How these dates differ</h2>
-        <ul>
-          @for (item of list.differences; track item.id) {
-            <li [attr.data-difference]="item.id">{{ item.text }}</li>
-          }
-        </ul>
-        @if (list.notice) {
-          <p role="status">{{ list.notice }}</p>
-        }
+      @if (list.notice) {
+        <p role="status">{{ list.notice }}</p>
+      }
+      <section id="trip-memories" tabindex="-1" aria-labelledby="saved-trips-heading">
+        <h2 id="saved-trips-heading" class="visually-hidden">Saved trips</h2>
         @if (list.memories.length) {
           <div class="memory-list">
             @for (memory of list.memories; track memory.id) {
@@ -77,52 +73,70 @@ import { travelError } from "./travel.models";
                 tabindex="-1"
                 [attr.data-trip]="memory.trip_id"
               >
-                <p class="eyebrow">{{ memory.mark_label }}</p>
-                <h2>{{ memory.title }}</h2>
-                <p>Source trip {{ memory.trip_id }}.</p>
-                <h3>Span</h3>
-                <p>{{ memory.span_text }}</p>
-                <p>{{ memory.overlap_text }}</p>
-                <h3>Town credit</h3>
-                <p>{{ memory.logged_text }}</p>
-                <p>{{ memory.credit_text }}</p>
-                <h3>Pixels</h3>
-                <p>{{ memory.pixels_text }}</p>
-                <h3>Place</h3>
-                <p>{{ memory.world_text }}</p>
-                <div class="button-row">
-                  <ui-button
-                    variant="secondary"
-                    [href]="memory.route"
-                    [label]="'Open ' + memory.title"
-                  />
-                  <ui-button
-                    variant="secondary"
-                    type="button"
-                    [disabled]="saving()"
-                    (click)="openRedate(memory)"
-                  >
-                    Redate {{ memory.title }}
-                  </ui-button>
-                  @if (memory.status === "booked" || memory.status === "done") {
+                <div class="memory-card__top">
+                  <div class="memory-card__identity">
+                    <p class="eyebrow">{{ memory.mark_label }}</p>
+                    <h2>{{ memory.title }}</h2>
+                  </div>
+                  <ui-button variant="primary" [href]="memory.route" [label]="'Open ' + memory.title" />
+                </div>
+                <dl class="memory-facts">
+                  <div>
+                    <dt>Dates</dt>
+                    <dd>{{ datesLabel(memory) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Place</dt>
+                    <dd>{{ placeLabel(memory) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Town credit</dt>
+                    <dd>{{ creditLabel(memory) }}</dd>
+                  </div>
+                  @if (loggedLabel(memory); as logged) {
+                    <div>
+                      <dt>Logged</dt>
+                      <dd>{{ logged }}</dd>
+                    </div>
+                  }
+                  @if (overlapLabel(memory); as overlap) {
+                    <div>
+                      <dt>Overlaps</dt>
+                      <dd>{{ overlap }}</dd>
+                    </div>
+                  }
+                </dl>
+                <details class="memory-manage">
+                  <summary>Manage {{ memory.title }}</summary>
+                  <div class="button-row">
                     <ui-button
-                      variant="ghost"
+                      variant="secondary"
                       type="button"
                       [disabled]="saving()"
-                      (click)="cancelTrip(memory)"
+                      (click)="openRedate(memory)"
                     >
-                      Cancel {{ memory.title }}
+                      Redate {{ memory.title }}
                     </ui-button>
-                  }
-                  <ui-button
-                    variant="danger"
-                    type="button"
-                    [disabled]="saving()"
-                    (click)="deleteTrip(memory)"
-                  >
-                    Delete {{ memory.title }}
-                  </ui-button>
-                </div>
+                    @if (memory.status === "booked" || memory.status === "done") {
+                      <ui-button
+                        variant="ghost"
+                        type="button"
+                        [disabled]="saving()"
+                        (click)="cancelTrip(memory)"
+                      >
+                        Cancel {{ memory.title }}
+                      </ui-button>
+                    }
+                    <ui-button
+                      variant="danger"
+                      type="button"
+                      [disabled]="saving()"
+                      (click)="deleteTrip(memory)"
+                    >
+                      Delete {{ memory.title }}
+                    </ui-button>
+                  </div>
+                </details>
               </article>
             }
           </div>
@@ -133,6 +147,14 @@ import { travelError } from "./travel.models";
           />
         }
       </section>
+      <details class="memory-rules">
+        <summary id="memory-differences">How these dates differ</summary>
+        <ul>
+          @for (item of list.differences; track item.id) {
+            <li [attr.data-difference]="item.id">{{ item.text }}</li>
+          }
+        </ul>
+      </details>
     } @else if (!error()) {
       <p role="status">Loading trip memories…</p>
     }
@@ -250,6 +272,26 @@ export class MemoriesComponent {
   editingTitle(): string {
     const id = this.editingId();
     return this.data()?.memories.find((item) => item.trip_id === id)?.title ?? "this trip";
+  }
+
+  datesLabel(memory: TripMemory): string {
+    return memoryDates(memory);
+  }
+
+  placeLabel(memory: TripMemory): string {
+    return memoryPlace(memory);
+  }
+
+  creditLabel(memory: TripMemory): string {
+    return memoryCredit(memory);
+  }
+
+  loggedLabel(memory: TripMemory): string {
+    return memoryLoggedDay(memory);
+  }
+
+  overlapLabel(memory: TripMemory): string {
+    return memoryOverlapNames(memory);
   }
 
   openRedate(memory: TripMemory): void {
